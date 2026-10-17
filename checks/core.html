@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="ms">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>E-Book Checks</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="../core/look.css">
+<style>
+  /* Check page only: the result list. Colours come from look.css tokens. */
+  .checks { display: grid; gap: 8px; padding: 0; margin: 0; list-style: none; }
+  .check { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; align-items: start;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .check .icon { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; background: var(--paper); color: var(--muted); }
+  .check.pass .icon { background: var(--ok-soft); color: var(--ok); }
+  .check.fail .icon { background: var(--bad-soft); color: var(--bad); }
+  .check.run .icon { background: var(--wait-soft); color: var(--wait); }
+  .check .detail { font-size: .8rem; color: var(--muted); font-family: var(--mono); word-break: break-word; margin-top: 2px; }
+  .check.fail .detail { color: var(--bad); }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 12px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .row > * { flex: 1; min-width: 140px; }
+  .steps { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
+  .big-count { font-size: 2.2rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+  .summary { font-weight: 700; }
+  h2 { margin: 0; font-size: 1.05rem; }
+  main { display: grid; gap: 18px; padding-block: 18px 40px; }
+</style>
+</head>
+<body>
+<header class="top hq">
+  <div class="wrap top-in">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 5.5c2.6-1.1 5.6-.9 9 1.2v13c-3.4-2.1-6.4-2.3-9-1.2z"/><path d="M21 5.5c-2.6-1.1-5.6-.9-9 1.2v13c3.4-2.1 6.4-2.3 9-1.2z"/></svg></div>
+      <div><span class="bm">Semakan E-Book</span><span class="en">E-Book checks · test copy only</span></div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="panel" aria-labelledby="setup-h">
+    <h2 id="setup-h"><span class="bm">1. Sediakan</span><span class="en">1. Set up</span></h2>
+    <div class="field">
+      <label for="link"><span class="bm">Pautan hantar (salinan ujian)</span><span class="en">Sending link (test copy)</span></label>
+      <input id="link" class="text-input" type="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec">
+    </div>
+    <div class="row">
+      <div class="field">
+        <label for="phone"><span class="bm">Kod telefon</span><span class="en">Phone code</span></label>
+        <input id="phone" class="text-input mono" maxlength="4" autocomplete="off" placeholder="P99">
+      </div>
+      <button id="run" class="btn btn-ok" type="button">RUN CHECKS<small>Jalankan semakan</small></button>
+    </div>
+    <p class="en">Masuk sebagai Kerani Sugut (rekaan). · Logs in as the made-up Sugut clerk. Uses the test sheet only.</p>
+  </section>
+
+  <section aria-labelledby="auto-h" style="display:grid;gap:10px">
+    <div class="row" style="justify-content:space-between">
+      <h2 id="auto-h"><span class="bm">2. Semakan automatik</span><span class="en">2. Automatic checks</span></h2>
+      <span id="summary" class="summary"></span>
+    </div>
+    <ol id="checks" class="checks"></ol>
+  </section>
+
+  <section class="panel" aria-labelledby="flight-h">
+    <h2 id="flight-h"><span class="bm">3. Ujian mod pesawat</span><span class="en">3. Flight-mode test (do by hand)</span></h2>
+    <ol class="steps">
+      <li>Hidupkan <b>mod pesawat</b>. · Turn <b>flight mode</b> on.</li>
+      <li>Tekan SAVE TEST ENTRY. Nombor menunggu naik. · Tap SAVE TEST ENTRY. The waiting number goes up.</li>
+      <li>Matikan mod pesawat. · Turn flight mode off.</li>
+      <li>Ia hantar sendiri, atau tekan SEND. Nombor jadi 0. · It sends by itself, or tap SEND. The number goes to 0.</li>
+      <li>Semak tab CHECK dalam helaian ujian. · Check the CHECK tab in the test sheet.</li>
+    </ol>
+    <div class="row">
+      <div><span class="big-count" id="waiting">0</span><span class="en">menunggu · waiting</span></div>
+      <div><span class="pill" id="signal"></span></div>
+    </div>
+    <div class="row">
+      <button id="save-test" class="btn btn-wait" type="button">SAVE TEST ENTRY<small>Simpan catatan ujian</small></button>
+      <button id="send" class="btn btn-ok" type="button">SEND<small>Hantar</small></button>
+    </div>
+    <p id="flight-msg" class="en" aria-live="polite"></p>
+  </section>
+
+  <p class="en"><a href="../index.html">← E-Book</a></p>
+</main>
+
+<div id="toast" class="toast" role="status" hidden></div>
+
+<script src="../core/version.js"></script>
+<script src="../core/config.js"></script>
+<script src="../lists/estates.js"></script>
+<script src="../lists/test-users.js"></script>
+<script src="../core/rooms.js"></script>
+<script src="../core/sync.js"></script>
+<script src="../core/login.js"></script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var TEST_KEY = '333333';       // made-up Sugut clerk, also on the test sheet
+  var TAB = 'CHECK';
+
+  $('link').value = EA.sendLink();
+  $('phone').value = EA.phone() || 'P99';
+
+  function uid(phone) {
+    return 'CHK-SSGT-' + phone + '-' + String(Date.now() % 1000000).padStart(6, '0') + String(Math.floor(Math.random() * 90 + 10));
+  }
+  function row(phone, extra) {
+    var now = new Date(), p = function (n) { return String(n).padStart(2, '0'); };
+    var d = now.getFullYear() + '-' + p(now.getMonth() + 1) + '-' + p(now.getDate());
+    return Object.assign({ id: uid(phone), date: d, company: 'SPLT', estate: 'SSGT', keyed_by: 'x',
+      keyed_at: d + ' ' + p(now.getHours()) + ':' + p(now.getMinutes()), phone: phone, status: 'active', replaces: '', note: 'check page' }, extra || {});
+  }
+  async function post(body) {
+    var res = await fetch(EA.sendLink(), { method: 'POST', credentials: 'omit',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
+    return res.json();
+  }
+
+  // Each check: Malay, English, and a test that returns {ok, detail}.
+  var CHECKS = [
+    ['Pautan boleh dicapai', 'Sending link reachable', async function () {
+      var r = await fetch(EA.sendLink(), { credentials: 'omit' }).then(function (x) { return x.json(); });
+      return { ok: r && r.ok && r.app === 'E-Book', detail: JSON.stringify(r) };
+    }],
+    ['Kunci betul dibenarkan masuk', 'Right key logs in', async function () {
+      var r = await EA.login(TEST_KEY);
+      return { ok: r.ok && r.user && r.user.role === 'Clerk', detail: r.ok ? r.user.name + ' · ' + r.user.estates.join(',') : r.why };
+    }],
+    ['Kunci salah ditolak', 'Wrong key refused', async function () {
+      var r = await post({ action: 'login', key: '000000', version: EA.VERSION });
+      return { ok: r.ok === false && r.error === 'wrong_key', detail: JSON.stringify(r) };
+    }],
+    ['Versi lama ditolak', 'Old app version refused', async function () {
+      var r = await post({ action: 'login', key: TEST_KEY, version: 0 });
+      return { ok: r.ok === false && r.error === 'old_version', detail: JSON.stringify(r) };
+    }],
+    ['Satu catatan disimpan', 'One entry saved', async function () {
+      var r = await post({ action: 'save', key: TEST_KEY, version: EA.VERSION, tab: TAB, row: row(EA.phone()) });
+      return { ok: r.ok === true && !r.already, detail: JSON.stringify(r) };
+    }],
+    ['Catatan sama dihantar dua kali, ditulis sekali', 'Same entry sent twice is written once', async function () {
+      var x = row(EA.phone());
+      var a = await post({ action: 'save', key: TEST_KEY, version: EA.VERSION, tab: TAB, row: x });
+      var b = await post({ action: 'save', key: TEST_KEY, version: EA.VERSION, tab: TAB, row: x });
+      return { ok: a.ok && !a.already && b.ok && b.already === true, detail: 'first: ' + JSON.stringify(a) + ' · again: ' + JSON.stringify(b) };
+    }],
+    ['Dua telefon hantar serentak', 'Two phones sending at the same moment', async function () {
+      var r = await Promise.all(['P98', 'P97'].map(function (ph) {
+        return post({ action: 'save', key: TEST_KEY, version: EA.VERSION, tab: TAB, row: row(ph, { note: 'two phones' }) });
+      }));
+      return { ok: r.every(function (x) { return x.ok && !x.already; }), detail: JSON.stringify(r) };
+    }],
+    ['Lima telefon hantar serentak', 'Five phones sending at the same moment', async function () {
+      var r = await Promise.all(['P91', 'P92', 'P93', 'P94', 'P95'].map(function (ph) {
+        return post({ action: 'save', key: TEST_KEY, version: EA.VERSION, tab: TAB, row: row(ph, { note: 'five phones' }) });
+      }));
+      var good = r.filter(function (x) { return x.ok && !x.already; }).length;
+      return { ok: good === 5, detail: good + ' of 5 arrived' };
+    }],
+    ['Kerani tidak boleh simpan ladang lain', 'Clerk cannot save for another estate', async function () {
+      var r = await post({ action: 'save', key: TEST_KEY, version: EA.VERSION, tab: TAB,
+        row: row(EA.phone(), { estate: 'KWNN', company: 'PJSB' }) });
+      return { ok: r.ok === false && r.error === 'not_your_estate', detail: JSON.stringify(r) };
+    }],
+    ['Lajur tidak dikenali ditolak', 'Unknown column refused', async function () {
+      var r = await post({ action: 'save', key: TEST_KEY, version: EA.VERSION, tab: TAB, row: row(EA.phone(), { made_up_col: 1 }) });
+      return { ok: r.ok === false && /unknown_col/.test(r.error), detail: JSON.stringify(r) };
+    }],
+    ['Simpan di telefon, kemudian hantar', 'Save on the phone, then send', async function () {
+      var before = EA.waiting();
+      EA.save(TAB, 'CHK', 'SSGT', { note: 'saved on phone, then sent' });
+      var mid = EA.waiting();
+      var s = await EA.send();
+      return { ok: mid === before + 1 && !s.error && EA.waiting() === 0, detail: 'waiting ' + before + ' → ' + mid + ' → ' + EA.waiting() + (s.error ? ' · ' + s.error : '') };
+    }]
+  ];
+
+  function draw(states) {
+    $('checks').innerHTML = CHECKS.map(function (c, i) {
+      var s = states[i] || { state: '' };
+      var icon = s.state === 'pass' ? '✓' : s.state === 'fail' ? '✕' : s.state === 'run' ? '…' : (i + 1);
+      return '<li class="check ' + s.state + '"><span class="icon" aria-hidden="true">' + icon + '</span><div>' +
+        '<span class="bm">' + c[0] + '</span><span class="en">' + c[1] + '</span>' +
+        (s.detail ? '<div class="detail">' + String(s.detail).replace(/</g, '&lt;') + '</div>' : '') + '</div></li>';
+    }).join('');
+  }
+  draw([]);
+
+  $('run').onclick = async function () {
+    var link = $('link').value.trim(), phone = $('phone').value.trim().toUpperCase();
+    if (!/^https:\/\/script\.google\.com\//.test(link)) { $('link').focus(); toast('Tampal pautan hantar dahulu · Paste the sending link first', true); return; }
+    if (!/^P\d{2,3}$/.test(phone)) { $('phone').focus(); toast('Kod telefon, cth P99 · Phone code, e.g. P99', true); return; }
+    EA.setSendLink(link); EA.setPhone(phone);
+    this.disabled = true;
+    var states = [], pass = 0;
+    for (var i = 0; i < CHECKS.length; i++) {
+      states[i] = { state: 'run' }; draw(states);
+      try {
+        var r = await CHECKS[i][2]();
+        states[i] = { state: r.ok ? 'pass' : 'fail', detail: r.detail };
+        if (r.ok) pass++;
+      } catch (e) { states[i] = { state: 'fail', detail: 'error: ' + e.message }; }
+      draw(states);
+      if (i === 1 && states[1].state !== 'pass') break;   // no point going on without a login
+    }
+    $('summary').textContent = pass + ' / ' + CHECKS.length + ' lulus · passed';
+    $('summary').style.color = pass === CHECKS.length ? 'var(--ok)' : 'var(--bad)';
+    this.disabled = false;
+    showWaiting();
+  };
+
+  // Flight-mode test by hand
+  function showWaiting() {
+    $('waiting').textContent = EA.waiting();
+    var on = navigator.onLine;
+    $('signal').className = 'pill ' + (on ? 'ok' : 'wait');
+    $('signal').textContent = on ? 'Ada isyarat · Signal' : 'Tiada isyarat · No signal';
+  }
+  $('save-test').onclick = function () {
+    if (!EA.currentUser()) { toast('Jalankan semakan dahulu · Run the checks first', true); return; }
+    var r = EA.save(TAB, 'CHK', 'SSGT', { note: 'flight-mode test' });
+    $('flight-msg').textContent = 'Disimpan di telefon · Saved on the phone: ' + r.id;
+    toast('Disimpan · Saved');
+  };
+  $('send').onclick = async function () {
+    var r = await EA.send();
+    $('flight-msg').textContent = r.error ? 'Belum dihantar · Not sent yet: ' + r.error : (r.sent || 0) + ' dihantar · sent';
+  };
+  document.addEventListener('ea:sync', showWaiting);
+  window.addEventListener('online', showWaiting);
+  window.addEventListener('offline', showWaiting);
+  showWaiting();
+
+  var tt;
+  function toast(t, bad) {
+    var el = $('toast'); el.textContent = t; el.className = 'toast' + (bad ? ' bad' : ''); el.hidden = false;
+    clearTimeout(tt); tt = setTimeout(function () { el.hidden = true; }, 3000);
+  }
+})();
+</script>
+</body>
+</html>

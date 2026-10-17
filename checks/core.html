@@ -82,6 +82,17 @@
     <p id="flight-msg" class="en" aria-live="polite"></p>
   </section>
 
+  <section class="panel" aria-labelledby="open-h">
+    <h2 id="open-h"><span class="bm">4. Buka tanpa isyarat</span><span class="en">4. Open with no signal (do by hand)</span></h2>
+    <p><span class="pill" id="offline-pill"></span></p>
+    <ol class="steps">
+      <li>Buka E-Book sekali dengan isyarat, tunggu tanda hijau di atas. · Open E-Book once with signal; wait for the green mark above.</li>
+      <li>Hidupkan mod pesawat <b>dan matikan Wi-Fi</b>. · Turn on flight mode <b>and turn Wi-Fi off</b>.</li>
+      <li>Tutup tab ini. Buka semula pautan E-Book. · Close this tab. Open the E-Book link again.</li>
+      <li>E-Book terbuka seperti biasa. · E-Book opens as normal.</li>
+    </ol>
+  </section>
+
   <p class="en"><a href="../index.html">← E-Book</a></p>
 </main>
 
@@ -94,6 +105,7 @@
 <script src="../core/rooms.js"></script>
 <script src="../core/sync.js"></script>
 <script src="../core/login.js"></script>
+<script src="../core/update.js"></script>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
@@ -234,6 +246,14 @@
     var r = await EA.send();
     $('flight-msg').textContent = r.error ? 'Belum dihantar · Not sent yet: ' + r.error : (r.sent || 0) + ' dihantar · sent';
   };
+  function showOffline() {
+    var p = $('offline-pill');
+    p.className = 'pill ' + (EA.offlineReady ? 'ok' : 'wait');
+    p.textContent = EA.offlineReady ? 'Salinan disimpan di telefon · Kept on this phone' : 'Sedang menyimpan salinan… · Keeping a copy…';
+  }
+  document.addEventListener('ea:offline-ready', showOffline);
+  showOffline();
+  EA.startOffline('../sw.js');
   document.addEventListener('ea:sync', showWaiting);
   window.addEventListener('online', showWaiting);
   window.addEventListener('offline', showWaiting);

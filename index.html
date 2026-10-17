@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ms">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Estate Book</title>
+<meta name="application-name" content="E-Book">
+<meta name="apple-mobile-web-app-title" content="E-Book">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="core/look.css">
+</head>
+<body>
+
+<!-- LOGIN -->
+<section id="login" class="login wrap" hidden>
+  <div class="login-card">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M3 5.5c2.6-1.1 5.6-.9 9 1.2v13c-3.4-2.1-6.4-2.3-9-1.2z"/><path d="M21 5.5c-2.6-1.1-5.6-.9-9 1.2v13c3.4-2.1 6.4-2.3 9-1.2z"/></svg></div>
+      <div><span class="bm">Estate Book</span><span class="en">E-Book · Buku Ladang · SPLT &amp; PJSB</span></div>
+    </div>
+    <form id="login-form" class="field" novalidate>
+      <label for="key"><span class="bm">Kunci 6 digit anda</span><span class="en">Your 6-digit key</span></label>
+      <input id="key" class="key-input" type="password" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="······">
+      <p id="login-msg" class="msg" role="alert" hidden></p>
+      <button id="login-btn" class="btn btn-main" type="submit">LOG IN<small>Masuk</small></button>
+    </form>
+    <div>
+      <button id="open-setup" class="link-btn" type="button"><span class="inline"><span class="bm">Tetapan telefon</span> · <span class="en">Phone setup</span></span></button>
+      <div id="phone-line" class="en"></div>
+    </div>
+    <div id="test-keys" class="test-keys" hidden>
+      <span class="test-badge">SALINAN UJIAN · TEST COPY</span>
+      <div>Orang rekaan sahaja. Tekan kunci untuk masuk.<br>Made-up people only. Tap a key to log in.</div>
+      <table id="test-table"></table>
+    </div>
+  </div>
+</section>
+
+<!-- HOME -->
+<div id="home" hidden>
+  <header id="top" class="top">
+    <div class="wrap">
+      <div class="top-in">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M3 5.5c2.6-1.1 5.6-.9 9 1.2v13c-3.4-2.1-6.4-2.3-9-1.2z"/><path d="M21 5.5c-2.6-1.1-5.6-.9-9 1.2v13c3.4-2.1 6.4-2.3 9-1.2z"/></svg></div>
+          <div><span class="bm">Estate Book</span><span class="en">E-Book · Buku Ladang</span></div>
+        </div>
+        <div class="who"><span class="bm" id="who-name"></span><span class="en" id="who-role"></span></div>
+        <button id="logout" class="btn btn-ghost" type="button">LOG OUT<small>Keluar</small></button>
+      </div>
+      <div id="estate-chips" class="estates" role="group" aria-label="Ladang / Estate"></div>
+    </div>
+  </header>
+
+  <div class="sync" id="sync">
+    <div class="wrap sync-in">
+      <div class="sync-info" aria-live="polite">
+        <span id="wait-pill" class="pill ok"></span>
+        <span class="muted" id="last-sent"></span>
+        <span id="test-mark" class="test-badge" hidden>UJIAN · TEST</span>
+      </div>
+      <button id="send-btn" class="btn btn-ok" type="button">SEND<small>Hantar</small></button>
+    </div>
+  </div>
+
+  <div id="notice-link" class="notice bad" hidden>
+    <div class="wrap notice-in">
+      <div><span class="bm">Pautan hantar belum ditetapkan. Apa yang dikunci di sini tidak akan sampai ke pejabat.</span>
+        <span class="en">The sending link is not set. Anything keyed here will not reach the office.</span></div>
+      <button class="btn btn-ghost" type="button" data-open-setup>SETUP<small>Tetapan</small></button>
+    </div>
+  </div>
+
+  <div id="notice-update" class="notice wait" hidden>
+    <div class="wrap notice-in">
+      <div><span class="bm">Versi baru sudah ada.</span><span class="en">A new version is out.</span></div>
+      <button id="load-btn" class="btn btn-wait" type="button">LOAD IT<small>Muat</small></button>
+    </div>
+  </div>
+
+  <main class="main wrap">
+    <div class="greet">
+      <div><h1 id="greet-bm"></h1><span class="en" id="greet-en"></span></div>
+      <div class="date"><span class="bm" id="date-bm"></span><span class="en" id="date-en"></span></div>
+    </div>
+    <div id="layout" class="layout">
+      <section aria-labelledby="rooms-h">
+        <h2 class="sec-h" id="rooms-h"><span class="inline"><span class="bm">Bilik</span> · <span class="en">Rooms</span></span></h2>
+        <div id="tiles" class="tiles"></div>
+      </section>
+      <aside id="plan" class="plan" hidden aria-labelledby="plan-h">
+        <h2 class="sec-h" id="plan-h"><span class="inline"><span class="bm">Pencapaian akan datang</span> · <span class="en">Next milestones</span></span></h2>
+        <ol id="plan-list"></ol>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap foot-in">
+      <span>Versi <span class="mono" id="ver"></span> · Version</span>
+      <span>Telefon <span class="mono" id="foot-phone"></span> · Phone</span>
+      <button class="link-btn" type="button" data-open-setup>Tetapan telefon · Phone setup</button>
+    </div>
+  </footer>
+</div>
+
+<!-- SHEET (messages, setup, confirm) -->
+<div id="sheet-back" class="sheet-back" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" id="sheet"></div>
+</div>
+<div id="toast" class="toast" role="status" hidden></div>
+
+<script src="core/version.js"></script>
+<script src="core/config.js"></script>
+<script src="lists/estates.js"></script>
+<script src="lists/test-users.js"></script>
+<script src="core/rooms.js"></script>
+<script src="core/sync.js"></script>
+<script src="core/login.js"></script>
+<script src="core/update.js"></script>
+<script src="core/home.js"></script>
+</body>
+</html>

@@ -20,6 +20,8 @@ var FILES = [
   'core/home.js',
   'lists/estates.js',
   'lists/test-users.js',
+  'lists/tasks.js',
+  'lists/test-workers.js',
   'checks/core.html'
 ];
 

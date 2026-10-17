@@ -42,7 +42,9 @@ self.addEventListener('fetch', function (e) {
   if (req.method !== 'GET') return;                       // sending to Google is never touched
   var url = new URL(req.url);
   if (url.origin !== location.origin) return;             // only our own files
-  if (url.search) return;                                 // e.g. the version check: always ask the site
+  // Files asked with '?…' (like the version check) always go to the site.
+  // A page opened with '?…' in its link still opens from the phone's copy.
+  if (url.search && req.mode !== 'navigate') return;
   e.respondWith(
     caches.open(CACHE).then(function (c) {
       return c.match(req, { ignoreSearch: true }).then(function (hit) {

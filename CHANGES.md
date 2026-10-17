@@ -13,3 +13,4 @@ One line per release: date, version, what changed.
 - 2026-10-17 — v1 (test copy, not released) — E-Book online at https://shasabah.github.io/e-book/ (company GitHub account shasabah, repository e-book). DMS untouched.
 - 2026-10-17 — v1 (test copy, not released) — Pasted sending links are cleaned of hidden spaces and line breaks (iPhone check failed with "string did not match the expected pattern"). Check page explains a bad link or a bad office answer in plain words.
 - 2026-10-17 — v1 (test copy, not released) — iPhone: 11 of 11 checks pass. The phone now keeps a copy of the whole app (sw.js), so E-Book opens with no signal; LOAD IT switches to a new copy when the version goes up. Check page has a by-hand "open with no signal" test.
+- 2026-10-17 — v1 (test copy, not released) — Offline fix: a page link with "?…" at the end now also opens from the phone copy (iPhone showed "not connected to the internet").

@@ -1,6 +1,19 @@
-// Foundation: the LOAD IT button. Reads core/version.js fresh from the
-// server and compares it with the version this phone is running.
+// Foundation: the phone's offline copy, and the LOAD IT button.
 window.EA = window.EA || {};
+
+// Keep a copy of the app on the phone (sw.js), so it opens with no signal.
+EA.offlineReady = false;
+EA.startOffline = function (swPath) {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register(swPath || 'sw.js').catch(function () {});
+  navigator.serviceWorker.ready.then(function () {
+    EA.offlineReady = true;
+    document.dispatchEvent(new CustomEvent('ea:offline-ready'));
+  });
+};
+
+// Reads core/version.js fresh from the site and compares it with the
+// version this phone is running.
 EA.checkUpdate = async function () {
   try {
     var res = await fetch('core/version.js?t=' + Date.now(), { cache: 'no-store' });
@@ -10,4 +23,20 @@ EA.checkUpdate = async function () {
     return latest > EA.VERSION ? latest : null;
   } catch (e) { return null; }
 };
-EA.loadUpdate = function () { location.reload(); };
+
+// LOAD IT: fetch the new copy, wait until the phone has switched to it
+// (at most 10 seconds), then reload.
+EA.loadUpdate = async function () {
+  try {
+    var reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
+    if (reg) {
+      var switched = new Promise(function (ok) {
+        navigator.serviceWorker.addEventListener('controllerchange', ok, { once: true });
+        setTimeout(ok, 10000);
+      });
+      await reg.update();
+      if (reg.installing || reg.waiting) await switched;
+    }
+  } catch (e) {}
+  location.reload();
+};

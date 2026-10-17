@@ -247,6 +247,10 @@
   setInterval(function () { if (EA.currentUser()) { renderSync(); renderGreeting(); } }, 60000);
   setInterval(checkUpdate, 30 * 60000);
 
+  // Keep a copy of the app on this phone, so it opens with no signal.
+  document.addEventListener('ea:offline-ready', function () { $('offline-mark').hidden = false; });
+  EA.startOffline('sw.js');
+
   render();
   checkUpdate();
 })();

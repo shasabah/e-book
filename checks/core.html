@@ -112,16 +112,21 @@
     return Object.assign({ id: uid(phone), date: d, company: 'SPLT', estate: 'SSGT', keyed_by: 'x',
       keyed_at: d + ' ' + p(now.getHours()) + ':' + p(now.getMinutes()), phone: phone, status: 'active', replaces: '', note: 'check page' }, extra || {});
   }
+  // Read the office's answer as text first, so a bad answer gives a clear message.
+  async function asJson(res) {
+    var t = await res.text();
+    try { return JSON.parse(t); } catch (e) { throw new Error('office did not answer properly: ' + t.slice(0, 80)); }
+  }
   async function post(body) {
     var res = await fetch(EA.sendLink(), { method: 'POST', credentials: 'omit',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
-    return res.json();
+    return asJson(res);
   }
 
   // Each check: Malay, English, and a test that returns {ok, detail}.
   var CHECKS = [
     ['Pautan boleh dicapai', 'Sending link reachable', async function () {
-      var r = await fetch(EA.sendLink(), { credentials: 'omit' }).then(function (x) { return x.json(); });
+      var r = await fetch(EA.sendLink(), { credentials: 'omit' }).then(asJson);
       return { ok: r && r.ok && r.app === 'E-Book', detail: JSON.stringify(r) };
     }],
     ['Kunci betul dibenarkan masuk', 'Right key logs in', async function () {
@@ -189,8 +194,9 @@
   draw([]);
 
   $('run').onclick = async function () {
-    var link = $('link').value.trim(), phone = $('phone').value.trim().toUpperCase();
-    if (!/^https:\/\/script\.google\.com\//.test(link)) { $('link').focus(); toast('Tampal pautan hantar dahulu · Paste the sending link first', true); return; }
+    var link = EA.cleanLink($('link').value), phone = $('phone').value.trim().toUpperCase();
+    $('link').value = link;
+    if (!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(link)) { $('link').focus(); toast('Pautan tidak lengkap. Mesti bermula https://script.google.com/macros/s/ dan berakhir /exec · Link not complete: must start https://script.google.com/macros/s/ and end /exec', true); return; }
     if (!/^P\d{2,3}$/.test(phone)) { $('phone').focus(); toast('Kod telefon, cth P99 · Phone code, e.g. P99', true); return; }
     EA.setSendLink(link); EA.setPhone(phone);
     this.disabled = true;

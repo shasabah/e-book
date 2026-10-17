@@ -16,3 +16,4 @@ One line per release: date, version, what changed.
 - 2026-10-17 — v1 (test copy, not released) — Offline fix: a page link with "?…" at the end now also opens from the phone copy (iPhone showed "not connected to the internet").
 - 2026-10-17 — v1 (test copy, not released) — iPhone, flight mode and Wi-Fi off: E-Book opens; 2 entries saved offline were sent when Wi-Fi returned. Foundation steps 1–4 done.
 - 2026-10-17 — v1 (test copy, not released) — Shared lists for Sugut: 4 blocks (130.65 Ha, from the 2027 business plan), 13 draft task codes (from the Jun 2025 piece-rate form), 10 made-up test workers. Rates kept off GitHub, in the "Sugut lists to confirm" sheet.
+- 2026-10-17 — v1 (test copy, not released) — Task list rebuilt from the official Sugut rate list (05/10/2022): 28 tasks in 6 sections, pay type per task (unit, day, hour, steps), Sunday and public holiday approval rules. Confirm sheet v2 in Drive.

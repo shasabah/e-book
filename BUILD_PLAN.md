@@ -46,6 +46,6 @@ No new rooms for field crews in peak crop (Aug–Nov).
 
 - DONE 17 Oct: Google script live on the E-Book TEST sheet (yclee@shasabah.com) and tested.
 - DONE 17 Oct: opens with no signal on iPhone (flight mode + Wi-Fi off); entries saved offline are sent when signal returns.
-- Shared lists for Sugut started 17 Oct: blocks done; task codes and rates waiting for HQ / Sugut manager to confirm (sheet "E-Book – Sugut lists to confirm").
+- Shared lists for Sugut started 17 Oct: blocks done; task codes and rates waiting for HQ / Sugut manager to confirm (sheet "E-Book – Sugut lists to confirm (v2)").
 - Move Durian into rooms/durian/ as its own release.
 - DONE 17 Oct: checks 11 of 11 on iPhone; app online at shasabah.github.io/e-book.

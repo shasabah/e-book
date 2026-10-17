@@ -21,7 +21,10 @@ window.EA = window.EA || {};
   EA.phone = function () { return get(K.phone, ''); };
   EA.setPhone = function (p) { set(K.phone, String(p || '').toUpperCase().replace(/\s+/g, '')); };
   EA.sendLink = function () { return get(K.link, ''); };
-  EA.setSendLink = function (l) { set(K.link, String(l || '').trim()); };
+  // Pasted links often carry hidden spaces or line breaks (from WhatsApp or a chat).
+  // Remove every one of them, so the link always works.
+  EA.cleanLink = function (l) { return String(l || '').replace(/[\s\u200B-\u200D\u2060\uFEFF]/g, ''); };
+  EA.setSendLink = function (l) { set(K.link, EA.cleanLink(l)); };
 
   // ID pattern from the rule book: ROOM-ESTATE-PHONE-000123
   function nextId(roomCode, estate) {

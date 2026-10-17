@@ -51,7 +51,7 @@
         s.querySelector('#set-cancel').onclick = closeSheet;
         s.querySelector('#set-save').onclick = function () {
           var p = s.querySelector('#set-phone').value.trim().toUpperCase();
-          var l = s.querySelector('#set-link').value.trim();
+          var l = EA.cleanLink(s.querySelector('#set-link').value);
           if (!/^P\d{2,3}$/.test(p)) { s.querySelector('#set-phone').focus(); toast('Kod telefon: P dan nombor, cth P07 · Phone code: P and a number, e.g. P07', 'bad'); return; }
           if (l && !/^https:\/\/script\.google\.com\//.test(l)) { s.querySelector('#set-link').focus(); toast('Pautan mesti bermula https://script.google.com/ · Link must start with https://script.google.com/', 'bad'); return; }
           EA.setPhone(p); EA.setSendLink(l);

@@ -45,7 +45,7 @@ No new rooms for field crews in peak crop (Aug–Nov).
 ## Still to do for the foundation
 
 - DONE 17 Oct: Google script live on the E-Book TEST sheet (yclee@shasabah.com) and tested.
-- Works with no signal when the page itself is opened (offline loading).
+- Opening with no signal: built 17 Oct (sw.js keeps a copy on the phone). To test on iPhone: flight mode + Wi-Fi off, reopen the link.
 - Shared lists filled from real estate data (blocks, task codes, rates) at the pilot.
 - Move Durian into rooms/durian/ as its own release.
-- checks/core.html written 17 Oct: 11 automatic checks + flight-mode test. To run on phones, the app needs a home (hosting).
+- checks/core.html: 11 of 11 pass on iPhone (17 Oct). App online at shasabah.github.io/e-book. Wi-Fi-off entry test still to confirm.

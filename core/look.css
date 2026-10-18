@@ -3,6 +3,9 @@
    Colours carry meaning everywhere: green saved/done, amber waiting/due soon,
    red overdue/problem, blue owner and HQ screens. No other colours.
    System fonts only, so the app looks right with no signal. */
+/* Anything marked hidden stays hidden, whatever its other styles say. */
+[hidden] { display: none !important; }
+
 :root {
   --paper: #f3f4f1;
   --surface: #ffffff;
@@ -180,3 +183,53 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .mono { font-family: var(--mono); }
 
 @media (prefers-reduced-motion: no-preference) { .tile { transition: border-color .15s; } }
+
+/* ---------- room screens (shared by every room) ---------- */
+.room { display: grid; gap: 16px; }
+.room-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.room-top h1 { margin: 0; font-size: 1.35rem; line-height: 1.15; }
+.room-top .grow { flex: 1; min-width: 0; }
+.back-btn { background: none; border: 1px solid var(--line); border-radius: var(--r); min-height: 44px; padding: 4px 12px; cursor: pointer; color: inherit; font: inherit; font-weight: 600; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 12px; }
+.card h2 { margin: 0; font-size: 1rem; }
+.step { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: var(--paper); font-size: .8rem; font-weight: 700; margin-right: 8px; vertical-align: 2px; }
+.fields { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+select.text-input { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 12px) 50%; background-size: 6px 6px; background-repeat: no-repeat; padding-right: 32px; }
+.hint { font-size: .82rem; color: var(--muted); margin: 0; }
+.warn { margin: 0; padding: 10px 12px; border-radius: var(--r); background: var(--wait-soft); color: var(--wait); font-weight: 600; }
+.warn .en { color: inherit; opacity: .85; }
+
+/* choice chips (lots, filters) */
+.picks { display: flex; flex-wrap: wrap; gap: 6px; }
+.pick { border: 1.5px solid var(--line); background: var(--surface); color: inherit; border-radius: 9px; padding: 6px 9px; min-height: 44px; min-width: 58px;
+  cursor: pointer; font: inherit; line-height: 1.1; text-align: center; }
+.pick b { display: block; font-family: var(--mono); font-size: .95rem; }
+.pick small { color: var(--muted); font-size: .72rem; }
+.pick[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.pick[aria-pressed="true"] small { color: inherit; opacity: .8; }
+
+/* attendance buttons */
+.seg { display: inline-flex; border: 1.5px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { border: 0; border-left: 1px solid var(--line); background: var(--surface); color: var(--muted); min-width: 46px; min-height: 44px;
+  font: inherit; font-weight: 700; cursor: pointer; padding: 0 6px; }
+.seg button:first-child { border-left: 0; }
+.seg button[aria-pressed="true"][data-k="H"] { background: var(--ok); color: #fff; }
+.seg button[aria-pressed="true"][data-k="S"] { background: var(--wait); color: #fff; }
+.seg button[aria-pressed="true"][data-k="C"] { background: var(--hq); color: #fff; }
+.seg button[aria-pressed="true"][data-k="T"] { background: var(--bad); color: #fff; }
+
+/* worker rows */
+.rows { display: grid; }
+.wrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.wrow:first-child { border-top: 0; }
+.wrow .who-w b { font-family: var(--mono); font-size: .9rem; }
+.wrow .job { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: .86rem; }
+.wrow .job .link-btn { padding: 4px 0; min-height: 32px; }
+.wrow.off { opacity: .55; }
+.counts { display: flex; gap: 6px; flex-wrap: wrap; }
+.bottom-bar { position: sticky; bottom: 0; z-index: 4; background: var(--paper); padding: 10px 0 calc(10px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line); }
+pre.chit { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: var(--mono); font-size: .82rem; background: var(--paper); border: 1px solid var(--line); border-radius: var(--r); padding: 12px; max-height: 50vh; overflow: auto; }
+.list-line { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid var(--line); }
+.list-line:first-child { border-top: 0; }
+.list-line .acts { display: flex; gap: 8px; }

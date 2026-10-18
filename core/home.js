@@ -32,6 +32,9 @@
     if (onReady) onReady($('sheet'));
   }
   function closeSheet() { $('sheet-back').hidden = true; $('sheet').innerHTML = ''; }
+  // Shared screen pieces, built once here. Rooms use these, never their own copy.
+  EA.ui = { toast: toast, openSheet: openSheet, closeSheet: closeSheet, esc: esc,
+            dayBm: DAY_BM, dayEn: DAY_EN, monBm: MON_BM, monEn: MON_EN, hhmm: hhmm };
   $('sheet-back').addEventListener('click', function (e) { if (e.target === $('sheet-back')) closeSheet(); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('sheet-back').hidden) closeSheet(); });
 
@@ -139,6 +142,12 @@
     $('date-en').textContent = DAY_EN[d.getDay()] + ', ' + d.getDate() + ' ' + MON_EN[d.getMonth()] + ' ' + d.getFullYear();
   }
 
+  // A room can be entered when it has a screen and is live; on the test copy
+  // a room still being built can be tried too.
+  function enterable(r) {
+    return !!(EA.roomViews && EA.roomViews[r.id]) && (r.state === 'live' || EA.config.TEST_MODE);
+  }
+
   function renderTiles(u, estate) {
     var rooms = EA.roomsFor(u, estate);
     if (!rooms.length) {
@@ -149,11 +158,12 @@
       return '<button class="tile ' + r.state + '" type="button" data-room="' + r.id + '">' +
         '<span class="mark" aria-hidden="true">' + r.mark + '</span>' +
         '<span class="name"><span class="bm">' + esc(r.bm) + '</span><span class="en">' + esc(r.en) + '</span></span>' +
-        '<span class="when">' + esc(r.when) + '</span></button>';
+        '<span class="when">' + esc(r.when) + (enterable(r) && r.state !== 'live' ? '<br><b>UJIAN · boleh cuba · TEST · try it</b>' : '') + '</span></button>';
     }).join('');
     $('tiles').querySelectorAll('.tile').forEach(function (t) {
       t.onclick = function () {
         var r = EA.rooms.find(function (x) { return x.id === t.dataset.room; });
+        if (enterable(r)) { location.hash = r.id; return; }
         openSheet('<h2 id="sheet-title"><span class="bm">' + esc(r.bm) + '</span><span class="en">' + esc(r.en) + '</span></h2>' +
           '<p><span class="bm" style="font-weight:400">' + esc(r.note.bm) + '</span><span class="en">' + esc(r.note.en) + '</span></p>' +
           '<div class="actions"><button class="btn btn-main" type="button" id="sheet-ok">OK<small>Faham</small></button></div>',
@@ -210,6 +220,13 @@
     renderGreeting();
     renderTiles(u, estate);
     renderPlan(u);
+    // Room screen, when the address ends in #room-id
+    var rid = location.hash.replace('#', '');
+    var room = rid && EA.roomsFor(u, estate).find(function (r) { return r.id === rid && enterable(r); });
+    $('home-main').hidden = !!room;
+    $('room').hidden = !room;
+    if (room) EA.roomViews[room.id].render($('room'), { user: u, estate: estate, room: room });
+    else $('room').innerHTML = '';
     renderSync();
     $('ver').textContent = EA.VERSION;
     $('foot-phone').textContent = EA.phone() || '—';
@@ -244,6 +261,7 @@
   }
 
   document.addEventListener('ea:sync', function () { if (EA.currentUser()) renderSync(); });
+  window.addEventListener('hashchange', function () { render(); window.scrollTo(0, 0); });
   setInterval(function () { if (EA.currentUser()) { renderSync(); renderGreeting(); } }, 60000);
   setInterval(checkUpdate, 30 * 60000);
 

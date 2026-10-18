@@ -39,7 +39,7 @@ window.EA = window.EA || {};
 
   // Save one entry on the phone. The standard columns always come first
   // and cannot be overwritten by the room's own fields.
-  EA.save = function (tab, roomCode, estate, fields, replaces) {
+  EA.save = function (tab, roomCode, estate, fields, replaces, status) {
     var user = EA.currentUser();
     if (!user) throw new Error('Not logged in');
     var est = EA.lists.estate(estate);
@@ -51,7 +51,7 @@ window.EA = window.EA || {};
       keyed_by: user.code,
       keyed_at: stamp(),
       phone: EA.phone(),
-      status: 'active',
+      status: status === 'removed' ? 'removed' : 'active',
       replaces: replaces || ''
     };
     Object.keys(fields || {}).forEach(function (k) { if (!(k in row)) row[k] = fields[k]; });
@@ -63,6 +63,8 @@ window.EA = window.EA || {};
   };
 
   EA.waiting = function () { return get(K.queue, []).length; };
+  // Is this entry still waiting on the phone?
+  EA.isWaiting = function (id) { return get(K.queue, []).some(function (q) { return q.row.id === id; }); };
   EA.lastSent = function () { return get(K.lastSent, 0); };
   EA.oldestWaiting = function () { var q = get(K.queue, []); return q.length ? q[0].savedAt : 0; };
 

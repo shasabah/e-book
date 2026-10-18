@@ -167,6 +167,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .sheet-back { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 20; display: grid; align-items: end; justify-items: center; }
 .sheet { width: 100%; max-width: 520px; background: var(--surface); border-radius: 18px 18px 0 0; display: grid; gap: 14px;
   padding: 20px max(18px, env(safe-area-inset-right, 0px)) calc(20px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px)); }
+/* A tall sheet scrolls inside itself, so its buttons can always be reached. */
+.sheet { max-height: 92vh; max-height: 92dvh; overflow-y: auto; overscroll-behavior: contain; align-content: start; }
 @media (min-width: 700px) { .sheet-back { align-items: center; } .sheet { border-radius: 18px; } }
 .sheet h2 { margin: 0; font-size: 1.2rem; }
 .sheet p { margin: 0; }
@@ -233,3 +235,15 @@ pre.chit { margin: 0; white-space: pre-wrap; word-break: break-word; font-family
 .list-line { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid var(--line); }
 .list-line:first-child { border-top: 0; }
 .list-line .acts { display: flex; gap: 8px; }
+
+/* chit table laid out like the paper muster chit */
+.chit-wrap { overflow-x: auto; }
+.chit-t { width: 100%; border-collapse: collapse; font-size: .86rem; font-variant-numeric: tabular-nums; }
+.chit-t th, .chit-t td { border-bottom: 1px solid var(--line); padding: 6px 4px; text-align: center; vertical-align: top; }
+.chit-t th:nth-child(2), .chit-t td:nth-child(2), .chit-t td[colspan] { text-align: left; }
+.chit-t th { font-size: .75rem; color: var(--muted); font-weight: 700; }
+.chit-t .sec td { background: var(--paper); font-weight: 700; padding-top: 8px; }
+.chit-t .tot td { font-weight: 700; border-top: 1.5px solid var(--ink); }
+.chit-t .grand td { font-weight: 800; border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink); }
+.chit-t .en { font-size: .75rem; }
+.bad-text { color: var(--bad); font-size: .85rem; }

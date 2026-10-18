@@ -11,7 +11,7 @@
 
   var TAB = 'FH_COLLECT', TAB_DIS = 'FH_DISPATCH', ROOM = 'FH';
   var K = { draft: 'fh.collectdraft', saved: 'fh.collect' };
-  var MILLS = ['Boustead', 'Sri Kamusan CC'];
+  var MILLS = ['Boustead (BOU)', 'Sri Kamusan CC (SKCC)', 'SKPOM', 'Fortuna', 'Sinar C'];   // from the Sugut FFB tonnage file 2026
 
   var el, ctx, draft;
   function ui() { return EA.ui; }

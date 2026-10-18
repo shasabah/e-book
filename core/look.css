@@ -276,3 +276,7 @@ pre.chit { margin: 0; white-space: pre-wrap; word-break: break-word; font-family
 .pick-line { display: flex; gap: 10px; align-items: center; cursor: pointer; }
 .pick-line input { width: 22px; height: 22px; flex: none; }
 textarea.text-input { font: inherit; resize: vertical; }
+
+/* v19: the delivery note's "bunches with no harvest record" (folded away when there are lots to tick) */
+details.card-sub { margin: 10px 0; border: 1px dashed var(--line, #ccc); border-radius: 10px; padding: 8px 10px; }
+details.card-sub summary { cursor: pointer; font-weight: 600; padding: 4px 0; }

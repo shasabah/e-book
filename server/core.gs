@@ -129,7 +129,16 @@ function saveRow(user, tab, row) {
     if (sh.getLastRow() > 1) {
       var found = sh.getRange(2, idCol, sh.getLastRow() - 1, 1)
         .createTextFinder(String(row.id)).matchEntireCell(true).findNext();
-      if (found) return { ok: true, id: row.id, already: true };
+      if (found) {
+        // Same id: only "already received" if it is truly the same entry (same
+        // person, same time keyed). A different entry with the same id means two
+        // phones share a phone code: refuse it loudly, never drop it quietly.
+        var r = found.getRow();
+        var kb = sh.getRange(r, head.indexOf('keyed_by') + 1).getDisplayValue();
+        var ka = sh.getRange(r, head.indexOf('keyed_at') + 1).getDisplayValue();
+        if (kb === String(row.keyed_by) && ka.slice(0, 16) === String(row.keyed_at).slice(0, 16)) return { ok: true, id: row.id, already: true };
+        return { ok: false, error: 'id_clash' };
+      }
     }
 
     var values = head.map(function (c) { return plain(row[c]); });
@@ -148,6 +157,8 @@ function plain(v) {
   if (/^[=+@]/.test(s)) return "'" + s;
   // Lot numbers like 1-5 would be turned into dates by the sheet; keep them as text.
   if (/^\d+-\d+/.test(s) && !/^\d{4}-\d{2}-\d{2}/.test(s)) return "'" + s;
+  // Date and time typed by the phone, kept exactly as sent (used to spot a true resend).
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(s)) return "'" + s;
   // Codes with a leading zero, like block 01, would lose the zero; keep them as text.
   if (/^0\d+$/.test(s)) return "'" + s;
   return s;

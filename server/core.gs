@@ -53,6 +53,7 @@ function doPost(e) {
     return reply({ ok: true, user: { code: user.user_code, name: user.name, role: user.role, estates: user.estates } });
   }
   if (req.action === 'save') return reply(saveRow(user, req.tab, req.row));
+  if (req.action === 'saveBatch') return reply(saveBatch(user, req.items));
   return reply({ ok: false, error: 'unknown_action' });
 }
 
@@ -145,6 +146,69 @@ function saveRow(user, tab, row) {
     var values = head.map(function (c) { return plain(row[c]); });
     sh.appendRow(values);
     return { ok: true, id: row.id };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Many entries in one trip (the phone sends everything waiting at once).
+// Same checks as saveRow, one lock, each tab read once, new rows written together.
+// Answers one result per entry, in order: ok / already / error.
+var BATCH_MAX = 100;
+function saveBatch(user, items) {
+  if (!items || !items.length || items.length > BATCH_MAX) return { ok: false, error: 'bad_batch' };
+  var ss = book_();
+  var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(25000)) return { ok: false, error: 'busy' };
+  try {
+    var tabs = {}, results = [];
+    function tabInfo(name) {
+      if (tabs[name] !== undefined) return tabs[name];
+      var sh = ss.getSheetByName(name);
+      if (!sh || sh.getLastColumn() < 1) return (tabs[name] = null);
+      var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+      var missing = STANDARD_COLS.filter(function (c) { return head.indexOf(c) < 0; });
+      var seen = {};
+      if (!missing.length && sh.getLastRow() > 1) {
+        var n = sh.getLastRow() - 1;
+        var ids = sh.getRange(2, head.indexOf('id') + 1, n, 1).getDisplayValues();
+        var kb = sh.getRange(2, head.indexOf('keyed_by') + 1, n, 1).getDisplayValues();
+        var ka = sh.getRange(2, head.indexOf('keyed_at') + 1, n, 1).getDisplayValues();
+        for (var i = 0; i < n; i++) seen[ids[i][0]] = kb[i][0] + '|' + String(ka[i][0]).slice(0, 16);
+      }
+      return (tabs[name] = { sh: sh, head: head, missing: missing, seen: seen, add: [] });
+    }
+    items.forEach(function (it) {
+      var row = it && it.row, tab = it && it.tab;
+      var id = row && row.id;
+      function fail(e) { results.push({ id: id || '', ok: false, error: e }); }
+      if (!tab || tab === USERS_TAB || !row || typeof row !== 'object') return fail('bad_entry');
+      var t = tabInfo(String(tab));
+      if (!t) return fail('no_tab:' + tab);
+      if (t.missing.length) return fail('tab_missing_col:' + t.missing[0]);
+      if (!id) return fail('no_id');
+      if (user.estates.indexOf(row.estate) < 0) return fail('not_your_estate');
+      if (STATUSES.indexOf(row.status) < 0) return fail('bad_status');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(row.date))) return fail('bad_date');
+      row.keyed_by = user.user_code;
+      row.received_at = now;
+      var extra = Object.keys(row).filter(function (k) { return t.head.indexOf(k) < 0; });
+      if (extra.length) return fail('unknown_col:' + extra.join(','));
+      var mark = row.keyed_by + '|' + String(row.keyed_at).slice(0, 16);
+      if (t.seen[id] !== undefined) {
+        if (t.seen[id] === mark) { results.push({ id: id, ok: true, already: true }); return; }
+        return fail('id_clash');
+      }
+      t.seen[id] = mark;
+      t.add.push(t.head.map(function (c) { return plain(row[c]); }));
+      results.push({ id: id, ok: true });
+    });
+    Object.keys(tabs).forEach(function (name) {
+      var t = tabs[name];
+      if (t && t.add.length) t.sh.getRange(t.sh.getLastRow() + 1, 1, t.add.length, t.head.length).setValues(t.add);
+    });
+    return { ok: true, results: results };
   } finally {
     lock.releaseLock();
   }

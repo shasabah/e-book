@@ -164,13 +164,89 @@
 
   // ---------- the screen ----------
   // The room's screens, as tabs at the top. Built once here for both screens.
-  function tabs(active) {
+  function tabs(active, user) {
+    var loaderOnly = user && user.role === 'Worker';
     return '<nav class="tabs" aria-label="Skrin · Screens">' +
+      (loaderOnly ? '' :
       '<a href="#field-harvest"' + (active === 'muster' ? ' aria-current="page"' : '') + '><span class="bm">Chit pagi</span><span class="en">Morning chit</span></a>' +
-      '<a href="#field-harvest/work"' + (active === 'work' ? ' aria-current="page"' : '') + '><span class="bm">Kerja harian</span><span class="en">Day\'s work</span></a></nav>';
+      '<a href="#field-harvest/work"' + (active === 'work' ? ' aria-current="page"' : '') + '><span class="bm">Kerja harian</span><span class="en">Day\'s work</span></a>') +
+      '<a href="#field-harvest/collect"' + (active === 'collect' ? ' aria-current="page"' : '') + '><span class="bm">Kutip & hantar</span><span class="en">Collect & dispatch</span></a></nav>';
   }
 
+  // ---------- crop backlog (field and ramp) ----------
+  // Worked out by the office from everyone's entries (harvesters' bunches, the
+  // loader's collection, lorries) and kept on the phone for no-signal mornings.
+  // With no sending link (test copy) it is worked out from this phone's own entries.
+  function backlogKey(estate) { return 'fh.backlog.' + estate; }
+  function getBacklog(estate) { return EA.sendLink() ? EA.local.get(backlogKey(estate), null) : localBacklog(estate); }
+  async function refreshBacklog(estate) {
+    if (!EA.sendLink()) { document.dispatchEvent(new CustomEvent('fh:backlog')); return localBacklog(estate); }
+    var b = await EA.ask('backlog', { estate: estate });
+    if (b) { EA.local.set(backlogKey(estate), b); document.dispatchEvent(new CustomEvent('fh:backlog')); }
+    return b;
+  }
+  function localBacklog(estate) {
+    var cut = [], col = [], dis = [];
+    EA.local.get('fh.work', []).forEach(function (s) {
+      if (s.estate !== estate) return;
+      s.rec.lines.forEach(function (l) { if (l.task_code === 'HV01') cut.push({ date: s.date, lot: l.lot, block: l.block, bunches: Number(l.bunches) || 0 }); });
+    });
+    EA.local.get('fh.collect', []).forEach(function (s) {
+      if (s.estate !== estate) return;
+      s.lines.forEach(function (l) { col.push({ date: s.date, lot: l.lot, block: l.block, bunches: Number(l.bunches) || 0, cleared: l.cleared }); });
+      if (s.dispatch) dis.push({ date: s.date, bunches: Number(s.dispatch.bunches) || 0, ramp_cleared: s.dispatch.ramp_cleared });
+    });
+    var clearedOn = {}, lots = {};
+    col.forEach(function (r) { if (r.cleared === 'Y' && (!clearedOn[r.lot] || r.date > clearedOn[r.lot])) clearedOn[r.lot] = r.date; });
+    function lot(l, b) { return lots[l] || (lots[l] = { lot: l, block: b, cut: 0, col: 0, since: '' }); }
+    cut.forEach(function (r) { if (!r.lot || (clearedOn[r.lot] && r.date <= clearedOn[r.lot])) return; var x = lot(r.lot, r.block); x.cut += r.bunches; if (!x.since || r.date < x.since) x.since = r.date; });
+    col.forEach(function (r) { if (!r.lot || (clearedOn[r.lot] && r.date <= clearedOn[r.lot])) return; lot(r.lot, r.block).col += r.bunches; });
+    var field = Object.keys(lots).map(function (k) { var x = lots[k]; return { lot: x.lot, block: x.block, bunches: Math.max(0, x.cut - x.col), since: x.since }; })
+      .filter(function (x) { return x.bunches > 0; }).sort(function (a, b) { return a.lot.localeCompare(b.lot, undefined, { numeric: true }); });
+    var empty = ''; dis.forEach(function (r) { if (r.ramp_cleared === 'Y' && r.date > empty) empty = r.date; });
+    var inR = 0, outR = 0, since = '';
+    col.forEach(function (r) { if (r.date > empty) { inR += r.bunches; if (!since || r.date < since) since = r.date; } });
+    dis.forEach(function (r) { if (r.date > empty || (r.date === empty && r.ramp_cleared !== 'Y')) outR += r.bunches; });
+    return { ok: true, estate: estate, at: EA.today() + ' ' + EA.ui.hhmm(new Date()), local: true, field: field,
+             fieldTotal: field.reduce(function (a, x) { return a + x.bunches; }, 0), ramp: { bunches: Math.max(0, inR - outR), since: since } };
+  }
+  function shortDate(iso) { return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : ''; }
+  function backlogLines(b) {
+    if (!b) return [];
+    return ['Baki ladang · Field: ' + (b.fieldTotal || 0) + ' tandan' + (b.field && b.field.length ? ' (' + b.field.map(function (x) { return x.lot + ' ' + x.bunches; }).join(', ') + ')' : ''),
+            'Baki ramp · Ramp: ' + ((b.ramp && b.ramp.bunches) || 0) + ' tandan' + (b.ramp && b.ramp.bunches && b.ramp.since ? ' (sejak ' + shortDate(b.ramp.since) + ')' : '')];
+  }
+  function backlogCard(estate) {
+    var b = getBacklog(estate);
+    var body = !b ? '<p class="hint">Belum ada. Perlu isyarat sekali untuk ambil dari pejabat. · Not yet: needs signal once to get it from the office.</p>' :
+      '<div class="list-line"><div><b>Ladang · Field: ' + (b.fieldTotal || 0) + ' tandan</b><span class="en">' +
+        (b.field.length ? b.field.map(function (x) { return 'Petak ' + esc(x.lot) + ': ' + x.bunches + ' (sejak ' + shortDate(x.since) + ')'; }).join(' · ') : 'Tiada baki · none left') + '</span></div></div>' +
+      '<div class="list-line"><div><b>Ramp: ' + ((b.ramp && b.ramp.bunches) || 0) + ' tandan</b><span class="en">' +
+        (b.ramp && b.ramp.bunches ? 'Belum dihantar ke kilang sejak ' + shortDate(b.ramp.since) + ' · not yet sent to the mill' : 'Kosong · empty') + '</span></div></div>' +
+      '<p class="hint">' + (b.local ? 'Dikira dari telefon ini (salinan ujian) · from this phone (test copy)' : 'Dikira pejabat ' + esc(b.at) + ' · worked out by the office') + '</p>';
+    return '<section class="card" id="fh-backlog" data-estate="' + esc(estate) + '" aria-labelledby="fh-bl"><div class="room-top"><h2 id="fh-bl" class="grow"><span class="inline"><span class="bm">Baki buah</span> · <span class="en">Crop backlog</span></span></h2>' +
+      '<button type="button" class="btn btn-ghost" data-refresh-backlog="1">REFRESH<small>Kemas kini</small></button></div>' + body + '</section>';
+  }
+  function wireBacklog(container, estate) {
+    container.querySelectorAll('[data-refresh-backlog]').forEach(function (b) {
+      b.onclick = async function () {
+        b.disabled = true;
+        var r = await refreshBacklog(estate);
+        b.disabled = false;
+        if (!r) EA.ui.toast('Tiada isyarat atau pautan · No signal or link', 'wait');
+      };
+    });
+  }
+  document.addEventListener('fh:backlog', function () {
+    var card = document.getElementById('fh-backlog');
+    if (!card) return;
+    var estate = card.dataset.estate;
+    card.outerHTML = backlogCard(estate);
+    wireBacklog(document, estate);
+  });
+
   function render(container, c) {
+    if (c.user.role === 'Worker' || c.screen === 'collect') return EA.fh.collect.render(container, c);
     if (c.screen === 'work' && EA.fh.work) return EA.fh.work.render(container, c);
     el = container; ctx = c;
     draft = loadDraft();
@@ -178,7 +254,7 @@
     var head = '<div class="room-top">' +
       '<button type="button" class="back-btn" id="fh-back">← <span class="inline"><span class="bm">Bilik</span></span></button>' +
       '<div class="grow"><h1>Chit muster pagi</h1><span class="en">Morning muster chit · ' + esc(ctx.estate) + '</span></div>' +
-      (testing ? '<span class="test-badge">UJIAN · TEST</span>' : '') + '</div>' + tabs('muster');
+      (testing ? '<span class="test-badge">UJIAN · TEST</span>' : '') + '</div>' + tabs('muster', ctx.user);
 
     if (!canKey(ctx.user)) {
       el.innerHTML = head + '<div class="card"><p><span class="bm">Pandangan pejabat untuk chit muster akan datang kemudian.</span>' +
@@ -191,10 +267,10 @@
       el.innerHTML = head +
         '<p class="msg ok-msg"><span class="bm">Chit hari ini sudah disimpan. Tekan VIEW untuk lihat, atau CORRECT untuk betulkan.</span>' +
         '<span class="en">Today\'s chit is saved. Tap VIEW to see it, or CORRECT to fix it.</span></p>' +
-        todayCard() +
+        todayCard() + backlogCard(ctx.estate) +
         '<button type="button" class="btn btn-ghost" id="fh-new">+ NEW CHIT<small>Chit baru (jarang · rarely needed)</small></button>';
       $('#fh-new').onclick = function () { draft.newChit = true; keepDraft(); render(el, ctx); };
-      wireCommon();
+      wireCommon(); wireBacklog(el, ctx.estate); refreshBacklog(ctx.estate);
       return;
     }
     var d = new Date();
@@ -202,6 +278,7 @@
       (d.getDay() === 0 ? '<p class="warn"><span class="bm">Hari Ahad: kerja perlu kelulusan Penolong Pengurus sebelum dikira untuk gaji.</span><span class="en">Sunday: work needs the Assistant Manager\'s approval before it counts for pay.</span></p>' : '') +
       (draft.replacing ? '<p class="warn"><span class="bm">Membetulkan chit ' + esc(draft.replacing) + '. Chit lama kekal; yang baru menggantikannya.</span><span class="en">Correcting chit ' + esc(draft.replacing) + '. The old one stays on record; this one replaces it.</span></p>' : '') +
 
+      backlogCard(ctx.estate) +
       '<section class="card" aria-labelledby="fh-s1"><h2 id="fh-s1"><span class="step">1</span><span class="inline"><span class="bm">Kerja hari ini</span> · <span class="en">Today\'s jobs</span></span></h2>' +
       '<p class="hint">' + esc(ui().dayBm[d.getDay()] + ', ' + d.getDate() + ' ' + ui().monBm[d.getMonth()] + ' ' + d.getFullYear()) + ' · ' + esc(ctx.estate) + '</p>' +
       (lastChit() && !draft.jobs.length ? '<div class="list-line copy-last"><div><b>Sama seperti chit ' + esc(niceDate(lastChit().date)) + '?</b>' +
@@ -237,7 +314,7 @@
     $('#fh-raint').oninput = function () { draft.rain_time = this.value; keepDraft(); };
     $('#fh-check').onclick = check;
     drawAll();
-    wireCommon();
+    wireCommon(); wireBacklog(el, ctx.estate); refreshBacklog(ctx.estate);
   }
 
   function drawAll() { drawJobs(); drawRows(); drawRain(); drawTable(); }
@@ -520,6 +597,7 @@
   function buildChit(chitId, confirmedAt, checker) {
     return { chit: chitId, date: EA.today(), estate: ctx.estate, rows: draftRows(), jobs: JSON.parse(JSON.stringify(draft.jobs)),
              rain_mm: draft.rain_mm, rain_time: draft.rain_time, checker: checker, confirmedAt: confirmedAt,
+             backlog: getBacklog(ctx.estate),
              keyedBy: ctx.user.code, keyedName: ctx.user.name, rev: 1 };
   }
 
@@ -576,6 +654,7 @@
     L.push('*CHIT MUSTER ' + (est ? est.company + ' ' : '') + c.estate + '*' + (c.rev > 1 ? ' _(dibetulkan · corrected)_' : ''));
     L.push(ui().dayBm[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear());
     L.push('Hujan semalam: ' + (Number(c.rain_mm) || 0).toFixed(2) + ' mm' + (c.rain_time ? ' (' + c.rain_time + ')' : '') + ' · Bulan ini: ' + rainMonth(c.date, c.chit.indexOf('(') === 0 ? c.rain_mm : undefined).toFixed(2) + ' mm');
+    backlogLines(c.backlog).forEach(function (x) { L.push(x); });
     L.push('```');
     L.push(pad('Blk', 4) + pad('Job', 17) + pad('Mdr', 4) + pad('M', 3) + pad('F', 3) + 'Tot');
     s.sections.forEach(function (x) {
@@ -690,4 +769,9 @@
   EA.fh.summary = summary;
   EA.fh.tabs = tabs;
   EA.fh.copyText = copyText;
+  EA.fh.getBacklog = getBacklog;
+  EA.fh.refreshBacklog = refreshBacklog;
+  EA.fh.backlogCard = backlogCard;
+  EA.fh.wireBacklog = wireBacklog;
+  EA.fh.shortDate = shortDate;
 })();

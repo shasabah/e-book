@@ -237,6 +237,11 @@
     var r = await EA.send();
     if (r.error === 'offline' || r.error === 'network') toast('Tiada isyarat. Akan dihantar bila ada isyarat · No signal. Will send when signal returns', 'wait');
     else if (r.error === 'nolink') toast('Tiada pautan hantar · No sending link', 'bad');
+    else if (r.error === 'id_clash') openSheet('<h2 id="sheet-title"><span class="bm">Kod telefon ini sama dengan telefon lain</span><span class="en">This phone code is already used by another phone</span></h2>' +
+      '<p><span class="bm" style="font-weight:400">Pejabat menolak catatan ini supaya tiada data hilang. Catatan kekal di telefon ini. Hubungi Yu Chen untuk kod telefon baru.</span>' +
+      '<span class="en">The office refused these entries so nothing is lost. They stay on this phone. Ask Yu Chen for a new phone code.</span></p>' +
+      '<div class="actions"><button class="btn btn-main" type="button" id="clash-ok">OK<small>Faham</small></button></div>',
+      function (s) { s.querySelector('#clash-ok').onclick = closeSheet; });
     else if (r.error) toast('Pejabat menolak: ' + r.error + ' · Office refused', 'bad');
     else if (r.sent) toast(r.sent + ' dihantar' + (r.test ? ' (ujian)' : '') + ' · sent' + (r.test ? ' (test)' : ''));
   };

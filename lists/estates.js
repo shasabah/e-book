@@ -20,6 +20,10 @@ EA.lists.blocks = [
 ];
 // Mills and collecting centres Sugut sends to (from the Sugut FFB tonnage file 2026).
 EA.lists.mills = ['Boustead (BOU)', 'Sri Kamusan CC (SKCC)', 'SKPOM', 'Fortuna', 'Sinar C'];
+// Mill grading limits: above these the staff must say what is going on (DRAFT, to confirm
+// with Yu Chen / the Assistant Manager). Percent of the bunches graded. Any rejected
+// bunch or any penalty also needs an explanation.
+EA.lists.gradingLimits = { unripe: 5, empty: 3, rotten: 1, dirty: 2, longStalk: 5 };
 EA.lists.estate = function (code) {
   return EA.lists.estates.find(function (e) { return e.code === code; }) || null;
 };

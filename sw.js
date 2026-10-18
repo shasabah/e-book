@@ -6,7 +6,8 @@
 // new copy in the background, and the LOAD IT button switches to it.
 importScripts('core/version.js');
 
-var CACHE = 'ebook-v' + EA.VERSION;
+// The page registers this file as sw.js?v=<version>, so a new version is a new file.
+var CACHE = 'ebook-v' + (new URL(location.href).searchParams.get('v') || EA.VERSION);
 var FILES = [
   './',
   'index.html',

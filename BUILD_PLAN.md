@@ -62,6 +62,7 @@ No new rooms for field crews in peak crop (Aug–Nov).
    - DONE 18 Oct (v14): screen 4, mill ticket: kg as printed, found by the delivery note (DO) number, tonnes split by block, ABW, rejects, mill bunch count. Office script version 14.
    - DONE 18 Oct (v15): the staff chooses the harvest on each ticket; ABW and each harvester's tonnes worked out; full mill grading with the staff's explanation when poor, sent to the Assistant Manager; delivery note for staff / clerk / mandor only.
    - DONE 18 Oct (v16): lots ticked per lorry with part bunches allowed, block balance kept for the next ticket; mill grading keyed by the estate clerk from WhatsApp (FH_GRADING); poor grading explained by the staff on the next morning's chit.
+   - DONE 18 Oct (v19): staff ticks the lots on the lorry at the delivery note (FH_DISPATCH_LOT, correctable until ticketed); clerk keys the ticket and the grading together from WhatsApp, DO no. finds the lots; staff can key a ticket when the clerk is away.
    - Next: lorry request at 5 MT; monthly tonnes per harvester (pay check); Assistant Manager's direction on each alert; office view (Wawa: tonnage by block and mill); ticket photo; older-day corrections by the clerk.
 2. Build on the test copy; Sugut junior staff tests with made-up workers.
 3. Pilot from 4 Jan beside the paper pocket check roll for about a month.

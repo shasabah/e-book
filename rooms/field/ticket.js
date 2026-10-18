@@ -7,7 +7,12 @@
 // (ticket no., DO no. = our delivery note no., weight in / out / nett in kg) and the grading
 // with it. Typing the DO no. finds the delivery note and its lots. The staff can still key a
 // ticket when the clerk is away. A lorry with no lots ticked on its delivery note (or no
-// delivery note) still has its lots ticked here, as before. Then the batch closes on the ticket:
+// delivery note) still has its lots ticked here, as before.
+// v20 (Yu Chen): on the staff's ticket screen the lorry waiting is picked by itself (the oldest),
+// and its lots show as choices the staff can still change, with the weights on the same screen.
+// A change of lots there corrects the delivery note too (new rows replace its rows), so the
+// lorry, its lots and the ticket always agree. The clerk sees the lots as the staff left them.
+// Then the batch closes on the ticket:
 //   ABW kg = nett MT x 1000 / bunches on the ticket
 //   each harvester's MT = his bunches x ABW  (the base of harvesting pay)
 // The mill's grading sheet is keyed by the estate clerk from the WhatsApp group, as a step
@@ -36,6 +41,7 @@
   function $(sel) { return el.querySelector(sel); }
   function canKey(u) { return u.role !== 'HQ'; }
   function canGrade(u) { return u.role === 'Clerk' || u.role === 'Owner'; }    // for now: the estate clerk
+  function canPick(u) { return u.role !== 'Clerk'; }                           // the staff chooses the lots; the clerk keys from WhatsApp
   function num(v) { var n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isFinite(n) ? n : 0; }
   function r3(n) { return Math.round(n * 1000) / 1000; }
   function r2(n) { return Math.round(n * 100) / 100; }
@@ -52,7 +58,7 @@
   function keepGrading(g) { var list = EA.local.get(K.grades, []).filter(function (x) { return !(x.estate === g.estate && x.ticket_no === g.ticket_no); }); list.push(g); EA.local.set(K.grades, list); }
   function blank() {
     return { date: EA.today(), estate: ctx.estate, trip: '', lorryBunches: 0, ticket_no: '', time: '', mill: mills()[0], do_no: '', lorry: '', driver: '',
-             w1: '', w2: '', ded: '', nett: '', blocks: {}, sel: {}, selTouched: false, note: '', replacing: '', dnLots: [] };
+             w1: '', w2: '', ded: '', nett: '', blocks: {}, sel: {}, selTouched: false, note: '', replacing: '', dnLots: [], dnRef: null, extra: {}, noAuto: false };
   }
   function loadDraft() {
     var all = EA.local.get(K.draft, {}), d = all[ctx.estate];
@@ -71,7 +77,8 @@
       var total = Object.keys(s.dispatch.blocks).reduce(function (a, b) { return a + num(s.dispatch.blocks[b]); }, 0);
       if (!total) return;
       out.push({ trip: s.dispatch.trip || ('L-' + s.date + '-' + s.at), date: s.date, lorry: s.dispatch.lorry, mill: s.dispatch.mill, dn: s.dispatch.dn || '', driver: s.dispatch.driver || '',
-                 blocks: s.dispatch.blocks, bunches: total, lots: (s.dispatch.parts || []).map(function (h) { return Object.assign({}, h); }) });
+                 ramp_cleared: s.dispatch.ramp_cleared || '', blocks: s.dispatch.blocks, bunches: total, blockIds: s.disIds || {},
+                 lots: (s.dispatch.parts || []).map(function (h) { return Object.assign({}, h, { row: (s.lotIds || {})[h.id] || '' }); }) });
     });
     return out;
   }
@@ -90,12 +97,33 @@
   }
 
   // ---------- harvest not yet on a lorry or ticket (shared with the delivery note) ----------
-  function lots() { return EA.fh.harvest.openLots(ctx.estate, { ticket: draft.replacing }); }
   function fromDn() { return (draft.dnLots || []).length > 0; }    // the lots come from the delivery note
+  // The staff may change the delivery note's lots here, when its rows are known (so they can be replaced).
+  function pickDn() { return fromDn() && canPick(ctx.user) && !!draft.dnRef && Object.keys(draft.dnRef.disIds || {}).length > 0; }
+  // Open lots; when the staff is choosing the delivery note's lots, that lorry's own lots are given back.
+  function lots() {
+    var skip = { ticket: draft.replacing };
+    if (pickDn()) { skip.trip = draft.trip; skip.parts = draft.dnRef.parts; }
+    return EA.fh.harvest.openLots(ctx.estate, skip);
+  }
+  function sameParts(a, b) {
+    var m = {}; a.forEach(function (h) { m[h.id] = (m[h.id] || 0) + num(h.bunches); });
+    b.forEach(function (h) { m[h.id] = (m[h.id] || 0) - num(h.bunches); });
+    return Object.keys(m).every(function (k) { return m[k] === 0; });
+  }
+  // With no lorry chosen, take the oldest waiting (the staff always; the clerk only when there is just one).
+  function autoPick() {
+    if (draft.trip || draft.replacing || draft.noAuto || draft.do_no || !canKey(ctx.user)) return false;
+    var list = trips().slice().sort(function (a, b) { return a.date === b.date ? (a.trip < b.trip ? -1 : 1) : (a.date < b.date ? -1 : 1); });
+    if (!list.length || (!canPick(ctx.user) && list.length > 1)) return false;
+    useTrip(list[0]);
+    return true;
+  }
   async function refreshOffice() {
     if (!EA.sendLink()) return;
     await EA.fh.harvest.refreshOpen(ctx.estate);
     if (!draft.trip && draft.do_no) matchDn(true);
+    else if (autoPick() && el && document.body.contains(el) && !el.hidden && $('#tk-tripbox')) render(el, ctx);
     if (canGrade(ctx.user)) { var r3x = await EA.ask('ungraded', { estate: ctx.estate }); if (r3x && r3x.tickets) EA.local.set(K.ungraded + ctx.estate, r3x.tickets); }
     if (el && document.body.contains(el) && !el.hidden && $('#tk-tripbox')) { keepDraft(); drawTrip(); drawLots(); drawSums(); drawGradeList(); }
   }
@@ -108,7 +136,13 @@
     var parts = [], open = {}, after = {}, byBlock = {}, dn = fromDn() && d === draft;
     var list = lots();
     list.forEach(function (l) { open[l.block] = (open[l.block] || 0) + l.open; });
-    if (dn) {
+    if (dn && pickDn()) {
+      // The staff's choice, starting from the delivery note's lots; bunches with no harvest record stay as on the lorry.
+      parts = EA.fh.harvest.takeParts(list, d.sel);
+      parts.forEach(function (h) { byBlock[h.block] = (byBlock[h.block] || 0) + h.bunches; });
+      Object.keys(d.extra || {}).forEach(function (b) { if (num(d.extra[b]) > 0) byBlock[b] = (byBlock[b] || 0) + num(d.extra[b]); });
+      Object.keys(open).forEach(function (b) { after[b] = open[b] - parts.filter(function (h) { return h.block === b; }).reduce(function (a, h) { return a + h.bunches; }, 0); });
+    } else if (dn) {
       // The lots are those ticked on the delivery note; the block totals also hold any bunches with no harvest record.
       parts = d.dnLots.map(function (h) { return { id: h.id, date: h.date, lot: h.lot, block: h.block, worker_id: h.worker_id, bunches: num(h.bunches) }; });
       Object.keys(d.blocks).forEach(function (b) { if (num(d.blocks[b]) > 0) byBlock[b] = num(d.blocks[b]); });
@@ -145,6 +179,7 @@
   function render(container, c) {
     el = container; ctx = c;
     draft = loadDraft();
+    if (autoPick()) keepDraft();
     var testing = ctx.room.state !== 'live';
     var head = '<div class="room-top">' +
       '<button type="button" class="back-btn" id="tk-back">← <span class="inline"><span class="bm">Bilik</span></span></button>' +
@@ -179,7 +214,9 @@
       '</div><p class="hint">Isi dalam kg seperti di tiket. · Key in kg, as printed on the ticket.</p></section>' +
 
       '<section class="card" aria-labelledby="tk-s2"><h2 id="tk-s2"><span class="step">2</span><span class="inline"><span class="bm">Petak dalam lori ini</span> · <span class="en">The lots on this lorry</span></span></h2>' +
-      (fromDn() ? '<p class="hint">Dari nota hantar DN ' + esc(draft.do_no) + ' (ditanda oleh staf). Untuk ubah, staf betulkan DN di Kutip & hantar sebelum tiket disimpan. · From the delivery note, ticked by the staff. To change them, the staff corrects the delivery note on Collect & dispatch before the ticket is saved.</p>'
+      (pickDn() ? '<p class="hint">Petak dari nota hantar DN ' + esc(draft.dnRef.dn) + '. Ubah jika perlu: tanda / buang petak, atau ubah tandan. Nota hantar dibetulkan bersama tiket. · The lots from the delivery note. Change them if needed: tick or untick, or change the bunches. The delivery note is corrected with the ticket.</p>'
+        : fromDn() ? '<p class="hint">Dari nota hantar DN ' + esc(draft.do_no) + ' (ditanda oleh staf). Untuk ubah, staf betulkan DN di Kutip & hantar sebelum tiket disimpan. · From the delivery note, ticked by the staff. To change them, the staff corrects the delivery note on Collect & dispatch before the ticket is saved.</p>'
+        : !canPick(ctx.user) ? ''      // the clerk: the note is drawn with the lots (she never ticks lots)
         : '<p class="hint">Nota hantar ini tiada petak. Tanda petak, dan ubah tandan jika hanya sebahagian. Yang tidak dipilih kekal sebagai baki blok. · This delivery note has no lots ticked. Tick the lots, and change the bunches if only part went. What is not chosen stays as the block\'s balance.</p>') +
       '<div id="tk-lots"></div><div id="tk-manual"></div><p class="hint" id="tk-sum"></p><div id="tk-bal"></div><div id="tk-harv"></div></section>' +
 
@@ -199,7 +236,7 @@
         if (['tk-w1', 'tk-w2', 'tk-ded', 'tk-nett'].indexOf(id) >= 0) v = v.replace(/[^\d]/g, '');
         draft[bind[id]] = v; keepDraft(); drawSums();
         if (id === 'tk-do' && !draft.trip) matchDn();
-        if (id === 'tk-do' && draft.trip && draft.tripDn && draft.do_no !== draft.tripDn) { draft.trip = ''; draft.lorryBunches = 0; draft.dnLots = []; draft.blocks = {}; keepDraft(); matchDn() || render(el, ctx); var i2 = $('#tk-do'); if (i2) { i2.focus(); i2.setSelectionRange(i2.value.length, i2.value.length); } }
+        if (id === 'tk-do' && draft.trip && draft.tripDn && draft.do_no !== draft.tripDn) { draft.trip = ''; draft.lorryBunches = 0; draft.dnLots = []; draft.dnRef = null; draft.blocks = {}; draft.sel = {}; draft.extra = {}; draft.noAuto = true; keepDraft(); matchDn() || render(el, ctx); var i2 = $('#tk-do'); if (i2) { i2.focus(); i2.setSelectionRange(i2.value.length, i2.value.length); } }
       };
     });
     $('#tk-date').onchange = function () { draft.date = this.value || EA.today(); keepDraft(); };
@@ -224,6 +261,16 @@
   function useTrip(x) {
     draft.trip = x.trip; draft.lorryBunches = x.bunches; draft.tripDn = x.dn || '';
     draft.dnLots = (x.lots || []).map(function (h) { return Object.assign({}, h); });
+    var lotIds = {}; draft.dnLots.forEach(function (h) { if (h.row) lotIds[h.id] = h.row; });
+    draft.dnRef = { trip: x.trip, date: x.date, dn: x.dn || '', driver: x.driver || '', lorry: x.lorry || '', mill: x.mill || '', ramp_cleared: x.ramp_cleared || '',
+                    blocks: JSON.parse(JSON.stringify(x.blocks || {})), parts: draft.dnLots.map(function (h) { return { id: h.id, date: h.date, lot: h.lot, block: h.block, worker_id: h.worker_id, bunches: num(h.bunches) }; }),
+                    disIds: JSON.parse(JSON.stringify(x.blockIds || {})), lotIds: lotIds };
+    draft.sel = {}; draft.extra = {};
+    draft.dnRef.parts.forEach(function (h) { draft.sel[h.lot] = String(num(draft.sel[h.lot]) + h.bunches); });
+    Object.keys(draft.dnRef.blocks).forEach(function (b) {
+      var inLots = draft.dnRef.parts.filter(function (h) { return h.block === b; }).reduce(function (a, h) { return a + h.bunches; }, 0);
+      if (num(draft.dnRef.blocks[b]) > inLots) draft.extra[b] = String(num(draft.dnRef.blocks[b]) - inLots);
+    });
     draft.blocks = {}; Object.keys(x.blocks).forEach(function (b) { draft.blocks[b] = String(x.blocks[b]); });
     if (!draft.lorry && x.lorry) draft.lorry = x.lorry;
     if (!draft.driver && x.driver) draft.driver = x.driver;
@@ -240,12 +287,12 @@
       list.map(function (x) { return '<option value="' + esc(x.trip) + '"' + (x.trip === draft.trip ? ' selected' : '') + '>' + esc(tripLabel(x)) + '</option>'; }).join('') + '</select></div>';
     $('#tk-trip').onchange = function () {
       var v = this.value, x = list.find(function (y) { return y.trip === v; });
-      if (x) useTrip(x); else { draft.trip = ''; draft.lorryBunches = 0; draft.dnLots = []; draft.blocks = {}; keepDraft(); }
+      if (x) useTrip(x); else { draft.trip = ''; draft.lorryBunches = 0; draft.dnLots = []; draft.dnRef = null; draft.blocks = {}; draft.sel = {}; draft.extra = {}; draft.noAuto = true; keepDraft(); }
       render(el, ctx);
     };
   }
   function drawLots() {
-    if (fromDn()) {
+    if (fromDn() && !pickDn()) {
       var c = calc(draft), inLots = {};
       draft.dnLots.forEach(function (h) { inLots[h.block] = (inLots[h.block] || 0) + num(h.bunches); });
       var g = {};
@@ -258,10 +305,21 @@
       $('#tk-manual').innerHTML = '';
       return;
     }
-    var list = lots();
+    if (!canPick(ctx.user)) {
+      // The clerk never ticks lots: they come from the staff's delivery note.
+      var bl = Object.keys(draft.blocks || {}).filter(function (b) { return num(draft.blocks[b]) > 0; }).sort();
+      $('#tk-lots').innerHTML = !draft.trip
+        ? '<p class="warn"><span class="bm">Taip No. DO dari tiket (atau pilih lori di atas). Petak datang dari nota hantar staf. Jika lori ini tiada dalam senarai, minta staf isi nota hantar di Kutip & hantar dahulu.</span><span class="en">Type the DO no. from the ticket (or choose the lorry above). The lots come from the staff\'s delivery note. If the lorry is not in the list, ask the staff to write its delivery note on Collect & dispatch first.</span></p>'
+        : '<p class="hint">Staf belum tanda petak untuk lori ini. Tiket boleh disimpan: tan dibahagi ikut blok sahaja, tan penuai belum dikira. Staf tanda petak di Kutip & hantar (CORRECT DN). · The staff has not ticked the lots for this lorry. The ticket can be saved: tonnes split by block only, harvesters\' tonnes not yet worked out. The staff ticks the lots on Collect & dispatch (CORRECT DN).</p>' +
+          (bl.length ? '<div class="rows">' + bl.map(function (b) { return '<div class="list-line"><div><b>Blk ' + esc(b) + '</b><span class="en">dari nota hantar · from the delivery note</span></div><div class="mono">' + num(draft.blocks[b]) + ' tandan</div></div>'; }).join('') + '</div>' : '');
+      $('#tk-manual').innerHTML = '';
+      return;
+    }
+    var list = lots(), onDn = {};
+    if (pickDn()) draft.dnRef.parts.forEach(function (h) { onDn[h.lot] = (onDn[h.lot] || 0) + h.bunches; });
     $('#tk-lots').innerHTML = list.length ? '<div class="rows">' + list.map(function (l) {
       var on = num(draft.sel[l.lot]) > 0 || draft.sel[l.lot] === '';
-      var who = l.workers;
+      var who = l.workers.concat(onDn[l.lot] ? ['DN ' + onDn[l.lot] + ' tandan'] : []);
       return '<div class="list-line lot-line"><label class="pick-line"><input type="checkbox" data-lot="' + esc(l.lot) + '"' + (on ? ' checked' : '') + '>' +
         '<div><b>Petak ' + esc(l.lot) + ' · Blk ' + esc(l.block) + '</b><span class="en">' + l.open + ' tandan terbuka · open · tuai ' + l.dates.map(sd).join(', ') + ' · ' +
         esc(who.map(person).join(', ')) + '</span></div></label>' +
@@ -284,6 +342,14 @@
         keepDraft(); drawSums();
       };
     });
+    // Bunches with no harvest record on the delivery note stay as they are.
+    if (pickDn()) {
+      var ex = Object.keys(draft.extra || {}).filter(function (b) { return num(draft.extra[b]) > 0; }).sort();
+      $('#tk-manual').innerHTML = ex.length ? '<div class="rows">' + ex.map(function (b) {
+        return '<div class="list-line"><div><b>Blk ' + esc(b) + '</b><span class="en">tanpa rekod tuai (dari DN) · no harvest record (from the delivery note)</span></div><div class="mono">' + num(draft.extra[b]) + ' tandan</div></div>';
+      }).join('') + '</div>' : '';
+      return;
+    }
     // With no open harvest at all (e.g. not keyed on Kerja harian), the block bunches are keyed by hand.
     $('#tk-manual').innerHTML = list.length ? '' : '<div class="blk-in">' + EA.lists.blocksFor(ctx.estate).map(function (b) {
       return '<div class="field"><label for="tk-b-' + esc(b.block) + '"><span class="bm">Blok ' + esc(b.block) + ' · tandan</span><span class="en">bunches</span></label>' +
@@ -315,7 +381,8 @@
     if (!(c.nett > 0)) p.push(['Isi berat (berat masuk dan keluar, atau bersih).', 'Fill in the weights (in and out, or nett).']);
     if (num(draft.w1) && num(draft.w2) && num(draft.w2) >= num(draft.w1)) p.push(['Berat keluar mesti kurang dari berat masuk.', 'The weight out must be less than the weight in.']);
     if (c.nett > 0 && c.nett < 0.5) p.push(['Bersih ' + c.nettKg + ' kg terlalu kecil: isi dalam kg, bukan MT.', 'Nett ' + c.nettKg + ' kg is too small: key kg, not MT.']);
-    if (!c.bunches) p.push(['Pilih petak dalam lori ini.', 'Choose the lots on this lorry.']);
+    if (!canPick(ctx.user) && !draft.trip) p.push(['Taip No. DO untuk cari nota hantar staf.', 'Type the DO no. to find the staff\'s delivery note.']);
+    else if (!c.bunches) p.push(['Pilih petak dalam lori ini.', 'Choose the lots on this lorry.']);
     var twice = saved().find(function (t) { return t.estate === ctx.estate && t.ticket_no === draft.ticket_no && t.key !== draft.replacing; });
     if (draft.ticket_no && twice) p.push(['Tiket ' + draft.ticket_no + ' sudah disimpan (' + sd(twice.date) + ').', 'Ticket ' + draft.ticket_no + ' is already saved. Use CORRECT on it instead.']);
     return p;
@@ -329,14 +396,34 @@
   function save() {
     var c = calc(draft), p = problems(c);
     if (p.length) return problemSheet(p, 'tp-ok');
+    var dnFix = pickDn() && !sameParts(c.harv, draft.dnRef.parts);
     var old = draft.replacing ? saved().find(function (t) { return t.key === draft.replacing; }) : null;
     var t = { key: old ? old.key : ctx.estate + '-' + draft.ticket_no + '-' + Date.now().toString(36), date: draft.date, estate: ctx.estate,
               ticket_no: draft.ticket_no, trip: draft.trip, lorryBunches: draft.lorryBunches, time: draft.time, mill: draft.mill, do_no: draft.do_no,
               lorry: draft.lorry.trim(), driver: draft.driver.trim(), w1: draft.w1, w2: draft.w2, ded: draft.ded, nettKg: c.nettKg, nett: c.nett,
               bunches: c.bunches, abw: c.abw, split: c.split, harv: c.harv, sel: JSON.parse(JSON.stringify(draft.sel)), balance: c.balance, note: draft.note.trim(),
               source: c.source, dnLots: JSON.parse(JSON.stringify(draft.dnLots || [])), blocks: JSON.parse(JSON.stringify(draft.blocks || {})), tripDn: draft.tripDn || '',
+              dnRef: draft.dnRef ? JSON.parse(JSON.stringify(draft.dnRef)) : null, extra: JSON.parse(JSON.stringify(draft.extra || {})),
               keyedName: ctx.user.name, rev: old ? (old.rev || 1) + 1 : 1, ids: { blocks: {}, harv: {} } };
     try {
+      if (dnFix) {
+        // The staff changed the lots: the delivery note is corrected first (its rows replaced), so the
+        // lorry, its lots and this ticket agree. The bunches with no harvest record stay as they were.
+        var ref = draft.dnRef, blocks = {};
+        c.blocks.forEach(function (b) { blocks[b] = c.split[b].bunches; });
+        var rec = { date: ref.date, estate: ctx.estate, at: EA.ui.hhmm(new Date()), tractor: '', loader: '', lines: [], fromTicket: t.ticket_no,
+                    dispatch: { trip: ref.trip, dn: ref.dn, driver: ref.driver, lorry: ref.lorry, mill: ref.mill, ramp_cleared: ref.ramp_cleared, blocks: blocks,
+                                parts: c.harv.map(function (h) { return { id: h.id, date: h.date, lot: h.lot, block: h.block, worker_id: h.worker_id, bunches: h.bunches }; }),
+                                extra: JSON.parse(JSON.stringify(draft.extra || {})), bunches: String(c.bunches) } };
+        EA.fh.harvest.writeDn(ctx.estate, rec, { date: ref.date, dispatch: ref, disIds: ref.disIds, lotIds: ref.lotIds });
+        var all = EA.local.get('fh.collect', []), here = false;
+        all.forEach(function (x) { if (x.dispatch && x.dispatch.trip === ref.trip && !x.dispatch.replacedBy) { x.dispatch.replacedBy = rec.at; here = true; } });
+        if (!here) rec.dispatch.prevParts = ref.parts;    // keyed on another phone: the office still counts these until this arrives
+        all.push(rec); EA.local.set('fh.collect', all);
+        t.dnRef = { trip: ref.trip, date: ref.date, dn: ref.dn, driver: ref.driver, lorry: ref.lorry, mill: ref.mill, ramp_cleared: ref.ramp_cleared, blocks: blocks,
+                    parts: rec.dispatch.parts, disIds: rec.disIds, lotIds: rec.lotIds };
+        t.dnLots = rec.dispatch.parts; t.blocks = blocks; t.lorryBunches = c.bunches; t.dnFixed = true;
+      }
       t.ids.ticket = EA.save(TAB, ROOM, ctx.estate, { date: t.date, ticket_no: t.ticket_no, trip: t.trip, mill: t.mill, do_no: t.do_no, lorry: t.lorry, driver: t.driver, time: t.time,
         first_kg: String(num(t.w1) || ''), second_kg: String(num(t.w2) || ''), deduct_kg: String(num(t.ded)), nett_kg: String(t.nettKg), nett_mt: String(t.nett),
         bunches: String(t.bunches), lorry_bunches: String(t.lorryBunches || ''), abw_kg: String(t.abw), note: t.note }, old ? old.ids.ticket : '').id;
@@ -499,7 +586,9 @@
         var d = blank();
         Object.assign(d, { date: t.date, trip: t.trip, lorryBunches: t.lorryBunches || 0, ticket_no: t.ticket_no, time: t.time, mill: t.mill, do_no: t.do_no, lorry: t.lorry, driver: t.driver,
                   w1: t.w1, w2: t.w2, ded: t.ded || '', nett: String(t.nettKg || Math.round(t.nett * 1000)), note: t.note || '', replacing: t.key, selTouched: true,
-                  sel: JSON.parse(JSON.stringify(t.sel || {})), dnLots: JSON.parse(JSON.stringify(t.dnLots || [])), tripDn: t.tripDn || '' });
+                  sel: JSON.parse(JSON.stringify(t.sel || {})), dnLots: JSON.parse(JSON.stringify(t.dnLots || [])), tripDn: t.tripDn || '',
+                  dnRef: t.dnRef ? JSON.parse(JSON.stringify(t.dnRef)) : null, extra: JSON.parse(JSON.stringify(t.extra || {})) });
+        if (d.dnRef) { d.sel = {}; d.dnRef.parts.forEach(function (h) { d.sel[h.lot] = String(num(d.sel[h.lot]) + num(h.bunches)); }); }
         if (t.source === 'dn') d.blocks = JSON.parse(JSON.stringify(t.blocks || {}));
         else if (!(t.harv || []).length) Object.keys(t.split).forEach(function (k) { d.blocks[k] = String(t.split[k].bunches); });
         draft = d;

@@ -222,11 +222,13 @@
     renderTiles(u, estate);
     renderPlan(u);
     // Room screen, when the address ends in #room-id
-    var rid = location.hash.replace('#', '');
+    // #room-id or #room-id/screen (a room may have several screens)
+    var parts = location.hash.replace('#', '').split('/');
+    var rid = parts[0], screen = parts[1] || '';
     var room = rid && EA.roomsFor(u, estate).find(function (r) { return r.id === rid && enterable(r); });
     $('home-main').hidden = !!room;
     $('room').hidden = !room;
-    if (room) EA.roomViews[room.id].render($('room'), { user: u, estate: estate, room: room });
+    if (room) EA.roomViews[room.id].render($('room'), { user: u, estate: estate, room: room, screen: screen });
     else $('room').innerHTML = '';
     renderSync();
     $('ver').textContent = EA.VERSION;

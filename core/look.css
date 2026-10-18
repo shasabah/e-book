@@ -249,3 +249,16 @@ pre.chit { margin: 0; white-space: pre-wrap; word-break: break-word; font-family
 .bad-text { color: var(--bad); font-size: .85rem; }
 .msg.ok-msg { background: var(--ok-soft); color: var(--ok); }
 .copy-last { background: var(--ok-soft); border-radius: var(--r); padding: 10px 12px; border-top: 0; }
+
+/* screens of one room, as tabs */
+.tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); }
+.tabs a { flex: 1; text-align: center; padding: 8px 6px 10px; text-decoration: none; color: var(--muted); border-bottom: 3px solid transparent; }
+.tabs a .bm { color: inherit; }
+.tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--ink); }
+.qty { width: 6.5em; padding: 8px; border: 2px solid var(--line); border-radius: 8px; background: var(--surface); font: inherit; font-variant-numeric: tabular-nums; }
+.qty:focus { border-color: var(--focus); outline: none; }
+.qty.bad { border-color: var(--bad); }
+.wline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 4px 0; }
+.wline select.text-input { width: auto; padding: 8px 30px 8px 8px; }
+.flag { color: var(--wait); font-weight: 700; font-size: .82rem; }
+.flag.bad { color: var(--bad); }

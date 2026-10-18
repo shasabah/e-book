@@ -314,7 +314,27 @@ function backlog(estate) {
   var now = new Date();
   var b = calcBacklog(cut, col, dis, Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd'));
   return { ok: true, estate: estate, at: Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'),
-           field: b.field, fieldTotal: b.fieldTotal, ramp: b.ramp, checks: b.checks, grading: gradingAlerts_(estate, now) };
+           field: b.field, fieldTotal: b.fieldTotal, ramp: b.ramp, checks: b.checks, grading: gradingAlerts_(estate, now), tonnage: tonnageMtd_(estate, now) };
+}
+
+// Month-to-date tonnes from the mill tickets, for the morning chit (v22). Counted by the delivery
+// note date (the day the crop left the estate); a ticket with no delivery note by its own date.
+function tonnageMtd_(estate, now) {
+  var month = Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM');
+  var dnDate = {};
+  standingRows_('FH_DISPATCH', estate).forEach(function (r) { if (r.trip && (!dnDate[r.trip] || r.date < dnDate[r.trip])) dnDate[r.trip] = r.date; });
+  var mt = 0, bunches = 0, n = 0, inMonth = {};
+  standingRows_('FH_TICKET', estate).forEach(function (t) {
+    var d = String((t.trip && dnDate[t.trip]) || t.date);
+    if (d.slice(0, 7) !== month) return;
+    mt += Number(t.nett_mt) || 0; bunches += Number(t.bunches) || 0; n++; inMonth[t.ticket_no] = true;
+  });
+  var blocks = {};
+  standingRows_('FH_TICKET_BLOCK', estate).forEach(function (r) {
+    if (inMonth[r.ticket_no]) blocks[r.block] = Math.round(((blocks[r.block] || 0) + (Number(r.mt) || 0)) * 1000) / 1000;
+  });
+  mt = Math.round(mt * 1000) / 1000;
+  return { month: month, mt: mt, bunches: bunches, tickets: n, abw: bunches ? Math.round(mt * 100000 / bunches) / 100 : 0, blocks: blocks };
 }
 
 // Poor mill gradings (keyed by the clerk) the staff has not yet explained on a morning chit.

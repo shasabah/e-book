@@ -33,8 +33,7 @@
   }
   function lotIds(s) { return values(s.lotIds).concat(values(s.disIds)); }
 
-  // skip: { trip } gives back the bunches of the lorry being corrected
-  //       (with { parts } too: its lots, when that lorry was keyed on another phone),
+  // skip: { trip } gives back the bunches of the lorry being corrected (on this phone),
   //       { ticket } gives back the bunches of the ticket being corrected.
   function openLines(estate, skip) {
     skip = skip || {};
@@ -49,7 +48,7 @@
       var x = lines.find(function (y) { return y.id === h.id; });
       if (x) x.bunches += n; else if (n > 0) lines.push({ id: h.id, date: h.date, lot: h.lot, block: h.block, worker_id: h.worker_id, bunches: n });
     }
-    var all = lorries(estate), skipHere = false;
+    var all = lorries(estate);
     all.forEach(function (s) {
       var d = s.dispatch, atOffice = office && !waiting(lotIds(s));
       if (d.replacedBy) {
@@ -58,14 +57,9 @@
         if (atOffice && nw && waiting(lotIds(nw))) d.parts.forEach(function (h) { adjust(h, h.bunches); });
         return;
       }
-      if (skip.trip && d.trip === skip.trip) { skipHere = true; if (atOffice) d.parts.forEach(function (h) { adjust(h, h.bunches); }); return; }
-      if (!atOffice) {
-        d.parts.forEach(function (h) { adjust(h, -h.bunches); });
-        // A lorry from another phone corrected here: the office still counts its old lots until this arrives.
-        if (office && d.prevParts) d.prevParts.forEach(function (h) { adjust(h, h.bunches); });
-      }
+      if (skip.trip && d.trip === skip.trip) { if (atOffice) d.parts.forEach(function (h) { adjust(h, h.bunches); }); return; }
+      if (!atOffice) d.parts.forEach(function (h) { adjust(h, -h.bunches); });
     });
-    if (skip.trip && !skipHere && office && skip.parts) skip.parts.forEach(function (h) { adjust(h, num(h.bunches)); });
     EA.local.get('fh.tickets', []).forEach(function (t) {
       if (t.estate !== estate || t.source === 'dn') return;     // a ticket that took its lots from the delivery note adds nothing here
       var atOffice = office && !EA.isWaiting(t.ids.ticket);

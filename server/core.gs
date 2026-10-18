@@ -31,7 +31,8 @@ var STATUSES = ['active', 'corrected', 'removed', 'disposed'];
 
 // Each room's tab and its own columns (after the standard ones).
 var ROOM_TABS = {
-  FH_MUSTER: ['chit', 'block', 'lots', 'mandor', 'worker_id', 'task_code', 'muster', 'confirmed_by', 'confirmed_at', 'note']
+  FH_MUSTER: ['chit', 'block', 'lots', 'mandor', 'worker_id', 'task_code', 'muster', 'confirmed_by', 'confirmed_at', 'note'],
+  FH_CHIT:   ['chit', 'rain_mm', 'rain_time', 'working', 'not_working', 'grand_total', 'confirmed_by', 'confirmed_at', 'note']
 };
 
 // ---------------- requests ----------------

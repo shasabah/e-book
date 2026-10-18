@@ -18,6 +18,8 @@ EA.lists.blocks = [
   { estate: 'SSGT', block: '03', name: 'Block 3', ha: 31.18 },
   { estate: 'SSGT', block: '04', name: 'Block 4', ha: 32.34 }
 ];
+// Mills and collecting centres Sugut sends to (from the Sugut FFB tonnage file 2026).
+EA.lists.mills = ['Boustead (BOU)', 'Sri Kamusan CC (SKCC)', 'SKPOM', 'Fortuna', 'Sinar C'];
 EA.lists.estate = function (code) {
   return EA.lists.estates.find(function (e) { return e.code === code; }) || null;
 };

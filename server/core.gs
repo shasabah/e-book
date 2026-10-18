@@ -263,11 +263,18 @@ function standingRows_(tabName, estate) {
   if (!sh || sh.getLastRow() < 2) return [];
   var vals = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getValues();
   var head = vals.shift(), replaced = {};
-  function txt(v) {      // dates the sheet turned into real dates come back as 2026-10-18 (or with the time)
-    if (Object.prototype.toString.call(v) === '[object Date]') return Utilities.formatDate(v, 'Asia/Kuala_Lumpur', (v.getHours() || v.getMinutes()) ? 'yyyy-MM-dd HH:mm' : 'yyyy-MM-dd');
+  // Dates the sheet turned into real dates come back as text again, read in the sheet's own
+  // time zone (reading them in another zone shifts them, e.g. 2026-10-18 08:00).
+  var tz = book_().getSpreadsheetTimeZone();
+  function txt(v, col) {
+    if (Object.prototype.toString.call(v) === '[object Date]') {
+      if (col === 'date') return Utilities.formatDate(v, tz, 'yyyy-MM-dd');
+      var hm = Utilities.formatDate(v, tz, 'HH:mm');
+      return Utilities.formatDate(v, tz, hm === '00:00' ? 'yyyy-MM-dd' : 'yyyy-MM-dd HH:mm');
+    }
     return String(v);
   }
-  var rows = vals.map(function (v) { var o = {}; head.forEach(function (c, i) { o[c] = txt(v[i]); }); return o; });
+  var rows = vals.map(function (v) { var o = {}; head.forEach(function (c, i) { o[c] = txt(v[i], c); }); return o; });
   rows.forEach(function (r) { if (r.replaces) replaced[r.replaces] = true; });
   return rows.filter(function (r) { return r.estate === estate && r.status === 'active' && !replaced[r.id]; });
 }

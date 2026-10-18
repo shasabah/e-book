@@ -24,10 +24,15 @@ function book_() { return SpreadsheetApp.openById(SHEET_ID); }
 
 var USERS_TAB = 'USERS';
 var USER_COLS = ['user_code', 'name', 'role', 'estates', 'key_hash', 'status', 'added_at'];
-var ROLES = ['Owner', 'HQ', 'Clerk', 'Mandor', 'Store', 'Worker'];
+var ROLES = ['Owner', 'HQ', 'Staff', 'Clerk', 'Mandor', 'Store', 'Worker'];
 var ESTATES = ['SDK', 'MELU', 'SSGT', 'PTAN', 'TKRS', 'KWNN'];
 var STANDARD_COLS = ['id', 'date', 'company', 'estate', 'keyed_by', 'keyed_at', 'phone', 'status', 'replaces'];
 var STATUSES = ['active', 'corrected', 'removed', 'disposed'];
+
+// Each room's tab and its own columns (after the standard ones).
+var ROOM_TABS = {
+  FH_MUSTER: ['chit', 'block', 'lots', 'mandor', 'worker_id', 'task_code', 'muster', 'confirmed_by', 'confirmed_at', 'note']
+};
 
 // ---------------- requests ----------------
 
@@ -64,6 +69,14 @@ function hashKey(key) {
   if (!salt) { salt = Utilities.getUuid(); props.setProperty('KEY_SALT', salt); }
   var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, salt + ':' + key);
   return bytes.map(function (b) { return ('0' + (b & 0xff).toString(16)).slice(-2); }).join('');
+}
+
+// Is there already a user with this code? (used so setupTestCopy can be run again safely)
+function findUser_(code) {
+  var sh = book_().getSheetByName(USERS_TAB);
+  if (!sh || sh.getLastRow() < 2) return false;
+  var codes = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
+  return codes.some(function (r) { return String(r[0]) === String(code); });
 }
 
 function findUser(key) {
@@ -132,7 +145,10 @@ function plain(v) {
   if (v === undefined || v === null) return '';
   if (typeof v === 'number' || typeof v === 'boolean') return v;
   var s = String(v);
-  return /^[=+@]/.test(s) ? "'" + s : s;
+  if (/^[=+@]/.test(s)) return "'" + s;
+  // Lot numbers like 1-5 would be turned into dates by the sheet; keep them as text.
+  if (/^\d+-\d+/.test(s) && !/^\d{4}-\d{2}-\d{2}/.test(s)) return "'" + s;
+  return s;
 }
 
 // ---------------- admin, run from the script editor ----------------
@@ -144,16 +160,21 @@ function setupTestCopy() {
   if (u.getLastRow() === 0) u.appendRow(USER_COLS);
   var c = ss.getSheetByName('CHECK') || ss.insertSheet('CHECK');
   if (c.getLastRow() === 0) c.appendRow(STANDARD_COLS.concat(['note', 'received_at']));
+  Object.keys(ROOM_TABS).forEach(function (name) {
+    var sh = ss.getSheetByName(name) || ss.insertSheet(name);
+    if (sh.getLastRow() === 0) sh.appendRow(STANDARD_COLS.concat(ROOM_TABS[name], ['received_at']));
+  });
   // Made-up people, same keys as the test copy of the app.
   var people = [
     ['T-OWN', 'Pemilik Ujian',  'Owner',  ESTATES.join(','), '111111'],
     ['T-HQ',  'Ali HQ',         'HQ',     ESTATES.join(','), '222222'],
-    ['T-CLK', 'Kerani Sugut',   'Clerk',  'SSGT', '333333'],
+    ['T-CLK', 'Kerani Sugut',   'Clerk',  'SSGT,PTAN', '333333'],
+    ['T-STF', 'Staf Sugut',     'Staff',  'SSGT', '777777'],
     ['T-MDR', 'Mandor Sugut',   'Mandor', 'SSGT', '444444'],
     ['T-STR', 'Stor Meliau',    'Store',  'MELU', '555555'],
     ['T-WRK', 'Pekerja Durian', 'Worker', 'SSGT', '666666']
   ];
-  people.forEach(function (p) { addUser(p[0], p[1], p[2], p[3], p[4]); });
+  people.forEach(function (p) { if (!findUser_(p[0])) addUser(p[0], p[1], p[2], p[3], p[4]); });
 }
 
 /** Add a person. Keys must be different for every person. */

@@ -46,7 +46,9 @@ var ROOM_TABS = {
                'rej_ur', 'rej_eb', 'rej_rt', 'loose_kg', 'penalty_pct', 'grade_flag'],
   FH_TICKET_BLOCK: ['ticket_no', 'block', 'bunches', 'mt'],
   FH_TICKET_HARV: ['ticket_no', 'work_id', 'date_cut', 'block', 'lot', 'worker_id', 'bunches', 'abw_kg', 'mt'],
-  FH_ALERT: ['chit', 'kind', 'block', 'lot', 'detail', 'staff_note', 'direction', 'direction_by', 'ref']
+  FH_ALERT: ['chit', 'kind', 'block', 'lot', 'detail', 'staff_note', 'direction', 'direction_by', 'ref'],
+  // Errors on phones, so the builder can see what went wrong without asking for screenshots.
+  APP_ERROR: ['where', 'message', 'stack', 'version', 'agent']
 };
 
 // ---------------- requests ----------------

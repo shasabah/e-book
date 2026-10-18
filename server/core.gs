@@ -175,6 +175,8 @@ function saveRow(user, tab, row) {
 // Same checks as saveRow, one lock, each tab read once, new rows written together.
 // Answers one result per entry, in order: ok / already / error.
 var BATCH_MAX = 100;
+var RECENT_ROWS = 5000;            // about 20 days of all estates' muster rows
+function daysAgo_(n) { return Utilities.formatDate(new Date(Date.now() - n * 86400000), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd'); }
 function saveBatch(user, items) {
   if (!items || !items.length || items.length > BATCH_MAX) return { ok: false, error: 'bad_batch' };
   var ss = book_();
@@ -192,9 +194,11 @@ function saveBatch(user, items) {
       var seen = {};
       var last = sh.getLastRow();
       if (!missing.length && last > 1) {
+        // Only the most recent rows are read (a resend comes within days, not months).
         var ci = head.indexOf('id'), cb = head.indexOf('keyed_by'), ca = head.indexOf('keyed_at');
         var w = Math.max(ci, cb, ca) + 1;
-        var vals = sh.getRange(2, 1, last - 1, w).getDisplayValues();   // one read
+        var from = Math.max(2, last - RECENT_ROWS + 1);
+        var vals = sh.getRange(from, 1, last - from + 1, w).getDisplayValues();   // one read
         for (var i = 0; i < vals.length; i++) seen[vals[i][ci]] = vals[i][cb] + '|' + String(vals[i][ca]).slice(0, 16);
       }
       return (tabs[name] = { sh: sh, head: head, missing: missing, seen: seen, add: [], last: last });
@@ -216,6 +220,16 @@ function saveBatch(user, items) {
       var extra = Object.keys(row).filter(function (k) { return t.head.indexOf(k) < 0; });
       if (extra.length) return fail('unknown_col:' + extra.join(','));
       var mark = row.keyed_by + '|' + String(row.keyed_at).slice(0, 16);
+      // An old entry arriving late (keyed more than 14 days ago) may be older than
+      // the rows read above: look for it in the whole tab, only for these.
+      if (t.seen[id] === undefined && String(row.keyed_at).slice(0, 10) < daysAgo_(14) && t.last > 1) {
+        var hit = t.sh.getRange(2, t.head.indexOf('id') + 1, t.last - 1, 1).createTextFinder(String(id)).matchEntireCell(true).findNext();
+        if (hit) {
+          var rr = hit.getRow();
+          t.seen[id] = t.sh.getRange(rr, t.head.indexOf('keyed_by') + 1).getDisplayValue() + '|' +
+                       String(t.sh.getRange(rr, t.head.indexOf('keyed_at') + 1).getDisplayValue()).slice(0, 16);
+        }
+      }
       if (t.seen[id] !== undefined) {
         if (t.seen[id] === mark) { results.push({ id: id, ok: true, already: true }); return; }
         return fail('id_clash');

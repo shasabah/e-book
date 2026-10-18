@@ -228,11 +228,26 @@
     var room = rid && EA.roomsFor(u, estate).find(function (r) { return r.id === rid && enterable(r); });
     $('home-main').hidden = !!room;
     $('room').hidden = !room;
-    if (room) EA.roomViews[room.id].render($('room'), { user: u, estate: estate, room: room, screen: screen });
-    else $('room').innerHTML = '';
+    if (room) {
+      try { EA.roomViews[room.id].render($('room'), { user: u, estate: estate, room: room, screen: screen }); }
+      catch (err) { roomError(err, room, screen, estate); }
+    } else $('room').innerHTML = '';
     renderSync();
     $('ver').textContent = EA.VERSION;
     $('foot-phone').textContent = EA.phone() || '—';
+  }
+
+  // A room screen that fails to open shows what went wrong (never a blank page), and the
+  // error goes to the office (tab APP_ERROR) so the builder can see it.
+  function roomError(err, room, screen, estate) {
+    var msg = (err && err.message) || String(err);
+    EA.reportError('room ' + room.id + '/' + (screen || 'main'), err, estate);
+    $('room').innerHTML = '<div class="card"><p class="msg"><span class="bm">Skrin ini tidak dapat dibuka.</span><span class="en">This screen could not open. Tap LOAD IT for the newest copy, or go back.</span></p>' +
+      '<p class="hint mono">' + esc(msg) + '</p>' +
+      '<div class="actions"><button class="btn btn-ghost" type="button" id="err-back">BACK<small>Kembali</small></button>' +
+      '<button class="btn btn-main" type="button" id="err-load">LOAD IT<small>Muat versi baru</small></button></div></div>';
+    $('err-back').onclick = function () { location.hash = ''; };
+    $('err-load').onclick = function () { EA.loadUpdate(); };
   }
 
   // ---------- actions ----------

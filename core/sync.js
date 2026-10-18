@@ -125,6 +125,24 @@ window.EA = window.EA || {};
   // ---------- asking the office for something back ----------
   // Shared by every room: e.g. the crop backlog worked out from everyone's entries.
   // Returns the office's answer, or null when there is no signal / no link.
+  // An error on the phone is kept as an entry for the office (tab APP_ERROR), once per message a day.
+  EA.reportError = function (where, err, estate) {
+    try {
+      var msg = String((err && err.message) || err || '').slice(0, 300);
+      var stack = String((err && err.stack) || '').split('\n').slice(0, 3).join(' | ').slice(0, 400);
+      var seen = get('ea.errSeen', {}), k = today() + '|' + where + '|' + msg;
+      if (seen[k]) return;
+      seen = {}; Object.keys(get('ea.errSeen', {})).forEach(function (x) { if (x.indexOf(today()) === 0) seen[x] = true; });
+      seen[k] = true; set('ea.errSeen', seen);
+      var user = EA.currentUser();
+      var est = estate || (user && user.estates && user.estates[0]);
+      if (!user || !est) return;
+      EA.save('APP_ERROR', 'EA', est, { where: where, message: msg, stack: stack, version: String(EA.VERSION), agent: navigator.userAgent.slice(0, 200) });
+    } catch (e) {}
+  };
+  window.addEventListener('error', function (e) { EA.reportError('page', e.error || e.message); });
+  window.addEventListener('unhandledrejection', function (e) { EA.reportError('promise', e.reason); });
+
   EA.ask = async function (action, extra) {
     var link = EA.sendLink(), user = EA.currentUser();
     if (!link || !user || !navigator.onLine) return null;

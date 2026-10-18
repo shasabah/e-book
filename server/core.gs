@@ -40,12 +40,13 @@ var ROOM_TABS = {
   FH_COLLECT: ['block', 'lot', 'bunches', 'cleared', 'tractor', 'loader', 'note'],
   FH_DISPATCH: ['bunches', 'lorry', 'mill', 'ramp_cleared', 'note', 'block', 'trip', 'dn_no', 'driver'],
   FH_TICKET: ['ticket_no', 'trip', 'mill', 'do_no', 'lorry', 'driver', 'time', 'first_kg', 'second_kg', 'deduct_kg', 'nett_kg', 'nett_mt',
-              'bunches', 'mill_bunches', 'abw_kg', 'rej_ur', 'rej_emp', 'rej_rott', 'rej_mt', 'note',
-              'lorry_bunches', 'sample', 'g_ur', 'g_udr', 'g_or', 'g_r', 'g_eb', 'g_rt', 'g_ls', 'g_pd', 'g_pf', 'g_ds', 'g_dt', 'g_dr',
-              'loose_kg', 'penalty_pct', 'grade_flag', 'explain'],
+              'bunches', 'abw_kg', 'note', 'lorry_bunches'],
+  // The mill's grading sheet, one row per ticket, keyed by the estate clerk (v16).
+  FH_GRADING: ['ticket_no', 'sample', 'mill_bunches', 'g_ur', 'g_udr', 'g_or', 'g_r', 'g_eb', 'g_rt', 'g_ls', 'g_pd', 'g_pf', 'g_ds', 'g_dt', 'g_dr',
+               'rej_ur', 'rej_eb', 'rej_rt', 'loose_kg', 'penalty_pct', 'grade_flag'],
   FH_TICKET_BLOCK: ['ticket_no', 'block', 'bunches', 'mt'],
   FH_TICKET_HARV: ['ticket_no', 'work_id', 'date_cut', 'block', 'lot', 'worker_id', 'bunches', 'abw_kg', 'mt'],
-  FH_ALERT: ['chit', 'kind', 'block', 'lot', 'detail', 'staff_note', 'direction', 'direction_by']
+  FH_ALERT: ['chit', 'kind', 'block', 'lot', 'detail', 'staff_note', 'direction', 'direction_by', 'ref']
 };
 
 // ---------------- requests ----------------
@@ -67,6 +68,10 @@ function doPost(e) {
   }
   if (req.action === 'save') return reply(saveRow(user, req.tab, req.row));
   if (req.action === 'saveBatch') return reply(saveBatch(user, req.items));
+  if (req.action === 'ungraded') {
+    if (user.estates.indexOf(req.estate) < 0) return reply({ ok: false, error: 'not_your_estate' });
+    return reply(ungraded_(req.estate));
+  }
   if (req.action === 'harvest') {
     if (user.estates.indexOf(req.estate) < 0) return reply({ ok: false, error: 'not_your_estate' });
     return reply(openHarvest(req.estate));
@@ -307,11 +312,22 @@ function backlog(estate) {
            field: b.field, fieldTotal: b.fieldTotal, ramp: b.ramp, checks: b.checks, grading: gradingAlerts_(estate, now) };
 }
 
-// Mill tickets of yesterday and today with poor grading, and what the staff said about them.
+// Poor mill gradings (keyed by the clerk) the staff has not yet explained on a morning chit.
 function gradingAlerts_(estate, now) {
-  var since = Utilities.formatDate(new Date(now.getTime() - 864e5), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd');
-  return standingRows_('FH_TICKET', estate).filter(function (r) { return r.grade_flag && r.date >= since; })
-    .map(function (r) { return { ticket_no: r.ticket_no, date: r.date, flag: r.grade_flag, explain: r.explain }; });
+  var since = Utilities.formatDate(new Date(now.getTime() - 21 * 864e5), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd');
+  var explained = {};
+  standingRows_('FH_ALERT', estate).forEach(function (r) { if (r.kind === 'grading' && r.ref && r.staff_note) explained[r.ref] = true; });
+  return standingRows_('FH_GRADING', estate).filter(function (r) { return r.grade_flag && r.date >= since && !explained[r.ticket_no]; })
+    .map(function (r) { return { ticket_no: r.ticket_no, date: r.date, flag: r.grade_flag }; });
+}
+
+// Mill tickets of the last 30 days with no grading yet, for the clerk.
+function ungraded_(estate) {
+  var since = Utilities.formatDate(new Date(Date.now() - 30 * 864e5), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd');
+  var graded = {};
+  standingRows_('FH_GRADING', estate).forEach(function (r) { graded[r.ticket_no] = true; });
+  return { ok: true, tickets: standingRows_('FH_TICKET', estate).filter(function (r) { return r.date >= since && !graded[r.ticket_no]; })
+    .map(function (r) { return { ticket_no: r.ticket_no, date: r.date, mill: r.mill, nett_mt: Number(r.nett_mt) || 0, do_no: r.do_no }; }) };
 }
 
   // ===== calcBacklog: the same text is in rooms/field/muster.js and server/core.gs =====
@@ -387,11 +403,14 @@ function gradingAlerts_(estate, now) {
 // for the ticket screen: the staff chooses which of them the ticket's tonnes belong to.
 function openHarvest(estate) {
   var cut = Utilities.formatDate(new Date(Date.now() - 45 * 864e5), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd');
+  // A line can go on a ticket in parts (part of a lot on one lorry, the rest on the next):
+  // what is left is the block's balance and stays open.
   var onTicket = {};
-  standingRows_('FH_TICKET_HARV', estate).forEach(function (r) { onTicket[r.work_id] = true; });
+  standingRows_('FH_TICKET_HARV', estate).forEach(function (r) { onTicket[r.work_id] = (onTicket[r.work_id] || 0) + (Number(r.bunches) || 0); });
   var lines = standingRows_('FH_WORK', estate).filter(function (r) {
-    return r.task_code === 'HV01' && Number(r.bunches) > 0 && r.date >= cut && !onTicket[r.id];
-  }).map(function (r) { return { id: r.id, date: r.date, lot: r.lot, block: r.block, worker_id: r.worker_id, bunches: Number(r.bunches) }; });
+    return r.task_code === 'HV01' && Number(r.bunches) > 0 && r.date >= cut;
+  }).map(function (r) { return { id: r.id, date: r.date, lot: r.lot, block: r.block, worker_id: r.worker_id, bunches: Number(r.bunches) - (onTicket[r.id] || 0) }; })
+    .filter(function (r) { return r.bunches > 0; });
   return { ok: true, lines: lines };
 }
 

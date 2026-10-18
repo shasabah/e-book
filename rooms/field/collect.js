@@ -99,7 +99,10 @@
         EA.lists.lotsFor(ctx.estate).map(function (l) { return '<option>' + l.lot + '</option>'; }).join('') + '</select></div>' +
       '</section>' +
 
-      '<section class="card" aria-labelledby="cl-s2"><h2 id="cl-s2"><span class="step">2</span><span class="inline"><span class="bm">Hantar ke kilang</span> · <span class="en">Sent to the mill (lorry)</span></span></h2>' +
+      // The delivery note is written by whoever the estate gives it to (Sugut: the staff;
+      // elsewhere the clerk or a mandor). The tractor driver and loader (Worker) do not see it.
+      (ctx.user.role === 'Worker' ? '' :
+      '<section class="card" aria-labelledby="cl-s2"><h2 id="cl-s2"><span class="step">2</span><span class="inline"><span class="bm">Nota hantar (DN) · lori ke kilang</span> · <span class="en">Delivery note: lorry to the mill</span></span></h2>' +
       '<p class="hint">Kosongkan jika tiada lori hari ini. Tandan dimuat ke lori, ikut blok (untuk bahagi tan tiket kilang). · Leave empty if no lorry today. Bunches loaded, by block (so the mill ticket\'s tonnes go to the right block).</p>' +
       '<div class="blk-in">' + EA.lists.blocksFor(ctx.estate).map(function (b) {
         var r = rampOf(b.block);
@@ -115,7 +118,7 @@
           EA.lists.mills.concat(['Lain-lain · Other']).map(function (m) { return '<option' + (m === draft.dispatch.mill ? ' selected' : '') + '>' + esc(m) + '</option>'; }).join('') + '</select></div>' +
       '</div>' +
       '<label class="inline-check"><input type="checkbox" id="cl-rc"' + (draft.dispatch.ramp_cleared === 'Y' ? ' checked' : '') + '> Ramp kosong selepas lori ini · ramp empty after this lorry</label>' +
-      '</section>' +
+      '</section>') +
 
       '<div class="bottom-bar"><button type="button" class="btn btn-main" id="cl-save">SAVE<small>Simpan</small></button></div>' +
       todayCard();
@@ -133,11 +136,13 @@
     el.querySelectorAll('input[data-dblock]').forEach(function (i) {
       i.oninput = function () { draft.dispatch.blocks[i.dataset.dblock] = i.value.replace(/\D/g, ''); keepDraft(); $('#cl-dtot').innerHTML = totText(); };
     });
-    $('#cl-dn').oninput = function () { draft.dispatch.dn = this.value.replace(/\s/g, ''); keepDraft(); };
-    $('#cl-dr').oninput = function () { draft.dispatch.driver = this.value; keepDraft(); };
-    $('#cl-lr').oninput = function () { draft.dispatch.lorry = this.value.toUpperCase(); keepDraft(); };
-    $('#cl-ml').onchange = function () { draft.dispatch.mill = this.value; keepDraft(); };
-    $('#cl-rc').onchange = function () { draft.dispatch.ramp_cleared = this.checked ? 'Y' : ''; keepDraft(); };
+    if ($('#cl-dn')) {
+      $('#cl-dn').oninput = function () { draft.dispatch.dn = this.value.replace(/\s/g, ''); keepDraft(); };
+      $('#cl-dr').oninput = function () { draft.dispatch.driver = this.value; keepDraft(); };
+      $('#cl-lr').oninput = function () { draft.dispatch.lorry = this.value.toUpperCase(); keepDraft(); };
+      $('#cl-ml').onchange = function () { draft.dispatch.mill = this.value; keepDraft(); };
+      $('#cl-rc').onchange = function () { draft.dispatch.ramp_cleared = this.checked ? 'Y' : ''; keepDraft(); };
+    }
     $('#cl-save').onclick = save;
     EA.fh.wireBacklog(el, ctx.estate);
     EA.fh.refreshBacklog(ctx.estate);
@@ -148,7 +153,7 @@
       var d = draft.lots[lot];
       return { lot: lot, block: d.block || ((EA.lists.lot(ctx.estate, lot) || {}).block || ''), bunches: d.bunches || '', cleared: d.cleared || '' };
     }).filter(function (l) { return num(l.bunches) > 0 || l.cleared === 'Y'; });
-    var dis = draft.dispatch, total = disTotal(dis), hasDis = total > 0 || dis.ramp_cleared === 'Y';
+    var dis = draft.dispatch, total = ctx.user.role === 'Worker' ? 0 : disTotal(dis), hasDis = ctx.user.role !== 'Worker' && (total > 0 || dis.ramp_cleared === 'Y');
     var p = [];
     if (!lines.length && !hasDis) p.push(['Tiada apa untuk disimpan.', 'Nothing to save yet.']);
     if (lines.length && (!draft.tractor || !draft.loader)) p.push(['Pilih pemandu traktor dan pemuat.', 'Choose the tractor driver and loader.']);

@@ -202,6 +202,8 @@
     });
     var b = calcBacklog(cut, col, dis, EA.today());
     b.ok = true; b.estate = estate; b.at = EA.today() + ' ' + EA.ui.hhmm(new Date()); b.local = true;
+    var y = new Date(EA.today() + 'T00:00:00Z'); y.setUTCDate(y.getUTCDate() - 1);
+    b.grading = EA.fh.ticket && EA.fh.ticket.gradingAlerts ? EA.fh.ticket.gradingAlerts(estate, y.toISOString().slice(0, 10)) : [];
     return b;
   }
 
@@ -341,13 +343,18 @@
       out.push({ key: 'K:' + x.lot + ':' + (x.cleared || 'open'), kind: 'count', block: x.block, lot: x.lot, detail: checkText(x),
                  bm: 'Kiraan tidak sama, ' + checkText(x), en: 'Mandor and loader counts differ' });
     });
+    // Poor mill grading: the staff already said what is going on when keying the ticket.
+    (b.grading || []).forEach(function (g) {
+      out.push({ key: 'G:' + g.ticket_no, kind: 'grading', block: '', lot: '', detail: 'Tiket ' + g.ticket_no + ': ' + g.flag, def: g.explain || '',
+                 bm: 'Gred kilang tiket ' + g.ticket_no + ' (' + shortDate(g.date) + '): ' + g.flag, en: 'Poor mill grading' });
+    });
     if (b.ramp && b.ramp.bunches && b.ramp.since && b.ramp.since < yday) {
       out.push({ key: 'R:' + b.ramp.since, kind: 'ramp', block: '', lot: '', detail: b.ramp.bunches + ' tandan, ' + rampText(b.ramp),
                  bm: 'Buah lama di ramp: ' + b.ramp.bunches + ' tandan (' + rampText(b.ramp) + ')', en: 'Bunches waiting at the ramp for more than a day' });
     }
     return out;
   }
-  function alertNote(key) {
+  function alertNote(key, def) {
     if (draft.alertNotes[key] != null) return { note: draft.alertNotes[key], carried: false };
     var prev = chits().filter(function (c) { return c.estate === ctx.estate && c.date < EA.today(); })
       .sort(function (a, b) { return a.date < b.date ? 1 : -1; });
@@ -355,7 +362,7 @@
       var a = (prev[i].alerts || []).find(function (x) { return x.key === key; });
       if (a) return { note: a.note, carried: true, date: prev[i].date };
     }
-    return { note: '', carried: false };
+    return { note: def || '', carried: false };
   }
   function alertSection() {
     var list = alertsFrom(getBacklog(ctx.estate));
@@ -363,7 +370,7 @@
     return '<section class="card alert-card" id="fh-alerts" aria-labelledby="fh-s0"><h2 id="fh-s0"><span class="step">!</span><span class="inline"><span class="bm">Amaran</span> · <span class="en">Alerts for the Assistant Manager</span></span></h2>' +
       '<p class="hint">Tulis apa berlaku dan tindakan. Masuk chit dan WhatsApp untuk Penolong Pengurus. · Say what happened and the action. It goes on the chit and to WhatsApp for the Assistant Manager.</p>' +
       list.map(function (a) {
-        var n = alertNote(a.key);
+        var n = alertNote(a.key, a.def);
         return '<div class="field"><label for="al-' + esc(a.key) + '"><span class="bm">' + esc(a.bm) + '</span><span class="en">' + esc(a.en) +
           (n.carried ? ' · dari chit ' + esc(shortDate(n.date)) + ', tukar jika ada berita baru · from an earlier chit, change if there is news' : '') + '</span></label>' +
           '<input id="al-' + esc(a.key) + '" class="text-input" data-alert="' + esc(a.key) + '" value="' + esc(n.note) + '" placeholder="Apa berlaku / tindakan · What happened / action"></div>';
@@ -378,7 +385,7 @@
   }
   function chitAlerts() {
     return alertsFrom(getBacklog(ctx.estate)).map(function (a) {
-      return { key: a.key, kind: a.kind, block: a.block, lot: a.lot, detail: a.detail, text: a.bm, note: String(alertNote(a.key).note || '').trim() };
+      return { key: a.key, kind: a.kind, block: a.block, lot: a.lot, detail: a.detail, text: a.bm, note: String(alertNote(a.key, a.def).note || '').trim() };
     });
   }
 

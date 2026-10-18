@@ -38,7 +38,7 @@ var ROOM_TABS = {
   FH_WORK:   ['chit', 'worker_id', 'task_code', 'block', 'lot', 'qty', 'unit', 'bunches', 'confirmed_by', 'confirmed_at', 'note'],
   FH_JOBDAY: ['chit', 'task_code', 'block', 'lots', 'workers', 'qty', 'unit', 'bunches', 'plan_ha', 'job_status', 'reason', 'flags', 'confirmed_by', 'confirmed_at', 'progress'],
   FH_COLLECT: ['block', 'lot', 'bunches', 'cleared', 'tractor', 'loader', 'note'],
-  FH_DISPATCH: ['bunches', 'lorry', 'mill', 'ramp_cleared', 'note']
+  FH_DISPATCH: ['bunches', 'lorry', 'mill', 'ramp_cleared', 'note', 'block', 'trip']
 };
 
 // ---------------- requests ----------------
@@ -279,32 +279,80 @@ function backlog(estate) {
   var cut = standingRows_('FH_WORK', estate).filter(function (r) { return r.task_code === 'HV01'; });
   var col = standingRows_('FH_COLLECT', estate);
   var dis = standingRows_('FH_DISPATCH', estate);
-  var clearedOn = {};
-  col.forEach(function (r) { if (r.cleared === 'Y' && (!clearedOn[r.lot] || r.date > clearedOn[r.lot])) clearedOn[r.lot] = r.date; });
-  var lots = {};
-  function lotOf(l, b) { return lots[l] || (lots[l] = { lot: l, block: b, cut: 0, collected: 0, since: '' }); }
-  cut.forEach(function (r) {
-    if (!r.lot || (clearedOn[r.lot] && r.date <= clearedOn[r.lot])) return;
-    var x = lotOf(r.lot, r.block); x.cut += Number(r.bunches) || 0;
-    if (!x.since || r.date < x.since) x.since = r.date;
-  });
-  col.forEach(function (r) {
-    if (!r.lot || (clearedOn[r.lot] && r.date <= clearedOn[r.lot])) return;
-    lotOf(r.lot, r.block).collected += Number(r.bunches) || 0;
-  });
-  var field = Object.keys(lots).map(function (k) { var x = lots[k]; x.bunches = Math.max(0, x.cut - x.collected); return x; })
-    .filter(function (x) { return x.bunches > 0; })
-    .sort(function (a, b) { return a.lot.localeCompare(b.lot, undefined, { numeric: true }); });
-  var rampEmpty = '';
-  dis.forEach(function (r) { if (r.ramp_cleared === 'Y' && r.date > rampEmpty) rampEmpty = r.date; });
-  var inRamp = 0, outRamp = 0, rampSince = '';
-  col.forEach(function (r) { if (r.date > rampEmpty) { inRamp += Number(r.bunches) || 0; if (!rampSince || r.date < rampSince) rampSince = r.date; } });
-  dis.forEach(function (r) { if (r.date > rampEmpty || (r.date === rampEmpty && r.ramp_cleared !== 'Y')) outRamp += Number(r.bunches) || 0; });
-  return { ok: true, estate: estate, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'),
-           field: field.map(function (x) { return { lot: x.lot, block: x.block, bunches: x.bunches, since: x.since }; }),
-           fieldTotal: field.reduce(function (a, x) { return a + x.bunches; }, 0),
-           ramp: { bunches: Math.max(0, inRamp - outRamp), since: rampSince } };
+  var now = new Date();
+  var b = calcBacklog(cut, col, dis, Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd'));
+  return { ok: true, estate: estate, at: Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'),
+           field: b.field, fieldTotal: b.fieldTotal, ramp: b.ramp, checks: b.checks };
 }
+
+  // ===== calcBacklog: the same text is in rooms/field/muster.js and server/core.gs =====
+  // cut: harvesters' bunches [{date, lot, block, bunches}]
+  // col: loader's collection [{date, lot, block, bunches, cleared}]
+  // dis: lorry loads [{date, block, bunches, ramp_cleared}]
+  // Field backlog per lot = cut - collected since the lot was last cleared ("Habis").
+  // Count check: when a lot is cleared and the mandor's count and the loader's count
+  // since the clearing before differ (last 7 days), or the loader has collected more
+  // than was cut. Ramp backlog per block = collected - sent since the ramp was last empty.
+  function calcBacklog(cut, col, dis, today) {
+    function n(v) { return Number(v) || 0; }
+    function byLot(a, b) { return String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true }); }
+    var d = new Date(today + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 7);
+    var weekAgo = d.toISOString().slice(0, 10);
+    var clears = {};
+    col.forEach(function (r) {
+      if (!r.lot || r.cleared !== 'Y') return;
+      var c = clears[r.lot] = clears[r.lot] || [];
+      if (c.indexOf(r.date) < 0) c.push(r.date);
+    });
+    Object.keys(clears).forEach(function (k) { clears[k].sort(); });
+    var lots = {};
+    function lotOf(r) { return lots[r.lot] || (lots[r.lot] = { lot: r.lot, block: r.block || '', cut: 0, col: 0, wCut: 0, wCol: 0, since: '' }); }
+    function place(r) {
+      var c = clears[r.lot] || [], last = c.length ? c[c.length - 1] : '', prev = c.length > 1 ? c[c.length - 2] : '';
+      if (!last || r.date > last) return 'open';
+      return r.date > prev ? 'window' : 'old';
+    }
+    cut.forEach(function (r) {
+      if (!r.lot) return;
+      var x = lotOf(r), p = place(r);
+      if (p === 'open') { x.cut += n(r.bunches); if (!x.since || r.date < x.since) x.since = r.date; }
+      else if (p === 'window') x.wCut += n(r.bunches);
+    });
+    col.forEach(function (r) {
+      if (!r.lot) return;
+      var x = lotOf(r), p = place(r);
+      if (p === 'open') x.col += n(r.bunches);
+      else if (p === 'window') x.wCol += n(r.bunches);
+    });
+    var field = [], checks = [];
+    Object.keys(lots).forEach(function (k) {
+      var x = lots[k], c = clears[k] || [], last = c.length ? c[c.length - 1] : '';
+      if (x.cut > x.col) field.push({ lot: x.lot, block: x.block, bunches: x.cut - x.col, since: x.since });
+      if (x.col > x.cut) checks.push({ lot: x.lot, block: x.block, mandor: x.cut, loader: x.col, cleared: '' });
+      if (last && last >= weekAgo && x.wCut !== x.wCol) checks.push({ lot: x.lot, block: x.block, mandor: x.wCut, loader: x.wCol, cleared: last });
+    });
+    field.sort(byLot); checks.sort(byLot);
+    var empty = '';
+    dis.forEach(function (r) { if (r.ramp_cleared === 'Y' && r.date > empty) empty = r.date; });
+    var blocks = {}, since = '', inAll = 0, outAll = 0;
+    function blk(b) { return blocks[b] || (blocks[b] = { block: b, bunches: 0 }); }
+    col.forEach(function (r) {
+      if (r.date <= empty) return;
+      inAll += n(r.bunches); blk(r.block || '').bunches += n(r.bunches);
+      if (n(r.bunches) && (!since || r.date < since)) since = r.date;
+    });
+    dis.forEach(function (r) {
+      if (r.date > empty || (r.date === empty && r.ramp_cleared !== 'Y')) { outAll += n(r.bunches); blk(r.block || '').bunches -= n(r.bunches); }
+    });
+    // A lorry keyed without its block (before v12) cannot be split, so then no block list is shown.
+    var rampBlocks = blocks[''] && blocks[''].bunches < 0 ? [] : Object.keys(blocks).map(function (k) { return blocks[k]; })
+      .filter(function (b) { return b.block && b.bunches > 0; })
+      .sort(function (a, b) { return a.block < b.block ? -1 : 1; });
+    var ramp = Math.max(0, inAll - outAll);
+    return { field: field, fieldTotal: field.reduce(function (a, x) { return a + x.bunches; }, 0),
+             ramp: { bunches: ramp, since: ramp ? since : '', blocks: rampBlocks }, checks: checks };
+  }
+  // ===== end calcBacklog =====
 
 // Plain values only: text that starts like a formula is kept as text.
 function plain(v) {

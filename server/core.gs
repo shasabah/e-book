@@ -430,14 +430,15 @@ function openTrips(estate) {
   var trips = {};
   standingRows_('FH_DISPATCH', estate).forEach(function (r) {
     if (!r.trip || r.date < cut || ticketed[r.trip] || !(Number(r.bunches) > 0)) return;
-    var x = trips[r.trip] || (trips[r.trip] = { trip: r.trip, date: r.date, lorry: r.lorry, mill: r.mill, dn: r.dn_no || '', driver: r.driver || '', blocks: {}, bunches: 0 });
+    var x = trips[r.trip] || (trips[r.trip] = { trip: r.trip, date: r.date, lorry: r.lorry, mill: r.mill, dn: r.dn_no || '', driver: r.driver || '', ramp_cleared: r.ramp_cleared || '', blocks: {}, bunches: 0, blockIds: {} });
     x.blocks[r.block] = (x.blocks[r.block] || 0) + Number(r.bunches); x.bunches += Number(r.bunches);
+    x.blockIds[r.block] = r.id;     // so a phone can correct this delivery note (new rows replace these)
   });
   // The lots the staff ticked on each delivery note (v19), for the clerk's ticket.
   var lots = {};
   standingRows_('FH_DISPATCH_LOT', estate).forEach(function (r) {
     if (!trips[r.trip]) return;
-    (lots[r.trip] = lots[r.trip] || []).push({ id: r.work_id, date: r.date_cut, lot: r.lot, block: r.block, worker_id: r.worker_id, bunches: Number(r.bunches) || 0 });
+    (lots[r.trip] = lots[r.trip] || []).push({ id: r.work_id, date: r.date_cut, lot: r.lot, block: r.block, worker_id: r.worker_id, bunches: Number(r.bunches) || 0, row: r.id });
   });
   return { ok: true, trips: Object.keys(trips).map(function (k) { trips[k].lots = lots[k] || []; return trips[k]; }) };
 }

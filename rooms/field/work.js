@@ -86,8 +86,8 @@
   function loadDraft(c) {
     var all = EA.local.get(K.draft, {});
     var d = all[c.chit];
-    if (d) return d;
-    d = { chit: c.chit, lines: {}, status: {}, checker: c.checker || '', replacing: '' };
+    if (d) { d.prog = d.prog || {}; d.manual = d.manual || {}; return d; }
+    d = { chit: c.chit, lines: {}, status: {}, checker: c.checker || '', replacing: '', prog: {}, manual: {} };
     jobsOf(c).forEach(function (j) {
       j.people.forEach(function (w) {
         var k = kind(j.task);
@@ -99,6 +99,32 @@
   }
   function keepDraft() { var all = EA.local.get(K.draft, {}); all[draft.chit] = draft; EA.local.set(K.draft, all); }
   function dropDraft() { var all = EA.local.get(K.draft, {}); delete all[draft.chit]; EA.local.set(K.draft, all); }
+
+  // ---------- Ha jobs: % of each lot, shared equally ----------
+  // Staff do not remember lot sizes; they know how much of a lot is done.
+  // Ha = lot size (from the map) x %; each person on the job gets an equal share.
+  // "Set per person" switches to keying each person's Ha by hand.
+  function isHa(j) { return kind(j.task) === 'qty' && task(j.task) && task(j.task).unit === 'Ha'; }
+  function auto(j) { return isHa(j) && !draft.manual[j.key]; }
+  function progLots(j) {
+    var p = draft.prog[j.key] || {}, out = j.lots.slice();
+    Object.keys(p).forEach(function (l) { if (out.indexOf(l) < 0) out.push(l); });
+    return out;
+  }
+  function lotHa(lot) { var l = EA.lists.lot(ctx.estate, lot); return l ? l.ha : 0; }
+  function shareOut(j) {           // fill each person's lines from the lot %
+    var p = draft.prog[j.key] || {}, n = j.people.length || 1;
+    var done = progLots(j).filter(function (l) { return num(p[l]) > 0; });
+    j.people.forEach(function (w) {
+      draft.lines[w] = done.length ? done.map(function (l) {
+        return { lot: l, qty: String(Math.round(lotHa(l) * Math.min(num(p[l]), 100) / 100 / n * 1000) / 1000), bunches: '' };
+      }) : [{ lot: '', qty: '', bunches: '' }];
+    });
+  }
+  function progText(j) {
+    var p = draft.prog[j.key] || {};
+    return progLots(j).filter(function (l) { return num(p[l]) > 0; }).map(function (l) { return l + ':' + num(p[l]) + '%'; }).join(' ');
+  }
 
   // ---------- totals and flags ----------
   function jobTotals(j) {
@@ -128,7 +154,7 @@
     var head = '<div class="room-top">' +
       '<button type="button" class="back-btn" id="wk-back">← <span class="inline"><span class="bm">Bilik</span></span></button>' +
       '<div class="grow"><h1>Kerja harian</h1><span class="en">Day\'s work · ' + esc(ctx.estate) + '</span></div>' +
-      (testing ? '<span class="test-badge">UJIAN · TEST</span>' : '') + '</div>' + EA.fh.tabs('work');
+      (testing ? '<span class="test-badge">UJIAN · TEST</span>' : '') + '</div>' + EA.fh.tabs('work', ctx.user);
     var list = chitsFor(ctx.estate);
     var pick = EA.local.get('fh.workchit', '');
     chit = list.find(function (x) { return x.chit === pick; }) || list[0] || null;
@@ -167,11 +193,32 @@
     refresh(jobs);
   }
 
+  function progBlock(j) {
+    var p = draft.prog[j.key] || {};
+    var others = EA.lists.lotsFor(ctx.estate, j.block).filter(function (l) { return progLots(j).indexOf(l.lot) < 0; });
+    return '<div class="field"><span class="inline"><span class="bm">Berapa banyak petak siap?</span> · <span class="en">How much of each lot is done?</span></span>' +
+      progLots(j).map(function (lot) {
+        var v = p[lot] || '', ha = lotHa(lot);
+        return '<div class="wline"><b class="mono">' + esc(lot) + '</b><span class="hint">' + ha.toFixed(2) + ' Ha</span>' +
+          '<div class="seg">' + [25, 50, 75, 100].map(function (x) { return '<button type="button" data-pj="' + j.key + '" data-pl="' + esc(lot) + '" data-pv="' + x + '" aria-pressed="' + (num(v) === x) + '">' + x + '%</button>'; }).join('') + '</div>' +
+          '<input class="qty" style="width:4.5em" inputmode="numeric" data-pj="' + j.key + '" data-pl="' + esc(lot) + '" value="' + esc(v) + '" placeholder="%">' +
+          '<span data-pha="' + j.key + '|' + esc(lot) + '">= ' + (Math.round(ha * Math.min(num(v), 100)) / 100).toFixed(2) + ' Ha</span></div>';
+      }).join('') +
+      (others.length ? '<div class="wline"><select class="text-input" data-paddlot="' + j.key + '"><option value="">+ Petak lain · another lot</option>' +
+        others.map(function (l) { return '<option>' + l.lot + '</option>'; }).join('') + '</select></div>' : '') + '</div>';
+  }
+
   function jobCard(j) {
     var k = kind(j.task), sec = EA.lists.sectionOf(j.task), st = draft.status[j.key] || { done: '', reason: '' };
+    if (auto(j)) shareOut(j);
     var lotsText = j.lots.length ? 'Petak ' + j.lots.join(', ') + ' · ' + jobTotals(j).planHa.toFixed(2) + ' Ha' : '';
     var lines = j.people.map(function (w) {
       var wl = draft.lines[w] || [];
+      if (auto(j)) {
+        var tot = wl.reduce(function (a, l) { return a + num(l.qty); }, 0);
+        return '<div class="wrow"><div class="who-w"><b>' + esc(w) + '</b><span class="en">' + esc(person(w)) + '</span></div>' +
+          '<div class="mono" data-share="' + w + '">' + (Math.round(tot * 1000) / 1000) + ' Ha</div></div>';
+      }
       var rows = k === 'ticket' ? '<span class="hint">Ikut tiket kilang · from the mill ticket</span>' :
         wl.map(function (l, i) {
           var lotSel = j.lots.length > 1 ? '<select class="text-input" data-w="' + w + '" data-i="' + i + '" data-f="lot"><option value="">Petak?</option>' +
@@ -188,7 +235,10 @@
     }).join('') + lines;
     return '<section class="card" data-job="' + j.key + '"><h2>' + esc(sec.code + '. ' + jobName(j.task)) + (j.block ? ' · Blok ' + esc(j.block) : '') + '</h2>' +
       '<p class="hint">' + esc(j.task + ' · ' + task(j.task).en) + (lotsText ? ' · ' + esc(lotsText) : '') + (j.mandor ? ' · Mandor ' + esc(person(j.mandor)) : '') + '</p>' +
-      (k !== 'ticket' && k !== 'day' ? '<div class="wline"><span class="hint">Isi sama untuk semua yang kosong · Fill the same for everyone empty:</span><input class="qty" inputmode="decimal" data-fill="' + j.key + '" placeholder="0"> ' + esc(unitLabel(j.task)) + '<button type="button" class="btn btn-ghost" data-fillgo="' + j.key + '">FILL<small>Isi</small></button></div>' : '') +
+      (isHa(j) ? progBlock(j) +
+        '<div class="wline"><span class="hint">' + (auto(j) ? 'Dibahagi sama rata · shared equally.' : 'Diisi seorang-seorang · keyed per person.') + '</span>' +
+        '<button type="button" class="btn btn-ghost" data-manual="' + j.key + '">' + (auto(j) ? 'SET PER PERSON<small>Isi seorang-seorang</small>' : 'EQUAL SHARE<small>Kembali sama rata</small>') + '</button></div>' : '') +
+      (k !== 'ticket' && k !== 'day' && !auto(j) && !isHa(j) ? '<div class="wline"><span class="hint">Isi sama untuk semua yang kosong · Fill the same for everyone empty:</span><input class="qty" inputmode="decimal" data-fill="' + j.key + '" placeholder="0"> ' + esc(unitLabel(j.task)) + '<button type="button" class="btn btn-ghost" data-fillgo="' + j.key + '">FILL<small>Isi</small></button></div>' : '') +
       '<div class="rows">' + lines + '</div>' +
       '<p class="hint" data-tot="' + j.key + '"></p><div data-flags="' + j.key + '"></div>' +
       '<div class="field"><span class="inline"><span class="bm">Kerja ini</span> · <span class="en">This job</span></span>' +
@@ -206,7 +256,8 @@
     var fix = $('#wk-fix');
     if (fix) fix.onclick = function () {
       var s = savedFor(chit.chit);
-      draft = { chit: chit.chit, lines: JSON.parse(JSON.stringify(s.lines)), status: JSON.parse(JSON.stringify(s.status)), checker: s.checker, replacing: s.chit };
+      draft = { chit: chit.chit, lines: JSON.parse(JSON.stringify(s.lines)), status: JSON.parse(JSON.stringify(s.status)), checker: s.checker, replacing: s.chit,
+                prog: JSON.parse(JSON.stringify(s.prog || {})), manual: JSON.parse(JSON.stringify(s.manual || {})) };
       keepDraft(); render(el, ctx);
     };
     var view = $('#wk-view');
@@ -246,6 +297,30 @@
         keepDraft(); render(el, ctx);
       };
     });
+    function jobByKey(key) { return jobs.find(function (x) { return x.key === key; }); }
+    function setPct(key, lot, v) {
+      draft.prog[key] = draft.prog[key] || {};
+      draft.prog[key][lot] = v === '' ? '' : String(Math.min(100, Math.max(0, Math.round(num(v)))));
+      var j = jobByKey(key); shareOut(j); keepDraft();
+    }
+    el.querySelectorAll('button[data-pj]').forEach(function (b) {
+      b.onclick = function () { setPct(b.dataset.pj, b.dataset.pl, b.dataset.pv); render(el, ctx); };
+    });
+    el.querySelectorAll('input[data-pj]').forEach(function (i) {
+      i.oninput = function () {
+        setPct(i.dataset.pj, i.dataset.pl, i.value.replace(/\D/g, ''));
+        var j = jobByKey(i.dataset.pj), v = num((draft.prog[j.key] || {})[i.dataset.pl]);
+        var span = el.querySelector('[data-pha="' + j.key + '|' + i.dataset.pl + '"]'); if (span) span.textContent = '= ' + (Math.round(lotHa(i.dataset.pl) * v) / 100).toFixed(2) + ' Ha';
+        j.people.forEach(function (w) { var s = el.querySelector('[data-share="' + w + '"]'); if (s) s.textContent = (Math.round(draft.lines[w].reduce(function (a, l) { return a + num(l.qty); }, 0) * 1000) / 1000) + ' Ha'; });
+        refresh(jobs);
+      };
+    });
+    el.querySelectorAll('[data-paddlot]').forEach(function (s) {
+      s.onchange = function () { if (!this.value) return; draft.prog[s.dataset.paddlot] = draft.prog[s.dataset.paddlot] || {}; draft.prog[s.dataset.paddlot][this.value] = ''; keepDraft(); render(el, ctx); };
+    });
+    el.querySelectorAll('[data-manual]').forEach(function (b) {
+      b.onclick = function () { var key = b.dataset.manual; draft.manual[key] = !draft.manual[key]; if (!draft.manual[key]) shareOut(jobByKey(key)); keepDraft(); render(el, ctx); };
+    });
     el.querySelectorAll('[data-st]').forEach(function (b) {
       b.onclick = function () {
         var key = b.dataset.st;
@@ -280,7 +355,9 @@
     var p = [];
     jobs.forEach(function (j) {
       var k = kind(j.task), st = draft.status[j.key] || {};
-      if (k !== 'ticket') {
+      if (auto(j)) {
+        if (!progText(j) && st.done !== 'N') p.push([shortName(j.task) + (j.block ? ' Blk ' + j.block : '') + ': isi % petak yang siap', 'Fill how much of each lot is done']);
+      } else if (k !== 'ticket') {
         var empty = j.people.filter(function (w) {
           var ls = draft.lines[w] || [];
           return !ls.length || ls.some(function (l) { return (j.lots.length > 1 && !l.lot) || !(num(k === 'bunches' ? l.bunches : l.qty) > 0); });
@@ -335,7 +412,7 @@
                       qty: k === 'bunches' || k === 'ticket' ? '' : String(t.qty), unit: k === 'bunches' ? 'bunch' : task(j.task).unit,
                       bunches: k === 'bunches' ? String(t.bunches) : '', plan_ha: t.planHa ? String(t.planHa) : '',
                       status: st.done === 'Y' ? 'done' : st.done === 'N' ? 'not_done' : '', reason: st.reason || '',
-                      flags: t.flags.map(function (f) { return f.text; }).join('; ') });
+                      flags: t.flags.map(function (f) { return f.text; }).join('; '), progress: isHa(j) ? progText(j) : '' });
     });
     return { chit: chit.chit, date: chit.date, estate: chit.estate, label: label, at: at, checker: checker,
              lines: lines, jobs: jobLines, keyedName: ctx.user.name };
@@ -367,11 +444,11 @@
         var o = oldJobs[j.task_code + '|' + j.block + '|' + j.lots];
         if (o && o.qty === j.qty && o.bunches === j.bunches && o.status === j.status && o.reason === j.reason && o.workers === j.workers) { j.id = o.id; return; }
         j.id = EA.save(TAB_JOB, ROOM, ctx.estate, { date: rec.date, chit: rec.chit, task_code: j.task_code, block: j.block, lots: j.lots, workers: j.workers,
-          qty: j.qty, unit: j.unit, bunches: j.bunches, plan_ha: j.plan_ha, job_status: j.status, reason: j.reason, flags: j.flags,
+          qty: j.qty, unit: j.unit, bunches: j.bunches, plan_ha: j.plan_ha, job_status: j.status, reason: j.reason, flags: j.flags, progress: j.progress,
           confirmed_by: rec.checker, confirmed_at: stamp }, o ? o.id : '').id;
       });
     } catch (e) { ui().toast('Tidak dapat simpan: ' + e.message + ' · Could not save', 'bad'); return; }
-    keepSaved({ chit: rec.chit, date: rec.date, estate: rec.estate, rec: rec, lines: draft.lines, status: draft.status, checker: draft.checker, rev: old ? (old.rev || 1) + 1 : 1 });
+    keepSaved({ chit: rec.chit, date: rec.date, estate: rec.estate, rec: rec, lines: draft.lines, status: draft.status, prog: draft.prog, manual: draft.manual, checker: draft.checker, rev: old ? (old.rev || 1) + 1 : 1 });
     dropDraft();
     ui().toast('Kerja harian disimpan · Day\'s work saved');
     if (navigator.onLine && EA.sendLink()) EA.send();
@@ -395,6 +472,7 @@
       else what = j.qty + ' ' + unitLabel(j.task_code) + (j.plan_ha ? ' / ' + num(j.plan_ha).toFixed(2) + ' Ha' : '');
       L.push('• ' + shortName(j.task_code) + (j.block ? ' Blk ' + j.block : '') + ' — ' + j.workers + ' org — ' + what + ' — ' +
              (j.status === 'done' ? 'SIAP' : j.status === 'not_done' ? 'BELUM SIAP' : '?'));
+      if (j.progress) L.push('   Petak: ' + j.progress.replace(/ /g, ', '));
       if (j.status === 'not_done' && j.reason) L.push('   Sebab/tindakan: ' + j.reason);
       if (j.flags) L.push('   Perhatian: ' + j.flags);
     });

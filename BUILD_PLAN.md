@@ -56,7 +56,8 @@ No new rooms for field crews in peak crop (Aug–Nov).
    - DONE 18 Oct: screen 1, morning muster chit (by lot), on the test copy.
    - DONE 18 Oct (v5): muster chit rebuilt like the Sugut paper chit: many jobs per chit, sections A–D, Mdr / M / F / Total, absence reasons, rainfall. Vehicles, crop balance, rejects and harvesting round come from later screens.
    - DONE 18 Oct (v10): screen 2, day's work by person and lot (quantity, bunches), job done / not done with reason and counter-measure, evening report.
-   - Next: harvest and crop balance by lot, lorry request, mill ticket (ABW: harvester tonnes = bunches x ticket MT / bunches).
+   - DONE 18 Oct (v11): Ha jobs keyed as % of lot (equal share); screen 3, collect & dispatch by tractor driver and loader; field and ramp backlog shown on the next morning's chit.
+   - Next: lorry request at 5 MT, mill ticket (ABW: harvester tonnes = bunches x ticket MT / bunches), office view, older-day corrections by the clerk.
 2. Build on the test copy; Sugut junior staff tests with made-up workers.
 3. Pilot from 4 Jan beside the paper pocket check roll for about a month.
 - DONE 17 Oct: checks 11 of 11 on iPhone; app online at shasabah.github.io/e-book.

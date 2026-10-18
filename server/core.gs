@@ -39,13 +39,16 @@ var ROOM_TABS = {
   FH_JOBDAY: ['chit', 'task_code', 'block', 'lots', 'workers', 'qty', 'unit', 'bunches', 'plan_ha', 'job_status', 'reason', 'flags', 'confirmed_by', 'confirmed_at', 'progress'],
   FH_COLLECT: ['block', 'lot', 'bunches', 'cleared', 'tractor', 'loader', 'note'],
   FH_DISPATCH: ['bunches', 'lorry', 'mill', 'ramp_cleared', 'note', 'block', 'trip', 'dn_no', 'driver'],
+  // The lots ticked on a delivery note: one row per harvester line on the lorry (v19).
+  FH_DISPATCH_LOT: ['trip', 'dn_no', 'block', 'lot', 'work_id', 'date_cut', 'worker_id', 'bunches'],
   FH_TICKET: ['ticket_no', 'trip', 'mill', 'do_no', 'lorry', 'driver', 'time', 'first_kg', 'second_kg', 'deduct_kg', 'nett_kg', 'nett_mt',
               'bunches', 'abw_kg', 'note', 'lorry_bunches'],
   // The mill's grading sheet, one row per ticket, keyed by the estate clerk (v16).
   FH_GRADING: ['ticket_no', 'sample', 'mill_bunches', 'g_ur', 'g_udr', 'g_or', 'g_r', 'g_eb', 'g_rt', 'g_ls', 'g_pd', 'g_pf', 'g_ds', 'g_dt', 'g_dr',
                'rej_ur', 'rej_eb', 'rej_rt', 'loose_kg', 'penalty_pct', 'grade_flag'],
   FH_TICKET_BLOCK: ['ticket_no', 'block', 'bunches', 'mt'],
-  FH_TICKET_HARV: ['ticket_no', 'work_id', 'date_cut', 'block', 'lot', 'worker_id', 'bunches', 'abw_kg', 'mt'],
+  // source: 'dn' = lots from the delivery note; 'ticket' (or empty, before v19) = lots ticked on the ticket.
+  FH_TICKET_HARV: ['ticket_no', 'work_id', 'date_cut', 'block', 'lot', 'worker_id', 'bunches', 'abw_kg', 'mt', 'source'],
   FH_ALERT: ['chit', 'kind', 'block', 'lot', 'detail', 'staff_note', 'direction', 'direction_by', 'ref'],
   // Errors on phones, so the builder can see what went wrong without asking for screenshots.
   APP_ERROR: ['where', 'message', 'stack', 'version', 'agent']
@@ -401,14 +404,16 @@ function ungraded_(estate) {
   }
   // ===== end calcBacklog =====
 
-// Harvesters' bunches (FH_WORK, HV01) of the last 45 days not yet on a mill ticket,
-// for the ticket screen: the staff chooses which of them the ticket's tonnes belong to.
+// Harvesters' bunches (FH_WORK, HV01) of the last 45 days not yet on a lorry, for the
+// delivery note (the staff ticks the lots) and for a ticket whose lorry has no lots ticked.
+// A line leaves when it goes on a lorry (FH_DISPATCH_LOT) or is picked on a ticket (FH_TICKET_HARV, not 'dn').
 function openHarvest(estate) {
   var cut = Utilities.formatDate(new Date(Date.now() - 45 * 864e5), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd');
   // A line can go on a ticket in parts (part of a lot on one lorry, the rest on the next):
   // what is left is the block's balance and stays open.
   var onTicket = {};
-  standingRows_('FH_TICKET_HARV', estate).forEach(function (r) { onTicket[r.work_id] = (onTicket[r.work_id] || 0) + (Number(r.bunches) || 0); });
+  standingRows_('FH_DISPATCH_LOT', estate).forEach(function (r) { onTicket[r.work_id] = (onTicket[r.work_id] || 0) + (Number(r.bunches) || 0); });
+  standingRows_('FH_TICKET_HARV', estate).forEach(function (r) { if (r.source !== 'dn') onTicket[r.work_id] = (onTicket[r.work_id] || 0) + (Number(r.bunches) || 0); });
   var lines = standingRows_('FH_WORK', estate).filter(function (r) {
     return r.task_code === 'HV01' && Number(r.bunches) > 0 && r.date >= cut;
   }).map(function (r) { return { id: r.id, date: r.date, lot: r.lot, block: r.block, worker_id: r.worker_id, bunches: Number(r.bunches) - (onTicket[r.id] || 0) }; })
@@ -428,7 +433,13 @@ function openTrips(estate) {
     var x = trips[r.trip] || (trips[r.trip] = { trip: r.trip, date: r.date, lorry: r.lorry, mill: r.mill, dn: r.dn_no || '', driver: r.driver || '', blocks: {}, bunches: 0 });
     x.blocks[r.block] = (x.blocks[r.block] || 0) + Number(r.bunches); x.bunches += Number(r.bunches);
   });
-  return { ok: true, trips: Object.keys(trips).map(function (k) { return trips[k]; }) };
+  // The lots the staff ticked on each delivery note (v19), for the clerk's ticket.
+  var lots = {};
+  standingRows_('FH_DISPATCH_LOT', estate).forEach(function (r) {
+    if (!trips[r.trip]) return;
+    (lots[r.trip] = lots[r.trip] || []).push({ id: r.work_id, date: r.date_cut, lot: r.lot, block: r.block, worker_id: r.worker_id, bunches: Number(r.bunches) || 0 });
+  });
+  return { ok: true, trips: Object.keys(trips).map(function (k) { trips[k].lots = lots[k] || []; return trips[k]; }) };
 }
 
 // A room's tab, made (or given its new columns) the first time an entry arrives for it,

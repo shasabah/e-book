@@ -20,7 +20,9 @@ var MIN_APP_VERSION = 1;
 // The test sheet this script writes into (E-Book TEST sheet).
 // At the pilot, this changes to the live sheet's ID.
 var SHEET_ID = '1N79YKsFE3CLvR6Z_lcy7clagEydOXhKKeTHI4sA3VWs';
-function book_() { return SpreadsheetApp.openById(SHEET_ID); }
+// Opened once per request (opening the sheet is the slowest step).
+var BOOK_ = null;
+function book_() { return BOOK_ || (BOOK_ = SpreadsheetApp.openById(SHEET_ID)); }
 
 var USERS_TAB = 'USERS';
 var USER_COLS = ['user_code', 'name', 'role', 'estates', 'key_hash', 'status', 'added_at'];
@@ -65,10 +67,15 @@ function reply(obj) {
 
 // Keys are never stored as typed. Only a scrambled form (hash) is kept in the
 // sheet, mixed with a secret kept in the script settings, not in the sheet.
+var SALT_ = null;
 function hashKey(key) {
-  var props = PropertiesService.getScriptProperties();
-  var salt = props.getProperty('KEY_SALT');
-  if (!salt) { salt = Utilities.getUuid(); props.setProperty('KEY_SALT', salt); }
+  var salt = SALT_;
+  if (!salt) {
+    var props = PropertiesService.getScriptProperties();
+    salt = props.getProperty('KEY_SALT');
+    if (!salt) { salt = Utilities.getUuid(); props.setProperty('KEY_SALT', salt); }
+    SALT_ = salt;
+  }
   var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, salt + ':' + key);
   return bytes.map(function (b) { return ('0' + (b & 0xff).toString(16)).slice(-2); }).join('');
 }
@@ -81,8 +88,21 @@ function findUser_(code) {
   return codes.some(function (r) { return String(r[0]) === String(code); });
 }
 
+// Who owns this key. Remembered for 10 minutes (CacheService) so most requests
+// do not read the USERS tab at all. A person switched off is refused within 10 minutes;
+// switchOff() also clears the memory at once.
 function findUser(key) {
   if (!/^\d{6}$/.test(String(key || ''))) return null;
+  var h0 = hashKey(String(key));
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get('u:' + h0);
+  if (hit) return JSON.parse(hit);
+  var u = findUserInSheet_(key);
+  if (u) cache.put('u:' + h0, JSON.stringify(u), 600);
+  return u;
+}
+
+function findUserInSheet_(key) {
   var sh = book_().getSheetByName(USERS_TAB);
   if (!sh || sh.getLastRow() < 2) return null;
   var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
@@ -170,14 +190,14 @@ function saveBatch(user, items) {
       var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
       var missing = STANDARD_COLS.filter(function (c) { return head.indexOf(c) < 0; });
       var seen = {};
-      if (!missing.length && sh.getLastRow() > 1) {
-        var n = sh.getLastRow() - 1;
-        var ids = sh.getRange(2, head.indexOf('id') + 1, n, 1).getDisplayValues();
-        var kb = sh.getRange(2, head.indexOf('keyed_by') + 1, n, 1).getDisplayValues();
-        var ka = sh.getRange(2, head.indexOf('keyed_at') + 1, n, 1).getDisplayValues();
-        for (var i = 0; i < n; i++) seen[ids[i][0]] = kb[i][0] + '|' + String(ka[i][0]).slice(0, 16);
+      var last = sh.getLastRow();
+      if (!missing.length && last > 1) {
+        var ci = head.indexOf('id'), cb = head.indexOf('keyed_by'), ca = head.indexOf('keyed_at');
+        var w = Math.max(ci, cb, ca) + 1;
+        var vals = sh.getRange(2, 1, last - 1, w).getDisplayValues();   // one read
+        for (var i = 0; i < vals.length; i++) seen[vals[i][ci]] = vals[i][cb] + '|' + String(vals[i][ca]).slice(0, 16);
       }
-      return (tabs[name] = { sh: sh, head: head, missing: missing, seen: seen, add: [] });
+      return (tabs[name] = { sh: sh, head: head, missing: missing, seen: seen, add: [], last: last });
     }
     items.forEach(function (it) {
       var row = it && it.row, tab = it && it.tab;
@@ -206,7 +226,7 @@ function saveBatch(user, items) {
     });
     Object.keys(tabs).forEach(function (name) {
       var t = tabs[name];
-      if (t && t.add.length) t.sh.getRange(t.sh.getLastRow() + 1, 1, t.add.length, t.head.length).setValues(t.add);
+      if (t && t.add.length) t.sh.getRange(t.last + 1, 1, t.add.length, t.head.length).setValues(t.add);
     });
     return { ok: true, results: results };
   } finally {
@@ -274,6 +294,10 @@ function switchOff(code) {
   var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
   var codes = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
   for (var i = 0; i < codes.length; i++) {
-    if (codes[i][0] === code) sh.getRange(i + 2, head.indexOf('status') + 1).setValue('off');
+    if (codes[i][0] === code) {
+      sh.getRange(i + 2, head.indexOf('status') + 1).setValue('off');
+      var h = sh.getRange(i + 2, head.indexOf('key_hash') + 1).getValue();
+      CacheService.getScriptCache().remove('u:' + h);
+    }
   }
 }

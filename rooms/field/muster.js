@@ -178,6 +178,17 @@
       wireCommon();
       return;
     }
+    var started = draft.jobs.length || Object.keys(draft.marks).length || draft.replacing || draft.newChit;
+    if (todaysChits().length && !started) {
+      el.innerHTML = head +
+        '<p class="msg ok-msg"><span class="bm">Chit hari ini sudah disimpan. Tekan VIEW untuk lihat, atau CORRECT untuk betulkan.</span>' +
+        '<span class="en">Today\'s chit is saved. Tap VIEW to see it, or CORRECT to fix it.</span></p>' +
+        todayCard() +
+        '<button type="button" class="btn btn-ghost" id="fh-new">+ NEW CHIT<small>Chit baru (jarang · rarely needed)</small></button>';
+      $('#fh-new').onclick = function () { draft.newChit = true; keepDraft(); render(el, ctx); };
+      wireCommon();
+      return;
+    }
     var d = new Date();
     el.innerHTML = head +
       (d.getDay() === 0 ? '<p class="warn"><span class="bm">Hari Ahad: kerja perlu kelulusan Penolong Pengurus sebelum dikira untuk gaji.</span><span class="en">Sunday: work needs the Assistant Manager\'s approval before it counts for pay.</span></p>' : '') +
@@ -248,9 +259,15 @@
     el.querySelectorAll('#fh-jobs [data-pick]').forEach(function (b) { b.onclick = function () { pickPeople(b.dataset.pick); }; });
   }
 
+  function unmarked() {
+    var taken = onOtherChit();
+    return everyone().filter(function (w) { return !draft.marks[w.id] && !taken[w.id]; });
+  }
   function drawRows() {
     var taken = onOtherChit();
-    $('#fh-rows').innerHTML = everyone().map(function (w) {
+    var left = unmarked();
+    $('#fh-rows').innerHTML = (left.length ? '<p class="warn"><span class="bm">' + left.length + ' orang belum ditanda.</span><span class="en">' + left.length + ' people not marked yet.</span></p>' : '<p class="hint">Semua orang sudah ditanda. · Everyone is marked.</p>') +
+      everyone().map(function (w) {
       var other = taken[w.id];
       var m = draft.marks[w.id] || '';
       var j = m === 'H' ? jobFor(w.id) : null;
@@ -403,6 +420,23 @@
         function (s) { s.querySelector('#pb-ok').onclick = ui().closeSheet; });
       return;
     }
+    var left = unmarked();
+    if (left.length) {
+      ui().openSheet('<h2 id="sheet-title"><span class="bm">' + left.length + ' orang belum ditanda</span><span class="en">' + left.length + ' people not marked yet</span></h2>' +
+        '<p><span class="bm" style="font-weight:400">Chit perlu kira semua orang ladang, bekerja atau tidak: ' + esc(left.map(function (w) { return w.id; }).join(', ')) + '</span>' +
+        '<span class="en">The chit counts everyone on the estate, working or not.</span></p>' +
+        '<div class="actions"><button class="btn btn-main" type="button" id="um-back">MARK THEM<small>Tandakan mereka</small></button></div>' +
+        '<div class="actions"><button class="btn btn-ghost" type="button" id="um-go">CONTINUE ANYWAY<small>Teruskan (mereka dalam chit lain)</small></button></div>',
+        function (s) {
+          s.querySelector('#um-back').onclick = function () { ui().closeSheet(); var r = el.querySelector('#fh-rows'); if (r) r.scrollIntoView({ behavior: 'smooth' }); };
+          s.querySelector('#um-go').onclick = function () { ui().closeSheet(); confirmSheet(); };
+        });
+      return;
+    }
+    confirmSheet();
+  }
+
+  function confirmSheet() {
     var onDuty = EA.lists.mandorsFor(ctx.estate).filter(function (m) { return draft.marks[m.id] === 'H'; });
     var empty = emptyJobs();
     var preview = chitText(buildChit('(belum disimpan · not saved yet)', EA.ui.hhmm(new Date()), draft.checker || (onDuty[0] && onDuty[0].id) || ''));

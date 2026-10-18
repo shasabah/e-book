@@ -12,7 +12,7 @@
   window.EA = window.EA || {};
   EA.fh = EA.fh || {};
 
-  var TAB = 'FH_COLLECT', TAB_DIS = 'FH_DISPATCH', TAB_LOT = 'FH_DISPATCH_LOT', ROOM = 'FH';
+  var TAB = 'FH_COLLECT', ROOM = 'FH';   // the delivery note's rows are written by EA.fh.harvest.writeDn
   var K = { draft: 'fh.collectdraft', saved: 'fh.collect' };
 
   var el, ctx, draft;
@@ -226,7 +226,7 @@
     var old = dis.replacing ? saved().find(function (s) { return s.dispatch && s.dispatch.trip === dis.replacing && !s.dispatch.replacedBy; }) : null;
     if (dis.replacing && !old) { ui().toast('Nota hantar lama tidak dijumpai · Old delivery note not found', 'bad'); return; }
     // One trip code ties together the rows of this lorry (one per block); a correction keeps it.
-    var trip = old ? old.dispatch.trip : 'LR-' + ctx.estate + '-' + (EA.phone() || 'P00') + '-' + EA.today().replace(/-/g, '') + '-' + EA.ui.hhmm(new Date()).replace(':', '') + String(new Date().getSeconds()).padStart(2, '0');
+    var trip = old ? old.dispatch.trip : 'LR-' + ctx.estate + '-' + (EA.phone() || 'P00') + '-' + EA.today().replace(/-/g, '') + '-' + EA.ui.hhmm(new Date()).replace(':', '') + String(new Date().getSeconds()).padStart(2, '0') + String(new Date().getMilliseconds()).padStart(3, '0');
     var dcopy = null, parts = [];
     if (hasDis) {
       parts = partsNow();
@@ -241,27 +241,7 @@
       lines.forEach(function (l) {
         rec.ids.push(EA.save(TAB, ROOM, ctx.estate, { block: l.block, lot: l.lot, bunches: String(num(l.bunches)), cleared: l.cleared, tractor: draft.tractor, loader: draft.loader, note: '' }).id);
       });
-      if (hasDis) {
-        // One row per block on this lorry, and one per harvester line ticked, tied together by the trip code.
-        var oldB = old ? Object.assign({}, old.disIds) : {}, oldL = old ? Object.assign({}, old.lotIds) : {};
-        var bl = Object.keys(dcopy.blocks).sort();
-        if (!bl.length) bl = [''];   // ramp emptied with no load
-        bl.forEach(function (b) {
-          var id = EA.save(TAB_DIS, ROOM, ctx.estate, { date: rec.date, block: b, trip: trip, dn_no: dcopy.dn, driver: dcopy.driver, bunches: String(num(dcopy.blocks[b])), lorry: dcopy.lorry, mill: dcopy.mill, ramp_cleared: dcopy.ramp_cleared, note: '' }, oldB[b] || '').id;
-          rec.ids.push(id); rec.disIds[b] = id; delete oldB[b];
-        });
-        parts.forEach(function (h) {
-          var id = EA.save(TAB_LOT, ROOM, ctx.estate, { date: rec.date, trip: trip, dn_no: dcopy.dn, block: h.block, lot: h.lot, work_id: h.id, date_cut: h.date, worker_id: h.worker_id, bunches: String(h.bunches) }, oldL[h.id] || '').id;
-          rec.ids.push(id); rec.lotIds[h.id] = id; delete oldL[h.id];
-        });
-        Object.keys(oldB).forEach(function (b) {
-          rec.ids.push(EA.save(TAB_DIS, ROOM, ctx.estate, { date: old.date, block: b, trip: trip, dn_no: old.dispatch.dn, driver: old.dispatch.driver, bunches: String(num(old.dispatch.blocks[b])), lorry: old.dispatch.lorry, mill: old.dispatch.mill, ramp_cleared: old.dispatch.ramp_cleared, note: '' }, oldB[b], 'removed').id);
-        });
-        Object.keys(oldL).forEach(function (wid) {
-          var h = old.dispatch.parts.find(function (x) { return x.id === wid; }) || {};
-          rec.ids.push(EA.save(TAB_LOT, ROOM, ctx.estate, { date: old.date, trip: trip, dn_no: old.dispatch.dn, block: h.block || '', lot: h.lot || '', work_id: wid, date_cut: h.date || '', worker_id: h.worker_id || '', bunches: String(h.bunches || '') }, oldL[wid], 'removed').id);
-        });
-      }
+      if (hasDis) EA.fh.harvest.writeDn(ctx.estate, rec, old);
     } catch (e) { ui().toast('Tidak dapat simpan: ' + e.message + ' · Could not save', 'bad'); return; }
     var list = EA.local.get(K.saved, []);
     if (old) list.forEach(function (s) { if (s.dispatch && s.dispatch.trip === trip && !s.dispatch.replacedBy) s.dispatch.replacedBy = rec.at; });

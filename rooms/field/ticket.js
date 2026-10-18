@@ -1,30 +1,28 @@
 // Field & Harvest room — screen 4: the mill ticket (Tiket kilang).
 // From the Field & Harvest Brief (Sugut), item 5, and the papers the driver posts to
-// WhatsApp after delivery (18 Oct 2026, Boustead Rimba Nilai): the weighbridge ticket
-// (ticket no., DO no. = our delivery note no., weight in / out / nett in kg) and the
-// grading sheet (ripeness, unsatisfactory bunches, rejects, penalty).
+// WhatsApp after delivery (18 Oct 2026, Boustead Rimba Nilai).
 //
-// The staff decides which harvest the ticket's tonnage belongs to: the harvest days and
-// lots keyed on Kerja harian (the mandor's bunches per harvester). Then, as decided in the
-// brief, the batch closes on the real ticket:
-//   ABW kg = nett MT x 1000 / bunches in the batch
+// The staff keys the weighbridge ticket (ticket no., DO no. = our delivery note no.,
+// weight in / out / nett in kg) and ticks the lots that went on that lorry. A lorry
+// carries several lots; usually one harvester takes one lot. For each lot the staff can
+// put all its bunches or only part; what is not put on this ticket stays as the block's
+// balance for the next ticket. Then, as decided in the brief, the batch closes on the ticket:
+//   ABW kg = nett MT x 1000 / bunches on the ticket
 //   each harvester's MT = his bunches x ABW  (the base of harvesting pay)
-//   each block's MT = its bunches x ABW
-// The lorry load (found by the DO / delivery note no.) suggests the batch and its bunch
-// count is shown beside it, with the mill's own count, as a cross-check.
-// The grading is operation information: when it is poor (limits in the shared lists) the
-// staff must say what is going on; it goes in the ticket text and on the next morning's
-// chit for the Assistant Manager.
-// Saved as FH_TICKET (one row), FH_TICKET_BLOCK (one per block) and FH_TICKET_HARV (one per
-// harvester line). A correction is new rows that point to the old ones (nothing is deleted).
+// The mill's grading sheet is keyed by the estate clerk from the WhatsApp group, as a step
+// of its own (for now; to be upgraded later). Poor grading becomes an alert on the next
+// morning's chit, where the staff says what is going on, for the Assistant Manager.
+// Saved as FH_TICKET (one row), FH_TICKET_BLOCK (one per block), FH_TICKET_HARV (one per
+// harvester line) and FH_GRADING (one per ticket, by the clerk).
+// A correction is new rows that point to the old ones (nothing is deleted).
 (function () {
   window.EA = window.EA || {};
   EA.fh = EA.fh || {};
 
-  var TAB = 'FH_TICKET', TAB_BLK = 'FH_TICKET_BLOCK', TAB_HARV = 'FH_TICKET_HARV', ROOM = 'FH';
-  var K = { draft: 'fh.ticketdraft', saved: 'fh.tickets', trips: 'fh.trips.', harv: 'fh.harv.' };
+  var TAB = 'FH_TICKET', TAB_BLK = 'FH_TICKET_BLOCK', TAB_HARV = 'FH_TICKET_HARV', TAB_GRADE = 'FH_GRADING', ROOM = 'FH';
+  var K = { draft: 'fh.ticketdraft', saved: 'fh.tickets', trips: 'fh.trips.', harv: 'fh.harv.', grades: 'fh.gradings', ungraded: 'fh.ungraded.' };
   var MAX_LOAD = 15;                 // from the brief: a lorry load not over 15 MT
-  var ABW_LOW = 5, ABW_HIGH = 30;    // kg per bunch outside this: check the bunches or the weight
+  var ABW_LOW = 5, ABW_HIGH = 30;    // kg per bunch outside this: check the lots chosen or the weight
   var GRADES = [                     // the mill's grading sheet, % of the bunches graded
     ['ur', 'UR', 'Mentah', 'Unripe'], ['udr', 'UDR', 'Kurang masak', 'Under ripe'], ['or', 'OR', 'Terlebih masak', 'Over ripe'],
     ['r', 'R', 'Masak', 'Ripe'], ['eb', 'EB', 'Tandan kosong', 'Empty bunch'],
@@ -36,21 +34,24 @@
   function esc(s) { return EA.ui.esc(s); }
   function $(sel) { return el.querySelector(sel); }
   function canKey(u) { return u.role !== 'HQ'; }
+  function canGrade(u) { return u.role === 'Clerk' || u.role === 'Owner'; }    // for now: the estate clerk
   function num(v) { var n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isFinite(n) ? n : 0; }
   function r3(n) { return Math.round(n * 1000) / 1000; }
   function r2(n) { return Math.round(n * 100) / 100; }
   function sd(iso) { return EA.fh.shortDate(iso); }
   function mills() { return EA.lists.mills; }
   function person(id) { var w = EA.lists.worker(id); return w ? w.name : id; }
+  function byLot(a, b) { return String(a).localeCompare(String(b), undefined, { numeric: true }); }
 
   // ---------- phone memory ----------
-  function saved() { var cut = new Date(); cut.setDate(cut.getDate() - 70); var from = cut.toISOString().slice(0, 10); return EA.local.get(K.saved, []).filter(function (t) { return t.date >= from; }); }
+  function daysAgo(n) { var d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); }
+  function saved() { return EA.local.get(K.saved, []).filter(function (t) { return t.date >= daysAgo(70); }); }
   function keepTicket(t) { var list = EA.local.get(K.saved, []).filter(function (x) { return x.key !== t.key; }); list.push(t); EA.local.set(K.saved, list); }
+  function gradings() { return EA.local.get(K.grades, []).filter(function (g) { return g.date >= daysAgo(70); }); }
+  function keepGrading(g) { var list = EA.local.get(K.grades, []).filter(function (x) { return !(x.estate === g.estate && x.ticket_no === g.ticket_no); }); list.push(g); EA.local.set(K.grades, list); }
   function blank() {
-    var g = {}; GRADES.forEach(function (x) { g[x[0]] = ''; }); g.sample = ''; g.loose = ''; g.penalty = '';
     return { date: EA.today(), estate: ctx.estate, trip: '', lorryBunches: 0, ticket_no: '', time: '', mill: mills()[0], do_no: '', lorry: '', driver: '',
-             w1: '', w2: '', ded: '', nett: '', mill_bunches: '', blocks: {}, groups: {}, groupsTouched: false,
-             rej: { ur: '', emp: '', rott: '' }, grade: g, explain: '', note: '', replacing: '' };
+             w1: '', w2: '', ded: '', nett: '', blocks: {}, sel: {}, selTouched: false, note: '', replacing: '' };
   }
   function loadDraft() {
     var all = EA.local.get(K.draft, {}), d = all[ctx.estate];
@@ -82,7 +83,9 @@
     return sd(x.date) + (x.dn ? ' · DN ' + x.dn : '') + ' · ' + (x.lorry || 'lori') + ' · ' + Object.keys(x.blocks).sort().map(function (b) { return 'Blk ' + b + ' ' + x.blocks[b]; }).join(', ') + ' (' + x.bunches + ' tandan)';
   }
 
-  // ---------- harvest not yet on a ticket (the mandor's bunches per harvester per lot) ----------
+  // ---------- harvest not yet (fully) on a ticket ----------
+  // Each line is one harvester's bunches on one lot and day (the mandor's count on Kerja harian).
+  // What is left of a line after earlier tickets stays open: that is the block's balance.
   function localHarvest() {
     var out = [];
     EA.local.get('fh.work', []).forEach(function (s) {
@@ -94,34 +97,47 @@
     return out;
   }
   function harvest() {
-    var list = EA.sendLink() ? EA.local.get(K.harv + ctx.estate, []) : localHarvest();
-    var used = {};
-    saved().forEach(function (t) { if (t.estate === ctx.estate && t.key !== draft.replacing) (t.harv || []).forEach(function (h) { used[h.id] = true; }); });
-    var mine = draft.replacing ? ((saved().find(function (t) { return t.key === draft.replacing; }) || {}).harv || []) : [];
-    var all = list.filter(function (h) { return !used[h.id]; });
-    mine.forEach(function (h) { if (!all.some(function (x) { return x.id === h.id; })) all.push(h); });   // a correction keeps its own lines
-    return all;
+    var office = !!EA.sendLink();
+    // The office list has already taken off the tickets it received; the phone's own list has not.
+    var lines = (office ? EA.local.get(K.harv + ctx.estate, []) : localHarvest()).map(function (h) { return Object.assign({}, h, { bunches: num(h.bunches) }); });
+    function adjust(h, n) {
+      var x = lines.find(function (y) { return y.id === h.id; });
+      if (x) x.bunches += n; else if (n > 0) lines.push({ id: h.id, date: h.date, lot: h.lot, block: h.block, worker_id: h.worker_id, bunches: n });
+    }
+    saved().forEach(function (t) {
+      if (t.estate !== ctx.estate) return;
+      var notYetAtOffice = !office || EA.isWaiting(t.ids.ticket);
+      (t.harv || []).forEach(function (h) {
+        if (t.key === draft.replacing) { if (!notYetAtOffice) adjust(h, h.bunches); }   // a correction gets its old bunches back
+        else if (notYetAtOffice) adjust(h, -h.bunches);
+      });
+    });
+    return lines.filter(function (h) { return h.bunches > 0; });
   }
-  function groups() {
+  // The lots with harvest still open, oldest crop first within a lot.
+  function lots() {
     var g = {};
     harvest().forEach(function (h) {
-      var k = h.date + '|' + h.lot;
-      var x = g[k] || (g[k] = { key: k, date: h.date, lot: h.lot, block: h.block, bunches: 0, lines: [] });
-      x.bunches += num(h.bunches); x.lines.push(h);
+      var x = g[h.lot] || (g[h.lot] = { lot: h.lot, block: h.block, open: 0, dates: [], lines: [] });
+      x.open += h.bunches; x.lines.push(h); if (x.dates.indexOf(h.date) < 0) x.dates.push(h.date);
     });
-    return Object.keys(g).map(function (k) { return g[k]; }).sort(function (a, b) { return a.date === b.date ? a.lot.localeCompare(b.lot, undefined, { numeric: true }) : (a.date < b.date ? -1 : 1); });
+    return Object.keys(g).map(function (k) {
+      var x = g[k];
+      x.lines.sort(function (a, b) { return a.date < b.date ? -1 : 1; }); x.dates.sort();
+      return x;
+    }).sort(function (a, b) { return a.block === b.block ? byLot(a.lot, b.lot) : (a.block < b.block ? -1 : 1); });
   }
-  // With a lorry chosen, suggest its blocks' harvest: the newest days up to the lorry's date,
-  // until the bunches reach the lorry's count (10% leeway for counting). The staff changes it.
-  function suggestGroups() {
-    if (draft.groupsTouched || !draft.trip) return;
+  // With a lorry chosen, suggest its blocks' lots, oldest crop first, up to the lorry's count
+  // (the last lot only in part); the rest stays as balance. The staff changes it.
+  function suggest() {
+    if (draft.selTouched || !draft.trip) return;
     var x = trips().find(function (y) { return y.trip === draft.trip; });
     if (!x) return;
-    draft.groups = {};
-    var total = 0, cap = num(x.bunches) * 1.1;
-    groups().filter(function (g) { return x.blocks[g.block] != null && g.date <= (x.date || draft.date); })
-      .sort(function (a, b) { return a.date < b.date ? 1 : -1; })
-      .forEach(function (g) { if (total + g.bunches <= cap) { draft.groups[g.key] = true; total += g.bunches; } });
+    draft.sel = {};
+    var need = num(x.bunches);
+    lots().filter(function (l) { return x.blocks[l.block] != null && l.dates[0] <= (x.date || draft.date); })
+      .sort(function (a, b) { return a.dates[0] === b.dates[0] ? byLot(a.lot, b.lot) : (a.dates[0] < b.dates[0] ? -1 : 1); })
+      .forEach(function (l) { if (need > 0) { var take = Math.min(l.open, need); draft.sel[l.lot] = String(take); need -= take; } });
   }
   async function refreshOffice() {
     if (!EA.sendLink()) return;
@@ -129,7 +145,8 @@
     if (r1 && r1.trips) EA.local.set(K.trips + ctx.estate, r1.trips);
     var r2 = await EA.ask('harvest', { estate: ctx.estate });
     if (r2 && r2.lines) EA.local.set(K.harv + ctx.estate, r2.lines);
-    if (el && document.body.contains(el) && !el.hidden && $('#tk-tripbox')) { suggestGroups(); keepDraft(); drawTrip(); drawGroups(); drawSums(); }
+    if (canGrade(ctx.user)) { var r3x = await EA.ask('ungraded', { estate: ctx.estate }); if (r3x && r3x.tickets) EA.local.set(K.ungraded + ctx.estate, r3x.tickets); }
+    if (el && document.body.contains(el) && !el.hidden && $('#tk-tripbox')) { suggest(); keepDraft(); drawTrip(); drawLots(); drawSums(); drawGradeList(); }
   }
 
   // ---------- sums ----------
@@ -137,11 +154,20 @@
     var w1 = num(d.w1), w2 = num(d.w2);
     var nettKg = (w1 && w2) ? Math.round(w1 - w2 - num(d.ded)) : num(d.nett);   // the ticket prints kg
     var nett = r3(nettKg / 1000);
-    var lines = [];
-    groups().forEach(function (g) { if (d.groups[g.key]) lines = lines.concat(g.lines); });
+    var parts = [], open = {}, after = {};
+    lots().forEach(function (l) {
+      open[l.block] = (open[l.block] || 0) + l.open;
+      var left = Math.min(num(d.sel[l.lot]), l.open);
+      l.lines.forEach(function (h) {            // oldest crop first; with one harvester per lot this is just his line
+        if (left <= 0) return;
+        var take = Math.min(h.bunches, left); left -= take;
+        parts.push({ id: h.id, date: h.date, lot: h.lot, block: h.block, worker_id: h.worker_id, bunches: take });
+      });
+    });
     var byBlock = {};
-    if (lines.length) lines.forEach(function (h) { byBlock[h.block] = (byBlock[h.block] || 0) + num(h.bunches); });
+    if (parts.length) parts.forEach(function (h) { byBlock[h.block] = (byBlock[h.block] || 0) + h.bunches; });
     else Object.keys(d.blocks).forEach(function (b) { if (num(d.blocks[b]) > 0) byBlock[b] = num(d.blocks[b]); });
+    Object.keys(open).forEach(function (b) { after[b] = open[b] - (parts.length ? (byBlock[b] || 0) : 0); });
     var blocks = Object.keys(byBlock).sort();
     var bunches = blocks.reduce(function (a, b) { return a + byBlock[b]; }, 0);
     var abw = bunches ? r2(nett * 1000 / bunches) : 0;
@@ -151,33 +177,16 @@
     }
     var split = {}, bm = share(blocks, function (b) { return byBlock[b]; });
     blocks.forEach(function (b, i) { split[b] = { bunches: byBlock[b], mt: bm[i] }; });
-    var hm = share(lines, function (h) { return num(h.bunches); });
-    var harv = lines.map(function (h, i) { return { id: h.id, date: h.date, lot: h.lot, block: h.block, worker_id: h.worker_id, bunches: num(h.bunches), mt: hm[i] }; });
-    var rejB = num(d.rej.ur) + num(d.rej.emp) + num(d.rej.rott);
-    return { nettKg: nettKg, nett: nett, blocks: blocks, split: split, bunches: bunches, abw: abw, harv: harv, fromHarvest: lines.length > 0,
-             rejB: rejB, rejMt: r3(rejB * abw / 1000) };
+    var hm = share(parts, function (h) { return h.bunches; });
+    parts.forEach(function (h, i) { h.mt = hm[i]; });
+    return { nettKg: nettKg, nett: nett, blocks: blocks, split: split, bunches: bunches, abw: abw, harv: parts, balance: after };
   }
   function flags(d, c) {
     var f = [];
     if (c.nett > MAX_LOAD) f.push(['Muatan lebih ' + MAX_LOAD + ' MT.', 'Load over ' + MAX_LOAD + ' MT.']);
-    if (c.bunches && c.nett && (c.abw < ABW_LOW || c.abw > ABW_HIGH)) f.push(['Purata berat tandan ' + c.abw + ' kg: semak tuaian yang dipilih atau berat.', 'Bunch weight ' + c.abw + ' kg looks wrong: check the harvest chosen or the weight.']);
-    if (d.lorryBunches && c.bunches && d.lorryBunches !== c.bunches) f.push(['Tuaian dipilih ' + c.bunches + ' tandan, lori ' + d.lorryBunches + ' (beza ' + (c.bunches - d.lorryBunches > 0 ? '+' : '') + (c.bunches - d.lorryBunches) + ').', 'Harvest chosen ' + c.bunches + ' bunches, the lorry load says ' + d.lorryBunches + '.']);
-    var mb = num(d.mill_bunches);
-    if (mb && c.bunches && mb !== c.bunches) f.push(['Kilang kira ' + mb + ' tandan, tuaian ' + c.bunches + '.', 'The mill counted ' + mb + ' bunches, the harvest chosen is ' + c.bunches + '.']);
+    if (c.bunches && c.nett && (c.abw < ABW_LOW || c.abw > ABW_HIGH)) f.push(['Purata berat tandan ' + c.abw + ' kg: semak petak yang dipilih atau berat.', 'Bunch weight ' + c.abw + ' kg looks wrong: check the lots chosen or the weight.']);
+    if (d.lorryBunches && c.bunches && d.lorryBunches !== c.bunches) f.push(['Petak dipilih ' + c.bunches + ' tandan, lori ' + d.lorryBunches + ' (beza ' + (c.bunches - d.lorryBunches > 0 ? '+' : '') + (c.bunches - d.lorryBunches) + ').', 'Lots chosen ' + c.bunches + ' bunches, the lorry load says ' + d.lorryBunches + '.']);
     return f;
-  }
-  // Poor grading: what the staff must explain. Limits are in the shared lists (draft, to confirm).
-  function gradeIssues(d, c) {
-    var g = d.grade, L = EA.lists.gradingLimits || {}, out = [];
-    var unripe = num(g.ur) + num(g.udr);
-    if (L.unripe != null && unripe > L.unripe) out.push('Mentah + kurang masak ' + unripe + '% (had ' + L.unripe + '%)');
-    if (L.empty != null && num(g.eb) > L.empty) out.push('Tandan kosong ' + num(g.eb) + '% (had ' + L.empty + '%)');
-    if (L.rotten != null && num(g.rt) > L.rotten) out.push('Busuk ' + num(g.rt) + '% (had ' + L.rotten + '%)');
-    if (L.dirty != null && num(g.dt) > L.dirty) out.push('Kotor ' + num(g.dt) + '% (had ' + L.dirty + '%)');
-    if (L.longStalk != null && num(g.ls) > L.longStalk) out.push('Tangkai panjang ' + num(g.ls) + '% (had ' + L.longStalk + '%)');
-    if (c.rejB) out.push('Ditolak ' + c.rejB + ' tandan');
-    if (num(g.penalty) > 0) out.push('Penalti ' + num(g.penalty) + '%');
-    return out;
   }
 
   // ---------- the screen ----------
@@ -194,9 +203,10 @@
       wireList(); $('#tk-back').onclick = function () { location.hash = ''; };
       return;
     }
-    suggestGroups();
+    suggest();
     var mOpts = mills().concat(draft.mill && mills().indexOf(draft.mill) < 0 ? [draft.mill] : []);
     el.innerHTML = head +
+      (canGrade(ctx.user) ? '<section class="card" id="tk-gradebox" aria-labelledby="tk-g0"><h2 id="tk-g0"><span class="step">G</span><span class="inline"><span class="bm">Gred kilang (kerani)</span> · <span class="en">Mill grading, keyed by the clerk from WhatsApp</span></span></h2><div id="tk-gradelist"></div></section>' : '') +
       (draft.replacing ? '<p class="warn"><span class="bm">Membetulkan tiket ' + esc(draft.ticket_no) + '. Yang lama kekal; yang baru menggantikannya.</span><span class="en">Correcting a ticket. The old one stays on record; this one replaces it.</span></p>' : '') +
 
       '<section class="card" aria-labelledby="tk-s1"><h2 id="tk-s1"><span class="step">1</span><span class="inline"><span class="bm">Tiket</span> · <span class="en">The weighbridge ticket</span></span></h2>' +
@@ -217,57 +227,31 @@
         field('tk-nett', 'Bersih (kg)', 'Nett weight, kg', draft.nett, 'numeric', '15700') +
       '</div><p class="hint">Isi dalam kg seperti di tiket. · Key in kg, as printed on the ticket.</p></section>' +
 
-      '<section class="card" aria-labelledby="tk-s2"><h2 id="tk-s2"><span class="step">2</span><span class="inline"><span class="bm">Tuaian mana?</span> · <span class="en">Which harvest is on this ticket?</span></span></h2>' +
-      '<p class="hint">Staf pilih hari dan petak tuaian (tandan mandor dari Kerja harian). ABW dan tan setiap penuai dikira sendiri. · The staff ticks the harvest days and lots (the mandor\'s bunches from Day\'s work). The bunch weight and each harvester\'s tonnes are worked out.</p>' +
-      '<div id="tk-groups"></div><div id="tk-manual"></div><p class="hint" id="tk-sum"></p><div id="tk-harv"></div></section>' +
+      '<section class="card" aria-labelledby="tk-s2"><h2 id="tk-s2"><span class="step">2</span><span class="inline"><span class="bm">Petak mana dalam lori ini?</span> · <span class="en">Which lots went on this lorry?</span></span></h2>' +
+      '<p class="hint">Tanda petak, dan ubah tandan jika hanya sebahagian. Yang tidak dipilih kekal sebagai baki blok untuk tiket seterusnya. · Tick the lots, and change the bunches if only part went. What is not chosen stays as the block\'s balance for the next ticket.</p>' +
+      '<div id="tk-lots"></div><div id="tk-manual"></div><p class="hint" id="tk-sum"></p><div id="tk-bal"></div><div id="tk-harv"></div></section>' +
 
-      '<section class="card" aria-labelledby="tk-s3"><h2 id="tk-s3"><span class="step">3</span><span class="inline"><span class="bm">Gred kilang</span> · <span class="en">The mill\'s grading sheet</span></span></h2>' +
-      '<div class="fields">' +
-        field('tk-sample', 'Tandan digred', 'Bunches graded', draft.grade.sample, 'numeric', '100') +
-        field('tk-mb', 'Jumlah tandan (kilang)', 'Total bunches counted by the mill', draft.mill_bunches, 'numeric', '') +
-      '</div><p class="hint">Peratus (%) seperti di kertas gred. · Percent, as on the grading sheet.</p>' +
-      '<div class="grade-grid">' + GRADES.map(function (x) {
-        return '<div class="field"><label for="tk-g-' + x[0] + '"><span class="bm">' + x[1] + ' · ' + esc(x[2]) + '</span><span class="en">' + esc(x[3]) + ' %</span></label>' +
-          '<input id="tk-g-' + x[0] + '" class="text-input" inputmode="decimal" data-g="' + x[0] + '" value="' + esc(draft.grade[x[0]] || '') + '" placeholder="0"></div>';
-      }).join('') + '</div>' +
-      '<p class="hint"><b>Tandan ditolak · Rejected bunches</b></p><div class="fields">' +
-        field('tk-ur', 'UR · Mentah', 'Unripe', draft.rej.ur, 'numeric', '0') +
-        field('tk-emp', 'EB · Kosong', 'Empty bunch', draft.rej.emp, 'numeric', '0') +
-        field('tk-rott', 'RT · Busuk', 'Rotten', draft.rej.rott, 'numeric', '0') +
-      '</div><div class="fields">' +
-        field('tk-loose', 'Buah relai (kg)', 'Loose fruit, kg', draft.grade.loose, 'decimal', '') +
-        field('tk-pen', 'Penalti (%)', 'Penalty, %', draft.grade.penalty, 'decimal', '') +
-      '</div><p class="hint" id="tk-rej"></p>' +
-      '<div id="tk-issues"></div>' +
-      '<div class="field"><label for="tk-explain"><span class="bm">Apa berlaku di ladang?</span><span class="en">What is going on in the estate? (needed when the grading is poor)</span></label>' +
-        '<textarea id="tk-explain" class="text-input" rows="3" placeholder="Cth: penuai potong buah mentah di petak 3-24; mandor sudah tegur. · E.g. unripe bunches cut in lot 3-24; the mandor has warned the harvester.">' + esc(draft.explain) + '</textarea></div>' +
-      field('tk-note', 'Catatan lain', 'Other note (optional)', draft.note, 'text', '') +
-      '</section>' +
-
+      (canGrade(ctx.user) ? '' : '<p class="hint">Gred kilang diisi oleh kerani ladang dari kumpulan WhatsApp. · The mill grading is keyed by the estate clerk from the WhatsApp group.</p>') +
+      field('tk-note', 'Catatan', 'Note (optional)', draft.note, 'text', '') +
       '<div class="bottom-bar"><button type="button" class="btn btn-main" id="tk-save">SAVE TICKET<small>Simpan tiket</small></button></div>' +
       monthCard() + listCard();
 
     $('#tk-back').onclick = function () { location.hash = ''; };
-    var bind = { 'tk-no': 'ticket_no', 'tk-time': 'time', 'tk-do': 'do_no', 'tk-lorry': 'lorry', 'tk-driver': 'driver', 'tk-w1': 'w1', 'tk-w2': 'w2', 'tk-ded': 'ded', 'tk-nett': 'nett', 'tk-note': 'note', 'tk-mb': 'mill_bunches', 'tk-explain': 'explain' };
+    var bind = { 'tk-no': 'ticket_no', 'tk-time': 'time', 'tk-do': 'do_no', 'tk-lorry': 'lorry', 'tk-driver': 'driver', 'tk-w1': 'w1', 'tk-w2': 'w2', 'tk-ded': 'ded', 'tk-nett': 'nett', 'tk-note': 'note' };
     Object.keys(bind).forEach(function (id) {
       $('#' + id).oninput = function () {
         var v = this.value;
         if (id === 'tk-lorry') v = v.toUpperCase();
         if (id === 'tk-no' || id === 'tk-do') v = v.replace(/\s/g, '');
-        if (['tk-w1', 'tk-w2', 'tk-ded', 'tk-nett', 'tk-mb'].indexOf(id) >= 0) v = v.replace(/[^\d]/g, '');
+        if (['tk-w1', 'tk-w2', 'tk-ded', 'tk-nett'].indexOf(id) >= 0) v = v.replace(/[^\d]/g, '');
         draft[bind[id]] = v; keepDraft(); drawSums();
         if (id === 'tk-do' && !draft.trip) matchDn();
       };
     });
-    $('#tk-date').onchange = function () { draft.date = this.value || EA.today(); keepDraft(); suggestGroups(); drawGroups(); drawSums(); };
+    $('#tk-date').onchange = function () { draft.date = this.value || EA.today(); keepDraft(); };
     $('#tk-mill').onchange = function () { draft.mill = this.value; keepDraft(); };
-    ['ur', 'emp', 'rott'].forEach(function (k) { $('#tk-' + k).oninput = function () { draft.rej[k] = this.value.replace(/\D/g, ''); keepDraft(); drawSums(); }; });
-    el.querySelectorAll('input[data-g]').forEach(function (i) { i.oninput = function () { draft.grade[i.dataset.g] = i.value.replace(/[^\d.]/g, ''); keepDraft(); drawSums(); }; });
-    $('#tk-sample').oninput = function () { draft.grade.sample = this.value.replace(/\D/g, ''); keepDraft(); };
-    $('#tk-loose').oninput = function () { draft.grade.loose = this.value.replace(/[^\d.]/g, ''); keepDraft(); };
-    $('#tk-pen').oninput = function () { draft.grade.penalty = this.value.replace(/[^\d.]/g, ''); keepDraft(); drawSums(); };
     $('#tk-save').onclick = save;
-    drawTrip(); drawGroups(); drawSums(); wireList();
+    drawTrip(); drawLots(); drawSums(); wireList(); drawGradeList();
     refreshOffice();
   }
   function field(id, bm, en, val, mode, ph) {
@@ -288,7 +272,7 @@
     if (!draft.do_no && x.dn) draft.do_no = x.dn;
     var m = mills().find(function (mm) { return mm === x.mill; }); if (m) draft.mill = m;
     if (x.date && draft.date === EA.today() && x.date < EA.today()) draft.date = x.date;
-    draft.groupsTouched = false; suggestGroups();
+    draft.selTouched = false; suggest();
     keepDraft();
   }
   function drawTrip() {
@@ -302,39 +286,55 @@
       render(el, ctx);
     };
   }
-  function drawGroups() {
-    var list = groups();
-    $('#tk-groups').innerHTML = list.length ? '<div class="rows">' + list.map(function (g) {
-      var on = !!draft.groups[g.key];
-      return '<label class="list-line pick-line"><input type="checkbox" data-grp="' + esc(g.key) + '"' + (on ? ' checked' : '') + '>' +
-        '<div><b>' + esc(sd(g.date)) + ' · petak ' + esc(g.lot) + ' · Blk ' + esc(g.block) + '</b><span class="en">' + g.bunches + ' tandan · ' + g.lines.length + ' penuai · harvesters</span></div></label>';
-    }).join('') + '</div>' : '<p class="hint">Tiada tuaian menunggu tiket di telefon ini. Isi tandan blok di bawah. · No harvest waiting for a ticket on this phone. Key the block bunches below.</p>';
-    el.querySelectorAll('[data-grp]').forEach(function (i) {
-      i.onchange = function () { draft.groupsTouched = true; if (i.checked) draft.groups[i.dataset.grp] = true; else delete draft.groups[i.dataset.grp]; keepDraft(); drawGroups(); drawSums(); };
+  function drawLots() {
+    var list = lots();
+    $('#tk-lots').innerHTML = list.length ? '<div class="rows">' + list.map(function (l) {
+      var on = num(draft.sel[l.lot]) > 0 || draft.sel[l.lot] === '';
+      var who = l.lines.map(function (h) { return h.worker_id; }).filter(function (w, i, a) { return a.indexOf(w) === i; });
+      return '<div class="list-line lot-line"><label class="pick-line"><input type="checkbox" data-lot="' + esc(l.lot) + '"' + (on ? ' checked' : '') + '>' +
+        '<div><b>Petak ' + esc(l.lot) + ' · Blk ' + esc(l.block) + '</b><span class="en">' + l.open + ' tandan terbuka · open · tuai ' + l.dates.map(sd).join(', ') + ' · ' +
+        esc(who.map(person).join(', ')) + '</span></div></label>' +
+        '<input class="qty" inputmode="numeric" aria-label="Tandan petak ' + esc(l.lot) + '" data-amt="' + esc(l.lot) + '" value="' + esc(on ? draft.sel[l.lot] : '') + '" placeholder="' + l.open + '"' + (on ? '' : ' disabled') + '></div>';
+    }).join('') + '</div>' : '<p class="hint">Tiada tuaian terbuka di telefon ini. Isi tandan blok di bawah. · No open harvest on this phone. Key the block bunches below.</p>';
+    el.querySelectorAll('input[data-lot]').forEach(function (i) {
+      i.onchange = function () {
+        var l = list.find(function (x) { return x.lot === i.dataset.lot; });
+        draft.selTouched = true;
+        if (i.checked) draft.sel[l.lot] = String(l.open); else delete draft.sel[l.lot];
+        keepDraft(); drawLots(); drawSums();
+      };
     });
-    // Without any harvest chosen, the block bunches are keyed by hand (from the lorry load if found).
-    var manual = !Object.keys(draft.groups).some(function (k) { return draft.groups[k]; });
-    $('#tk-manual').innerHTML = manual ? '<div class="blk-in">' + EA.lists.blocksFor(ctx.estate).map(function (b) {
+    el.querySelectorAll('input[data-amt]').forEach(function (i) {
+      i.oninput = function () {
+        var l = list.find(function (x) { return x.lot === i.dataset.amt; });
+        var raw = i.value.replace(/\D/g, '');
+        if (raw !== '' && num(raw) > l.open) { raw = String(l.open); i.value = raw; }
+        draft.selTouched = true; draft.sel[l.lot] = raw;
+        keepDraft(); drawSums();
+      };
+    });
+    // With no open harvest at all (e.g. not keyed on Kerja harian), the block bunches are keyed by hand.
+    $('#tk-manual').innerHTML = list.length ? '' : '<div class="blk-in">' + EA.lists.blocksFor(ctx.estate).map(function (b) {
       return '<div class="field"><label for="tk-b-' + esc(b.block) + '"><span class="bm">Blok ' + esc(b.block) + ' · tandan</span><span class="en">bunches</span></label>' +
         '<input id="tk-b-' + esc(b.block) + '" class="text-input" inputmode="numeric" data-blk="' + esc(b.block) + '" value="' + esc(draft.blocks[b.block] || '') + '" placeholder="0"></div>';
-    }).join('') + '</div>' : '';
+    }).join('') + '</div>';
     el.querySelectorAll('input[data-blk]').forEach(function (i) { i.oninput = function () { draft.blocks[i.dataset.blk] = i.value.replace(/\D/g, ''); keepDraft(); drawSums(); }; });
   }
   function drawSums() {
     var c = calc(draft);
     if (num(draft.w1) && num(draft.w2) && $('#tk-nett') && document.activeElement !== $('#tk-nett')) { $('#tk-nett').value = String(c.nettKg); draft.nett = String(c.nettKg); }
     var f = flags(draft, c);
-    $('#tk-sum').innerHTML = 'Jumlah · Total: <b>' + c.bunches + '</b> tandan · <b>' + c.nett.toFixed(2) + '</b> MT · ABW <b>' + (c.abw || 0) + '</b> kg/tandan' +
+    $('#tk-sum').innerHTML = 'Tiket ini · This ticket: <b>' + c.bunches + '</b> tandan · <b>' + c.nett.toFixed(2) + '</b> MT · ABW <b>' + (c.abw || 0) + '</b> kg/tandan' +
       (c.blocks.length ? '<br>' + c.blocks.map(function (b) { return 'Blk ' + esc(b) + ': ' + c.split[b].bunches + ' tandan, ' + c.split[b].mt.toFixed(2) + ' MT'; }).join(' · ') : '') +
       f.map(function (x) { return '<span class="warn" style="display:block;margin-top:6px">' + esc(x[0]) + ' · ' + esc(x[1]) + '</span>'; }).join('');
+    var bal = Object.keys(c.balance).filter(function (b) { return c.balance[b] > 0; }).sort();
+    $('#tk-bal').innerHTML = bal.length ? '<p class="hint"><b>Baki blok selepas tiket ini · Block balance after this ticket:</b> ' +
+      bal.map(function (b) { return 'Blk ' + esc(b) + ' ' + c.balance[b] + ' tandan'; }).join(' · ') + '</p>' : '';
     var byW = {};
-    c.harv.forEach(function (h) { var x = byW[h.worker_id] || (byW[h.worker_id] = { b: 0, mt: 0 }); x.b += h.bunches; x.mt = r3(x.mt + h.mt); });
+    c.harv.forEach(function (h) { var x = byW[h.worker_id] || (byW[h.worker_id] = { b: 0, mt: 0, lots: [] }); x.b += h.bunches; x.mt = r3(x.mt + h.mt); if (x.lots.indexOf(h.lot) < 0) x.lots.push(h.lot); });
     $('#tk-harv').innerHTML = c.harv.length && c.nett ? '<p class="hint"><b>Tan setiap penuai · Each harvester\'s tonnes</b></p><div class="rows">' + Object.keys(byW).map(function (w) {
-      return '<div class="list-line"><div><b>' + esc(person(w)) + '</b><span class="en">' + esc(w) + '</span></div><div class="mono">' + byW[w].b + ' tandan · ' + byW[w].mt.toFixed(3) + ' MT</div></div>';
+      return '<div class="list-line"><div><b>' + esc(person(w)) + '</b><span class="en">' + esc(w) + ' · petak ' + esc(byW[w].lots.join(', ')) + '</span></div><div class="mono">' + byW[w].b + ' tandan · ' + byW[w].mt.toFixed(3) + ' MT</div></div>';
     }).join('') + '</div>' : '';
-    $('#tk-rej').textContent = c.rejB ? 'Jumlah tolak · Total rejected: ' + c.rejB + ' tandan ≈ ' + c.rejMt.toFixed(2) + ' MT' : '';
-    var iss = gradeIssues(draft, c);
-    $('#tk-issues').innerHTML = iss.length ? '<p class="msg"><span class="bm">Gred perlu penjelasan: ' + esc(iss.join('; ')) + '</span><span class="en">The grading needs an explanation from the staff below. It goes to the Assistant Manager.</span></p>' : '';
   }
 
   // ---------- save ----------
@@ -344,38 +344,30 @@
     if (!(c.nett > 0)) p.push(['Isi berat (berat masuk dan keluar, atau bersih).', 'Fill in the weights (in and out, or nett).']);
     if (num(draft.w1) && num(draft.w2) && num(draft.w2) >= num(draft.w1)) p.push(['Berat keluar mesti kurang dari berat masuk.', 'The weight out must be less than the weight in.']);
     if (c.nett > 0 && c.nett < 0.5) p.push(['Bersih ' + c.nettKg + ' kg terlalu kecil: isi dalam kg, bukan MT.', 'Nett ' + c.nettKg + ' kg is too small: key kg, not MT.']);
-    if (!c.bunches) p.push(['Pilih tuaian (atau isi tandan blok).', 'Choose the harvest (or key the block bunches).']);
-    if (gradeIssues(draft, c).length && !draft.explain.trim()) p.push(['Gred kurang baik: tulis apa berlaku di ladang.', 'The grading is poor: say what is going on in the estate.']);
+    if (!c.bunches) p.push(['Pilih petak dalam lori ini.', 'Choose the lots on this lorry.']);
     var twice = saved().find(function (t) { return t.estate === ctx.estate && t.ticket_no === draft.ticket_no && t.key !== draft.replacing; });
     if (draft.ticket_no && twice) p.push(['Tiket ' + draft.ticket_no + ' sudah disimpan (' + sd(twice.date) + ').', 'Ticket ' + draft.ticket_no + ' is already saved. Use CORRECT on it instead.']);
     return p;
   }
+  function problemSheet(p, id) {
+    ui().openSheet('<h2 id="sheet-title"><span class="bm">Belum lengkap</span><span class="en">Not complete yet</span></h2>' +
+      p.map(function (x) { return '<p class="msg"><span class="bm">' + esc(x[0]) + '</span><span class="en">' + esc(x[1]) + '</span></p>'; }).join('') +
+      '<div class="actions"><button class="btn btn-main" type="button" id="' + id + '">OK<small>Betulkan</small></button></div>',
+      function (s) { s.querySelector('#' + id).onclick = ui().closeSheet; });
+  }
   function save() {
     var c = calc(draft), p = problems(c);
-    if (p.length) {
-      ui().openSheet('<h2 id="sheet-title"><span class="bm">Belum lengkap</span><span class="en">Not complete yet</span></h2>' +
-        p.map(function (x) { return '<p class="msg"><span class="bm">' + esc(x[0]) + '</span><span class="en">' + esc(x[1]) + '</span></p>'; }).join('') +
-        '<div class="actions"><button class="btn btn-main" type="button" id="tp-ok">OK<small>Betulkan</small></button></div>',
-        function (s) { s.querySelector('#tp-ok').onclick = ui().closeSheet; });
-      return;
-    }
+    if (p.length) return problemSheet(p, 'tp-ok');
     var old = draft.replacing ? saved().find(function (t) { return t.key === draft.replacing; }) : null;
-    var issues = gradeIssues(draft, c), g = draft.grade;
     var t = { key: old ? old.key : ctx.estate + '-' + draft.ticket_no + '-' + Date.now().toString(36), date: draft.date, estate: ctx.estate,
               ticket_no: draft.ticket_no, trip: draft.trip, lorryBunches: draft.lorryBunches, time: draft.time, mill: draft.mill, do_no: draft.do_no,
               lorry: draft.lorry.trim(), driver: draft.driver.trim(), w1: draft.w1, w2: draft.w2, ded: draft.ded, nettKg: c.nettKg, nett: c.nett,
-              bunches: c.bunches, mill_bunches: num(draft.mill_bunches), abw: c.abw, split: c.split, harv: c.harv,
-              rej: { ur: num(draft.rej.ur), emp: num(draft.rej.emp), rott: num(draft.rej.rott) }, rejB: c.rejB, rejMt: c.rejMt,
-              grade: JSON.parse(JSON.stringify(g)), issues: issues, explain: draft.explain.trim(), note: draft.note.trim(),
+              bunches: c.bunches, abw: c.abw, split: c.split, harv: c.harv, sel: JSON.parse(JSON.stringify(draft.sel)), balance: c.balance, note: draft.note.trim(),
               keyedName: ctx.user.name, rev: old ? (old.rev || 1) + 1 : 1, ids: { blocks: {}, harv: {} } };
     try {
-      var row = { date: t.date, ticket_no: t.ticket_no, trip: t.trip, mill: t.mill, do_no: t.do_no, lorry: t.lorry, driver: t.driver, time: t.time,
+      t.ids.ticket = EA.save(TAB, ROOM, ctx.estate, { date: t.date, ticket_no: t.ticket_no, trip: t.trip, mill: t.mill, do_no: t.do_no, lorry: t.lorry, driver: t.driver, time: t.time,
         first_kg: String(num(t.w1) || ''), second_kg: String(num(t.w2) || ''), deduct_kg: String(num(t.ded)), nett_kg: String(t.nettKg), nett_mt: String(t.nett),
-        bunches: String(t.bunches), lorry_bunches: String(t.lorryBunches || ''), mill_bunches: String(t.mill_bunches || ''), abw_kg: String(t.abw),
-        rej_ur: String(t.rej.ur), rej_emp: String(t.rej.emp), rej_rott: String(t.rej.rott), rej_mt: String(t.rejMt),
-        sample: g.sample, loose_kg: g.loose, penalty_pct: g.penalty, grade_flag: issues.join('; '), explain: t.explain, note: t.note };
-      GRADES.forEach(function (x) { row['g_' + x[0]] = g[x[0]] || ''; });
-      t.ids.ticket = EA.save(TAB, ROOM, ctx.estate, row, old ? old.ids.ticket : '').id;
+        bunches: String(t.bunches), lorry_bunches: String(t.lorryBunches || ''), abw_kg: String(t.abw), note: t.note }, old ? old.ids.ticket : '').id;
       var oldB = old ? Object.assign({}, old.ids.blocks) : {};
       c.blocks.forEach(function (b) {
         t.ids.blocks[b] = EA.save(TAB_BLK, ROOM, ctx.estate, { date: t.date, ticket_no: t.ticket_no, block: b, bunches: String(c.split[b].bunches), mt: String(c.split[b].mt) },
@@ -400,9 +392,90 @@
     keepTicket(t);
     dropDraft();
     ui().toast('Tiket disimpan · Ticket saved' + (old ? ' (dibetulkan · corrected)' : ''));
-    if (navigator.onLine && EA.sendLink()) EA.send().then(function () { EA.fh.refreshBacklog(ctx.estate); });
+    if (navigator.onLine && EA.sendLink()) EA.send();
     render(el, ctx);
     showText(t.key);
+  }
+
+  // ---------- the mill grading, keyed by the estate clerk ----------
+  function ungraded() {
+    var graded = {};
+    gradings().forEach(function (g) { if (g.estate === ctx.estate) graded[g.ticket_no] = true; });
+    var list = EA.sendLink() ? EA.local.get(K.ungraded + ctx.estate, []) : [];
+    saved().forEach(function (t) {     // tickets keyed on this phone, even before the office has them
+      if (t.estate === ctx.estate && !list.some(function (x) { return x.ticket_no === t.ticket_no; })) list.push({ ticket_no: t.ticket_no, date: t.date, mill: t.mill, nett_mt: t.nett, do_no: t.do_no });
+    });
+    return list.filter(function (t) { return !graded[t.ticket_no] && t.date >= daysAgo(30); }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+  }
+  function drawGradeList() {
+    if (!canGrade(ctx.user) || !$('#tk-gradelist')) return;
+    var todo = ungraded();
+    var done = gradings().filter(function (g) { return g.estate === ctx.estate; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 5);
+    $('#tk-gradelist').innerHTML =
+      (todo.length ? '<p class="hint"><b>Menunggu gred · Waiting for grading</b></p>' + todo.map(function (t) {
+        return '<div class="list-line"><div><b>' + esc(sd(t.date)) + ' · tiket ' + esc(t.ticket_no) + '</b><span class="en">' + esc(t.mill || '') + (t.nett_mt ? ' · ' + num(t.nett_mt).toFixed(2) + ' MT' : '') + (t.do_no ? ' · DO ' + esc(t.do_no) : '') + '</span></div>' +
+          '<div class="acts"><button type="button" class="btn btn-ok" data-grade="' + esc(t.ticket_no) + '" data-gdate="' + esc(t.date) + '">GRADE<small>Isi gred</small></button></div></div>';
+      }).join('') : '<p class="hint">Tiada tiket menunggu gred. · No ticket waiting for grading.</p>') +
+      (done.length ? '<p class="hint"><b>Sudah digred · Graded</b></p>' + done.map(function (g) {
+        return '<div class="list-line"><div><b>' + esc(sd(g.date)) + ' · tiket ' + esc(g.ticket_no) + '</b><span class="en' + (g.flag ? ' warn-t' : '') + '">' + esc(g.flag || 'Gred baik · Grading fine') + '</span></div>' +
+          '<div class="acts"><button type="button" class="btn btn-ghost" data-grade="' + esc(g.ticket_no) + '" data-gdate="' + esc(g.date) + '">CORRECT<small>Betulkan</small></button></div></div>';
+      }).join('') : '');
+    el.querySelectorAll('[data-grade]').forEach(function (b) { b.onclick = function () { gradeSheet(b.dataset.grade, b.dataset.gdate); }; });
+  }
+  // Poor grading: shown to the staff and the Assistant Manager. Limits are in the shared lists (draft, to confirm).
+  function gradeIssues(g) {
+    var L = EA.lists.gradingLimits || {}, out = [];
+    var unripe = num(g.ur) + num(g.udr);
+    if (L.unripe != null && unripe > L.unripe) out.push('Mentah + kurang masak ' + unripe + '% (had ' + L.unripe + '%)');
+    if (L.empty != null && num(g.eb) > L.empty) out.push('Tandan kosong ' + num(g.eb) + '% (had ' + L.empty + '%)');
+    if (L.rotten != null && num(g.rt) > L.rotten) out.push('Busuk ' + num(g.rt) + '% (had ' + L.rotten + '%)');
+    if (L.dirty != null && num(g.dt) > L.dirty) out.push('Kotor ' + num(g.dt) + '% (had ' + L.dirty + '%)');
+    if (L.longStalk != null && num(g.ls) > L.longStalk) out.push('Tangkai panjang ' + num(g.ls) + '% (had ' + L.longStalk + '%)');
+    var rej = num(g.rej_ur) + num(g.rej_eb) + num(g.rej_rt);
+    if (rej) out.push('Ditolak ' + rej + ' tandan (UR ' + num(g.rej_ur) + ', EB ' + num(g.rej_eb) + ', RT ' + num(g.rej_rt) + ')');
+    if (num(g.penalty) > 0) out.push('Penalti ' + num(g.penalty) + '%');
+    return out;
+  }
+  function gradeSheet(ticketNo, date) {
+    var old = gradings().find(function (g) { return g.estate === ctx.estate && g.ticket_no === ticketNo; });
+    var g = old ? JSON.parse(JSON.stringify(old.g)) : {};
+    function f(id, bm, en, k, mode) {
+      return '<div class="field"><label for="gs-' + id + '"><span class="bm">' + esc(bm) + '</span><span class="en">' + esc(en) + '</span></label>' +
+        '<input id="gs-' + id + '" class="text-input" inputmode="' + (mode || 'decimal') + '" data-gk="' + k + '" value="' + esc(g[k] || '') + '" placeholder="0"></div>';
+    }
+    ui().openSheet('<h2 id="sheet-title"><span class="bm">Gred kilang · tiket ' + esc(ticketNo) + '</span><span class="en">Mill grading sheet, ' + esc(sd(date)) + '</span></h2>' +
+      '<div class="fields">' + f('sample', 'Tandan digred', 'Bunches graded', 'sample', 'numeric') + f('millb', 'Jumlah tandan (kilang)', 'Total bunches counted by the mill', 'mill_bunches', 'numeric') + '</div>' +
+      '<p class="hint">Peratus (%) seperti di kertas gred. · Percent, as on the grading sheet.</p>' +
+      '<div class="grade-grid">' + GRADES.map(function (x) { return f('g-' + x[0], x[1] + ' · ' + x[2], x[3] + ' %', x[0]); }).join('') + '</div>' +
+      '<p class="hint"><b>Tandan ditolak · Rejected bunches</b></p><div class="grade-grid">' +
+        f('rur', 'UR · Mentah', 'Unripe', 'rej_ur', 'numeric') + f('reb', 'EB · Kosong', 'Empty', 'rej_eb', 'numeric') + f('rrt', 'RT · Busuk', 'Rotten', 'rej_rt', 'numeric') + '</div>' +
+      '<div class="fields">' + f('loose', 'Buah relai (kg)', 'Loose fruit, kg', 'loose') + f('pen', 'Penalti (%)', 'Penalty, %', 'penalty') + '</div>' +
+      '<div id="gs-issues"></div>' +
+      '<div class="actions"><button class="btn btn-ghost" type="button" id="gs-cancel">CANCEL<small>Batal</small></button>' +
+      '<button class="btn btn-main" type="button" id="gs-save">SAVE GRADING<small>Simpan gred</small></button></div>',
+      function (s) {
+        function show() {
+          var iss = gradeIssues(g);
+          s.querySelector('#gs-issues').innerHTML = iss.length ? '<p class="msg"><span class="bm">Gred kurang baik: ' + esc(iss.join('; ')) + '</span><span class="en">Poor grading: it goes on the next morning\'s chit; the staff says what is going on, for the Assistant Manager.</span></p>' : '';
+        }
+        s.querySelectorAll('[data-gk]').forEach(function (i) { i.oninput = function () { g[i.dataset.gk] = i.value.replace(/[^\d.]/g, ''); show(); }; });
+        s.querySelector('#gs-cancel').onclick = ui().closeSheet;
+        s.querySelector('#gs-save').onclick = function () {
+          var iss = gradeIssues(g);
+          var row = { date: date, ticket_no: ticketNo, sample: g.sample || '', mill_bunches: g.mill_bunches || '', rej_ur: g.rej_ur || '', rej_eb: g.rej_eb || '', rej_rt: g.rej_rt || '',
+                      loose_kg: g.loose || '', penalty_pct: g.penalty || '', grade_flag: iss.join('; ') };
+          GRADES.forEach(function (x) { row['g_' + x[0]] = g[x[0]] || ''; });
+          var id;
+          try { id = EA.save(TAB_GRADE, ROOM, ctx.estate, row, old ? old.id : '').id; }
+          catch (e) { ui().toast('Tidak dapat simpan: ' + e.message + ' · Could not save', 'bad'); return; }
+          keepGrading({ estate: ctx.estate, ticket_no: ticketNo, date: date, g: g, flag: iss.join('; '), id: id, keyedName: ctx.user.name });
+          ui().closeSheet();
+          ui().toast('Gred disimpan · Grading saved');
+          if (navigator.onLine && EA.sendLink()) EA.send().then(function () { EA.fh.refreshBacklog(ctx.estate); });
+          drawGradeList();
+        };
+        show();
+      });
   }
 
   // ---------- month to date, and the list ----------
@@ -411,13 +484,13 @@
     return saved().filter(function (t) { return t.estate === ctx.estate && t.date.slice(0, 7) === m; });
   }
   function monthTotals() {
-    var list = monthTickets(), byBlock = {}, byMill = {}, mt = 0, bunches = 0, rej = 0;
+    var list = monthTickets(), byBlock = {}, byMill = {}, mt = 0, bunches = 0;
     list.forEach(function (t) {
-      mt += t.nett; bunches += t.bunches; rej += t.rejB;
+      mt += t.nett; bunches += t.bunches;
       Object.keys(t.split).forEach(function (b) { byBlock[b] = r3((byBlock[b] || 0) + t.split[b].mt); });
       byMill[t.mill] = r3((byMill[t.mill] || 0) + t.nett);
     });
-    return { n: list.length, mt: r3(mt), bunches: bunches, abw: bunches ? r2(mt * 1000 / bunches) : 0, rej: rej, byBlock: byBlock, byMill: byMill };
+    return { n: list.length, mt: r3(mt), bunches: bunches, abw: bunches ? r2(mt * 1000 / bunches) : 0, byBlock: byBlock, byMill: byMill };
   }
   function monthCard() {
     var s = monthTotals();
@@ -425,7 +498,7 @@
     return '<section class="card" id="tk-month"><h2><span class="inline"><span class="bm">Bulan ini · ' + esc(ui().monBm[d.getMonth()]) + '</span> · <span class="en">Month to date (tickets on this phone)</span></span></h2>' +
       (s.n ? '<div class="list-line"><div><b>' + s.mt.toFixed(2) + ' MT · ' + s.n + ' tiket · ABW ' + s.abw + ' kg</b><span class="en">' +
         Object.keys(s.byBlock).sort().map(function (b) { return 'Blk ' + esc(b) + ' ' + s.byBlock[b].toFixed(2); }).join(' · ') + '</span><span class="en">' +
-        Object.keys(s.byMill).map(function (m) { return esc(m) + ' ' + s.byMill[m].toFixed(2); }).join(' · ') + (s.rej ? ' · tolak · rejected ' + s.rej + ' tandan' : '') + '</span></div></div>'
+        Object.keys(s.byMill).map(function (m) { return esc(m) + ' ' + s.byMill[m].toFixed(2); }).join(' · ') + '</span></div></div>'
         : '<p class="hint">Belum ada tiket bulan ini. · No tickets this month yet.</p>') + '</section>';
   }
   function allIds(t) { return [t.ids.ticket].concat(Object.keys(t.ids.blocks).map(function (b) { return t.ids.blocks[b]; }), Object.keys(t.ids.harv || {}).map(function (h) { return t.ids.harv[h]; })); }
@@ -436,7 +509,6 @@
         var waiting = allIds(t).some(function (i) { return EA.isWaiting(i); });
         return '<div class="list-line"><div><b>' + esc(sd(t.date)) + ' · ' + esc(t.ticket_no) + ' · ' + t.nett.toFixed(2) + ' MT</b><span class="en">' + esc(t.mill) + ' · ' +
           Object.keys(t.split).sort().map(function (b) { return 'Blk ' + esc(b) + ' ' + t.split[b].mt.toFixed(2); }).join(', ') + ' · ABW ' + t.abw + ' kg</span>' +
-          ((t.issues || []).length ? '<span class="en warn-t">Gred · Grading: ' + esc(t.issues.join('; ')) + '</span>' : '') +
           '<span class="pill ' + (waiting ? 'wait">Menunggu · Waiting' : 'ok">Dihantar · Sent') + '</span></div>' +
           '<div class="acts"><button type="button" class="btn btn-ghost" data-tview="' + esc(t.key) + '">VIEW<small>Lihat</small></button>' +
           (canKey(ctx.user) ? '<button type="button" class="btn btn-ghost" data-tfix="' + esc(t.key) + '">CORRECT<small>Betulkan</small></button>' : '') + '</div></div>';
@@ -450,12 +522,10 @@
         if (!t) return;
         var d = blank();
         Object.assign(d, { date: t.date, trip: t.trip, lorryBunches: t.lorryBunches || 0, ticket_no: t.ticket_no, time: t.time, mill: t.mill, do_no: t.do_no, lorry: t.lorry, driver: t.driver,
-                  w1: t.w1, w2: t.w2, ded: t.ded || '', nett: String(t.nettKg || Math.round(t.nett * 1000)), mill_bunches: t.mill_bunches ? String(t.mill_bunches) : '',
-                  rej: { ur: String(t.rej.ur || ''), emp: String(t.rej.emp || ''), rott: String(t.rej.rott || '') },
-                  grade: Object.assign(d.grade, t.grade || {}), explain: t.explain || '', note: t.note || '', replacing: t.key, groupsTouched: true });
-        draft = d;
-        (t.harv || []).forEach(function (h) { d.groups[h.date + '|' + h.lot] = true; });
+                  w1: t.w1, w2: t.w2, ded: t.ded || '', nett: String(t.nettKg || Math.round(t.nett * 1000)), note: t.note || '', replacing: t.key, selTouched: true,
+                  sel: JSON.parse(JSON.stringify(t.sel || {})) });
         if (!(t.harv || []).length) Object.keys(t.split).forEach(function (k) { d.blocks[k] = String(t.split[k].bunches); });
+        draft = d;
         keepDraft(); render(el, ctx); window.scrollTo(0, 0);
       };
     });
@@ -463,27 +533,20 @@
 
   // ---------- the ticket text for WhatsApp ----------
   function ticketText(t) {
-    var est = EA.lists.estate(t.estate), s = monthTotals(), g = t.grade || {};
+    var est = EA.lists.estate(t.estate), s = monthTotals();
     var L = [];
     L.push('*TIKET KILANG ' + (est ? est.company + ' ' : '') + t.estate + '*' + (t.rev > 1 ? ' _(dibetulkan · corrected)_' : ''));
     L.push('Tiket ' + t.ticket_no + ' · ' + t.mill + ' · ' + sd(t.date) + (t.time ? ' ' + t.time : ''));
     L.push('Lori ' + (t.lorry || '-') + (t.do_no ? ' · DO ' + t.do_no : ''));
     L.push('Bersih · Nett: ' + t.nett.toFixed(2) + ' MT' + (num(t.w1) && num(t.w2) ? ' (' + num(t.w1) + ' − ' + num(t.w2) + (num(t.ded) ? ' − ' + num(t.ded) : '') + ' kg)' : ''));
     Object.keys(t.split).sort().forEach(function (b) { L.push('Blk ' + b + ': ' + t.split[b].bunches + ' tandan, ' + t.split[b].mt.toFixed(2) + ' MT'); });
-    L.push('ABW: ' + t.abw + ' kg/tandan' + (t.lorryBunches && t.lorryBunches !== t.bunches ? ' · lori ' + t.lorryBunches + ' tandan' : '') + (t.mill_bunches && t.mill_bunches !== t.bunches ? ' · kilang ' + t.mill_bunches + ' tandan' : ''));
+    L.push('ABW: ' + t.abw + ' kg/tandan' + (t.lorryBunches && t.lorryBunches !== t.bunches ? ' · lori ' + t.lorryBunches + ' tandan' : ''));
     if ((t.harv || []).length) {
-      var lots = {}; t.harv.forEach(function (h) { lots[sd(h.date) + ' ' + h.lot] = true; });
-      L.push('Tuaian · Harvest: ' + Object.keys(lots).join(', '));
+      var lots = {}; t.harv.forEach(function (h) { lots[h.lot] = (lots[h.lot] || 0) + h.bunches; });
+      L.push('Petak · Lots: ' + Object.keys(lots).sort(byLot).map(function (l) { return l + ' (' + lots[l] + ')'; }).join(', '));
     }
-    var gl = GRADES.filter(function (x) { return num(g[x[0]]); }).map(function (x) { return x[1] + ' ' + num(g[x[0]]) + '%'; });
-    if (gl.length) L.push('Gred · Grading' + (g.sample ? ' (' + g.sample + ' tandan)' : '') + ': ' + gl.join(', '));
-    if (t.rejB) L.push('Ditolak · Rejected: ' + t.rejB + ' tandan (UR ' + t.rej.ur + ', EB ' + t.rej.emp + ', RT ' + t.rej.rott + ') ≈ ' + t.rejMt.toFixed(2) + ' MT');
-    if (num(g.penalty)) L.push('Penalti · Penalty: ' + num(g.penalty) + '%');
-    if ((t.issues || []).length) {
-      L.push('*⚠ GRED · GRADING — untuk tindakan Penolong Pengurus*');
-      L.push(t.issues.join('; '));
-      L.push('Penjelasan staf: ' + t.explain);
-    }
+    var bal = Object.keys(t.balance || {}).filter(function (b) { return t.balance[b] > 0; }).sort();
+    if (bal.length) L.push('Baki blok · Block balance: ' + bal.map(function (b) { return 'Blk ' + b + ' ' + t.balance[b]; }).join(', '));
     if (t.note) L.push('Catatan: ' + t.note);
     L.push('Bulan ini · Month to date: ' + s.mt.toFixed(2) + ' MT (' + s.n + ' tiket)');
     L.push('Disediakan: ' + (t.keyedName || ''));
@@ -508,10 +571,10 @@
       });
   }
 
-  // For the morning chit with no office link: this phone's tickets with poor grading.
-  function gradingAlerts(estate, since) {
-    return EA.local.get(K.saved, []).filter(function (t) { return t.estate === estate && t.date >= since && (t.issues || []).length; })
-      .map(function (t) { return { ticket_no: t.ticket_no, date: t.date, flag: t.issues.join('; '), explain: t.explain }; });
+  // For the morning chit with no office link: this phone's gradings that came out poor.
+  function gradingAlerts(estate) {
+    return gradings().filter(function (g) { return g.estate === estate && g.flag; })
+      .map(function (g) { return { ticket_no: g.ticket_no, date: g.date, flag: g.flag }; });
   }
 
   document.addEventListener('ea:sync', function () {

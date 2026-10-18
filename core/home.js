@@ -233,7 +233,7 @@
       catch (err) { roomError(err, room, screen, estate); }
     } else $('room').innerHTML = '';
     renderSync();
-    $('ver').textContent = EA.VERSION;
+    $('ver').textContent = (EA.RELEASE || '') + ' (' + EA.VERSION + ')';
     $('foot-phone').textContent = EA.phone() || '—';
   }
 

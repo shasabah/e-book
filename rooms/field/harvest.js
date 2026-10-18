@@ -41,6 +41,10 @@
     var office = !!EA.sendLink();
     // The office list has already taken off what it received; this phone's own entries still waiting have not.
     var lines = (office ? EA.local.get(K.harv + estate, []) : localHarvest(estate)).map(function (h) { return Object.assign({}, h, { bunches: num(h.bunches) }); });
+    if (office) {   // harvest keyed on this phone and not yet at the office (v22)
+      var have = {}; lines.forEach(function (h) { have[h.id] = true; });
+      localHarvest(estate).forEach(function (h) { if (!have[h.id] && EA.isWaiting(h.id)) lines.push(h); });
+    }
     function adjust(h, n) {
       var x = lines.find(function (y) { return y.id === h.id; });
       if (x) x.bunches += n; else if (n > 0) lines.push({ id: h.id, date: h.date, lot: h.lot, block: h.block, worker_id: h.worker_id, bunches: n });
@@ -134,6 +138,26 @@
     return rec;
   }
 
+  // Bunches still in the field, by lot (cut, not yet collected to the ramp). From the office's backlog,
+  // plus this phone's own entries the office has not counted yet (v22).
+  function fieldLeft(estate) {
+    var b = EA.fh.getBacklog(estate), m = {};
+    (b && b.field || []).forEach(function (x) { m[x.lot] = (m[x.lot] || 0) + num(x.bunches); });
+    if (!EA.sendLink()) return m;     // test copy: the backlog is worked out from this phone already
+    var at = (b && b.at) || '';
+    localHarvest(estate).forEach(function (h) { if (EA.isWaiting(h.id)) m[h.lot] = (m[h.lot] || 0) + h.bunches; });
+    EA.local.get('fh.collect', []).forEach(function (s) {
+      if (s.estate !== estate) return;
+      var after = !at || (s.date + ' ' + s.at) >= at;
+      (s.lines || []).forEach(function (l) {
+        if (!(l.id && EA.isWaiting(l.id)) && !after) return;
+        m[l.lot] = l.cleared === 'Y' ? 0 : (m[l.lot] || 0) - num(l.bunches);
+      });
+    });
+    Object.keys(m).forEach(function (k) { if (m[k] < 0) m[k] = 0; });
+    return m;
+  }
+
   // Ask the office for the open harvest and the lorries still waiting for a ticket.
   async function refreshOpen(estate) {
     if (!EA.sendLink()) return false;
@@ -144,5 +168,5 @@
     return !!(r1 && r1.trips) || !!(r2 && r2.lines);
   }
 
-  EA.fh.harvest = { openLines: openLines, openLots: openLots, takeParts: takeParts, writeDn: writeDn, refreshOpen: refreshOpen, byLot: byLot };
+  EA.fh.harvest = { openLines: openLines, openLots: openLots, takeParts: takeParts, writeDn: writeDn, refreshOpen: refreshOpen, byLot: byLot, fieldLeft: fieldLeft };
 })();

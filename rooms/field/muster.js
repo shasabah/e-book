@@ -174,7 +174,7 @@
       '<a href="#field-harvest"' + (active === 'muster' ? ' aria-current="page"' : '') + '><span class="bm">Chit pagi</span><span class="en">Morning chit</span></a>' +
       '<a href="#field-harvest/work"' + (active === 'work' ? ' aria-current="page"' : '') + '><span class="bm">Kerja harian</span><span class="en">Day\'s work</span></a>') +
       '<a href="#field-harvest/collect"' + (active === 'collect' ? ' aria-current="page"' : '') + '><span class="bm">Kutip & hantar</span><span class="en">Collect & dispatch</span></a>' +
-      (loaderOnly ? '' : '<a href="#field-harvest/ticket"' + (active === 'ticket' ? ' aria-current="page"' : '') + '><span class="bm">Tiket kilang</span><span class="en">Mill ticket</span></a>') + '</nav>';
+      (loaderOnly || !(user && /^(Clerk|Owner|HQ)$/.test(user.role)) ? '' : '<a href="#field-harvest/ticket"' + (active === 'ticket' ? ' aria-current="page"' : '') + '><span class="bm">Tiket kilang</span><span class="en">Mill ticket</span></a>') + '</nav>';
   }
 
   // ---------- crop backlog (field and ramp) ----------
@@ -206,6 +206,7 @@
     var b = calcBacklog(cut, col, dis, EA.today());
     b.ok = true; b.estate = estate; b.at = EA.today() + ' ' + EA.ui.hhmm(new Date()); b.local = true;
     b.grading = EA.fh.ticket && EA.fh.ticket.gradingAlerts ? EA.fh.ticket.gradingAlerts(estate) : [];
+    b.tonnage = localTonnage(estate);
     return b;
   }
 
@@ -279,6 +280,22 @@
   // ===== end calcBacklog =====
 
   function shortDate(iso) { return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : ''; }
+  // Test copy (no office link): month-to-date tonnes from this phone's tickets, by delivery note date.
+  function localTonnage(estate) {
+    var m = EA.today().slice(0, 7), mt = 0, bunches = 0, n = 0, blocks = {};
+    EA.local.get('fh.tickets', []).forEach(function (t) {
+      var d = (t.dnRef && t.dnRef.date) || t.date;
+      if (t.estate !== estate || String(d).slice(0, 7) !== m) return;
+      mt += Number(t.nett) || 0; bunches += Number(t.bunches) || 0; n++;
+      Object.keys(t.split || {}).forEach(function (b) { blocks[b] = Math.round(((blocks[b] || 0) + t.split[b].mt) * 1000) / 1000; });
+    });
+    mt = Math.round(mt * 1000) / 1000;
+    return { month: m, mt: mt, bunches: bunches, tickets: n, abw: bunches ? Math.round(mt * 100000 / bunches) / 100 : 0, blocks: blocks };
+  }
+  function tonnageText(t) {
+    if (!t) return '';
+    return Number(t.mt || 0).toFixed(2) + ' MT · ' + (t.tickets || 0) + ' tiket · ' + (t.bunches || 0) + ' tandan' + (t.abw ? ' · ABW ' + t.abw + ' kg' : '');
+  }
   function rampText(r) {
     if (!r || !r.bunches) return '';
     return (r.blocks && r.blocks.length ? r.blocks.map(function (x) { return 'Blk ' + x.block + ' ' + x.bunches; }).join(', ') + ', ' : '') + 'sejak ' + shortDate(r.since);
@@ -288,14 +305,19 @@
   }
   function backlogLines(b) {
     if (!b) return [];
-    var L = ['Baki ladang · Field: ' + (b.fieldTotal || 0) + ' tandan' + (b.field && b.field.length ? ' (' + b.field.map(function (x) { return x.lot + ' ' + x.bunches; }).join(', ') + ')' : ''),
-             'Baki ramp · Ramp: ' + ((b.ramp && b.ramp.bunches) || 0) + ' tandan' + (b.ramp && b.ramp.bunches ? ' (' + rampText(b.ramp) + ')' : '')];
+    var L = (b.tonnage ? ['Tan bulan ini · Month to date: ' + tonnageText(b.tonnage)] : []).concat(['Baki ladang · Field: ' + (b.fieldTotal || 0) + ' tandan' + (b.field && b.field.length ? ' (' + b.field.map(function (x) { return x.lot + ' ' + x.bunches; }).join(', ') + ')' : ''),
+             'Baki ramp · Ramp: ' + ((b.ramp && b.ramp.bunches) || 0) + ' tandan' + (b.ramp && b.ramp.bunches ? ' (' + rampText(b.ramp) + ')' : '')]);
     if (b.checks && b.checks.length) L.push('Semak kiraan · Count check: ' + b.checks.map(checkText).join('; '));
     return L;
   }
   function backlogCard(estate) {
     var b = getBacklog(estate);
+    var t = b && b.tonnage;
     var body = !b ? '<p class="hint">Belum ada. Perlu isyarat sekali untuk ambil dari pejabat. · Not yet: needs signal once to get it from the office.</p>' :
+      (t ? '<div class="list-line"><div><b>Tan bulan ini · Month to date: ' + Number(t.mt || 0).toFixed(2) + ' MT</b><span class="en">' +
+        (t.tickets ? esc(t.tickets + ' tiket · ' + t.bunches + ' tandan' + (t.abw ? ' · ABW ' + t.abw + ' kg' : '')) : 'Belum ada tiket bulan ini · no tickets this month yet') + '</span>' +
+        (Object.keys(t.blocks || {}).length ? '<span class="en">' + Object.keys(t.blocks).sort().map(function (k) { return 'Blk ' + esc(k) + ' ' + Number(t.blocks[k]).toFixed(2); }).join(' · ') + '</span>' : '') +
+        '<span class="en">Bajet akan datang · budget to date comes when the 2027 budget is loaded</span></div></div>' : '') +
       '<div class="list-line"><div><b>Ladang · Field: ' + (b.fieldTotal || 0) + ' tandan</b><span class="en">' +
         (b.field.length ? b.field.map(function (x) { return 'Petak ' + esc(x.lot) + ': ' + x.bunches + ' (sejak ' + shortDate(x.since) + ')'; }).join(' · ') : 'Tiada baki · none left') + '</span></div></div>' +
       '<div class="list-line"><div><b>Ramp: ' + ((b.ramp && b.ramp.bunches) || 0) + ' tandan</b><span class="en">' +
@@ -304,7 +326,7 @@
         b.checks.map(function (x) { return esc(checkText(x)); }).join('<br>') +
         '</span><span class="en">Kiraan mandor dan pemuat tidak sama: buah tertinggal, atau salah kira? · The mandor\'s and the loader\'s counts differ: bunches left behind, or a wrong count?</span></div></div>' : '') +
       '<p class="hint">' + (b.local ? 'Dikira dari telefon ini (salinan ujian) · from this phone (test copy)' : 'Dikira pejabat ' + esc(b.at) + ' · worked out by the office') + '</p>';
-    return '<section class="card" id="fh-backlog" data-estate="' + esc(estate) + '" aria-labelledby="fh-bl"><div class="room-top"><h2 id="fh-bl" class="grow"><span class="inline"><span class="bm">Baki buah</span> · <span class="en">Crop backlog</span></span></h2>' +
+    return '<section class="card" id="fh-backlog" data-estate="' + esc(estate) + '" aria-labelledby="fh-bl"><div class="room-top"><h2 id="fh-bl" class="grow"><span class="inline"><span class="bm">Tan & baki buah</span> · <span class="en">Tonnes and crop backlog</span></span></h2>' +
       '<button type="button" class="btn btn-ghost" data-refresh-backlog="1">REFRESH<small>Kemas kini</small></button></div>' + body + '</section>';
   }
   function wireBacklog(container, estate) {

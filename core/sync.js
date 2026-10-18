@@ -68,10 +68,9 @@ window.EA = window.EA || {};
   EA.lastSent = function () { return get(K.lastSent, 0); };
   EA.oldestWaiting = function () { var q = get(K.queue, []); return q.length ? q[0].savedAt : 0; };
 
-  // Send waiting entries, one at a time, oldest first. Stops at the first
-  // failure and keeps the rest waiting.
+  // Send waiting entries (all in one trip). Anything refused stays waiting.
   var sending = false;
-  EA.send = async function () {
+  async function sendNow() {
     if (sending) return { busy: true };
     var q = get(K.queue, []);
     if (!q.length) { set(K.lastSent, Date.now()); changed(); return { sent: 0 }; }
@@ -121,9 +120,41 @@ window.EA = window.EA || {};
     } catch (e) { err = 'network'; }
     sending = false; changed();
     return err ? { sent: sent, error: err } : { sent: sent };
+  }
+
+  // ---------- trying again by itself ----------
+  // When the office is busy or there is no signal, the phone tries again after a
+  // random wait (so many phones do not all try at the same second): about
+  // 20–40 s, then longer each time, at most 5–10 minutes. Errors a person must
+  // fix (wrong key, phone code clash, another estate...) are not retried.
+  var NO_RETRY = /^(id_clash|not_your_estate|wrong_key|old_version|login|nolink|bad_|unknown_col|tab_missing_col)/;
+  var retryTimer = null, fails = 0;
+  EA.nextRetry = 0;
+  function planRetry(err) {
+    clearTimeout(retryTimer); retryTimer = null; EA.nextRetry = 0;
+    if (!err || NO_RETRY.test(String(err))) { if (!err) fails = 0; changed(); return; }
+    fails++;
+    var base = Math.min(20000 * Math.pow(2, fails - 1), 300000);
+    var wait = Math.round(base + Math.random() * base);
+    EA.nextRetry = Date.now() + wait;
+    retryTimer = setTimeout(autoSend, wait);
+    changed();
+  }
+  function autoSend() {
+    if (!EA.currentUser() || !EA.waiting() || sending) return;
+    EA.send();
+  }
+  EA.send = async function () {
+    if (sending) return { busy: true };
+    var r = await sendNow();
+    if (!r.test) planRetry(r.error || (EA.waiting() ? 'refused' : ''));
+    return r;
   };
   EA.isSending = function () { return sending; };
 
-  // Send by itself when signal comes back.
-  window.addEventListener('online', function () { if (EA.currentUser() && EA.waiting()) EA.send(); });
+  // Send by itself when signal comes back, when E-Book is opened again, and a
+  // check every 3 minutes in case anything is still waiting.
+  window.addEventListener('online', function () { fails = 0; autoSend(); });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') autoSend(); });
+  setInterval(function () { if (!retryTimer) autoSend(); }, 180000);
 })();

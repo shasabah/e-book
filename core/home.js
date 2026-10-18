@@ -202,6 +202,7 @@
     } else {
       $('last-sent').textContent = 'Belum pernah dihantar · Never sent';
     }
+    if (n > 0 && EA.nextRetry > Date.now()) $('last-sent').textContent += ' · Cuba lagi sendiri ' + hhmm(new Date(EA.nextRetry)) + ' · retries by itself';
     var sending = EA.isSending();
     $('send-btn').disabled = sending || n === 0;
     $('send-btn').innerHTML = sending ? 'SENDING<small>Menghantar…</small>' : 'SEND<small>Hantar</small>';

@@ -139,7 +139,7 @@ function findUserInSheet_(key) {
 
 function saveRow(user, tab, row) {
   if (!tab || tab === USERS_TAB || !row || typeof row !== 'object') return { ok: false, error: 'bad_entry' };
-  var sh = book_().getSheetByName(String(tab));
+  var sh = roomTab_(book_(), String(tab));
   if (!sh) return { ok: false, error: 'no_tab:' + tab };
 
   // Checks before writing
@@ -203,7 +203,7 @@ function saveBatch(user, items) {
     var tabs = {}, results = [];
     function tabInfo(name) {
       if (tabs[name] !== undefined) return tabs[name];
-      var sh = ss.getSheetByName(name);
+      var sh = roomTab_(ss, name);
       if (!sh || sh.getLastColumn() < 1) return (tabs[name] = null);
       var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
       var missing = STANDARD_COLS.filter(function (c) { return head.indexOf(c) < 0; });
@@ -382,6 +382,20 @@ function openTrips(estate) {
     x.blocks[r.block] = (x.blocks[r.block] || 0) + Number(r.bunches); x.bunches += Number(r.bunches);
   });
   return { ok: true, trips: Object.keys(trips).map(function (k) { return trips[k]; }) };
+}
+
+// A room's tab, made (or given its new columns) the first time an entry arrives for it,
+// so a new screen works without running setupTestCopy by hand. Old rows stay as they are.
+function roomTab_(ss, name) {
+  var sh = ss.getSheetByName(name);
+  var cols = ROOM_TABS[name];
+  if (!cols) return sh;
+  var want = STANDARD_COLS.concat(cols, ['received_at']);
+  if (!sh) { sh = ss.insertSheet(name); sh.appendRow(want); return sh; }
+  if (sh.getLastColumn() < 1) { sh.appendRow(want); return sh; }
+  var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  want.forEach(function (c) { if (head.indexOf(c) < 0) { head.push(c); sh.getRange(1, head.length).setValue(c); } });
+  return sh;
 }
 
 // Plain values only: text that starts like a formula is kept as text.

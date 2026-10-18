@@ -199,7 +199,7 @@
       if (s.estate !== estate) return;
       s.lines.forEach(function (l) { col.push({ date: s.date, lot: l.lot, block: l.block, bunches: l.bunches, cleared: l.cleared }); });
       var d = s.dispatch;
-      if (!d) return;
+      if (!d || d.replacedBy) return;     // a corrected delivery note: the new one counts
       if (d.blocks) Object.keys(d.blocks).forEach(function (b) { dis.push({ date: s.date, block: b, bunches: d.blocks[b], ramp_cleared: d.ramp_cleared }); });
       else dis.push({ date: s.date, block: '', bunches: d.bunches, ramp_cleared: d.ramp_cleared });
     });

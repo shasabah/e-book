@@ -5,7 +5,10 @@ window.EA = window.EA || {};
 EA.offlineReady = false;
 EA.startOffline = function (swPath) {
   if (!('serviceWorker' in navigator)) return;
-  navigator.serviceWorker.register(swPath || 'sw.js').catch(function () {});
+  // The version number is in the address of sw.js, so every new version is a
+  // new address and the phone always fetches it. 'none' = never use an old
+  // browser copy of sw.js or of the files it reads.
+  navigator.serviceWorker.register((swPath || 'sw.js') + '?v=' + EA.VERSION, { updateViaCache: 'none' }).catch(function () {});
   navigator.serviceWorker.ready.then(function () {
     EA.offlineReady = true;
     document.dispatchEvent(new CustomEvent('ea:offline-ready'));
@@ -34,8 +37,17 @@ EA.loadUpdate = async function () {
         navigator.serviceWorker.addEventListener('controllerchange', ok, { once: true });
         setTimeout(ok, 10000);
       });
+      // Register the new version's address; the phone then fetches the new copy.
+      var latest = await EA.checkUpdate();
+      var v = latest || EA.VERSION;
+      reg = await navigator.serviceWorker.register('sw.js?v=' + v, { updateViaCache: 'none' });
       await reg.update();
       if (reg.installing || reg.waiting) await switched;
+      else if (latest) {
+        // Still nothing new: drop the phone's old copy so the page loads fresh from the site.
+        var keys = await caches.keys();
+        await Promise.all(keys.filter(function (k) { return k.indexOf('ebook-') === 0; }).map(function (k) { return caches.delete(k); }));
+      }
     }
   } catch (e) {}
   location.reload();

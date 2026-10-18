@@ -148,6 +148,8 @@ function plain(v) {
   if (/^[=+@]/.test(s)) return "'" + s;
   // Lot numbers like 1-5 would be turned into dates by the sheet; keep them as text.
   if (/^\d+-\d+/.test(s) && !/^\d{4}-\d{2}-\d{2}/.test(s)) return "'" + s;
+  // Codes with a leading zero, like block 01, would lose the zero; keep them as text.
+  if (/^0\d+$/.test(s)) return "'" + s;
   return s;
 }
 

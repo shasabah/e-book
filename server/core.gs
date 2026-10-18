@@ -271,9 +271,9 @@ function standingRows_(tabName, estate) {
   if (!sh || sh.getLastRow() < 2) return [];
   var vals = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getValues();
   var head = vals.shift(), replaced = {};
-  // Dates the sheet turned into real dates come back as text again, read in the sheet's own
-  // time zone (reading them in another zone shifts them, e.g. 2026-10-18 08:00).
-  var tz = book_().getSpreadsheetTimeZone();
+  // Dates the sheet turned into real dates (older rows) come back as text again. The script
+  // gets them in its own time zone, so they are read in that zone (any other shifts the day).
+  var tz = Session.getScriptTimeZone();
   function txt(v, col) {
     if (Object.prototype.toString.call(v) === '[object Date]') {
       if (col === 'date') return Utilities.formatDate(v, tz, 'yyyy-MM-dd');
@@ -406,6 +406,9 @@ function plain(v) {
   if (/^[=+@]/.test(s)) return "'" + s;
   // Lot numbers like 1-5 would be turned into dates by the sheet; keep them as text.
   if (/^\d+-\d+/.test(s) && !/^\d{4}-\d{2}-\d{2}/.test(s)) return "'" + s;
+  // A date (2026-10-18) is kept as text too, so the sheet never turns it into a date in
+  // another time zone and back a day early.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return "'" + s;
   // Date and time typed by the phone, kept exactly as sent (used to spot a true resend).
   if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(s)) return "'" + s;
   // Codes with a leading zero, like block 01, would lose the zero; keep them as text.

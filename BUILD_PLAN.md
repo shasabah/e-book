@@ -60,7 +60,8 @@ No new rooms for field crews in peak crop (Aug–Nov).
    - DONE 18 Oct (v12): count check, mandor's bunches against the loader's per lot (red on the chit when they differ); lorry load keyed by block; ramp backlog by block. Office script version 12.
    - DONE 18 Oct (v13): alerts on the morning chit (field backlog, old ramp crop, count differences) with the staff's note, for the Assistant Manager; tab FH_ALERT. Office script version 13.
    - DONE 18 Oct (v14): screen 4, mill ticket: kg as printed, found by the delivery note (DO) number, tonnes split by block, ABW, rejects, mill bunch count. Office script version 14.
-   - Next: lorry request at 5 MT; harvester tonnes = his bunches x the load's ABW; Assistant Manager's direction on each alert; office view (Wawa: tonnage by block and mill); ticket photo; older-day corrections by the clerk.
+   - DONE 18 Oct (v15): the staff chooses the harvest on each ticket; ABW and each harvester's tonnes worked out; full mill grading with the staff's explanation when poor, sent to the Assistant Manager; delivery note for staff / clerk / mandor only.
+   - Next: lorry request at 5 MT; monthly tonnes per harvester (pay check); Assistant Manager's direction on each alert; office view (Wawa: tonnage by block and mill); ticket photo; older-day corrections by the clerk.
 2. Build on the test copy; Sugut junior staff tests with made-up workers.
 3. Pilot from 4 Jan beside the paper pocket check roll for about a month.
 - DONE 17 Oct: checks 11 of 11 on iPhone; app online at shasabah.github.io/e-book.

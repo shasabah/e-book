@@ -189,32 +189,104 @@
     var cut = [], col = [], dis = [];
     EA.local.get('fh.work', []).forEach(function (s) {
       if (s.estate !== estate) return;
-      s.rec.lines.forEach(function (l) { if (l.task_code === 'HV01') cut.push({ date: s.date, lot: l.lot, block: l.block, bunches: Number(l.bunches) || 0 }); });
+      s.rec.lines.forEach(function (l) { if (l.task_code === 'HV01') cut.push({ date: s.date, lot: l.lot, block: l.block, bunches: l.bunches }); });
     });
     EA.local.get('fh.collect', []).forEach(function (s) {
       if (s.estate !== estate) return;
-      s.lines.forEach(function (l) { col.push({ date: s.date, lot: l.lot, block: l.block, bunches: Number(l.bunches) || 0, cleared: l.cleared }); });
-      if (s.dispatch) dis.push({ date: s.date, bunches: Number(s.dispatch.bunches) || 0, ramp_cleared: s.dispatch.ramp_cleared });
+      s.lines.forEach(function (l) { col.push({ date: s.date, lot: l.lot, block: l.block, bunches: l.bunches, cleared: l.cleared }); });
+      var d = s.dispatch;
+      if (!d) return;
+      if (d.blocks) Object.keys(d.blocks).forEach(function (b) { dis.push({ date: s.date, block: b, bunches: d.blocks[b], ramp_cleared: d.ramp_cleared }); });
+      else dis.push({ date: s.date, block: '', bunches: d.bunches, ramp_cleared: d.ramp_cleared });
     });
-    var clearedOn = {}, lots = {};
-    col.forEach(function (r) { if (r.cleared === 'Y' && (!clearedOn[r.lot] || r.date > clearedOn[r.lot])) clearedOn[r.lot] = r.date; });
-    function lot(l, b) { return lots[l] || (lots[l] = { lot: l, block: b, cut: 0, col: 0, since: '' }); }
-    cut.forEach(function (r) { if (!r.lot || (clearedOn[r.lot] && r.date <= clearedOn[r.lot])) return; var x = lot(r.lot, r.block); x.cut += r.bunches; if (!x.since || r.date < x.since) x.since = r.date; });
-    col.forEach(function (r) { if (!r.lot || (clearedOn[r.lot] && r.date <= clearedOn[r.lot])) return; lot(r.lot, r.block).col += r.bunches; });
-    var field = Object.keys(lots).map(function (k) { var x = lots[k]; return { lot: x.lot, block: x.block, bunches: Math.max(0, x.cut - x.col), since: x.since }; })
-      .filter(function (x) { return x.bunches > 0; }).sort(function (a, b) { return a.lot.localeCompare(b.lot, undefined, { numeric: true }); });
-    var empty = ''; dis.forEach(function (r) { if (r.ramp_cleared === 'Y' && r.date > empty) empty = r.date; });
-    var inR = 0, outR = 0, since = '';
-    col.forEach(function (r) { if (r.date > empty) { inR += r.bunches; if (!since || r.date < since) since = r.date; } });
-    dis.forEach(function (r) { if (r.date > empty || (r.date === empty && r.ramp_cleared !== 'Y')) outR += r.bunches; });
-    return { ok: true, estate: estate, at: EA.today() + ' ' + EA.ui.hhmm(new Date()), local: true, field: field,
-             fieldTotal: field.reduce(function (a, x) { return a + x.bunches; }, 0), ramp: { bunches: Math.max(0, inR - outR), since: since } };
+    var b = calcBacklog(cut, col, dis, EA.today());
+    b.ok = true; b.estate = estate; b.at = EA.today() + ' ' + EA.ui.hhmm(new Date()); b.local = true;
+    return b;
   }
+
+  // ===== calcBacklog: the same text is in rooms/field/muster.js and server/core.gs =====
+  // cut: harvesters' bunches [{date, lot, block, bunches}]
+  // col: loader's collection [{date, lot, block, bunches, cleared}]
+  // dis: lorry loads [{date, block, bunches, ramp_cleared}]
+  // Field backlog per lot = cut - collected since the lot was last cleared ("Habis").
+  // Count check: when a lot is cleared and the mandor's count and the loader's count
+  // since the clearing before differ (last 7 days), or the loader has collected more
+  // than was cut. Ramp backlog per block = collected - sent since the ramp was last empty.
+  function calcBacklog(cut, col, dis, today) {
+    function n(v) { return Number(v) || 0; }
+    function byLot(a, b) { return String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true }); }
+    var d = new Date(today + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 7);
+    var weekAgo = d.toISOString().slice(0, 10);
+    var clears = {};
+    col.forEach(function (r) {
+      if (!r.lot || r.cleared !== 'Y') return;
+      var c = clears[r.lot] = clears[r.lot] || [];
+      if (c.indexOf(r.date) < 0) c.push(r.date);
+    });
+    Object.keys(clears).forEach(function (k) { clears[k].sort(); });
+    var lots = {};
+    function lotOf(r) { return lots[r.lot] || (lots[r.lot] = { lot: r.lot, block: r.block || '', cut: 0, col: 0, wCut: 0, wCol: 0, since: '' }); }
+    function place(r) {
+      var c = clears[r.lot] || [], last = c.length ? c[c.length - 1] : '', prev = c.length > 1 ? c[c.length - 2] : '';
+      if (!last || r.date > last) return 'open';
+      return r.date > prev ? 'window' : 'old';
+    }
+    cut.forEach(function (r) {
+      if (!r.lot) return;
+      var x = lotOf(r), p = place(r);
+      if (p === 'open') { x.cut += n(r.bunches); if (!x.since || r.date < x.since) x.since = r.date; }
+      else if (p === 'window') x.wCut += n(r.bunches);
+    });
+    col.forEach(function (r) {
+      if (!r.lot) return;
+      var x = lotOf(r), p = place(r);
+      if (p === 'open') x.col += n(r.bunches);
+      else if (p === 'window') x.wCol += n(r.bunches);
+    });
+    var field = [], checks = [];
+    Object.keys(lots).forEach(function (k) {
+      var x = lots[k], c = clears[k] || [], last = c.length ? c[c.length - 1] : '';
+      if (x.cut > x.col) field.push({ lot: x.lot, block: x.block, bunches: x.cut - x.col, since: x.since });
+      if (x.col > x.cut) checks.push({ lot: x.lot, block: x.block, mandor: x.cut, loader: x.col, cleared: '' });
+      if (last && last >= weekAgo && x.wCut !== x.wCol) checks.push({ lot: x.lot, block: x.block, mandor: x.wCut, loader: x.wCol, cleared: last });
+    });
+    field.sort(byLot); checks.sort(byLot);
+    var empty = '';
+    dis.forEach(function (r) { if (r.ramp_cleared === 'Y' && r.date > empty) empty = r.date; });
+    var blocks = {}, since = '', inAll = 0, outAll = 0;
+    function blk(b) { return blocks[b] || (blocks[b] = { block: b, bunches: 0 }); }
+    col.forEach(function (r) {
+      if (r.date <= empty) return;
+      inAll += n(r.bunches); blk(r.block || '').bunches += n(r.bunches);
+      if (n(r.bunches) && (!since || r.date < since)) since = r.date;
+    });
+    dis.forEach(function (r) {
+      if (r.date > empty || (r.date === empty && r.ramp_cleared !== 'Y')) { outAll += n(r.bunches); blk(r.block || '').bunches -= n(r.bunches); }
+    });
+    // A lorry keyed without its block (before v12) cannot be split, so then no block list is shown.
+    var rampBlocks = blocks[''] && blocks[''].bunches < 0 ? [] : Object.keys(blocks).map(function (k) { return blocks[k]; })
+      .filter(function (b) { return b.block && b.bunches > 0; })
+      .sort(function (a, b) { return a.block < b.block ? -1 : 1; });
+    var ramp = Math.max(0, inAll - outAll);
+    return { field: field, fieldTotal: field.reduce(function (a, x) { return a + x.bunches; }, 0),
+             ramp: { bunches: ramp, since: ramp ? since : '', blocks: rampBlocks }, checks: checks };
+  }
+  // ===== end calcBacklog =====
+
   function shortDate(iso) { return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : ''; }
+  function rampText(r) {
+    if (!r || !r.bunches) return '';
+    return (r.blocks && r.blocks.length ? r.blocks.map(function (x) { return 'Blk ' + x.block + ' ' + x.bunches; }).join(', ') + ', ' : '') + 'sejak ' + shortDate(r.since);
+  }
+  function checkText(x) {
+    return x.lot + ': mandor ' + x.mandor + ', pemuat ' + x.loader + ' (beza ' + (x.loader - x.mandor > 0 ? '+' : '') + (x.loader - x.mandor) + (x.cleared ? ', habis ' + shortDate(x.cleared) : '') + ')';
+  }
   function backlogLines(b) {
     if (!b) return [];
-    return ['Baki ladang · Field: ' + (b.fieldTotal || 0) + ' tandan' + (b.field && b.field.length ? ' (' + b.field.map(function (x) { return x.lot + ' ' + x.bunches; }).join(', ') + ')' : ''),
-            'Baki ramp · Ramp: ' + ((b.ramp && b.ramp.bunches) || 0) + ' tandan' + (b.ramp && b.ramp.bunches && b.ramp.since ? ' (sejak ' + shortDate(b.ramp.since) + ')' : '')];
+    var L = ['Baki ladang · Field: ' + (b.fieldTotal || 0) + ' tandan' + (b.field && b.field.length ? ' (' + b.field.map(function (x) { return x.lot + ' ' + x.bunches; }).join(', ') + ')' : ''),
+             'Baki ramp · Ramp: ' + ((b.ramp && b.ramp.bunches) || 0) + ' tandan' + (b.ramp && b.ramp.bunches ? ' (' + rampText(b.ramp) + ')' : '')];
+    if (b.checks && b.checks.length) L.push('Semak kiraan · Count check: ' + b.checks.map(checkText).join('; '));
+    return L;
   }
   function backlogCard(estate) {
     var b = getBacklog(estate);
@@ -222,7 +294,10 @@
       '<div class="list-line"><div><b>Ladang · Field: ' + (b.fieldTotal || 0) + ' tandan</b><span class="en">' +
         (b.field.length ? b.field.map(function (x) { return 'Petak ' + esc(x.lot) + ': ' + x.bunches + ' (sejak ' + shortDate(x.since) + ')'; }).join(' · ') : 'Tiada baki · none left') + '</span></div></div>' +
       '<div class="list-line"><div><b>Ramp: ' + ((b.ramp && b.ramp.bunches) || 0) + ' tandan</b><span class="en">' +
-        (b.ramp && b.ramp.bunches ? 'Belum dihantar ke kilang sejak ' + shortDate(b.ramp.since) + ' · not yet sent to the mill' : 'Kosong · empty') + '</span></div></div>' +
+        (b.ramp && b.ramp.bunches ? 'Belum dihantar ke kilang: ' + esc(rampText(b.ramp)) + ' · not yet sent to the mill' : 'Kosong · empty') + '</span></div></div>' +
+      (b.checks && b.checks.length ? '<div class="list-line flag-line"><div><b class="warn-t">Semak kiraan · Count check</b><span class="en">' +
+        b.checks.map(function (x) { return esc(checkText(x)); }).join('<br>') +
+        '</span><span class="en">Kiraan mandor dan pemuat tidak sama: buah tertinggal, atau salah kira? · The mandor\'s and the loader\'s counts differ: bunches left behind, or a wrong count?</span></div></div>' : '') +
       '<p class="hint">' + (b.local ? 'Dikira dari telefon ini (salinan ujian) · from this phone (test copy)' : 'Dikira pejabat ' + esc(b.at) + ' · worked out by the office') + '</p>';
     return '<section class="card" id="fh-backlog" data-estate="' + esc(estate) + '" aria-labelledby="fh-bl"><div class="room-top"><h2 id="fh-bl" class="grow"><span class="inline"><span class="bm">Baki buah</span> · <span class="en">Crop backlog</span></span></h2>' +
       '<button type="button" class="btn btn-ghost" data-refresh-backlog="1">REFRESH<small>Kemas kini</small></button></div>' + body + '</section>';

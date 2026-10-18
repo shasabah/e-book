@@ -21,6 +21,7 @@ var FILES = [
   'lists/estates.js',
   'lists/test-users.js',
   'lists/tasks.js',
+  'lists/lots.js',
   'lists/test-workers.js',
   'checks/core.html'
 ];

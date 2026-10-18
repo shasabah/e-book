@@ -9,8 +9,8 @@ Builder: Yu Chen, with Claude. One room at a time. One data store: the Estate Ap
 |---|---|---|---|
 | 0 | Decisions | Builder, one data store, staff helpers named | M1 · 23 Oct 2026 |
 | 1 | Foundation | One login; blocks, workers, task codes and rates loaded | M2 · 30 Nov 2026 |
-| 2 | Durian moves in | Durian runs inside the new layout, tested at Sugut | inside step 1 |
-| 3 | Field & Harvest pilot, SSGT | Sugut keys daily work per worker and block; mill tickets checked | M3 · 4 Jan 2027 |
+| 2 | Durian moves in | Moved to after the durian harvest (decided 18 Oct) | ~Jul 2027 |
+| 3 | Field & Harvest pilot, SSGT | Sugut keys daily work per worker and lot; mill tickets checked | M3 · 4 Jan 2027 |
 | 4 | Field & Harvest, all estates | March review comes from the app | M4 · 31 Mar 2027 |
 | 5 | Sugut pay check | App pay matches Ekklesia Feb, Mar, Apr | M5 · 30 Apr 2027 |
 | 6 | Purchase & Store | Pilot 1 Jun; all estates, paper requests stop | M6–M7 · 31 Aug 2027 |
@@ -46,6 +46,13 @@ No new rooms for field crews in peak crop (Aug–Nov).
 
 - DONE 17 Oct: Google script live on the E-Book TEST sheet (yclee@shasabah.com) and tested.
 - DONE 17 Oct: opens with no signal on iPhone (flight mode + Wi-Fi off); entries saved offline are sent when signal returns.
-- Shared lists for Sugut started 17 Oct: blocks done; task codes and rates waiting for HQ / Sugut manager to confirm (sheet "E-Book – Sugut lists to confirm (v2)").
-- Move Durian into rooms/durian/ as its own release.
+- Shared lists for Sugut started 17 Oct: blocks done; task codes and rates waiting for HQ / Sugut manager to confirm (sheet "E-Book – Sugut lists to confirm (v3)").
+- DONE 18 Oct: Sugut lots loaded from the QField map (lists/lots.js): 164 lots under the 4 blocks, 130.65 Ha, 17,835 palms. Work and crop will be keyed by lot, not block.
+- Durian move: postponed to after the 2027 durian harvest (decided 18 Oct). DMS keeps running as is.
+
+## Next room: Field & Harvest, Sugut (4 Jan 2027)
+
+1. One-page brief, signed by Yu Chen (Rule 10: no brief, no building).
+2. Build on the test copy; Sugut junior staff tests with made-up workers.
+3. Pilot from 4 Jan beside the paper pocket check roll for about a month.
 - DONE 17 Oct: checks 11 of 11 on iPhone; app online at shasabah.github.io/e-book.

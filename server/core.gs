@@ -36,7 +36,9 @@ var ROOM_TABS = {
   FH_MUSTER: ['chit', 'block', 'lots', 'mandor', 'worker_id', 'task_code', 'muster', 'confirmed_by', 'confirmed_at', 'note'],
   FH_CHIT:   ['chit', 'rain_mm', 'rain_time', 'working', 'not_working', 'grand_total', 'confirmed_by', 'confirmed_at', 'note'],
   FH_WORK:   ['chit', 'worker_id', 'task_code', 'block', 'lot', 'qty', 'unit', 'bunches', 'confirmed_by', 'confirmed_at', 'note'],
-  FH_JOBDAY: ['chit', 'task_code', 'block', 'lots', 'workers', 'qty', 'unit', 'bunches', 'plan_ha', 'job_status', 'reason', 'flags', 'confirmed_by', 'confirmed_at']
+  FH_JOBDAY: ['chit', 'task_code', 'block', 'lots', 'workers', 'qty', 'unit', 'bunches', 'plan_ha', 'job_status', 'reason', 'flags', 'confirmed_by', 'confirmed_at', 'progress'],
+  FH_COLLECT: ['block', 'lot', 'bunches', 'cleared', 'tractor', 'loader', 'note'],
+  FH_DISPATCH: ['bunches', 'lorry', 'mill', 'ramp_cleared', 'note']
 };
 
 // ---------------- requests ----------------
@@ -58,6 +60,10 @@ function doPost(e) {
   }
   if (req.action === 'save') return reply(saveRow(user, req.tab, req.row));
   if (req.action === 'saveBatch') return reply(saveBatch(user, req.items));
+  if (req.action === 'backlog') {
+    if (user.estates.indexOf(req.estate) < 0) return reply({ ok: false, error: 'not_your_estate' });
+    return reply(backlog(req.estate));
+  }
   return reply({ ok: false, error: 'unknown_action' });
 }
 
@@ -250,6 +256,56 @@ function saveBatch(user, items) {
   }
 }
 
+// ---------------- reading back: crop backlog ----------------
+// Rows that still stand: status 'active' and not replaced by a later row.
+function standingRows_(tabName, estate) {
+  var sh = book_().getSheetByName(tabName);
+  if (!sh || sh.getLastRow() < 2) return [];
+  var vals = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getValues();
+  var head = vals.shift(), replaced = {};
+  function txt(v) {      // dates the sheet turned into real dates come back as 2026-10-18 (or with the time)
+    if (Object.prototype.toString.call(v) === '[object Date]') return Utilities.formatDate(v, 'Asia/Kuala_Lumpur', (v.getHours() || v.getMinutes()) ? 'yyyy-MM-dd HH:mm' : 'yyyy-MM-dd');
+    return String(v);
+  }
+  var rows = vals.map(function (v) { var o = {}; head.forEach(function (c, i) { o[c] = txt(v[i]); }); return o; });
+  rows.forEach(function (r) { if (r.replaces) replaced[r.replaces] = true; });
+  return rows.filter(function (r) { return r.estate === estate && r.status === 'active' && !replaced[r.id]; });
+}
+
+// Field backlog per lot = bunches cut (harvesters, FH_WORK HV01) - bunches collected
+// to the ramp (FH_COLLECT), counted after the last time the lot was marked cleared.
+// Ramp backlog = collected - sent on lorries (FH_DISPATCH), after the ramp was last empty.
+function backlog(estate) {
+  var cut = standingRows_('FH_WORK', estate).filter(function (r) { return r.task_code === 'HV01'; });
+  var col = standingRows_('FH_COLLECT', estate);
+  var dis = standingRows_('FH_DISPATCH', estate);
+  var clearedOn = {};
+  col.forEach(function (r) { if (r.cleared === 'Y' && (!clearedOn[r.lot] || r.date > clearedOn[r.lot])) clearedOn[r.lot] = r.date; });
+  var lots = {};
+  function lotOf(l, b) { return lots[l] || (lots[l] = { lot: l, block: b, cut: 0, collected: 0, since: '' }); }
+  cut.forEach(function (r) {
+    if (!r.lot || (clearedOn[r.lot] && r.date <= clearedOn[r.lot])) return;
+    var x = lotOf(r.lot, r.block); x.cut += Number(r.bunches) || 0;
+    if (!x.since || r.date < x.since) x.since = r.date;
+  });
+  col.forEach(function (r) {
+    if (!r.lot || (clearedOn[r.lot] && r.date <= clearedOn[r.lot])) return;
+    lotOf(r.lot, r.block).collected += Number(r.bunches) || 0;
+  });
+  var field = Object.keys(lots).map(function (k) { var x = lots[k]; x.bunches = Math.max(0, x.cut - x.collected); return x; })
+    .filter(function (x) { return x.bunches > 0; })
+    .sort(function (a, b) { return a.lot.localeCompare(b.lot, undefined, { numeric: true }); });
+  var rampEmpty = '';
+  dis.forEach(function (r) { if (r.ramp_cleared === 'Y' && r.date > rampEmpty) rampEmpty = r.date; });
+  var inRamp = 0, outRamp = 0, rampSince = '';
+  col.forEach(function (r) { if (r.date > rampEmpty) { inRamp += Number(r.bunches) || 0; if (!rampSince || r.date < rampSince) rampSince = r.date; } });
+  dis.forEach(function (r) { if (r.date > rampEmpty || (r.date === rampEmpty && r.ramp_cleared !== 'Y')) outRamp += Number(r.bunches) || 0; });
+  return { ok: true, estate: estate, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'),
+           field: field.map(function (x) { return { lot: x.lot, block: x.block, bunches: x.bunches, since: x.since }; }),
+           fieldTotal: field.reduce(function (a, x) { return a + x.bunches; }, 0),
+           ramp: { bunches: Math.max(0, inRamp - outRamp), since: rampSince } };
+}
+
 // Plain values only: text that starts like a formula is kept as text.
 function plain(v) {
   if (v === undefined || v === null) return '';
@@ -276,7 +332,12 @@ function setupTestCopy() {
   if (c.getLastRow() === 0) c.appendRow(STANDARD_COLS.concat(['note', 'received_at']));
   Object.keys(ROOM_TABS).forEach(function (name) {
     var sh = ss.getSheetByName(name) || ss.insertSheet(name);
-    if (sh.getLastRow() === 0) sh.appendRow(STANDARD_COLS.concat(ROOM_TABS[name], ['received_at']));
+    if (sh.getLastRow() === 0) { sh.appendRow(STANDARD_COLS.concat(ROOM_TABS[name], ['received_at'])); return; }
+    // A new column added later goes on the end of the header. Old rows stay as they are.
+    var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    STANDARD_COLS.concat(ROOM_TABS[name], ['received_at']).forEach(function (col) {
+      if (head.indexOf(col) < 0) { head.push(col); sh.getRange(1, head.length).setValue(col); }
+    });
   });
   // Made-up people, same keys as the test copy of the app.
   var people = [

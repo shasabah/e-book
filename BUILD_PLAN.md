@@ -52,7 +52,9 @@ No new rooms for field crews in peak crop (Aug–Nov).
 
 ## Next room: Field & Harvest, Sugut (4 Jan 2027)
 
-1. One-page brief, signed by Yu Chen (Rule 10: no brief, no building).
+1. DONE 18 Oct: brief approved by Yu Chen (Rule 10).
+   - DONE 18 Oct: screen 1, morning muster chit (by lot), on the test copy.
+   - Next: screen 2, end-of-day work by worker and lot (quantity, bunches); then harvest and crop balance, lorry, mill ticket (ABW).
 2. Build on the test copy; Sugut junior staff tests with made-up workers.
 3. Pilot from 4 Jan beside the paper pocket check roll for about a month.
 - DONE 17 Oct: checks 11 of 11 on iPhone; app online at shasabah.github.io/e-book.

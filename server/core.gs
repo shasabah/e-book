@@ -40,8 +40,11 @@ var ROOM_TABS = {
   FH_COLLECT: ['block', 'lot', 'bunches', 'cleared', 'tractor', 'loader', 'note'],
   FH_DISPATCH: ['bunches', 'lorry', 'mill', 'ramp_cleared', 'note', 'block', 'trip', 'dn_no', 'driver'],
   FH_TICKET: ['ticket_no', 'trip', 'mill', 'do_no', 'lorry', 'driver', 'time', 'first_kg', 'second_kg', 'deduct_kg', 'nett_kg', 'nett_mt',
-              'bunches', 'mill_bunches', 'abw_kg', 'rej_ur', 'rej_emp', 'rej_rott', 'rej_mt', 'note'],
+              'bunches', 'mill_bunches', 'abw_kg', 'rej_ur', 'rej_emp', 'rej_rott', 'rej_mt', 'note',
+              'lorry_bunches', 'sample', 'g_ur', 'g_udr', 'g_or', 'g_r', 'g_eb', 'g_rt', 'g_ls', 'g_pd', 'g_pf', 'g_ds', 'g_dt', 'g_dr',
+              'loose_kg', 'penalty_pct', 'grade_flag', 'explain'],
   FH_TICKET_BLOCK: ['ticket_no', 'block', 'bunches', 'mt'],
+  FH_TICKET_HARV: ['ticket_no', 'work_id', 'date_cut', 'block', 'lot', 'worker_id', 'bunches', 'abw_kg', 'mt'],
   FH_ALERT: ['chit', 'kind', 'block', 'lot', 'detail', 'staff_note', 'direction', 'direction_by']
 };
 
@@ -64,6 +67,10 @@ function doPost(e) {
   }
   if (req.action === 'save') return reply(saveRow(user, req.tab, req.row));
   if (req.action === 'saveBatch') return reply(saveBatch(user, req.items));
+  if (req.action === 'harvest') {
+    if (user.estates.indexOf(req.estate) < 0) return reply({ ok: false, error: 'not_your_estate' });
+    return reply(openHarvest(req.estate));
+  }
   if (req.action === 'trips') {
     if (user.estates.indexOf(req.estate) < 0) return reply({ ok: false, error: 'not_your_estate' });
     return reply(openTrips(req.estate));
@@ -297,7 +304,14 @@ function backlog(estate) {
   var now = new Date();
   var b = calcBacklog(cut, col, dis, Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd'));
   return { ok: true, estate: estate, at: Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'),
-           field: b.field, fieldTotal: b.fieldTotal, ramp: b.ramp, checks: b.checks };
+           field: b.field, fieldTotal: b.fieldTotal, ramp: b.ramp, checks: b.checks, grading: gradingAlerts_(estate, now) };
+}
+
+// Mill tickets of yesterday and today with poor grading, and what the staff said about them.
+function gradingAlerts_(estate, now) {
+  var since = Utilities.formatDate(new Date(now.getTime() - 864e5), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd');
+  return standingRows_('FH_TICKET', estate).filter(function (r) { return r.grade_flag && r.date >= since; })
+    .map(function (r) { return { ticket_no: r.ticket_no, date: r.date, flag: r.grade_flag, explain: r.explain }; });
 }
 
   // ===== calcBacklog: the same text is in rooms/field/muster.js and server/core.gs =====
@@ -368,6 +382,18 @@ function backlog(estate) {
              ramp: { bunches: ramp, since: ramp ? since : '', blocks: rampBlocks }, checks: checks };
   }
   // ===== end calcBacklog =====
+
+// Harvesters' bunches (FH_WORK, HV01) of the last 45 days not yet on a mill ticket,
+// for the ticket screen: the staff chooses which of them the ticket's tonnes belong to.
+function openHarvest(estate) {
+  var cut = Utilities.formatDate(new Date(Date.now() - 45 * 864e5), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd');
+  var onTicket = {};
+  standingRows_('FH_TICKET_HARV', estate).forEach(function (r) { onTicket[r.work_id] = true; });
+  var lines = standingRows_('FH_WORK', estate).filter(function (r) {
+    return r.task_code === 'HV01' && Number(r.bunches) > 0 && r.date >= cut && !onTicket[r.id];
+  }).map(function (r) { return { id: r.id, date: r.date, lot: r.lot, block: r.block, worker_id: r.worker_id, bunches: Number(r.bunches) }; });
+  return { ok: true, lines: lines };
+}
 
 // Lorry loads of the last 21 days that have no mill ticket yet, for the ticket screen.
 // One lorry = the FH_DISPATCH rows sharing a trip code (one row per block).

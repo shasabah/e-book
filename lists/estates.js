@@ -1,4 +1,5 @@
 // Shared list: estates and blocks. Owned by HQ. Every room only reads it.
+// Lots (petak) under each block are in lists/lots.js.
 // Sugut blocks from SPLT_SSGT_BUSINESS_PLAN_2027 (Setup sheet, 14 Oct 2026): 130.65 Ha.
 // Other estates' blocks are added from HQ's block list before their pilot.
 window.EA = window.EA || {};

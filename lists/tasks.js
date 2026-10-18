@@ -22,7 +22,9 @@ EA.lists.taskGroups = [
   { code: 'MN', bm: 'Pembajaan',    en: 'Manuring' },
   { code: 'LD', bm: 'Pemuat',       en: 'Loader (field & ramp)' },
   { code: 'MC', bm: 'Jentera',      en: 'Machines' },
-  { code: 'GN', bm: 'Am',           en: 'General' }
+  { code: 'GN', bm: 'Am',           en: 'General' },
+  { code: 'DR', bm: 'Pemandu',      en: 'Drivers' },
+  { code: 'DF', bm: 'Ladang durian', en: 'Durian farm' }
 ];
 EA.lists.tasks = [
   // Harvesting
@@ -58,7 +60,23 @@ EA.lists.tasks = [
   { code: 'MC01', group: 'MC', bm: 'Jam jentolak (JCB)',        en: 'Backhoe (JCB) hours',            unit: 'hour', pay: 'hour' },
   { code: 'MC02', group: 'MC', bm: 'Pemandu traktor harian',    en: 'Tractor driver daily',           unit: 'day',  pay: 'day' },
   // General
-  { code: 'GN01', group: 'GN', bm: 'Hadir muster',              en: 'Muster call',                    unit: 'day',  pay: 'day', assign: false }
+  { code: 'GN01', group: 'GN', bm: 'Hadir muster',              en: 'Muster call',                    unit: 'day',  pay: 'day', assign: false },
+  // From the Sugut paper muster chit (17 Oct 2026). New codes are DRAFT, to confirm with HQ.
+  { code: 'MT11', group: 'MT', bm: 'Racun menyeluruh',          en: 'Blanket spraying',               unit: 'Ha',   pay: 'unit' },
+  { code: 'MT12', group: 'MT', bm: 'Perosak & penyakit',        en: 'Pest & diseases',                unit: 'day',  pay: 'day' },
+  { code: 'MT13', group: 'MT', bm: 'Cantas tepi jalan',         en: 'Road side trimming',             unit: 'day',  pay: 'day' },
+  { code: 'MT14', group: 'MT', bm: 'Tapak semaian',             en: 'Nursery',                        unit: 'day',  pay: 'day' },
+  { code: 'DF01', group: 'DF', bm: 'Kerja ladang durian',       en: 'Durian farm work',               unit: 'day',  pay: 'day' },
+  { code: 'HV08', group: 'HV', bm: 'Creeper',                   en: 'Creeper',                        unit: 'day',  pay: 'day' },
+  { code: 'GN02', group: 'GN', bm: 'Penjaga genset',            en: 'Genset attendant',               unit: 'day',  pay: 'day' },
+  { code: 'GN03', group: 'GN', bm: 'Pengasuh taska',            en: 'Creche ayah',                    unit: 'day',  pay: 'day' },
+  { code: 'GN04', group: 'GN', bm: 'Kebersihan mes/pejabat',    en: 'Upkeep mess/office',             unit: 'day',  pay: 'day' },
+  { code: 'GN05', group: 'GN', bm: 'Pembantu stor',             en: 'Store attendant',                unit: 'day',  pay: 'day' },
+  { code: 'GN06', group: 'GN', bm: 'Pengawal',                  en: 'Guard',                          unit: 'day',  pay: 'day' },
+  { code: 'DR01', group: 'DR', bm: 'Pembantu pemandu traktor',  en: 'Tractor driver attendant',       unit: 'day',  pay: 'day' },
+  { code: 'DR02', group: 'DR', bm: 'Pembantu jentolak',         en: 'Backhoe attendant',              unit: 'day',  pay: 'day' },
+  { code: 'DR03', group: 'DR', bm: 'Pemandu lori',              en: 'Truck driver',                   unit: 'day',  pay: 'day' },
+  { code: 'DR04', group: 'DR', bm: 'Pemandu Hitachi',           en: 'Hitachi driver',                 unit: 'day',  pay: 'day' }
 ];
 EA.lists.task = function (code) {
   return EA.lists.tasks.find(function (t) { return t.code === code; }) || null;
@@ -74,4 +92,32 @@ EA.lists.task = function (code) {
 };
 EA.lists.assignable = function () {
   return EA.lists.tasks.filter(function (t) { return t.assign !== false; });
+};
+
+// The four sections of the paper muster chit, in the paper's order.
+// block: true = the job needs a block (field work); false = no block (office, guard, drivers).
+EA.lists.chitSections = [
+  { code: 'A', bm: 'Penyelenggaraan', en: 'Maintenance', block: true,
+    tasks: ['MT03', 'MT02', 'MT05', 'MT11', 'MT12', 'MN01', 'MN04', 'MT13', 'HV07', 'FM01', 'MT01', 'MT14', 'FM02', 'DF01',
+            'MT04', 'MT06', 'MT07', 'MT08', 'MT10', 'MN02', 'MN03'] },
+  { code: 'B', bm: 'Tuaian', en: 'Harvesting', block: true,
+    tasks: ['HV01', 'HV08', 'HV04', 'HV03', 'LD02', 'LD01', 'MT09'] },
+  { code: 'C', bm: 'Am', en: 'General', block: false,
+    tasks: ['GN02', 'GN03', 'GN04', 'GN05', 'GN06'] },
+  { code: 'D', bm: 'Pemandu', en: 'Drivers', block: false,
+    tasks: ['DR01', 'MC02', 'MC01', 'DR02', 'DR03', 'DR04'] }
+];
+EA.lists.sectionOf = function (code) {
+  return EA.lists.chitSections.find(function (s) { return s.tasks.indexOf(code) >= 0; }) || EA.lists.chitSections[0];
+};
+// Short names as written on the paper muster chit (at most 16 letters, for the WhatsApp chit).
+EA.lists.chitNames = {
+  MT03: 'Circle Spraying', MT02: 'Decreeping', MT05: 'Selective Spray', MT11: 'Blanket Spray', MT12: 'Pest & Diseases',
+  MN01: 'Manuring <2kg', MN04: 'Manuring >2kg', MT13: 'Road Side Trim', HV07: 'Pruning', FM01: 'Pruning Abandon',
+  MT01: 'Slashing', MT14: 'Nursery', FM02: 'Loading Stumping', DF01: 'Durian Farm', MT04: 'Organic Spray',
+  MT06: 'Lallang Spray', MT07: 'VOPs', MT08: 'Load Seedlings', MT10: 'Palm Census', MN02: 'Load Fertiliser',
+  MN03: 'Transport Fert.', HV01: 'Harvester', HV08: 'Creeper', HV04: 'Checker', HV03: 'Loader', LD02: 'Loader Ramp',
+  LD01: 'Loader Daily', MT09: 'Loose Fruit', GN02: 'Genset Attendant', GN03: 'Creche Ayah', GN04: 'Upkeep Mess/Off.',
+  GN05: 'Store Attendant', GN06: 'Guard', DR01: 'Tractor Drv Att.', MC02: 'Tractor Driver', MC01: 'Backhoe Driver',
+  DR02: 'Backhoe Attend.', DR03: 'Truck Driver', DR04: 'Hitachi Driver'
 };

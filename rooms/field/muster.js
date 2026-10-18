@@ -202,8 +202,7 @@
     });
     var b = calcBacklog(cut, col, dis, EA.today());
     b.ok = true; b.estate = estate; b.at = EA.today() + ' ' + EA.ui.hhmm(new Date()); b.local = true;
-    var y = new Date(EA.today() + 'T00:00:00Z'); y.setUTCDate(y.getUTCDate() - 1);
-    b.grading = EA.fh.ticket && EA.fh.ticket.gradingAlerts ? EA.fh.ticket.gradingAlerts(estate, y.toISOString().slice(0, 10)) : [];
+    b.grading = EA.fh.ticket && EA.fh.ticket.gradingAlerts ? EA.fh.ticket.gradingAlerts(estate) : [];
     return b;
   }
 
@@ -343,10 +342,14 @@
       out.push({ key: 'K:' + x.lot + ':' + (x.cleared || 'open'), kind: 'count', block: x.block, lot: x.lot, detail: checkText(x),
                  bm: 'Kiraan tidak sama, ' + checkText(x), en: 'Mandor and loader counts differ' });
     });
-    // Poor mill grading: the staff already said what is going on when keying the ticket.
+    // Poor mill grading (keyed by the clerk): the staff says what is going on in the estate,
+    // once; after that morning it is closed (the office no longer sends it).
+    var explained = {};
+    chits().forEach(function (c) { if (c.estate === b.estate && c.date < today) (c.alerts || []).forEach(function (a) { if (a.kind === 'grading' && a.note) explained[a.key] = true; }); });
     (b.grading || []).forEach(function (g) {
-      out.push({ key: 'G:' + g.ticket_no, kind: 'grading', block: '', lot: '', detail: 'Tiket ' + g.ticket_no + ': ' + g.flag, def: g.explain || '',
-                 bm: 'Gred kilang tiket ' + g.ticket_no + ' (' + shortDate(g.date) + '): ' + g.flag, en: 'Poor mill grading' });
+      if (explained['G:' + g.ticket_no]) return;
+      out.push({ key: 'G:' + g.ticket_no, kind: 'grading', block: '', lot: '', ref: g.ticket_no, detail: 'Tiket ' + g.ticket_no + ': ' + g.flag,
+                 bm: 'Gred kilang tiket ' + g.ticket_no + ' (' + shortDate(g.date) + '): ' + g.flag, en: 'Poor mill grading: what is going on in the estate?' });
     });
     if (b.ramp && b.ramp.bunches && b.ramp.since && b.ramp.since < yday) {
       out.push({ key: 'R:' + b.ramp.since, kind: 'ramp', block: '', lot: '', detail: b.ramp.bunches + ' tandan, ' + rampText(b.ramp),
@@ -385,7 +388,7 @@
   }
   function chitAlerts() {
     return alertsFrom(getBacklog(ctx.estate)).map(function (a) {
-      return { key: a.key, kind: a.kind, block: a.block, lot: a.lot, detail: a.detail, text: a.bm, note: String(alertNote(a.key, a.def).note || '').trim() };
+      return { key: a.key, kind: a.kind, block: a.block, lot: a.lot, ref: a.ref || '', detail: a.detail, text: a.bm, note: String(alertNote(a.key, a.def).note || '').trim() };
     });
   }
 
@@ -780,12 +783,12 @@
         delete oldAl[a.key];
         if (o && o.note === a.note) { a.id = o.id; return; }
         a.id = EA.save(TAB_ALERT, ROOM, ctx.estate, { chit: c.chit, kind: a.kind, block: a.block, lot: a.lot, detail: a.detail,
-          staff_note: a.note, direction: '', direction_by: '' }, o ? o.id : '').id;
+          staff_note: a.note, direction: '', direction_by: '', ref: a.ref || '' }, o ? o.id : '').id;
       });
       Object.keys(oldAl).forEach(function (k) {
         var o = oldAl[k];
         EA.save(TAB_ALERT, ROOM, ctx.estate, { chit: c.chit, kind: o.kind, block: o.block, lot: o.lot, detail: o.detail,
-          staff_note: o.note, direction: '', direction_by: '' }, o.id, 'removed');
+          staff_note: o.note, direction: '', direction_by: '', ref: o.ref || '' }, o.id, 'removed');
       });
       var s = summary(c.rows);
       c.chitRowId = EA.save(TAB_CHIT, ROOM, ctx.estate, { chit: c.chit, rain_mm: c.rain_mm, rain_time: c.rain_time,

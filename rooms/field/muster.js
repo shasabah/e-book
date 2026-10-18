@@ -448,7 +448,7 @@
   // ---------- today's chits on this phone ----------
   function todayCard() {
     var list = todaysChits();
-    return '<section class="card" aria-labelledby="fh-today"><h2 id="fh-today"><span class="inline"><span class="bm">Chit hari ini di telefon ini</span> · <span class="en">Today\'s chits on this phone</span></span></h2>' +
+    return '<section class="card" id="fh-today-card" aria-labelledby="fh-today"><h2 id="fh-today"><span class="inline"><span class="bm">Chit hari ini di telefon ini</span> · <span class="en">Today\'s chits on this phone</span></span></h2>' +
       (list.length ? '<div>' + list.map(function (c) {
         var n = counts(c.rows.reduce(function (o, r) { o[r.worker_id] = r.muster; return o; }, {}));
         var waiting = c.rows.some(function (r) { return EA.isWaiting(r.id); });
@@ -463,8 +463,21 @@
       '</section>';
   }
 
+  // After sending, refresh the Waiting / Sent marks on today's chits.
+  document.addEventListener('ea:sync', function () {
+    if (!el || !document.body.contains(el) || el.hidden) return;
+    var card = el.querySelector('#fh-today-card');
+    if (!card) return;
+    card.outerHTML = todayCard();
+    wireList();
+  });
+
   function wireCommon() {
     $('#fh-back').onclick = function () { location.hash = ''; };
+    wireList();
+  }
+
+  function wireList() {
     el.querySelectorAll('[data-view]').forEach(function (b) { b.onclick = function () { showChit(b.dataset.view); }; });
     el.querySelectorAll('[data-fix]').forEach(function (b) {
       b.onclick = function () {

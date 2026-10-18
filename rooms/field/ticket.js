@@ -212,10 +212,10 @@
         field('tk-lorry', 'No. lori', 'Lorry no.', draft.lorry, 'text', '') +
         field('tk-driver', 'Pemandu', 'Driver', draft.driver, 'text', '') +
       '</div><div class="fields">' +
-        field('tk-w1', 'Berat masuk (kg)', '1st weight (in), kg', draft.w1, 'numeric', '') +
-        field('tk-w2', 'Berat keluar (kg)', '2nd weight (out), kg', draft.w2, 'numeric', '') +
+        field('tk-w1', 'Berat pertama (kg)', '1st weight, kg', draft.w1, 'numeric', '') +
+        field('tk-w2', 'Berat kedua (kg)', '2nd weight, kg', draft.w2, 'numeric', '') +
         field('tk-ded', 'Potongan (kg)', 'Deduction, kg', draft.ded, 'numeric', '') +
-        field('tk-nett', 'Bersih (kg)', 'Nett weight, kg', draft.nett, 'numeric', '') +
+        field('tk-nett', 'Berat bersih (kg)', 'Net weight, kg', draft.nett, 'numeric', '') +
       '</div><p class="hint">Isi dalam kg seperti di tiket. · Key in kg, as printed on the ticket.</p></section>' +
 
       '<section class="card" aria-labelledby="tk-s2"><h2 id="tk-s2"><span class="step">2</span><span class="inline"><span class="bm">Petak dalam lori ini</span> · <span class="en">The lots on this lorry</span></span></h2>' +
@@ -416,9 +416,9 @@
   function problems(c) {
     var p = [];
     if (!draft.ticket_no) p.push(['Isi no. tiket.', 'Fill in the ticket number.']);
-    if (!(c.nett > 0)) p.push(['Isi berat (berat masuk dan keluar, atau bersih).', 'Fill in the weights (in and out, or nett).']);
-    if (num(draft.w1) && num(draft.w2) && num(draft.w2) >= num(draft.w1)) p.push(['Berat keluar mesti kurang dari berat masuk.', 'The weight out must be less than the weight in.']);
-    if (c.nett > 0 && c.nett < 0.5) p.push(['Bersih ' + c.nettKg + ' kg terlalu kecil: isi dalam kg, bukan MT.', 'Nett ' + c.nettKg + ' kg is too small: key kg, not MT.']);
+    if (!(c.nett > 0)) p.push(['Isi berat (berat pertama dan kedua, atau berat bersih).', 'Fill in the weights (1st and 2nd weight, or net weight).']);
+    if (num(draft.w1) && num(draft.w2) && num(draft.w2) >= num(draft.w1)) p.push(['Berat kedua mesti kurang dari berat pertama.', 'The 2nd weight must be less than the 1st weight.']);
+    if (c.nett > 0 && c.nett < 0.5) p.push(['Berat bersih ' + c.nettKg + ' kg terlalu kecil: isi dalam kg, bukan MT.', 'Net weight ' + c.nettKg + ' kg is too small: key kg, not MT.']);
     if (!canPick(ctx.user) && !draft.trip) p.push(['Taip No. DO untuk cari nota hantar staf.', 'Type the DO no. to find the staff\'s delivery note.']);
     else if (!c.bunches) p.push(['Pilih petak dalam lori ini.', 'Choose the lots on this lorry.']);
     var twice = saved().find(function (t) { return t.estate === ctx.estate && t.ticket_no === draft.ticket_no && t.key !== draft.replacing; });
@@ -668,7 +668,7 @@
     L.push('*TIKET KILANG ' + (est ? est.company + ' ' : '') + t.estate + '*' + (t.rev > 1 ? ' _(dibetulkan · corrected)_' : ''));
     L.push('Tiket ' + t.ticket_no + ' · ' + t.mill + ' · ' + sd(t.date) + (t.time ? ' ' + t.time : ''));
     L.push('Lori ' + (t.lorry || '-') + (t.do_no ? ' · DO ' + t.do_no : ''));
-    L.push('Bersih · Nett: ' + t.nett.toFixed(2) + ' MT' + (num(t.w1) && num(t.w2) ? ' (' + num(t.w1) + ' − ' + num(t.w2) + (num(t.ded) ? ' − ' + num(t.ded) : '') + ' kg)' : ''));
+    L.push('Berat bersih · Net weight: ' + t.nett.toFixed(2) + ' MT' + (num(t.w1) && num(t.w2) ? ' (' + num(t.w1) + ' − ' + num(t.w2) + (num(t.ded) ? ' − ' + num(t.ded) : '') + ' kg)' : ''));
     Object.keys(t.split).sort().forEach(function (b) { L.push('Blk ' + b + ': ' + t.split[b].bunches + ' tandan, ' + t.split[b].mt.toFixed(2) + ' MT'); });
     L.push('ABW: ' + t.abw + ' kg/tandan' + (t.lorryBunches && t.lorryBunches !== t.bunches ? ' · lori ' + t.lorryBunches + ' tandan' : ''));
     if ((t.harv || []).length) {

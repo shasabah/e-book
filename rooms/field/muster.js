@@ -163,14 +163,22 @@
   }
 
   // ---------- the screen ----------
+  // The room's screens, as tabs at the top. Built once here for both screens.
+  function tabs(active) {
+    return '<nav class="tabs" aria-label="Skrin · Screens">' +
+      '<a href="#field-harvest"' + (active === 'muster' ? ' aria-current="page"' : '') + '><span class="bm">Chit pagi</span><span class="en">Morning chit</span></a>' +
+      '<a href="#field-harvest/work"' + (active === 'work' ? ' aria-current="page"' : '') + '><span class="bm">Kerja harian</span><span class="en">Day\'s work</span></a></nav>';
+  }
+
   function render(container, c) {
+    if (c.screen === 'work' && EA.fh.work) return EA.fh.work.render(container, c);
     el = container; ctx = c;
     draft = loadDraft();
     var testing = ctx.room.state !== 'live';
     var head = '<div class="room-top">' +
       '<button type="button" class="back-btn" id="fh-back">← <span class="inline"><span class="bm">Bilik</span></span></button>' +
       '<div class="grow"><h1>Chit muster pagi</h1><span class="en">Morning muster chit · ' + esc(ctx.estate) + '</span></div>' +
-      (testing ? '<span class="test-badge">UJIAN · TEST</span>' : '') + '</div>';
+      (testing ? '<span class="test-badge">UJIAN · TEST</span>' : '') + '</div>' + tabs('muster');
 
     if (!canKey(ctx.user)) {
       el.innerHTML = head + '<div class="card"><p><span class="bm">Pandangan pejabat untuk chit muster akan datang kemudian.</span>' +
@@ -676,4 +684,10 @@
   }
 
   EA.roomViews['field-harvest'] = { render: render, chitText: chitText, summary: summary };
+  // Shared with the room's other screens (rooms/field/work.js).
+  EA.fh = EA.fh || {};
+  EA.fh.allChits = chits;
+  EA.fh.summary = summary;
+  EA.fh.tabs = tabs;
+  EA.fh.copyText = copyText;
 })();

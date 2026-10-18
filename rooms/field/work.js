@@ -1,0 +1,444 @@
+// Field & Harvest room — screen 2: the day's work (Kerja harian), keyed in the evening.
+// From the Field & Harvest Brief (Sugut), approved by Yu Chen 18 Oct 2026.
+//
+// It starts from the morning muster chit, so nothing is keyed twice:
+//   1. For each job on the chit and each person on it: what was done, by lot.
+//      Ha / bags / palms / seedlings / hours as the job's unit; bunches for
+//      harvesters (their tonnes come later from the mill ticket); day-rate jobs
+//      are a full or half day; loading and checking go by the mill ticket.
+//   2. Each job: Siap (done) or Belum siap (not finished) with the reason and
+//      what will be done about it.
+//   3. Flags: harvester under 115 bunches; more hectares than the lot has.
+//   4. The mandor confirms; saved per person per lot (FH_WORK) and per job
+//      (FH_JOBDAY); the evening report is ready for WhatsApp.
+// Piece rates are not here: the office adds the rate in force on the date.
+// A correction is new rows that point to the old ones (nothing is deleted).
+(function () {
+  window.EA = window.EA || {};
+  EA.fh = EA.fh || {};
+
+  var TAB = 'FH_WORK', TAB_JOB = 'FH_JOBDAY', ROOM = 'FH';
+  var K = { draft: 'fh.workdraft', saved: 'fh.work' };
+  var LOW_BUNCHES = 115;            // from the brief: harvesters under 115 bunches a day are shown
+
+  var el, ctx, chit, draft;
+  function ui() { return EA.ui; }
+  function esc(s) { return EA.ui.esc(s); }
+  function $(sel) { return el.querySelector(sel); }
+  function canKey(u) { return u.role !== 'HQ'; }
+  function task(code) { return EA.lists.task(code); }
+  function jobName(code) { var t = task(code); return t ? t.bm : code; }
+  function shortName(code) { return (EA.lists.chitNames && EA.lists.chitNames[code]) || (task(code) ? task(code).en : code); }
+  function person(id) { var w = EA.lists.worker(id); return w ? w.name : id; }
+  function num(v) { var n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isFinite(n) ? n : 0; }
+  function r2(n) { return Math.round(n * 100) / 100; }
+  function niceDate(iso) { var d = new Date(iso + 'T00:00:00'); return ui().dayBm[d.getDay()] + ' ' + d.getDate() + ' ' + ui().monBm[d.getMonth()]; }
+
+  // What is keyed for a job, from its unit.
+  //   qty     — a number in the job's unit, per lot (Ha, bag, palm, seedling)
+  //   bunches — harvesters: bunches per lot
+  //   day     — full or half day
+  //   hour    — hours (machines)
+  //   ticket  — nothing keyed: paid from the mill ticket tonnes
+  function kind(code) {
+    var t = task(code);
+    if (!t) return 'day';
+    if (code === 'HV01') return 'bunches';
+    if (t.unit === 'MT') return 'ticket';
+    if (t.unit === 'day') return 'day';
+    if (t.unit === 'hour') return 'hour';
+    return 'qty';
+  }
+  function unitLabel(code) {
+    var k = kind(code), t = task(code);
+    return k === 'bunches' ? 'tandan' : k === 'day' ? 'hari' : k === 'hour' ? 'jam' : k === 'ticket' ? 'MT' : (t.unit === 'bag' ? 'beg' : t.unit === 'palm' ? 'pokok' : t.unit === 'seedling' ? 'anak benih' : t.unit);
+  }
+
+  // ---------- which chit ----------
+  function chitsFor(estate) {
+    var t = EA.today(), y = new Date(); y.setDate(y.getDate() - 1);
+    var yd = y.toISOString().slice(0, 10);
+    return EA.fh.allChits().filter(function (c) { return c.estate === estate && (c.date === t || c.date === yd); })
+      .sort(function (a, b) { return (a.date + a.confirmedAt) < (b.date + b.confirmedAt) ? 1 : -1; });
+  }
+  // The jobs on a chit, each with the people present on it.
+  function jobsOf(c) {
+    var jobs = (c.jobs || []).map(function (j) { return { key: j.key, task: j.task, block: j.block, lots: j.lots || [], mandor: j.mandor, people: [], mandors: [] }; });
+    c.rows.forEach(function (r) {
+      if (r.status === 'removed' || r.muster !== 'H') return;
+      var j = jobs.find(function (x) { return x.task === r.task_code && x.block === r.block && x.lots.join(' ') === r.lots; });
+      if (!j) { j = { key: 'r' + jobs.length, task: r.task_code, block: r.block, lots: r.lots ? r.lots.split(' ') : [], mandor: r.mandor, people: [], mandors: [] }; jobs.push(j); }
+      var w = EA.lists.worker(r.worker_id);
+      if (w && w.mdr) j.mandors.push(r.worker_id);     // a mandor supervises: nothing to key for him
+      else j.people.push(r.worker_id);
+    });
+    return jobs.filter(function (j) { return j.people.length || j.mandors.length; }).sort(function (a, b) {
+      var sa = EA.lists.sectionOf(a.task), sb = EA.lists.sectionOf(b.task);
+      return sa.code < sb.code ? -1 : sa.code > sb.code ? 1 : sa.tasks.indexOf(a.task) - sb.tasks.indexOf(b.task);
+    });
+  }
+
+  // ---------- phone memory ----------
+  function saved() { return EA.local.get(K.saved, []).filter(function (s) { return s.date >= daysAgo(40); }); }
+  function daysAgo(n) { var d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); }
+  function savedFor(chitId) { return saved().find(function (s) { return s.chit === chitId; }) || null; }
+  function keepSaved(s) { var list = saved().filter(function (x) { return x.chit !== s.chit; }); list.push(s); EA.local.set(K.saved, list); }
+  function loadDraft(c) {
+    var all = EA.local.get(K.draft, {});
+    var d = all[c.chit];
+    if (d) return d;
+    d = { chit: c.chit, lines: {}, status: {}, checker: c.checker || '', replacing: '' };
+    jobsOf(c).forEach(function (j) {
+      j.people.forEach(function (w) {
+        var k = kind(j.task);
+        d.lines[w] = [{ lot: j.lots.length === 1 ? j.lots[0] : '', qty: k === 'day' ? '1' : '', bunches: '' }];
+      });
+      d.status[j.key] = { done: '', reason: '' };
+    });
+    return d;
+  }
+  function keepDraft() { var all = EA.local.get(K.draft, {}); all[draft.chit] = draft; EA.local.set(K.draft, all); }
+  function dropDraft() { var all = EA.local.get(K.draft, {}); delete all[draft.chit]; EA.local.set(K.draft, all); }
+
+  // ---------- totals and flags ----------
+  function jobTotals(j) {
+    var k = kind(j.task), qty = 0, bunches = 0, byLot = {}, flags = [];
+    j.people.forEach(function (w) {
+      var pb = 0;
+      (draft.lines[w] || []).forEach(function (l) {
+        qty += num(l.qty); bunches += num(l.bunches); pb += num(l.bunches);
+        if (l.lot) byLot[l.lot] = r2((byLot[l.lot] || 0) + num(k === 'bunches' ? l.bunches : l.qty));
+      });
+      if (k === 'bunches' && pb > 0 && pb < LOW_BUNCHES) flags.push({ w: w, text: w + ' ' + pb + ' tandan (bawah ' + LOW_BUNCHES + ')', bad: false });
+    });
+    if (task(j.task) && task(j.task).unit === 'Ha') {
+      Object.keys(byLot).forEach(function (lot) {
+        var l = EA.lists.lot(ctx.estate, lot);
+        if (l && byLot[lot] > l.ha * 1.05) flags.push({ text: 'Petak ' + lot + ': ' + byLot[lot] + ' Ha lebih daripada saiz petak ' + l.ha.toFixed(2) + ' Ha', bad: true });
+      });
+    }
+    var planHa = 0; j.lots.forEach(function (n) { var l = EA.lists.lot(ctx.estate, n); if (l) planHa += l.ha; });
+    return { qty: r2(qty), bunches: bunches, byLot: byLot, flags: flags, planHa: r2(planHa) };
+  }
+
+  // ---------- the screen ----------
+  function render(container, c) {
+    el = container; ctx = c;
+    var testing = ctx.room.state !== 'live';
+    var head = '<div class="room-top">' +
+      '<button type="button" class="back-btn" id="wk-back">← <span class="inline"><span class="bm">Bilik</span></span></button>' +
+      '<div class="grow"><h1>Kerja harian</h1><span class="en">Day\'s work · ' + esc(ctx.estate) + '</span></div>' +
+      (testing ? '<span class="test-badge">UJIAN · TEST</span>' : '') + '</div>' + EA.fh.tabs('work');
+    var list = chitsFor(ctx.estate);
+    var pick = EA.local.get('fh.workchit', '');
+    chit = list.find(function (x) { return x.chit === pick; }) || list[0] || null;
+
+    if (!chit) {
+      el.innerHTML = head + '<div class="card"><p><span class="bm">Tiada chit pagi untuk hari ini atau semalam di telefon ini. Simpan chit pagi dahulu.</span>' +
+        '<span class="en">No morning chit for today or yesterday on this phone. Save the morning chit first.</span></p>' +
+        '<a class="btn btn-main" href="#field-harvest">MORNING CHIT<small>Chit pagi</small></a></div>';
+      $('#wk-back').onclick = function () { location.hash = ''; };
+      return;
+    }
+    var done = savedFor(chit.chit);
+    draft = loadDraft(chit);
+    var chooser = list.length > 1 ? '<div class="field"><label for="wk-chit"><span class="bm">Chit</span><span class="en">Which morning chit</span></label><select id="wk-chit" class="text-input">' +
+      list.map(function (x) { return '<option value="' + esc(x.chit) + '"' + (x.chit === chit.chit ? ' selected' : '') + '>' + esc(niceDate(x.date) + ' · Chit ' + x.chit.split('-').pop() + ' · ' + x.confirmedAt) + '</option>'; }).join('') + '</select></div>' : '';
+
+    if (done && !draft.replacing) {
+      el.innerHTML = head + chooser +
+        '<p class="msg ok-msg"><span class="bm">Kerja harian untuk chit ini sudah disimpan.</span><span class="en">The day\'s work for this chit is saved.</span></p>' +
+        savedCard(done);
+      wireTop();
+      return;
+    }
+    if (!canKey(ctx.user)) { el.innerHTML = head + '<div class="card"><p class="hint">Pandangan pejabat akan datang kemudian. · The office view comes later.</p></div>'; wireTop(); return; }
+
+    var jobs = jobsOf(chit);
+    el.innerHTML = head + chooser +
+      '<p class="hint">Dari chit pagi ' + esc(niceDate(chit.date)) + ' · ' + jobs.reduce(function (a, j) { return a + j.people.length; }, 0) + ' orang bekerja, ' + jobs.length + ' kerja. · From the morning chit.</p>' +
+      (draft.replacing ? '<p class="warn"><span class="bm">Membetulkan kerja harian. Rekod lama kekal; yang baru menggantikannya.</span><span class="en">Correcting the day\'s work. The old record stays; this one replaces it.</span></p>' : '') +
+      jobs.map(jobCard).join('') +
+      '<section class="card"><h2><span class="inline"><span class="bm">Laporan petang</span> · <span class="en">Evening report</span></span></h2><pre class="chit" id="wk-preview"></pre></section>' +
+      '<div class="bottom-bar"><button type="button" class="btn btn-main" id="wk-check">CHECK WITH MANDOR<small>Semak dengan mandor</small></button></div>';
+    wireTop();
+    wireJobs(jobs);
+    $('#wk-check').onclick = function () { check(jobs); };
+    refresh(jobs);
+  }
+
+  function jobCard(j) {
+    var k = kind(j.task), sec = EA.lists.sectionOf(j.task), st = draft.status[j.key] || { done: '', reason: '' };
+    var lotsText = j.lots.length ? 'Petak ' + j.lots.join(', ') + ' · ' + jobTotals(j).planHa.toFixed(2) + ' Ha' : '';
+    var lines = j.people.map(function (w) {
+      var wl = draft.lines[w] || [];
+      var rows = k === 'ticket' ? '<span class="hint">Ikut tiket kilang · from the mill ticket</span>' :
+        wl.map(function (l, i) {
+          var lotSel = j.lots.length > 1 ? '<select class="text-input" data-w="' + w + '" data-i="' + i + '" data-f="lot"><option value="">Petak?</option>' +
+            j.lots.map(function (n) { return '<option' + (n === l.lot ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select>' : (j.lots[0] ? '<span class="mono">' + esc(j.lots[0]) + '</span>' : '');
+          var input = k === 'day'
+            ? '<div class="seg"><button type="button" data-w="' + w + '" data-i="' + i + '" data-day="1" aria-pressed="' + (l.qty === '1') + '">1</button><button type="button" data-w="' + w + '" data-i="' + i + '" data-day="0.5" aria-pressed="' + (l.qty === '0.5') + '">½</button></div> hari'
+            : '<input class="qty" inputmode="decimal" data-w="' + w + '" data-i="' + i + '" data-f="' + (k === 'bunches' ? 'bunches' : 'qty') + '" value="' + esc(k === 'bunches' ? l.bunches : l.qty) + '" placeholder="0"> ' + esc(unitLabel(j.task));
+          return '<div class="wline">' + lotSel + input + (i > 0 ? '<button type="button" class="link-btn" data-w="' + w + '" data-del="' + i + '">buang</button>' : '') + '</div>';
+        }).join('') + (j.lots.length > 1 && k !== 'day' ? '<button type="button" class="link-btn" data-w="' + w + '" data-add="1">+ petak lain · another lot</button>' : '');
+      return '<div class="wrow"><div class="who-w"><b>' + esc(w) + '</b><span class="en">' + esc(person(w)) + '</span></div><div></div><div class="job" style="display:block">' + rows + '</div></div>';
+    }).join('');
+    lines = j.mandors.map(function (m) {
+      return '<div class="wrow"><div class="who-w"><b>' + esc(m) + '</b><span class="en">' + esc(person(m)) + ' · Mandor · ikut kumpulan · goes by the gang</span></div><div></div></div>';
+    }).join('') + lines;
+    return '<section class="card" data-job="' + j.key + '"><h2>' + esc(sec.code + '. ' + jobName(j.task)) + (j.block ? ' · Blok ' + esc(j.block) : '') + '</h2>' +
+      '<p class="hint">' + esc(j.task + ' · ' + task(j.task).en) + (lotsText ? ' · ' + esc(lotsText) : '') + (j.mandor ? ' · Mandor ' + esc(person(j.mandor)) : '') + '</p>' +
+      (k !== 'ticket' && k !== 'day' ? '<div class="wline"><span class="hint">Isi sama untuk semua yang kosong · Fill the same for everyone empty:</span><input class="qty" inputmode="decimal" data-fill="' + j.key + '" placeholder="0"> ' + esc(unitLabel(j.task)) + '<button type="button" class="btn btn-ghost" data-fillgo="' + j.key + '">FILL<small>Isi</small></button></div>' : '') +
+      '<div class="rows">' + lines + '</div>' +
+      '<p class="hint" data-tot="' + j.key + '"></p><div data-flags="' + j.key + '"></div>' +
+      '<div class="field"><span class="inline"><span class="bm">Kerja ini</span> · <span class="en">This job</span></span>' +
+        '<div class="seg"><button type="button" data-st="' + j.key + '" data-v="Y" aria-pressed="' + (st.done === 'Y') + '" style="min-width:110px">SIAP · Done</button>' +
+        '<button type="button" data-st="' + j.key + '" data-v="N" aria-pressed="' + (st.done === 'N') + '" style="min-width:140px">BELUM SIAP · Not done</button></div></div>' +
+      '<div class="field" data-reasonbox="' + j.key + '"' + (st.done === 'N' ? '' : ' hidden') + '><label><span class="bm">Sebab & tindakan</span><span class="en">Why, and what will be done (counter-measure)</span></label>' +
+        '<textarea class="text-input" rows="2" data-reason="' + j.key + '" placeholder="cth: hujan 2 petang; sambung esok dengan 2 orang lagi">' + esc(st.reason) + '</textarea></div>' +
+      '</section>';
+  }
+
+  function wireTop() {
+    $('#wk-back').onclick = function () { location.hash = ''; };
+    var sel = $('#wk-chit');
+    if (sel) sel.onchange = function () { EA.local.set('fh.workchit', this.value); render(el, ctx); };
+    var fix = $('#wk-fix');
+    if (fix) fix.onclick = function () {
+      var s = savedFor(chit.chit);
+      draft = { chit: chit.chit, lines: JSON.parse(JSON.stringify(s.lines)), status: JSON.parse(JSON.stringify(s.status)), checker: s.checker, replacing: s.chit };
+      keepDraft(); render(el, ctx);
+    };
+    var view = $('#wk-view');
+    if (view) view.onclick = function () { showReport(savedFor(chit.chit)); };
+  }
+
+  function wireJobs(jobs) {
+    var jobOfW = {};
+    jobs.forEach(function (j) { j.people.forEach(function (w) { jobOfW[w] = j; }); });
+    el.querySelectorAll('[data-f]').forEach(function (inp) {
+      var ev = inp.tagName === 'SELECT' ? 'onchange' : 'oninput';
+      inp[ev] = function () {
+        var l = draft.lines[inp.dataset.w][Number(inp.dataset.i)];
+        l[inp.dataset.f] = inp.dataset.f === 'lot' ? inp.value : inp.value.replace(/[^\d.,]/g, '');
+        keepDraft(); refresh(jobs);
+      };
+    });
+    el.querySelectorAll('[data-day]').forEach(function (b) {
+      b.onclick = function () {
+        draft.lines[b.dataset.w][Number(b.dataset.i)].qty = b.dataset.day;
+        b.parentNode.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', x === b); });
+        keepDraft(); refresh(jobs);
+      };
+    });
+    el.querySelectorAll('[data-add]').forEach(function (b) {
+      b.onclick = function () { draft.lines[b.dataset.w].push({ lot: '', qty: '', bunches: '' }); keepDraft(); render(el, ctx); };
+    });
+    el.querySelectorAll('[data-del]').forEach(function (b) {
+      b.onclick = function () { draft.lines[b.dataset.w].splice(Number(b.dataset.del), 1); keepDraft(); render(el, ctx); };
+    });
+    el.querySelectorAll('[data-fillgo]').forEach(function (b) {
+      b.onclick = function () {
+        var key = b.dataset.fillgo, v = el.querySelector('[data-fill="' + key + '"]').value.replace(/[^\d.,]/g, '');
+        if (!v) return;
+        var j = jobs.find(function (x) { return x.key === key; }), f = kind(j.task) === 'bunches' ? 'bunches' : 'qty';
+        j.people.forEach(function (w) { draft.lines[w].forEach(function (l) { if (!l[f]) l[f] = v; }); });
+        keepDraft(); render(el, ctx);
+      };
+    });
+    el.querySelectorAll('[data-st]').forEach(function (b) {
+      b.onclick = function () {
+        var key = b.dataset.st;
+        draft.status[key] = draft.status[key] || { done: '', reason: '' };
+        draft.status[key].done = b.dataset.v;
+        b.parentNode.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', x === b); });
+        el.querySelector('[data-reasonbox="' + key + '"]').hidden = b.dataset.v !== 'N';
+        keepDraft(); refresh(jobs);
+      };
+    });
+    el.querySelectorAll('[data-reason]').forEach(function (t) {
+      t.oninput = function () { draft.status[t.dataset.reason].reason = t.value; keepDraft(); refresh(jobs); };
+    });
+  }
+
+  function refresh(jobs) {
+    jobs.forEach(function (j) {
+      var t = jobTotals(j), k = kind(j.task);
+      var line = k === 'bunches' ? j.people.length + ' orang · ' + t.bunches + ' tandan · purata ' + (j.people.length ? Math.round(t.bunches / j.people.length) : 0) + ' seorang'
+        : k === 'day' ? j.people.length + ' orang · ' + t.qty + ' hari'
+        : k === 'ticket' ? j.people.length + ' orang · tan ikut tiket kilang'
+        : j.people.length + ' orang · ' + t.qty + ' ' + unitLabel(j.task) + (task(j.task).unit === 'Ha' && t.planHa ? ' daripada ' + t.planHa.toFixed(2) + ' Ha dirancang' : '');
+      var tot = el.querySelector('[data-tot="' + j.key + '"]'); if (tot) tot.textContent = 'Jumlah · Total: ' + line;
+      var fl = el.querySelector('[data-flags="' + j.key + '"]');
+      if (fl) fl.innerHTML = t.flags.map(function (f) { return '<p class="flag' + (f.bad ? ' bad' : '') + '">' + esc(f.text) + '</p>'; }).join('');
+    });
+    var pv = $('#wk-preview'); if (pv) pv.textContent = reportText(buildRecord('(belum disimpan)', EA.ui.hhmm(new Date()), draft.checker));
+  }
+
+  // ---------- check, confirm, save ----------
+  function problems(jobs) {
+    var p = [];
+    jobs.forEach(function (j) {
+      var k = kind(j.task), st = draft.status[j.key] || {};
+      if (k !== 'ticket') {
+        var empty = j.people.filter(function (w) {
+          var ls = draft.lines[w] || [];
+          return !ls.length || ls.some(function (l) { return (j.lots.length > 1 && !l.lot) || !(num(k === 'bunches' ? l.bunches : l.qty) > 0); });
+        });
+        if (empty.length) p.push([shortName(j.task) + (j.block ? ' Blk ' + j.block : '') + ': belum lengkap untuk ' + empty.join(', '), 'Quantity or lot missing']);
+      }
+      if (!st.done) p.push([shortName(j.task) + (j.block ? ' Blk ' + j.block : '') + ': pilih SIAP atau BELUM SIAP', 'Mark the job done or not done']);
+      if (st.done === 'N' && String(st.reason || '').trim().length < 5) p.push([shortName(j.task) + ': tulis sebab dan tindakan', 'Write why and what will be done']);
+
+    });
+    return p;
+  }
+
+  function check(jobs) {
+    var p = problems(jobs);
+    if (p.length) {
+      ui().openSheet('<h2 id="sheet-title"><span class="bm">Belum lengkap</span><span class="en">Not complete yet</span></h2>' +
+        p.map(function (x) { return '<p class="msg"><span class="bm">' + esc(x[0]) + '</span><span class="en">' + esc(x[1]) + '</span></p>'; }).join('') +
+        '<div class="actions"><button class="btn btn-main" type="button" id="wp-ok">OK<small>Betulkan</small></button></div>',
+        function (s) { s.querySelector('#wp-ok').onclick = ui().closeSheet; });
+      return;
+    }
+    var mandors = EA.lists.mandorsFor(ctx.estate);
+    var red = [];
+    jobs.forEach(function (j) { jobTotals(j).flags.forEach(function (f) { if (f.bad) red.push(f.text); }); });
+    ui().openSheet('<h2 id="sheet-title"><span class="bm">Mandor, semak kerja hari ini</span><span class="en">Mandor, check today\'s work on this phone</span></h2>' +
+      (red.length ? '<div class="msg"><span class="bm">Perhatian: ' + esc(red.join('; ')) + '</span><span class="en">Check these before confirming. They go into the report for HQ to see. If the map size of a lot is wrong, tell HQ.</span></div>' : '') +
+      '<pre class="chit">' + esc(reportText(buildRecord('(belum disimpan)', EA.ui.hhmm(new Date()), draft.checker))) + '</pre>' +
+      '<div class="field"><label for="wc-who"><span class="bm">Mandor yang menyemak</span><span class="en">Mandor who checked</span></label><select id="wc-who" class="text-input">' +
+        mandors.map(function (m) { return '<option value="' + m.id + '"' + (m.id === (draft.checker || chit.checker) ? ' selected' : '') + '>' + esc(m.name) + '</option>'; }).join('') + '</select></div>' +
+      '<div class="actions"><button class="btn btn-ghost" type="button" id="wc-back">BACK<small>Ubah</small></button>' +
+      '<button class="btn btn-ok" type="button" id="wc-ok">CONFIRM<small>Mandor sahkan</small></button></div>',
+      function (s) {
+        s.querySelector('#wc-back').onclick = ui().closeSheet;
+        s.querySelector('#wc-ok').onclick = function () { draft.checker = s.querySelector('#wc-who').value; keepDraft(); ui().closeSheet(); save(jobs); };
+      });
+  }
+
+  // One record of the day's work: lines per person per lot, and one line per job.
+  function buildRecord(label, at, checker) {
+    var jobs = jobsOf(chit), lines = [], jobLines = [];
+    jobs.forEach(function (j) {
+      var k = kind(j.task), t = jobTotals(j), st = draft.status[j.key] || {};
+      j.people.forEach(function (w) {
+        if (k === 'ticket') { lines.push({ worker_id: w, task_code: j.task, block: j.block, lot: j.lots.join(' '), qty: '', unit: 'MT', bunches: '' }); return; }
+        (draft.lines[w] || []).forEach(function (l) {
+          lines.push({ worker_id: w, task_code: j.task, block: j.block, lot: l.lot || j.lots[0] || '', qty: k === 'bunches' ? '' : String(num(l.qty)),
+                       unit: k === 'bunches' ? 'bunch' : (task(j.task).unit), bunches: k === 'bunches' ? String(num(l.bunches)) : '' });
+        });
+      });
+      jobLines.push({ key: j.key, task_code: j.task, block: j.block, lots: j.lots.join(' '), workers: j.people.length,
+                      qty: k === 'bunches' || k === 'ticket' ? '' : String(t.qty), unit: k === 'bunches' ? 'bunch' : task(j.task).unit,
+                      bunches: k === 'bunches' ? String(t.bunches) : '', plan_ha: t.planHa ? String(t.planHa) : '',
+                      status: st.done === 'Y' ? 'done' : st.done === 'N' ? 'not_done' : '', reason: st.reason || '',
+                      flags: t.flags.map(function (f) { return f.text; }).join('; ') });
+    });
+    return { chit: chit.chit, date: chit.date, estate: chit.estate, label: label, at: at, checker: checker,
+             lines: lines, jobs: jobLines, keyedName: ctx.user.name };
+  }
+
+  function save(jobs) {
+    var at = EA.ui.hhmm(new Date());
+    var old = draft.replacing ? savedFor(draft.replacing) : null;
+    var rec = buildRecord('', at, draft.checker);
+    var stamp = EA.today() + ' ' + at;
+    try {
+      var oldLines = {};
+      if (old) old.rec.lines.forEach(function (l) { oldLines[l.worker_id + '|' + l.task_code + '|' + l.lot] = l; });
+      rec.lines.forEach(function (l) {
+        var key = l.worker_id + '|' + l.task_code + '|' + l.lot, o = oldLines[key];
+        if (o && o.qty === l.qty && o.bunches === l.bunches) { l.id = o.id; delete oldLines[key]; return; }
+        l.id = EA.save(TAB, ROOM, ctx.estate, { date: rec.date, chit: rec.chit, worker_id: l.worker_id, task_code: l.task_code, block: l.block, lot: l.lot,
+          qty: l.qty, unit: l.unit, bunches: l.bunches, confirmed_by: rec.checker, confirmed_at: stamp, note: '' }, o ? o.id : '').id;
+        delete oldLines[key];
+      });
+      Object.keys(oldLines).forEach(function (key) {
+        var o = oldLines[key];
+        EA.save(TAB, ROOM, ctx.estate, { date: rec.date, chit: rec.chit, worker_id: o.worker_id, task_code: o.task_code, block: o.block, lot: o.lot,
+          qty: o.qty, unit: o.unit, bunches: o.bunches, confirmed_by: rec.checker, confirmed_at: stamp, note: 'removed in correction' }, o.id, 'removed');
+      });
+      var oldJobs = {};
+      if (old) old.rec.jobs.forEach(function (j) { oldJobs[j.task_code + '|' + j.block + '|' + j.lots] = j; });
+      rec.jobs.forEach(function (j) {
+        var o = oldJobs[j.task_code + '|' + j.block + '|' + j.lots];
+        if (o && o.qty === j.qty && o.bunches === j.bunches && o.status === j.status && o.reason === j.reason && o.workers === j.workers) { j.id = o.id; return; }
+        j.id = EA.save(TAB_JOB, ROOM, ctx.estate, { date: rec.date, chit: rec.chit, task_code: j.task_code, block: j.block, lots: j.lots, workers: j.workers,
+          qty: j.qty, unit: j.unit, bunches: j.bunches, plan_ha: j.plan_ha, job_status: j.status, reason: j.reason, flags: j.flags,
+          confirmed_by: rec.checker, confirmed_at: stamp }, o ? o.id : '').id;
+      });
+    } catch (e) { ui().toast('Tidak dapat simpan: ' + e.message + ' · Could not save', 'bad'); return; }
+    keepSaved({ chit: rec.chit, date: rec.date, estate: rec.estate, rec: rec, lines: draft.lines, status: draft.status, checker: draft.checker, rev: old ? (old.rev || 1) + 1 : 1 });
+    dropDraft();
+    ui().toast('Kerja harian disimpan · Day\'s work saved');
+    if (navigator.onLine && EA.sendLink()) EA.send();
+    render(el, ctx);
+    showReport(savedFor(rec.chit));
+  }
+
+  // ---------- the evening report ----------
+  function reportText(rec, rev) {
+    var d = new Date(rec.date + 'T00:00:00'), est = EA.lists.estate(rec.estate);
+    var L = ['*KERJA HARIAN ' + (est ? est.company + ' ' : '') + rec.estate + '*' + (rev > 1 ? ' _(dibetulkan · corrected)_' : ''),
+             ui().dayBm[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear()];
+    var lastSec = '';
+    rec.jobs.forEach(function (j) {
+      var sec = EA.lists.sectionOf(j.task_code);
+      if (sec.code !== lastSec) { L.push(''); L.push(sec.code + '. ' + sec.en); lastSec = sec.code; }
+      var k = kind(j.task_code), what;
+      if (k === 'bunches') what = j.bunches + ' tandan (purata ' + Math.round(num(j.bunches) / (j.workers || 1)) + ')';
+      else if (k === 'ticket') what = 'tan ikut tiket';
+      else if (k === 'day') what = j.qty + ' hari';
+      else what = j.qty + ' ' + unitLabel(j.task_code) + (j.plan_ha ? ' / ' + num(j.plan_ha).toFixed(2) + ' Ha' : '');
+      L.push('• ' + shortName(j.task_code) + (j.block ? ' Blk ' + j.block : '') + ' — ' + j.workers + ' org — ' + what + ' — ' +
+             (j.status === 'done' ? 'SIAP' : j.status === 'not_done' ? 'BELUM SIAP' : '?'));
+      if (j.status === 'not_done' && j.reason) L.push('   Sebab/tindakan: ' + j.reason);
+      if (j.flags) L.push('   Perhatian: ' + j.flags);
+    });
+    L.push('');
+    L.push('Disediakan: ' + (rec.keyedName || '') + ' · Disemak mandor: ' + person(rec.checker) + ' ' + rec.at);
+    L.push('E-Book ' + rec.chit);
+    return L.join('\n');
+  }
+
+  function savedCard(s) {
+    var ids = s.rec.lines.map(function (l) { return l.id; }).concat(s.rec.jobs.map(function (j) { return j.id; }));
+    var waiting = ids.some(function (i) { return i && EA.isWaiting(i); });
+    var notDone = s.rec.jobs.filter(function (j) { return j.status === 'not_done'; }).length;
+    return '<section class="card" id="wk-saved"><div class="list-line"><div><b>' + esc(niceDate(s.date)) + ' · ' + esc(s.rec.at) + (s.rev > 1 ? ' · dibetulkan' : '') + '</b>' +
+      '<span class="en">' + s.rec.jobs.length + ' kerja · ' + (s.rec.jobs.length - notDone) + ' siap · ' + notDone + ' belum siap</span></div>' +
+      '<div class="acts"><span class="pill ' + (waiting ? 'wait">Menunggu · Waiting' : 'ok">Dihantar · Sent') + '</span>' +
+      '<button type="button" class="btn btn-ghost" id="wk-view">VIEW<small>Lihat</small></button>' +
+      (canKey(ctx.user) ? '<button type="button" class="btn btn-ghost" id="wk-fix">CORRECT<small>Betulkan</small></button>' : '') + '</div></div></section>';
+  }
+
+  function showReport(s) {
+    if (!s) return;
+    var text = reportText(s.rec, s.rev);
+    ui().openSheet('<h2 id="sheet-title"><span class="bm">Laporan petang untuk WhatsApp</span><span class="en">Evening report for WhatsApp</span></h2>' +
+      '<pre class="chit">' + esc(text) + '</pre>' +
+      '<div class="actions"><button class="btn btn-ghost" type="button" id="rp-copy">COPY<small>Salin</small></button>' +
+      '<button class="btn btn-ok" type="button" id="rp-wa">WHATSAPP<small>Hantar ke WhatsApp</small></button></div>' +
+      '<div class="actions"><button class="btn btn-ghost" type="button" id="rp-close">CLOSE<small>Tutup</small></button></div>',
+      function (sh) {
+        sh.querySelector('#rp-close').onclick = ui().closeSheet;
+        sh.querySelector('#rp-copy').onclick = function () { EA.fh.copyText(text); };
+        sh.querySelector('#rp-wa').onclick = function () {
+          if (navigator.share) navigator.share({ text: text }).catch(function () {});
+          else window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener');
+        };
+      });
+  }
+
+  // Refresh the Waiting / Sent mark after sending.
+  document.addEventListener('ea:sync', function () {
+    if (!el || !document.body.contains(el) || el.hidden || !chit) return;
+    var card = el.querySelector('#wk-saved'), s = savedFor(chit.chit);
+    if (card && s) { card.outerHTML = savedCard(s); wireTop(); }
+  });
+
+  EA.fh.work = { render: render, reportText: reportText };
+})();

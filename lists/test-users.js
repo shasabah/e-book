@@ -12,3 +12,7 @@ EA.lists.testUsers = [
   { code: 'T-STR', key: '555555', name: 'Stor Meliau',    role: 'Store',  estates: ['MELU'] },
   { code: 'T-WRK', key: '666666', name: 'Pekerja Durian', role: 'Worker', estates: ['SSGT'] }
 ];
+// People with a given role at an estate (e.g. the mandors of Sugut).
+EA.lists.peopleFor = function (estate, role) {
+  return EA.lists.testUsers.filter(function (u) { return u.role === role && u.estates.indexOf(estate) >= 0; });
+};

@@ -11,6 +11,7 @@
 //       day   = paid per day worked
 //       hour  = paid per machine hour
 //       tier  = paid by steps (e.g. harvest incentive by tonnes)
+// assign: false = not given out at the morning muster (incentives, the muster itself).
 // Pay set per person (monthly basic, grade, allowances) is HR data, kept in
 // the People list, not here.
 window.EA = window.EA || {};
@@ -26,11 +27,11 @@ EA.lists.taskGroups = [
 EA.lists.tasks = [
   // Harvesting
   { code: 'HV01', group: 'HV', bm: 'Tuai BTS',                  en: 'FFB harvesting',                 unit: 'MT',   pay: 'unit' },
-  { code: 'HV02', group: 'HV', bm: 'Insentif tuai (1 sabit)',   en: 'Harvesting incentive (1 sickle)', unit: 'MT',   pay: 'tier' },
+  { code: 'HV02', group: 'HV', bm: 'Insentif tuai (1 sabit)',   en: 'Harvesting incentive (1 sickle)', unit: 'MT',   pay: 'tier', assign: false },
   { code: 'HV07', group: 'HV', bm: 'Cantas',                    en: 'Pruning',                        unit: 'Ha',   pay: 'unit' },
   { code: 'HV04', group: 'HV', bm: 'Pemeriksa BTS',             en: 'FFB checker',                    unit: 'MT',   pay: 'unit' },
-  { code: 'HV05', group: 'HV', bm: 'Insentif penyelia (A)',     en: 'Supervisor incentive (A)',       unit: 'MT',   pay: 'unit' },
-  { code: 'HV06', group: 'HV', bm: 'Insentif penyelia (B)',     en: 'Supervisor incentive (B)',       unit: 'MT',   pay: 'unit' },
+  { code: 'HV05', group: 'HV', bm: 'Insentif penyelia (A)',     en: 'Supervisor incentive (A)',       unit: 'MT',   pay: 'unit', assign: false },
+  { code: 'HV06', group: 'HV', bm: 'Insentif penyelia (B)',     en: 'Supervisor incentive (B)',       unit: 'MT',   pay: 'unit', assign: false },
   // Maintenance
   { code: 'MT01', group: 'MT', bm: 'Tebas',                     en: 'Slashing',                       unit: 'Ha',   pay: 'unit' },
   { code: 'MT02', group: 'MT', bm: 'Cabut menjalar',            en: 'Decreeping',                     unit: 'Ha',   pay: 'unit' },
@@ -57,7 +58,7 @@ EA.lists.tasks = [
   { code: 'MC01', group: 'MC', bm: 'Jam jentolak (JCB)',        en: 'Backhoe (JCB) hours',            unit: 'hour', pay: 'hour' },
   { code: 'MC02', group: 'MC', bm: 'Pemandu traktor harian',    en: 'Tractor driver daily',           unit: 'day',  pay: 'day' },
   // General
-  { code: 'GN01', group: 'GN', bm: 'Hadir muster',              en: 'Muster call',                    unit: 'day',  pay: 'day' }
+  { code: 'GN01', group: 'GN', bm: 'Hadir muster',              en: 'Muster call',                    unit: 'day',  pay: 'day', assign: false }
 ];
 EA.lists.task = function (code) {
   return EA.lists.tasks.find(function (t) { return t.code === code; }) || null;
@@ -68,3 +69,9 @@ EA.lists.workRules = [
   { when: 'sunday',  bm: 'Kerja hari Ahad: lulus Penolong Pengurus',  en: 'Sunday work: approved by the Assistant Manager' },
   { when: 'holiday', bm: 'Kerja cuti umum: lulus Pengurus Besar',      en: 'Public holiday work: approved by the General Manager' }
 ];
+EA.lists.task = function (code) {
+  return EA.lists.tasks.find(function (t) { return t.code === code; }) || null;
+};
+EA.lists.assignable = function () {
+  return EA.lists.tasks.filter(function (t) { return t.assign !== false; });
+};

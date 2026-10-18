@@ -15,3 +15,9 @@ EA.lists.testWorkers = [
   { id: 'W-SSGT-009', name: 'Pekerja Contoh 9', estate: 'SSGT', gang: 'Rawatan · Maintenance' },
   { id: 'W-SSGT-010', name: 'Pekerja Contoh 10', estate: 'SSGT', gang: 'Muat · Loading' }
 ];
+EA.lists.workersFor = function (estate) {
+  return EA.lists.testWorkers.filter(function (w) { return w.estate === estate; });
+};
+EA.lists.worker = function (id) {
+  return EA.lists.testWorkers.find(function (w) { return w.id === id; }) || null;
+};

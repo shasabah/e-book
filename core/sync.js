@@ -88,20 +88,35 @@ window.EA = window.EA || {};
     if (!navigator.onLine) return { error: 'offline' };
     sending = true; changed();
     var sent = 0, err = null;
+    function post(body) {
+      return fetch(link, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(Object.assign({ key: user.key, version: EA.VERSION }, body)) }).then(function (r) { return r.json(); });
+    }
     try {
-      while (q.length) {
-        var item = q[0];
-        var res = await fetch(link, {
-          method: 'POST', credentials: 'omit',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'save', key: user.key, version: EA.VERSION, tab: item.tab, row: item.row })
-        });
-        var j = await res.json();
+      // Everything waiting goes in one trip (up to 50 at a time).
+      var oneByOne = false;
+      while (q.length && !oneByOne) {
+        var chunk = q.slice(0, 50);
+        var j = await post({ action: 'saveBatch', items: chunk.map(function (it) { return { tab: it.tab, row: it.row }; }) });
+        if (j && j.error === 'unknown_action') { oneByOne = true; break; }     // older office script
         if (!j || !j.ok) { err = (j && j.error) || 'refused'; break; }
-        q.shift(); sent++;
-        set(K.queue, q);
-        set(K.lastSent, Date.now());
-        changed();
+        var done = {}, firstErr = null;
+        (j.results || []).forEach(function (r) { if (r.ok) done[r.id] = true; else if (!firstErr) firstErr = r.error; });
+        // Read the list again: something may have been saved while this was sending.
+        var now = get(K.queue, []), before = now.length;
+        q = now.filter(function (it) { return !done[it.row.id]; });
+        sent += before - q.length;
+        set(K.queue, q); set(K.lastSent, Date.now()); changed();
+        if (firstErr) { err = firstErr; break; }
+        if (before === q.length) { err = 'refused'; break; }
+      }
+      // Older office script: one entry per trip, as before.
+      while (oneByOne && q.length) {
+        var item = q[0];
+        var r1 = await post({ action: 'save', tab: item.tab, row: item.row });
+        if (!r1 || !r1.ok) { err = (r1 && r1.error) || 'refused'; break; }
+        q = get(K.queue, []).filter(function (it) { return it.row.id !== item.row.id; }); sent++;
+        set(K.queue, q); set(K.lastSent, Date.now()); changed();
       }
     } catch (e) { err = 'network'; }
     sending = false; changed();

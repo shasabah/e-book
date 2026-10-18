@@ -196,6 +196,9 @@
 
       '<section class="card" aria-labelledby="fh-s1"><h2 id="fh-s1"><span class="step">1</span><span class="inline"><span class="bm">Kerja hari ini</span> · <span class="en">Today\'s jobs</span></span></h2>' +
       '<p class="hint">' + esc(ui().dayBm[d.getDay()] + ', ' + d.getDate() + ' ' + ui().monBm[d.getMonth()] + ' ' + d.getFullYear()) + ' · ' + esc(ctx.estate) + '</p>' +
+      (lastChit() && !draft.jobs.length ? '<div class="list-line copy-last"><div><b>Sama seperti chit ' + esc(niceDate(lastChit().date)) + '?</b>' +
+        '<span class="en">Copy its jobs and who was on each, then change only what is different. Sick, leave and absent are not copied.</span></div>' +
+        '<div class="acts"><button type="button" class="btn btn-ok" id="fh-copy">SAME AS LAST<small>Salin chit lepas</small></button></div></div>' : '') +
       '<div id="fh-jobs"></div>' +
       '<button type="button" class="btn btn-ghost" id="fh-addjob">+ ADD JOB<small>Tambah kerja</small></button>' +
       '</section>' +
@@ -221,6 +224,7 @@
       todayCard();
 
     $('#fh-addjob').onclick = function () { editJob(null); };
+    if ($('#fh-copy')) $('#fh-copy').onclick = copyLast;
     $('#fh-rain').oninput = function () { draft.rain_mm = this.value.replace(/[^\d.]/g, ''); keepDraft(); drawRain(); };
     $('#fh-raint').oninput = function () { draft.rain_time = this.value; keepDraft(); };
     $('#fh-check').onclick = check;
@@ -229,6 +233,26 @@
   }
 
   function drawAll() { drawJobs(); drawRows(); drawRain(); drawTable(); }
+  function niceDate(iso) { var d = new Date(iso + 'T00:00:00'); return ui().dayBm[d.getDay()] + ' ' + d.getDate() + ' ' + ui().monBm[d.getMonth()]; }
+  // The latest chit of an earlier day on this phone.
+  function lastChit() {
+    var t = EA.today();
+    return chits().filter(function (c) { return c.estate === ctx.estate && c.date < t; })
+      .sort(function (a, b) { return (a.date + a.confirmedAt) < (b.date + b.confirmedAt) ? 1 : -1; })[0] || null;
+  }
+  function copyLast() {
+    var c = lastChit(); if (!c) return;
+    draft.jobs = []; draft.marks = {}; draft.jobOf = {}; draft.nextJob = 1;
+    var taken = onOtherChit();
+    c.rows.forEach(function (r) {
+      if (r.status === 'removed' || r.muster !== 'H' || taken[r.worker_id] || !EA.lists.worker(r.worker_id)) return;
+      var j = draft.jobs.find(function (x) { return x.task === r.task_code && x.block === r.block && x.lots.join(' ') === r.lots; });
+      if (!j) { j = { key: 'j' + (draft.nextJob++), task: r.task_code, block: r.block, lots: r.lots ? r.lots.split(' ') : [], mandor: r.mandor }; draft.jobs.push(j); }
+      draft.marks[r.worker_id] = 'H'; draft.jobOf[r.worker_id] = j.key;
+    });
+    keepDraft(); render(el, ctx);
+    ui().toast('Disalin. Ubah petak dan yang berbeza · Copied. Change the lots and anything different');
+  }
   function drawRain() { $('#fh-rainmtd').textContent = 'Bulan ini · Month to date: ' + rainMonth(EA.today(), draft.rain_mm).toFixed(2) + ' mm (dari chit di telefon ini · from chits on this phone)'; }
   function draftRows() {
     var rows = [];
@@ -422,18 +446,50 @@
     }
     var left = unmarked();
     if (left.length) {
-      ui().openSheet('<h2 id="sheet-title"><span class="bm">' + left.length + ' orang belum ditanda</span><span class="en">' + left.length + ' people not marked yet</span></h2>' +
-        '<p><span class="bm" style="font-weight:400">Chit perlu kira semua orang ladang, bekerja atau tidak: ' + esc(left.map(function (w) { return w.id; }).join(', ')) + '</span>' +
-        '<span class="en">The chit counts everyone on the estate, working or not.</span></p>' +
-        '<div class="actions"><button class="btn btn-main" type="button" id="um-back">MARK THEM<small>Tandakan mereka</small></button></div>' +
-        '<div class="actions"><button class="btn btn-ghost" type="button" id="um-go">CONTINUE ANYWAY<small>Teruskan (mereka dalam chit lain)</small></button></div>',
-        function (s) {
-          s.querySelector('#um-back').onclick = function () { ui().closeSheet(); var r = el.querySelector('#fh-rows'); if (r) r.scrollIntoView({ behavior: 'smooth' }); };
-          s.querySelector('#um-go').onclick = function () { ui().closeSheet(); confirmSheet(); };
-        });
+      leftoverSheet(left);
       return;
     }
     confirmSheet();
+  }
+
+  // Mark the people still left, right here: S / C / T each, or all absent at once.
+  function leftoverSheet(left) {
+    ui().openSheet('<h2 id="sheet-title"><span class="bm">' + left.length + ' orang belum ditanda</span><span class="en">' + left.length + ' people not marked yet. The chit counts everyone, working or not.</span></h2>' +
+      '<div class="rows">' + left.map(function (w) {
+        return '<div class="wrow"><div class="who-w"><b>' + esc(w.id) + '</b><span class="en">' + esc(w.name) + ' · ' + (w.mdr ? 'Mandor' : esc(w.gang)) + '</span></div>' +
+          '<div class="seg" role="group" aria-label="' + esc(w.id) + '">' + ['S', 'C', 'T'].map(function (k) {
+            return '<button type="button" data-lw="' + w.id + '" data-k="' + k + '" aria-pressed="false" title="' + MARKS[k][0] + ' · ' + MARKS[k][1] + '">' + k + '</button>';
+          }).join('') + '</div></div>';
+      }).join('') + '</div>' +
+      '<p class="hint">S Sakit · sick &nbsp; C Cuti · leave &nbsp; T Tak hadir · absent. Yang bekerja: tekan BACK dan beri kerja. · Anyone who worked: tap BACK and give them a job.</p>' +
+      '<div class="actions"><button class="btn btn-wait" type="button" id="lo-all">REST ABSENT<small>Baki semua tak hadir</small></button>' +
+      '<button class="btn btn-ok" type="button" id="lo-next">NEXT<small>Seterusnya</small></button></div>' +
+      '<div class="actions"><button class="btn btn-ghost" type="button" id="lo-back">BACK<small>Kembali ke senarai</small></button></div>',
+      function (s) {
+        var pick = {};
+        s.querySelectorAll('[data-lw]').forEach(function (b) {
+          b.onclick = function () {
+            var w = b.dataset.lw, k = b.dataset.k;
+            pick[w] = pick[w] === k ? '' : k;
+            s.querySelectorAll('[data-lw="' + w + '"]').forEach(function (x) { x.setAttribute('aria-pressed', x.dataset.k === pick[w]); });
+          };
+        });
+        function apply() { Object.keys(pick).forEach(function (w) { if (pick[w]) draft.marks[w] = pick[w]; }); keepDraft(); drawAll(); }
+        s.querySelector('#lo-all').onclick = function () {
+          left.forEach(function (w) { if (!pick[w.id]) { pick[w.id] = 'T'; s.querySelectorAll('[data-lw="' + w.id + '"]').forEach(function (x) { x.setAttribute('aria-pressed', x.dataset.k === 'T'); }); } });
+        };
+        s.querySelector('#lo-back').onclick = function () { apply(); ui().closeSheet(); var r = el.querySelector('#fh-rows'); if (r) r.scrollIntoView({ behavior: 'smooth' }); };
+        s.querySelector('#lo-next').onclick = function () {
+          apply(); ui().closeSheet();
+          var still = unmarked();
+          if (!still.length) { confirmSheet(); return; }
+          ui().openSheet('<h2 id="sheet-title"><span class="bm">Masih ' + still.length + ' orang belum ditanda</span><span class="en">Still ' + still.length + ' not marked</span></h2>' +
+            '<p><span class="bm" style="font-weight:400">' + esc(still.map(function (w) { return w.id; }).join(', ')) + '</span><span class="en">Continue only if they are on another chit.</span></p>' +
+            '<div class="actions"><button class="btn btn-ghost" type="button" id="st-back">BACK<small>Kembali</small></button>' +
+            '<button class="btn btn-ok" type="button" id="st-go">CONTINUE<small>Teruskan</small></button></div>',
+            function (s2) { s2.querySelector('#st-back').onclick = function () { ui().closeSheet(); leftoverSheet(still); }; s2.querySelector('#st-go').onclick = function () { ui().closeSheet(); confirmSheet(); }; });
+        };
+      });
   }
 
   function confirmSheet() {

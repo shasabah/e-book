@@ -23,3 +23,5 @@ One line per release: date, version, what changed.
 - 2026-10-18 — v2 — Fix: anything marked hidden now stays hidden (the empty message panel was covering the page after login, blocking taps on room tiles).
 - 2026-10-18 — v2 — Google script: FH_MUSTER tab made by setupTestCopy; lot numbers like 1-5 kept as text (the sheet would turn them into dates).
 - 2026-10-18 — v2 — Google script: block codes like 01 keep their leading zero (stored as text). Deployed as version 3 on the same link.
+- 2026-10-18 — v3 (test copy) — Fix: today's chits now change from Waiting to Sent as soon as sending finishes.
+- 2026-10-18 — v3 — Fix: two phones with the same phone code no longer lose entries. The office refuses an entry whose id is already used by a different entry (error id_clash) and the phone shows "This phone code is already used by another phone"; the entries stay waiting on the phone. Found when Yu Chen's test chit (phone P99) clashed with Claude's test rows (also P99): workers 1–4 of that chit were dropped. Google script deployed as version 4.

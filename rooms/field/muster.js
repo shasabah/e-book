@@ -869,7 +869,7 @@
     var mdrs = EA.lists.mandorsFor(c.estate).filter(function (m) { return c.rows.some(function (r) { return r.worker_id === m.id && r.muster === 'H'; }); });
     if (mdrs.length) L.push('Mandor bertugas: ' + mdrs.map(function (m) { return m.name; }).join(', '));
     L.push('Disediakan: ' + (c.keyedName || c.keyedBy) + ' · Disemak mandor: ' + person(c.checker) + ' ' + c.confirmedAt);
-    L.push('E-Book ' + c.chit);
+    L.push('E-Book ' + (EA.RELEASE || '') + ' · ' + c.chit);
     return L.join('\n');
   }
 

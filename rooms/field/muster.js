@@ -16,7 +16,7 @@
   window.EA = window.EA || {};
   EA.roomViews = EA.roomViews || {};
 
-  var TAB = 'FH_MUSTER', TAB_CHIT = 'FH_CHIT', ROOM = 'FH';
+  var TAB = 'FH_MUSTER', TAB_CHIT = 'FH_CHIT', TAB_ALERT = 'FH_ALERT', ROOM = 'FH';
   var K = { draft: 'fh.draft2', chits: 'fh.chits2', chitNo: 'fh.chitNo' };
   var MARKS = { H: ['Hadir', 'Present'], S: ['Sakit', 'Sick'], C: ['Cuti', 'On leave'], T: ['Tak hadir', 'Absent'],
                 L: ['Hari Buruh', 'Labour day'], X: ['Pindah', 'Transfer'] };
@@ -31,7 +31,7 @@
 
   // ---------- phone memory ----------
   function blankDraft() {
-    return { date: EA.today(), estate: ctx.estate, jobs: [], marks: {}, jobOf: {}, rain_mm: '', rain_time: '', checker: '', replacing: '', nextJob: 1 };
+    return { date: EA.today(), estate: ctx.estate, jobs: [], marks: {}, jobOf: {}, rain_mm: '', rain_time: '', checker: '', replacing: '', nextJob: 1, alertNotes: {} };
   }
   function loadDraft() {
     var all = EA.local.get(K.draft, {});
@@ -318,7 +318,68 @@
     var estate = card.dataset.estate;
     card.outerHTML = backlogCard(estate);
     wireBacklog(document, estate);
+    var slot = document.getElementById('fh-alert-slot');
+    if (slot && el && ctx && draft) { slot.innerHTML = alertSection(); wireAlerts(); }
   });
+
+  // ---------- alerts (Amaran): backlog the Assistant Manager must look into ----------
+  // Every morning the chit lists what is wrong with yesterday's crop: bunches still in
+  // the field, bunches waiting at the ramp from before yesterday, and lots where the
+  // mandor's and the loader's counts differ. The staff says what happened for each;
+  // it goes on the chit and in the WhatsApp text for the Assistant Manager to follow up.
+  function alertsFrom(b) {
+    var out = [], today = EA.today();
+    if (!b) return out;
+    var yday = new Date(today + 'T00:00:00Z'); yday.setUTCDate(yday.getUTCDate() - 1); yday = yday.toISOString().slice(0, 10);
+    (b.field || []).forEach(function (x) {
+      if (x.since && x.since >= today) return;
+      out.push({ key: 'F:' + x.lot, kind: 'field', block: x.block, lot: x.lot, detail: x.bunches + ' tandan sejak ' + shortDate(x.since),
+                 bm: 'Buah tertinggal di ladang, petak ' + x.lot + ': ' + x.bunches + ' tandan sejak ' + shortDate(x.since), en: 'Bunches left in the field' });
+    });
+    (b.checks || []).forEach(function (x) {
+      out.push({ key: 'K:' + x.lot + ':' + (x.cleared || 'open'), kind: 'count', block: x.block, lot: x.lot, detail: checkText(x),
+                 bm: 'Kiraan tidak sama, ' + checkText(x), en: 'Mandor and loader counts differ' });
+    });
+    if (b.ramp && b.ramp.bunches && b.ramp.since && b.ramp.since < yday) {
+      out.push({ key: 'R:' + b.ramp.since, kind: 'ramp', block: '', lot: '', detail: b.ramp.bunches + ' tandan, ' + rampText(b.ramp),
+                 bm: 'Buah lama di ramp: ' + b.ramp.bunches + ' tandan (' + rampText(b.ramp) + ')', en: 'Bunches waiting at the ramp for more than a day' });
+    }
+    return out;
+  }
+  function alertNote(key) {
+    if (draft.alertNotes[key] != null) return { note: draft.alertNotes[key], carried: false };
+    var prev = chits().filter(function (c) { return c.estate === ctx.estate && c.date < EA.today(); })
+      .sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+    for (var i = 0; i < prev.length; i++) {
+      var a = (prev[i].alerts || []).find(function (x) { return x.key === key; });
+      if (a) return { note: a.note, carried: true, date: prev[i].date };
+    }
+    return { note: '', carried: false };
+  }
+  function alertSection() {
+    var list = alertsFrom(getBacklog(ctx.estate));
+    if (!list.length) return '';
+    return '<section class="card alert-card" id="fh-alerts" aria-labelledby="fh-s0"><h2 id="fh-s0"><span class="step">!</span><span class="inline"><span class="bm">Amaran</span> · <span class="en">Alerts for the Assistant Manager</span></span></h2>' +
+      '<p class="hint">Tulis apa berlaku dan tindakan. Masuk chit dan WhatsApp untuk Penolong Pengurus. · Say what happened and the action. It goes on the chit and to WhatsApp for the Assistant Manager.</p>' +
+      list.map(function (a) {
+        var n = alertNote(a.key);
+        return '<div class="field"><label for="al-' + esc(a.key) + '"><span class="bm">' + esc(a.bm) + '</span><span class="en">' + esc(a.en) +
+          (n.carried ? ' · dari chit ' + esc(shortDate(n.date)) + ', tukar jika ada berita baru · from an earlier chit, change if there is news' : '') + '</span></label>' +
+          '<input id="al-' + esc(a.key) + '" class="text-input" data-alert="' + esc(a.key) + '" value="' + esc(n.note) + '" placeholder="Apa berlaku / tindakan · What happened / action"></div>';
+      }).join('') + '</section>';
+  }
+  function wireAlerts() {
+    el.querySelectorAll('#fh-alerts [data-alert]').forEach(function (i) {
+      if (draft.alertNotes[i.dataset.alert] == null && i.value) { draft.alertNotes[i.dataset.alert] = i.value; }
+      i.oninput = function () { draft.alertNotes[i.dataset.alert] = i.value; keepDraft(); };
+    });
+    keepDraft();
+  }
+  function chitAlerts() {
+    return alertsFrom(getBacklog(ctx.estate)).map(function (a) {
+      return { key: a.key, kind: a.kind, block: a.block, lot: a.lot, detail: a.detail, text: a.bm, note: String(alertNote(a.key).note || '').trim() };
+    });
+  }
 
   function render(container, c) {
     if (c.user.role === 'Worker' || c.screen === 'collect') return EA.fh.collect.render(container, c);
@@ -353,7 +414,7 @@
       (d.getDay() === 0 ? '<p class="warn"><span class="bm">Hari Ahad: kerja perlu kelulusan Penolong Pengurus sebelum dikira untuk gaji.</span><span class="en">Sunday: work needs the Assistant Manager\'s approval before it counts for pay.</span></p>' : '') +
       (draft.replacing ? '<p class="warn"><span class="bm">Membetulkan chit ' + esc(draft.replacing) + '. Chit lama kekal; yang baru menggantikannya.</span><span class="en">Correcting chit ' + esc(draft.replacing) + '. The old one stays on record; this one replaces it.</span></p>' : '') +
 
-      backlogCard(ctx.estate) +
+      backlogCard(ctx.estate) + '<div id="fh-alert-slot">' + alertSection() + '</div>' +
       '<section class="card" aria-labelledby="fh-s1"><h2 id="fh-s1"><span class="step">1</span><span class="inline"><span class="bm">Kerja hari ini</span> · <span class="en">Today\'s jobs</span></span></h2>' +
       '<p class="hint">' + esc(ui().dayBm[d.getDay()] + ', ' + d.getDate() + ' ' + ui().monBm[d.getMonth()] + ' ' + d.getFullYear()) + ' · ' + esc(ctx.estate) + '</p>' +
       (lastChit() && !draft.jobs.length ? '<div class="list-line copy-last"><div><b>Sama seperti chit ' + esc(niceDate(lastChit().date)) + '?</b>' +
@@ -388,6 +449,7 @@
     $('#fh-rain').oninput = function () { draft.rain_mm = this.value.replace(/[^\d.]/g, ''); keepDraft(); drawRain(); };
     $('#fh-raint').oninput = function () { draft.rain_time = this.value; keepDraft(); };
     $('#fh-check').onclick = check;
+    wireAlerts();
     drawAll();
     wireCommon(); wireBacklog(el, ctx.estate); refreshBacklog(ctx.estate);
   }
@@ -587,6 +649,9 @@
     var taken = onOtherChit();
     var twice = rows.filter(function (r) { return taken[r.worker_id]; }).map(function (r) { return r.worker_id; });
     if (twice.length) p.push(['Sudah dalam chit lain: ' + twice.join(', '), 'Already on another chit: ' + twice.join(', ')]);
+    if (!draft.alertNotes) draft.alertNotes = {};
+    var noNote = chitAlerts().filter(function (a) { return !a.note; });
+    if (noNote.length) p.push(['Tulis apa berlaku untuk setiap amaran (' + noNote.length + ' belum).', 'Say what happened for each alert (' + noNote.length + ' not done).']);
     if (draft.rain_mm === '') p.push(['Isi hujan semalam (0 jika tiada hujan).', 'Fill in the rain (0 if no rain).']);
     return p;
   }
@@ -672,7 +737,7 @@
   function buildChit(chitId, confirmedAt, checker) {
     return { chit: chitId, date: EA.today(), estate: ctx.estate, rows: draftRows(), jobs: JSON.parse(JSON.stringify(draft.jobs)),
              rain_mm: draft.rain_mm, rain_time: draft.rain_time, checker: checker, confirmedAt: confirmedAt,
-             backlog: getBacklog(ctx.estate),
+             backlog: getBacklog(ctx.estate), alerts: chitAlerts(),
              keyedBy: ctx.user.code, keyedName: ctx.user.name, rev: 1 };
   }
 
@@ -698,6 +763,20 @@
         var o = oldBy[w];
         EA.save(TAB, ROOM, ctx.estate, { chit: c.chit, block: o.block, lots: o.lots, mandor: o.mandor, worker_id: o.worker_id,
           task_code: o.task_code, muster: o.muster, confirmed_by: c.checker, confirmed_at: stamp, note: 'removed in correction' }, o.id, 'removed');
+      });
+      var oldAl = {};
+      if (old) (old.alerts || []).forEach(function (a) { if (a.id) oldAl[a.key] = a; });
+      c.alerts.forEach(function (a) {
+        var o = oldAl[a.key];
+        delete oldAl[a.key];
+        if (o && o.note === a.note) { a.id = o.id; return; }
+        a.id = EA.save(TAB_ALERT, ROOM, ctx.estate, { chit: c.chit, kind: a.kind, block: a.block, lot: a.lot, detail: a.detail,
+          staff_note: a.note, direction: '', direction_by: '' }, o ? o.id : '').id;
+      });
+      Object.keys(oldAl).forEach(function (k) {
+        var o = oldAl[k];
+        EA.save(TAB_ALERT, ROOM, ctx.estate, { chit: c.chit, kind: o.kind, block: o.block, lot: o.lot, detail: o.detail,
+          staff_note: o.note, direction: '', direction_by: '' }, o.id, 'removed');
       });
       var s = summary(c.rows);
       c.chitRowId = EA.save(TAB_CHIT, ROOM, ctx.estate, { chit: c.chit, rain_mm: c.rain_mm, rain_time: c.rain_time,
@@ -729,7 +808,11 @@
     L.push('*CHIT MUSTER ' + (est ? est.company + ' ' : '') + c.estate + '*' + (c.rev > 1 ? ' _(dibetulkan · corrected)_' : ''));
     L.push(ui().dayBm[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear());
     L.push('Hujan semalam: ' + (Number(c.rain_mm) || 0).toFixed(2) + ' mm' + (c.rain_time ? ' (' + c.rain_time + ')' : '') + ' · Bulan ini: ' + rainMonth(c.date, c.chit.indexOf('(') === 0 ? c.rain_mm : undefined).toFixed(2) + ' mm');
-    backlogLines(c.backlog).forEach(function (x) { L.push(x); });
+    backlogLines(c.backlog).forEach(function (x) { if (!(c.alerts && c.alerts.length && x.indexOf('Semak kiraan') === 0)) L.push(x); });
+    if (c.alerts && c.alerts.length) {
+      L.push('*⚠ AMARAN · ALERT — untuk tindakan Penolong Pengurus*');
+      c.alerts.forEach(function (a) { L.push('• ' + a.text + ' → ' + a.note); });
+    }
     L.push('```');
     L.push(pad('Blk', 4) + pad('Job', 17) + pad('Mdr', 4) + pad('M', 3) + pad('F', 3) + 'Tot');
     s.sections.forEach(function (x) {
@@ -821,6 +904,7 @@
         var c = todaysChits().find(function (x) { return x.chit === b.dataset.fix; });
         if (!c) return;
         var d = blankDraft();
+        d.alertNotes = {}; (c.alerts || []).forEach(function (a) { d.alertNotes[a.key] = a.note; });
         d.replacing = c.chit; d.rain_mm = c.rain_mm; d.rain_time = c.rain_time; d.checker = c.checker;
         d.jobs = JSON.parse(JSON.stringify(c.jobs || []));
         d.nextJob = d.jobs.length + 1;

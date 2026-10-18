@@ -247,3 +247,4 @@ pre.chit { margin: 0; white-space: pre-wrap; word-break: break-word; font-family
 .chit-t .grand td { font-weight: 800; border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink); }
 .chit-t .en { font-size: .75rem; }
 .bad-text { color: var(--bad); font-size: .85rem; }
+.msg.ok-msg { background: var(--ok-soft); color: var(--ok); }

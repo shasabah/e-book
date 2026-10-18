@@ -38,7 +38,10 @@ var ROOM_TABS = {
   FH_WORK:   ['chit', 'worker_id', 'task_code', 'block', 'lot', 'qty', 'unit', 'bunches', 'confirmed_by', 'confirmed_at', 'note'],
   FH_JOBDAY: ['chit', 'task_code', 'block', 'lots', 'workers', 'qty', 'unit', 'bunches', 'plan_ha', 'job_status', 'reason', 'flags', 'confirmed_by', 'confirmed_at', 'progress'],
   FH_COLLECT: ['block', 'lot', 'bunches', 'cleared', 'tractor', 'loader', 'note'],
-  FH_DISPATCH: ['bunches', 'lorry', 'mill', 'ramp_cleared', 'note', 'block', 'trip'],
+  FH_DISPATCH: ['bunches', 'lorry', 'mill', 'ramp_cleared', 'note', 'block', 'trip', 'dn_no', 'driver'],
+  FH_TICKET: ['ticket_no', 'trip', 'mill', 'do_no', 'lorry', 'driver', 'time', 'first_kg', 'second_kg', 'deduct_kg', 'nett_kg', 'nett_mt',
+              'bunches', 'mill_bunches', 'abw_kg', 'rej_ur', 'rej_emp', 'rej_rott', 'rej_mt', 'note'],
+  FH_TICKET_BLOCK: ['ticket_no', 'block', 'bunches', 'mt'],
   FH_ALERT: ['chit', 'kind', 'block', 'lot', 'detail', 'staff_note', 'direction', 'direction_by']
 };
 
@@ -61,6 +64,10 @@ function doPost(e) {
   }
   if (req.action === 'save') return reply(saveRow(user, req.tab, req.row));
   if (req.action === 'saveBatch') return reply(saveBatch(user, req.items));
+  if (req.action === 'trips') {
+    if (user.estates.indexOf(req.estate) < 0) return reply({ ok: false, error: 'not_your_estate' });
+    return reply(openTrips(req.estate));
+  }
   if (req.action === 'backlog') {
     if (user.estates.indexOf(req.estate) < 0) return reply({ ok: false, error: 'not_your_estate' });
     return reply(backlog(req.estate));
@@ -361,6 +368,21 @@ function backlog(estate) {
              ramp: { bunches: ramp, since: ramp ? since : '', blocks: rampBlocks }, checks: checks };
   }
   // ===== end calcBacklog =====
+
+// Lorry loads of the last 21 days that have no mill ticket yet, for the ticket screen.
+// One lorry = the FH_DISPATCH rows sharing a trip code (one row per block).
+function openTrips(estate) {
+  var cut = Utilities.formatDate(new Date(Date.now() - 21 * 864e5), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd');
+  var ticketed = {};
+  standingRows_('FH_TICKET', estate).forEach(function (r) { if (r.trip) ticketed[r.trip] = true; });
+  var trips = {};
+  standingRows_('FH_DISPATCH', estate).forEach(function (r) {
+    if (!r.trip || r.date < cut || ticketed[r.trip] || !(Number(r.bunches) > 0)) return;
+    var x = trips[r.trip] || (trips[r.trip] = { trip: r.trip, date: r.date, lorry: r.lorry, mill: r.mill, dn: r.dn_no || '', driver: r.driver || '', blocks: {}, bunches: 0 });
+    x.blocks[r.block] = (x.blocks[r.block] || 0) + Number(r.bunches); x.bunches += Number(r.bunches);
+  });
+  return { ok: true, trips: Object.keys(trips).map(function (k) { return trips[k]; }) };
+}
 
 // Plain values only: text that starts like a formula is kept as text.
 function plain(v) {

@@ -170,7 +170,8 @@
       (loaderOnly ? '' :
       '<a href="#field-harvest"' + (active === 'muster' ? ' aria-current="page"' : '') + '><span class="bm">Chit pagi</span><span class="en">Morning chit</span></a>' +
       '<a href="#field-harvest/work"' + (active === 'work' ? ' aria-current="page"' : '') + '><span class="bm">Kerja harian</span><span class="en">Day\'s work</span></a>') +
-      '<a href="#field-harvest/collect"' + (active === 'collect' ? ' aria-current="page"' : '') + '><span class="bm">Kutip & hantar</span><span class="en">Collect & dispatch</span></a></nav>';
+      '<a href="#field-harvest/collect"' + (active === 'collect' ? ' aria-current="page"' : '') + '><span class="bm">Kutip & hantar</span><span class="en">Collect & dispatch</span></a>' +
+      (loaderOnly ? '' : '<a href="#field-harvest/ticket"' + (active === 'ticket' ? ' aria-current="page"' : '') + '><span class="bm">Tiket kilang</span><span class="en">Mill ticket</span></a>') + '</nav>';
   }
 
   // ---------- crop backlog (field and ramp) ----------
@@ -384,6 +385,7 @@
   function render(container, c) {
     if (c.user.role === 'Worker' || c.screen === 'collect') return EA.fh.collect.render(container, c);
     if (c.screen === 'work' && EA.fh.work) return EA.fh.work.render(container, c);
+    if (c.screen === 'ticket' && EA.fh.ticket) return EA.fh.ticket.render(container, c);
     el = container; ctx = c;
     draft = loadDraft();
     var testing = ctx.room.state !== 'live';

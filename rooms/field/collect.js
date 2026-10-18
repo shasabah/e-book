@@ -11,7 +11,6 @@
 
   var TAB = 'FH_COLLECT', TAB_DIS = 'FH_DISPATCH', ROOM = 'FH';
   var K = { draft: 'fh.collectdraft', saved: 'fh.collect' };
-  var MILLS = ['Boustead (BOU)', 'Sri Kamusan CC (SKCC)', 'SKPOM', 'Fortuna', 'Sinar C'];   // from the Sugut FFB tonnage file 2026
 
   var el, ctx, draft;
   function ui() { return EA.ui; }
@@ -22,7 +21,7 @@
 
   function saved() { var cut = new Date(); cut.setDate(cut.getDate() - 40); var from = cut.toISOString().slice(0, 10); return EA.local.get(K.saved, []).filter(function (s) { return s.date >= from; }); }
   function todays() { return saved().filter(function (s) { return s.estate === ctx.estate && s.date === EA.today(); }); }
-  function blank() { return { date: EA.today(), estate: ctx.estate, tractor: '', loader: '', lots: {}, extra: [], dispatch: { blocks: {}, lorry: '', mill: MILLS[0], ramp_cleared: '' } }; }
+  function blank() { return { date: EA.today(), estate: ctx.estate, tractor: '', loader: '', lots: {}, extra: [], dispatch: { blocks: {}, lorry: '', mill: EA.lists.mills[0], dn: '', driver: '', ramp_cleared: '' } }; }
   function disTotal(d) { return Object.keys(d.blocks || {}).reduce(function (a, b) { return a + num(d.blocks[b]); }, 0); }
   function loadDraft() {
     var all = EA.local.get(K.draft, {}), d = all[ctx.estate];
@@ -32,6 +31,7 @@
       if (last) { d.tractor = last.tractor; d.loader = last.loader; }
     }
     if (!d.dispatch.blocks) d.dispatch.blocks = {};
+    if (d.dispatch.dn == null) { d.dispatch.dn = ''; d.dispatch.driver = ''; }
     return d;
   }
   function keepDraft() { var all = EA.local.get(K.draft, {}); all[ctx.estate] = draft; EA.local.set(K.draft, all); }
@@ -53,6 +53,17 @@
     return out.sort(function (a, b2) { return a.lot.localeCompare(b2.lot, undefined, { numeric: true }); });
   }
 
+  // For the delivery note's "Estimated tonnage": bunches x this month's bunch weight from the tickets.
+  function abwNow() {
+    var m = EA.today().slice(0, 7), mt = 0, b = 0;
+    EA.local.get('fh.tickets', []).forEach(function (t) { if (t.estate === ctx.estate && t.date.slice(0, 7) === m && !t.removed) { mt += t.nett; b += t.bunches; } });
+    return b ? mt * 1000 / b : 0;
+  }
+  function totText() {
+    var n = disTotal(draft.dispatch), a = abwNow();
+    return 'Jumlah ke lori · Total on the lorry: <b>' + n + '</b> tandan' +
+      (n && a ? ' · anggaran · estimated <b>' + (n * a / 1000).toFixed(1) + ' MT</b> (ABW ' + a.toFixed(1) + ' kg, untuk nota hantar · for the delivery note)' : '');
+  }
   function rampOf(block) {
     var b = EA.fh.getBacklog(ctx.estate), r = b && b.ramp && b.ramp.blocks || [];
     var x = r.find(function (y) { return y.block === block; });
@@ -95,11 +106,13 @@
         return '<div class="field"><label for="cl-db-' + esc(b.block) + '"><span class="bm">Blok ' + esc(b.block) + '</span><span class="en">' + (r ? 'Di ramp · at ramp: ' + r : 'tandan · bunches') + '</span></label>' +
           '<input id="cl-db-' + esc(b.block) + '" class="text-input" inputmode="numeric" data-dblock="' + esc(b.block) + '" value="' + esc(draft.dispatch.blocks[b.block] || '') + '" placeholder="0"></div>';
       }).join('') + '</div>' +
-      '<p class="hint" id="cl-dtot">Jumlah ke lori · Total on the lorry: <b>' + disTotal(draft.dispatch) + '</b> tandan</p>' +
+      '<p class="hint" id="cl-dtot">' + totText() + '</p>' +
       '<div class="fields">' +
+        '<div class="field"><label for="cl-dn"><span class="bm">No. nota hantar (DN)</span><span class="en">Delivery note no.</span></label><input id="cl-dn" class="text-input" inputmode="numeric" value="' + esc(draft.dispatch.dn) + '" placeholder="8524"></div>' +
+        '<div class="field"><label for="cl-dr"><span class="bm">Pemandu</span><span class="en">Driver</span></label><input id="cl-dr" class="text-input" value="' + esc(draft.dispatch.driver) + '"></div>' +
         '<div class="field"><label for="cl-lr"><span class="bm">No. lori</span><span class="en">Lorry number</span></label><input id="cl-lr" class="text-input" value="' + esc(draft.dispatch.lorry) + '" placeholder="SA 1234 B"></div>' +
         '<div class="field"><label for="cl-ml"><span class="bm">Kilang</span><span class="en">Mill or collecting centre</span></label><select id="cl-ml" class="text-input">' +
-          MILLS.concat(['Lain-lain · Other']).map(function (m) { return '<option' + (m === draft.dispatch.mill ? ' selected' : '') + '>' + esc(m) + '</option>'; }).join('') + '</select></div>' +
+          EA.lists.mills.concat(['Lain-lain · Other']).map(function (m) { return '<option' + (m === draft.dispatch.mill ? ' selected' : '') + '>' + esc(m) + '</option>'; }).join('') + '</select></div>' +
       '</div>' +
       '<label class="inline-check"><input type="checkbox" id="cl-rc"' + (draft.dispatch.ramp_cleared === 'Y' ? ' checked' : '') + '> Ramp kosong selepas lori ini · ramp empty after this lorry</label>' +
       '</section>' +
@@ -118,8 +131,10 @@
     });
     $('#cl-addlot').onchange = function () { if (this.value && draft.extra.indexOf(this.value) < 0) { draft.extra.push(this.value); keepDraft(); render(el, ctx); } };
     el.querySelectorAll('input[data-dblock]').forEach(function (i) {
-      i.oninput = function () { draft.dispatch.blocks[i.dataset.dblock] = i.value.replace(/\D/g, ''); keepDraft(); $('#cl-dtot b').textContent = disTotal(draft.dispatch); };
+      i.oninput = function () { draft.dispatch.blocks[i.dataset.dblock] = i.value.replace(/\D/g, ''); keepDraft(); $('#cl-dtot').innerHTML = totText(); };
     });
+    $('#cl-dn').oninput = function () { draft.dispatch.dn = this.value.replace(/\s/g, ''); keepDraft(); };
+    $('#cl-dr').oninput = function () { draft.dispatch.driver = this.value; keepDraft(); };
     $('#cl-lr').oninput = function () { draft.dispatch.lorry = this.value.toUpperCase(); keepDraft(); };
     $('#cl-ml').onchange = function () { draft.dispatch.mill = this.value; keepDraft(); };
     $('#cl-rc').onchange = function () { draft.dispatch.ramp_cleared = this.checked ? 'Y' : ''; keepDraft(); };
@@ -137,6 +152,7 @@
     var p = [];
     if (!lines.length && !hasDis) p.push(['Tiada apa untuk disimpan.', 'Nothing to save yet.']);
     if (lines.length && (!draft.tractor || !draft.loader)) p.push(['Pilih pemandu traktor dan pemuat.', 'Choose the tractor driver and loader.']);
+    if (total > 0 && !dis.dn) p.push(['Isi no. nota hantar (DN).', 'Fill in the delivery note number.']);
     if (total > 0 && !dis.lorry.trim()) p.push(['Isi no. lori.', 'Fill in the lorry number.']);
     if (p.length) {
       ui().openSheet('<h2 id="sheet-title"><span class="bm">Belum lengkap</span><span class="en">Not complete yet</span></h2>' +
@@ -146,6 +162,9 @@
       return;
     }
     var dcopy = hasDis ? JSON.parse(JSON.stringify(dis)) : null;
+    // One trip code ties together the rows of this lorry (one per block).
+    var trip = 'LR-' + ctx.estate + '-' + (EA.phone() || 'P00') + '-' + EA.today().replace(/-/g, '') + '-' + EA.ui.hhmm(new Date()).replace(':', '') + String(new Date().getSeconds()).padStart(2, '0');
+    if (dcopy) dcopy.trip = trip;
     if (dcopy) { Object.keys(dcopy.blocks).forEach(function (b) { if (!num(dcopy.blocks[b])) delete dcopy.blocks[b]; }); dcopy.bunches = String(total); }
     var rec = { date: EA.today(), estate: ctx.estate, at: EA.ui.hhmm(new Date()), tractor: draft.tractor, loader: draft.loader, lines: lines, dispatch: dcopy, ids: [] };
     try {
@@ -154,11 +173,10 @@
       });
       if (hasDis) {
         // One row per block on this lorry, tied together by the trip code.
-        var trip = 'LR-' + ctx.estate + '-' + (EA.phone() || 'P00') + '-' + EA.today().replace(/-/g, '') + '-' + EA.ui.hhmm(new Date()).replace(':', '') + String(new Date().getSeconds()).padStart(2, '0');
         var parts = Object.keys(dis.blocks).filter(function (b) { return num(dis.blocks[b]) > 0; });
         if (!parts.length) parts = [''];   // ramp emptied with no load
         parts.forEach(function (b) {
-          rec.ids.push(EA.save(TAB_DIS, ROOM, ctx.estate, { block: b, trip: trip, bunches: String(num(dis.blocks[b])), lorry: dis.lorry.trim(), mill: dis.mill, ramp_cleared: dis.ramp_cleared, note: '' }).id);
+          rec.ids.push(EA.save(TAB_DIS, ROOM, ctx.estate, { block: b, trip: trip, dn_no: dis.dn, driver: dis.driver.trim(), bunches: String(num(dis.blocks[b])), lorry: dis.lorry.trim(), mill: dis.mill, ramp_cleared: dis.ramp_cleared, note: '' }).id);
         });
       }
     } catch (e) { ui().toast('Tidak dapat simpan: ' + e.message + ' · Could not save', 'bad'); return; }

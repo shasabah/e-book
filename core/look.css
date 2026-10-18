@@ -262,3 +262,5 @@ pre.chit { margin: 0; white-space: pre-wrap; word-break: break-word; font-family
 .wline select.text-input { width: auto; padding: 8px 30px 8px 8px; }
 .flag { color: var(--wait); font-weight: 700; font-size: .82rem; }
 .flag.bad { color: var(--bad); }
+.inline-check { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font-size: .9rem; }
+.inline-check input { width: 22px; height: 22px; }

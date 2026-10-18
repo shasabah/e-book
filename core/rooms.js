@@ -11,7 +11,7 @@ EA.rooms = [
     state: 'next', when: 'Seterusnya · Next — Sugut, 4 Jan 2027',
     note: { bm: 'Kerja harian setiap pekerja dan tuaian setiap petak. Perintis di Sugut mula 4 Jan 2027.',
             en: 'Daily work per worker and crop per lot. Sugut pilot starts 4 Jan 2027.' },
-    roles: ['Owner', 'HQ', 'Staff', 'Clerk', 'Mandor'] },
+    roles: ['Owner', 'HQ', 'Staff', 'Clerk', 'Mandor', 'Worker'] },
   { id: 'purchase-store', mark: 'PS', bm: 'Belian & Stor', en: 'Purchase & Store',
     state: 'later', when: 'Dibuka · Opens Jun 2027',
     note: { bm: 'Permintaan, kelulusan, pesanan, terima ke stor, keluar ke blok atau mesin. Perintis 1 Jun 2027.',

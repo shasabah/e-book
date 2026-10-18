@@ -122,6 +122,20 @@ window.EA = window.EA || {};
     return err ? { sent: sent, error: err } : { sent: sent };
   }
 
+  // ---------- asking the office for something back ----------
+  // Shared by every room: e.g. the crop backlog worked out from everyone's entries.
+  // Returns the office's answer, or null when there is no signal / no link.
+  EA.ask = async function (action, extra) {
+    var link = EA.sendLink(), user = EA.currentUser();
+    if (!link || !user || !navigator.onLine) return null;
+    try {
+      var res = await fetch(link, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(Object.assign({ action: action, key: user.key, version: EA.VERSION }, extra || {})) });
+      var j = await res.json();
+      return j && j.ok ? j : null;
+    } catch (e) { return null; }
+  };
+
   // ---------- trying again by itself ----------
   // When the office is busy or there is no signal, the phone tries again after a
   // random wait (so many phones do not all try at the same second): about

@@ -36,7 +36,10 @@
   function loadDraft() {
     var all = EA.local.get(K.draft, {});
     var d = all[ctx.estate];
-    return (!d || d.date !== EA.today()) ? blankDraft() : d;
+    if (!d || d.date !== EA.today()) return blankDraft();
+    // A draft saved by an older version may lack newer parts (e.g. alert notes): fill them in.
+    var b = blankDraft(); Object.keys(b).forEach(function (k) { if (d[k] == null) d[k] = b[k]; });
+    return d;
   }
   function keepDraft() { var all = EA.local.get(K.draft, {}); all[ctx.estate] = draft; EA.local.set(K.draft, all); }
   function dropDraft() { var all = EA.local.get(K.draft, {}); delete all[ctx.estate]; EA.local.set(K.draft, all); }

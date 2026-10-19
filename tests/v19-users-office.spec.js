@@ -76,26 +76,36 @@ const mine = post({ key: OWN, action: 'userPin', code: 'OWN-ALL-01' });
 check('the Owner can make his own new PIN (self flag set), and the new one works', mine.ok && mine.self === true && post({ key: mine.pin, action: 'login' }).ok && post({ key: OWN, action: 'login' }).error === 'wrong_key');
 const OWN2 = mine.pin;
 
+// 4b. Owner types his own PIN
+check('own PIN: an easy one (123456, 112233, 111111) is refused', ['123456', '112233', '111111', '454545'].every(x => post({ key: OWN2, action: 'userMyPin', code: 'OWN-ALL-01', pin: x }).error === 'pick_another'));
+check('own PIN: someone else\'s PIN gets the same answer (nothing learned)', post({ key: OWN2, action: 'userMyPin', code: 'OWN-ALL-01', pin: r.pin }).error === 'pick_another');
+check('own PIN: not for another user', post({ key: OWN2, action: 'userMyPin', code: 'STF-SSGT-01', pin: '583920' }).error === 'not_self');
+check('own PIN: 5 digits refused', post({ key: OWN2, action: 'userMyPin', code: 'OWN-ALL-01', pin: '58392' }).error === 'bad_pin');
+const myPin = post({ key: OWN2, action: 'userMyPin', code: 'OWN-ALL-01', pin: '583920' });
+check('own PIN 583920 saved: it logs in, the old one does not', myPin.ok && !('pin' in myPin) && post({ key: '583920', action: 'login' }).ok && post({ key: OWN2, action: 'login' }).error === 'wrong_key');
+check('own PIN: the same PIN again is refused', post({ key: '583920', action: 'userMyPin', code: 'OWN-ALL-01', pin: '583920' }).error === 'same_pin');
+const OWN3 = '583920';
+
 // 5. Change role / estates
-const ch = post({ key: OWN2, action: 'userSet', code: 'CLK-SSGT-01', role: 'Clerk', estates: ['SSGT'] });
+const ch = post({ key: OWN3, action: 'userSet', code: 'CLK-SSGT-01', role: 'Clerk', estates: ['SSGT'] });
 check('change the clerk to Sugut only: login shows SSGT only', ch.ok && post({ key: r.pin, action: 'login' }).user.estates.join() === 'SSGT');
-check('the Owner cannot take the Owner role away from himself', post({ key: OWN2, action: 'userSet', code: 'OWN-ALL-01', role: 'HQ', estates: ['SDK'] }).error === 'not_self');
+check('the Owner cannot take the Owner role away from himself', post({ key: OWN3, action: 'userSet', code: 'OWN-ALL-01', role: 'HQ', estates: ['SDK'] }).error === 'not_self');
 
 // 6. Switch off / on
-check('switch off: the Staff can no longer log in', post({ key: OWN2, action: 'userOff', code: 'STF-SSGT-01', reason: 'telefon hilang' }).ok && post({ key: np.pin, action: 'login' }).error === 'wrong_key');
-check('a new PIN is refused while switched off', post({ key: OWN2, action: 'userPin', code: 'STF-SSGT-01' }).error === 'user_off');
-check('switch on again: the same PIN works again', post({ key: OWN2, action: 'userOn', code: 'STF-SSGT-01' }).ok && post({ key: np.pin, action: 'login' }).ok);
-check('the Owner cannot switch himself off', post({ key: OWN2, action: 'userOff', code: 'OWN-ALL-01' }).error === 'not_self');
-check('test users cannot be changed one by one (only all off together)', post({ key: OWN2, action: 'userOn', code: 'T-STF' }).error === 'test_user_row');
+check('switch off: the Staff can no longer log in', post({ key: OWN3, action: 'userOff', code: 'STF-SSGT-01', reason: 'telefon hilang' }).ok && post({ key: np.pin, action: 'login' }).error === 'wrong_key');
+check('a new PIN is refused while switched off', post({ key: OWN3, action: 'userPin', code: 'STF-SSGT-01' }).error === 'user_off');
+check('switch on again: the same PIN works again', post({ key: OWN3, action: 'userOn', code: 'STF-SSGT-01' }).ok && post({ key: np.pin, action: 'login' }).ok);
+check('the Owner cannot switch himself off', post({ key: OWN3, action: 'userOff', code: 'OWN-ALL-01' }).error === 'not_self');
+check('test users cannot be changed one by one (only all off together)', post({ key: OWN3, action: 'userOn', code: 'T-STF' }).error === 'test_user_row');
 
 // 7. Test PINs off
-const to = post({ key: OWN2, action: 'testOff' });
+const to = post({ key: OWN3, action: 'testOff' });
 check('switch off all test PINs: 4 switched off, 777777 and 111111 refused, real PINs still work',
-  to.ok && to.switchedOff === 4 && post({ key: '777777', action: 'login' }).error === 'wrong_key' && post({ key: '111111', action: 'login' }).error === 'wrong_key' && post({ key: OWN2, action: 'login' }).ok);
+  to.ok && to.switchedOff === 4 && post({ key: '777777', action: 'login' }).error === 'wrong_key' && post({ key: '111111', action: 'login' }).error === 'wrong_key' && post({ key: OWN3, action: 'login' }).ok);
 check('nothing deleted: every user row still in the sheet', tabs.USERS.rows.length === 1 + 4 + 5);
 
 // 8. Record of every change
 const log = tabs.USERS_LOG.rows;
 const acts = log.slice(1).map(x => x[3]).join(',');
-check('USERS_LOG has one line per change, with who did it', acts === 'add,add,add,add,add,new_pin,new_pin,change,off,on,test_off' && log[2][1] === 'OWN-ALL-01' && log[1][1] === 'T-OWN', acts);
-check('no PIN is ever written in the log', !JSON.stringify(log).match(new RegExp([OWN, OWN2, f.pin, np.pin, r.pin].join('|'))));
+check('USERS_LOG has one line per change, with who did it', acts === 'add,add,add,add,add,new_pin,new_pin,own_pin_set,change,off,on,test_off' && log[2][1] === 'OWN-ALL-01' && log[1][1] === 'T-OWN', acts);
+check('no PIN is ever written in the log', !JSON.stringify(log).match(new RegExp([OWN, OWN3, f.pin, np.pin, r.pin].join('|'))));

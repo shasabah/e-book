@@ -124,6 +124,28 @@ const LINK = 'https://script.google.com/macros/s/TEST-LINK/exec';
   await p.click('#us-done'); await p.click('#dn-ok'); await p.waitForSelector('#us-add');
   check('the screen still loads with the new PIN', await p.locator('[data-user="OWN-ALL-01"]').count() === 1);
 
+  // Change my PIN (typed by the Owner)
+  await p.click('[data-user="OWN-ALL-01"]'); await p.click('#ps-mine'); await p.waitForSelector('#mp-1');
+  await p.fill('#mp-1', '123456'); await p.fill('#mp-2', '123456'); await p.click('#mp-ok'); await p.waitForTimeout(300);
+  check('Tukar PIN saya: 123456 refused with "Pilih PIN lain"', /Pilih PIN lain/.test(await p.textContent('#mp-err')));
+  await p.fill('#mp-1', '583920'); await p.fill('#mp-2', '583921'); await p.click('#mp-ok'); await p.waitForTimeout(100);
+  check('Tukar PIN saya: two different PINs refused', /tidak sama/.test(await p.textContent('#mp-err')));
+  await p.fill('#mp-2', '583920'); await p.click('#mp-ok'); await p.waitForTimeout(400);
+  check('Tukar PIN saya: 583920 saved, this phone uses it, office accepts it',
+    /PIN anda sudah ditukar/.test(await p.textContent('#toast')) && await p.evaluate(() => EA.currentUser().key) === '583920' && JSON.parse(office(JSON.stringify({ version: 99, key: '583920', action: 'login' }))).ok);
+
+  // Quick open: the last list shows at once, before the office answers
+  await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(100);
+  let slow; await p.unroute(LINK);
+  await p.route(LINK, route => { slow = route; });
+  await p.evaluate(() => { location.hash = 'users'; }); await p.waitForTimeout(300);
+  check('the last list shows at once while the office is still answering', await p.locator('[data-user="OWN-ALL-01"]').count() === 1 && /Memuat dari pejabat/.test(await p.locator('#room').innerText()));
+  await slow.fulfill({ status: 200, contentType: 'application/json', body: office(slow.request().postData()) });
+  await p.unroute(LINK);
+  await p.route(LINK, route => route.fulfill({ status: 200, contentType: 'application/json', body: office(route.request().postData()) }));
+  await p.waitForTimeout(400);
+  check('then it refreshes (loading line gone)', !/Memuat dari pejabat/.test(await p.locator('#room').innerText()));
+
   // English
   await p.evaluate(() => EA.setLang('en')); await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(100);
   await p.evaluate(() => { location.hash = 'users'; }); await p.waitForSelector('#us-add');
@@ -140,7 +162,7 @@ const LINK = 'https://script.google.com/macros/s/TEST-LINK/exec';
 
   // Log in the office: one line per change, no PIN in it
   const log = tabs.USERS_LOG.rows.slice(1).map(x => x[3]).join(',');
-  check('office log: add, add, new_pin, off, test_off, new_pin, new_pin', log === 'add,add,new_pin,off,test_off,new_pin,new_pin', log);
+  check('office log: add, add, new_pin, off, test_off, new_pin, own_pin_set, new_pin', log === 'add,add,new_pin,off,test_off,new_pin,own_pin_set,new_pin', log);
   check('no page errors', errs.length === 0, errs.join(' | '));
   await b.close();
 })();

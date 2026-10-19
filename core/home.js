@@ -269,6 +269,7 @@
       '<div class="actions"><button class="btn btn-main" type="button" id="clash-ok">OK<small>Faham</small></button></div>',
       function (s) { s.querySelector('#clash-ok').onclick = closeSheet; });
     else if (r.error) toast('Pejabat menolak: ' + r.error + ' · Office refused', 'bad');
+    else if (r.refused) toast(r.refused + ' pembetulan DN ditolak: lori sudah ada tiket. Hubungi kerani. · DN correction refused: lorry already ticketed', 'bad');
     else if (r.sent) toast(r.sent + ' dihantar' + (r.test ? ' (ujian)' : '') + ' · sent' + (r.test ? ' (test)' : ''));
   };
 

@@ -77,3 +77,4 @@ No new rooms for field crews in peak crop (Aug–Nov).
 - 1.4 (27), 19 Oct 2026: lorry needs lots; short collection asks and stays field backlog; delivery note locked once ticketed.
 - 1.5 (28), 19 Oct 2026: company job codes loaded (72). HQ to confirm units; Borate and <1.5 kg manuring targets to confirm; road side pruning has no code.
 - 1.6 (29), 19 Oct 2026: Pagi Sawit look and the per-phone language switch (Bahasa default).
+- 1.7 (30), 19 Oct 2026: History tab. Dashboards for Samsir and the Owner come after the two-week trial.

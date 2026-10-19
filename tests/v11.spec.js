@@ -53,7 +53,7 @@ const { chromium } = require('playwright');
   // Kutip & hantar: the block's harvest shows as one row
   await p.click('.tabs a[href="#field-harvest/collect"]'); await p.waitForSelector('#cl-rows');
   const rows = t(await p.textContent('#cl-rows'));
-  check('collect: block harvest shows as "Blk 02 (semua petak)" with 200 in the field', /Blk 02 \(semua petak · all lots\).*field 200/.test(rows), rows.slice(0, 160));
+  check('collect: block harvest shows as "Blk 02 (semua petak)" with 200 in the field', /Blk 02 \(semua petak\).*Ladang 200/.test(rows), rows.slice(0, 160));
   check('chit card: no count check', !/Semak kiraan|Count check/.test(await p.textContent('#fh-backlog')));
   check('no page errors', errs.length === 0, errs.join(' | '));
   await b.close();

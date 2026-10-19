@@ -34,7 +34,7 @@ const { chromium } = require('playwright');
   check('saved as 90 collected, lot not cleared', q === '3-30=90', q);
   await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForTimeout(500);
   const card = (await p.textContent('#fh-backlog')).replace(/\s+/g, ' ');
-  check('the 10 not collected stay as field backlog', /Field: 10/.test(card), card.slice(0, 200));
+  check('the 10 not collected stay as field backlog', /Ladang: 10/.test(card), card.slice(0, 200));
   check('no page errors', errs.length === 0, errs.join(' | '));
   await b.close();
 })();

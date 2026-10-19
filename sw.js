@@ -23,10 +23,12 @@ var FILES = [
   'lists/test-users.js',
   'lists/tasks.js',
   'lists/lots.js',
+  'lists/targets.js',
   'rooms/field/muster.js',
   'rooms/field/work.js',
   'rooms/field/harvest.js', 'rooms/field/collect.js', 'rooms/field/ticket.js',
   'lists/test-workers.js',
+  'lists/people.js',
   'checks/core.html'
 ];
 

@@ -176,7 +176,8 @@
       '<a href="#field-harvest"' + (active === 'muster' ? ' aria-current="page"' : '') + '><span class="bm">Chit pagi</span><span class="en">Morning chit</span></a>' +
       '<a href="#field-harvest/work"' + (active === 'work' ? ' aria-current="page"' : '') + '><span class="bm">Kerja harian</span><span class="en">Day\'s work</span></a>') +
       '<a href="#field-harvest/collect"' + (active === 'collect' ? ' aria-current="page"' : '') + '><span class="bm">Kutip & hantar</span><span class="en">Collect & dispatch</span></a>' +
-      (loaderOnly || !(user && /^(Clerk|Owner|HQ)$/.test(user.role)) ? '' : '<a href="#field-harvest/ticket"' + (active === 'ticket' ? ' aria-current="page"' : '') + '><span class="bm">Tiket kilang</span><span class="en">Mill ticket</span></a>') + '</nav>';
+      (loaderOnly || !(user && /^(Clerk|Owner|HQ)$/.test(user.role)) ? '' : '<a href="#field-harvest/ticket"' + (active === 'ticket' ? ' aria-current="page"' : '') + '><span class="bm">Tiket kilang</span><span class="en">Mill ticket</span></a>') +
+      (loaderOnly ? '' : '<a href="#field-harvest/history"' + (active === 'history' ? ' aria-current="page"' : '') + '><span class="bm">Sejarah</span><span class="en">History</span></a>') + '</nav>';
   }
 
   // ---------- crop backlog (field and ramp) ----------
@@ -424,6 +425,7 @@
     if (c.user.role === 'Worker' || c.screen === 'collect') return EA.fh.collect.render(container, c);
     if (c.screen === 'work' && EA.fh.work) return EA.fh.work.render(container, c);
     if (c.screen === 'ticket' && EA.fh.ticket) return EA.fh.ticket.render(container, c);
+    if (c.screen === 'history' && EA.fh.history) return EA.fh.history.render(container, c);
     el = container; ctx = c;
     draft = loadDraft();
     var testing = ctx.room.state !== 'live';
@@ -868,12 +870,29 @@
       ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad');
       return;
     }
+    // v1.7 History: every version of the chit, with who saved it, when, and what changed.
+    var prevV = old ? (old.versions || [{ at: old.confirmedAt, by: old.keyedName || old.keyedBy, changes: [] }]) : [];
+    c.versions = prevV.concat([{ at: confirmedAt, by: ctx.user.name, changes: old ? diffRows(old.rows, c.rows) : [] }]);
     keepChit(c);
     dropDraft();
     ui().toast(EA.t('Chit disimpan', 'Chit saved') + (old ? ' (' + EA.t('dibetulkan', 'corrected') + ')' : ''));
     if (navigator.onLine && EA.sendLink()) EA.send();
     render(el, ctx);
     showChit(c.chit);
+  }
+
+  // What changed between two versions of a chit: people added, taken off, or moved to another job.
+  function diffRows(a, b) {
+    var was = {}, out = [];
+    a.forEach(function (r) { if (r.status !== 'removed') was[r.worker_id] = r; });
+    b.forEach(function (r) {
+      var o = was[r.worker_id]; delete was[r.worker_id];
+      if (!o) out.push({ kind: 'add', w: r.worker_id, task: r.task_code, block: r.block, muster: r.muster });
+      else if (o.muster !== r.muster || o.task_code !== r.task_code || o.block !== r.block || o.lots !== r.lots)
+        out.push({ kind: 'move', w: r.worker_id, task: r.task_code, block: r.block, muster: r.muster, from: { task: o.task_code, block: o.block, muster: o.muster } });
+    });
+    Object.keys(was).forEach(function (w) { var o = was[w]; out.push({ kind: 'off', w: w, task: o.task_code, block: o.block, muster: o.muster }); });
+    return out;
   }
 
   // ---------- the chit text for the WhatsApp group (laid out like the paper) ----------
@@ -1016,4 +1035,6 @@
   EA.fh.backlogCard = backlogCard;
   EA.fh.wireBacklog = wireBacklog;
   EA.fh.shortDate = shortDate;
+  EA.fh.chitText = chitText;
+  EA.fh.marks = MARKS;
 })();

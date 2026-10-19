@@ -44,7 +44,11 @@ EA.loadUpdate = async function () {
       await reg.update();
       if (reg.installing || reg.waiting) await switched;
       else if (latest) {
-        // Still nothing new: drop the phone's old copy so the page loads fresh from the site.
+        // Still nothing new: drop the phone's old copy so the page loads fresh from the site, but
+        // only when the site really answers now; with no signal, keep it so E-Book still opens (v1.9).
+        var alive = false;
+        try { alive = (await fetch('index.html?t=' + Date.now(), { cache: 'no-store' })).ok; } catch (e2) { alive = false; }
+        if (!alive) { location.reload(); return; }
         var keys = await caches.keys();
         // Keep the newest version's copy (it may already be on the phone), drop the older ones.
         await Promise.all(keys.filter(function (k) { return k.indexOf('ebook-') === 0 && k !== 'ebook-v' + latest; }).map(function (k) { return caches.delete(k); }));

@@ -7,7 +7,14 @@ window.EA = window.EA || {};
 
   EA.currentUser = function () { return EA.local.get(USER, null); };
 
-  function keep(u) { EA.local.set(USER, u); EA.local.set(LAST, u); return { ok: true, user: u }; }
+  var KNOWN = 'ea.knownUsers';
+  function keep(u) {
+    EA.local.set(USER, u); EA.local.set(LAST, u);
+    // Everyone who logged in here can come back in with no signal, not only the last one (v1.9).
+    var k = (EA.local.get(KNOWN, []) || []).filter(function (x) { return x.code !== u.code; });
+    k.unshift(u); EA.local.set(KNOWN, k.slice(0, 6));
+    return { ok: true, user: u };
+  }
 
   EA.login = async function (key) {
     key = String(key || '').trim();
@@ -16,15 +23,17 @@ window.EA = window.EA || {};
     if (link) {
       var res, j;
       try {
-        res = await fetch(link, {
+        res = await EA.fetchWait(link, {
           method: 'POST', credentials: 'omit',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'login', key: key, version: EA.VERSION })
+          body: JSON.stringify({ action: 'login', key: key, version: EA.VERSION, phone: EA.phone() })
         });
       } catch (e) {
         // No signal: the last person who logged in on this phone may come back in.
         var last = EA.local.get(LAST, null);
         if (last && last.key === key) return keep(last);
+        var known = (EA.local.get(KNOWN, []) || []).find(function (x) { return x.key === key; });
+        if (known) return keep(known);
         return { ok: false, why: 'offline' };
       }
       // The office answered, but not with its usual reply (an error page): "office busy".
@@ -51,8 +60,10 @@ window.EA = window.EA || {};
     u.key = String(pin); EA.local.set(USER, u);
     var last = EA.local.get(LAST, null);
     if (last && last.code === u.code) { last.key = u.key; EA.local.set(LAST, last); }
+    var k = (EA.local.get(KNOWN, []) || []).map(function (x) { if (x.code === u.code) x.key = u.key; return x; });
+    EA.local.set(KNOWN, k);
   };
 
   // Switch a person off on this phone (lost phone, person left).
-  EA.forget = function () { EA.local.del(USER); EA.local.del(LAST); };
+  EA.forget = function () { EA.local.del(USER); EA.local.del(LAST); EA.local.del(KNOWN); };
 })();

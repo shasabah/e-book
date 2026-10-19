@@ -324,3 +324,21 @@ details.card-sub summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
 .pick-name b { font-family: inherit; font-size: .95rem; }
 .pick-group { margin: 12px 0 4px; }
 #pp-find { margin: 8px 0 4px; }
+
+/* History (v1.7): month buttons, one card per day, rows inside a day */
+.seg2 { display: flex; gap: 6px; margin: 4px 0 12px; flex-wrap: wrap; }
+.seg2 button { flex: 1; min-height: 40px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--surface); font-weight: 600; cursor: pointer; padding: 4px 10px; }
+.seg2 button.on { background: var(--ok); color: #fff; border-color: transparent; }
+.hist { display: grid; gap: 8px; }
+.day { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; text-align: left; width: 100%; background: var(--surface); border: 1px solid transparent;
+  border-radius: var(--card-r); box-shadow: var(--shadow); padding: 12px 14px; cursor: pointer; font: inherit; color: inherit; }
+.day:hover { border-color: var(--ok); }
+.day .d { font-weight: 700; }
+.day .mt { font-weight: 700; color: var(--ok); text-align: right; font-variant-numeric: tabular-nums; }
+.day .meta { grid-column: 1 / -1; font-size: .84rem; color: var(--muted); }
+.chip2 { display: inline-block; font-size: .72rem; font-weight: 700; border-radius: 999px; padding: 2px 8px; background: var(--wait-soft); color: #9a5b00; white-space: nowrap; }
+.hrow { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.hrow:last-of-type { border-bottom: 0; }
+.hrow .s { display: block; font-size: .82rem; color: var(--muted); font-weight: 400; }
+.hrow .n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: .9rem; }
+.ok-t { color: var(--ok); font-weight: 700; }

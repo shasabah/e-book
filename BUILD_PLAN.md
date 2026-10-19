@@ -78,3 +78,5 @@ No new rooms for field crews in peak crop (Aug–Nov).
 - 1.5 (28), 19 Oct 2026: company job codes loaded (72). HQ to confirm units; Borate and <1.5 kg manuring targets to confirm; road side pruning has no code.
 - 1.6 (29), 19 Oct 2026: Pagi Sawit look and the per-phone language switch (Bahasa default).
 - 1.7 (30), 19 Oct 2026: History tab. Dashboards for Samsir and the Owner come after the two-week trial.
+- 1.8 (31), 19 Oct 2026: four buttons showed the wrong language; step-by-step guide (PDF) for Ferezelly and Ria.
+- 1.9 (32), 19 Oct 2026: Pengguna & PIN (Owner only): add users with a random PIN shown once (copy, WhatsApp), new PIN, change, switch off/on, test PINs off. Replaces addUser/switchOffTestKeys in the script editor.

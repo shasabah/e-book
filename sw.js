@@ -29,6 +29,7 @@ var FILES = [
   'rooms/field/work.js',
   'rooms/field/harvest.js', 'rooms/field/collect.js', 'rooms/field/ticket.js',
   'rooms/field/history.js',
+  'core/users.js',
   'lists/test-workers.js',
   'lists/people.js',
   'checks/core.html'

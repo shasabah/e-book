@@ -11,13 +11,18 @@ EA.lists = EA.lists || {};
   var KEY = 'ea.people.', AT = 'ea.people.at';
   function real(estate) { var p = EA.local ? EA.local.get(KEY + estate, null) : null; return p && p.length ? p : null; }
   EA.lists.realPeople = function (estate) { return !!real(estate); };
+  // The made-up workers are only for the made-up test people (codes T-…). A real person with no
+  // list yet gets none, and the muster asks for signal once (v1.9), so no made-up worker is ever sent.
+  function testOk() { var u = EA.currentUser && EA.currentUser(); return !u || /^T-/.test(String(u.code)); }
+  function fallback(estate) { return testOk() ? EA.lists.testWorkers.filter(function (w) { return w.estate === estate; }) : []; }
+  EA.lists.needPeople = function (estate) { return !real(estate) && !testOk(); };
   EA.lists.workersFor = function (estate) {
     var p = real(estate);
-    return (p || EA.lists.testWorkers.filter(function (w) { return w.estate === estate; })).filter(function (w) { return !w.mdr; });
+    return (p || fallback(estate)).filter(function (w) { return !w.mdr; });
   };
   EA.lists.mandorsFor = function (estate) {
     var p = real(estate);
-    return (p || EA.lists.testWorkers.filter(function (w) { return w.estate === estate; })).filter(function (w) { return w.mdr; });
+    return (p || fallback(estate)).filter(function (w) { return w.mdr; });
   };
   EA.lists.worker = function (id) {
     var found = null;

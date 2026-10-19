@@ -102,7 +102,7 @@ window.EA = window.EA || {};
     }
     if (!navigator.onLine) return { error: 'offline' };
     sending = true; changed();
-    var sent = 0, err = null;
+    var sent = 0, err = null, refusedAll = 0;
     function post(body) {
       return fetch(link, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(Object.assign({ key: user.key, version: EA.VERSION }, body)) }).then(function (r) { return r.json(); });
@@ -116,11 +116,23 @@ window.EA = window.EA || {};
         if (j && j.error === 'unknown_action') { oneByOne = true; break; }     // older office script
         if (!j || !j.ok) { err = (j && j.error) || 'refused'; break; }
         var done = {}, firstErr = null;
-        (j.results || []).forEach(function (r) { if (r.ok) done[r.id] = true; else if (!firstErr) firstErr = r.error; });
+        var refused = [];
+        (j.results || []).forEach(function (r) {
+          if (r.ok) done[r.id] = true;
+          // A delivery note correction refused because the lorry already has a ticket: it can never be
+          // accepted, so it leaves the waiting list and is kept apart (shown on Collect & dispatch).
+          else if (r.error === 'ticketed') { done[r.id] = true; refused.push(r.id); }
+          else if (!firstErr) firstErr = r.error;
+        });
+        if (refused.length) {
+          var keep = get('ea.refused', []);
+          chunk.forEach(function (it) { if (refused.indexOf(it.row.id) >= 0) keep.push({ id: it.row.id, tab: it.tab, trip: it.row.trip || '', at: Date.now() }); });
+          set('ea.refused', keep.slice(-200)); refusedAll += refused.length;
+        }
         // Read the list again: something may have been saved while this was sending.
         var now = get(K.queue, []), before = now.length;
         now = now.filter(function (it) { return !done[it.row.id]; });
-        sent += before - now.length;
+        sent += before - now.length - refused.length;
         set(K.queue, now); set(K.lastSent, Date.now()); changed();
         if (firstErr) { err = firstErr; break; }
         if (before === now.length) { err = 'refused'; break; }
@@ -137,7 +149,7 @@ window.EA = window.EA || {};
       }
     } catch (e) { err = 'network'; }
     sending = false; changed();
-    return err ? { sent: sent, error: err } : { sent: sent };
+    return err ? { sent: sent, error: err, refused: refusedAll } : { sent: sent, refused: refusedAll };
   }
 
   // ---------- asking the office for something back ----------

@@ -368,3 +368,8 @@ details.card-sub summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
 .us-first { border: 2px solid var(--sun); }
 #sheet > .btn { width: 100%; margin-top: 6px; }
 .us .actions .btn { flex: 1; }
+
+/* Kongsi app · Share the app (v1.9) */
+.share-qr { width: 236px; margin: 6px auto 4px; padding: 8px; border: 3px solid var(--sun); border-radius: 16px; background: #fff; }
+.share-qr img { width: 100%; height: auto; display: block; }
+.share-url { text-align: center; font-weight: 800; color: var(--slate); margin: 4px 0 0; word-break: break-all; }

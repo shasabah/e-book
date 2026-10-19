@@ -7,5 +7,7 @@ EA.config = {
   // lists/test-users.js and pretends to send when no link is set.
   TEST_MODE: true,
   // A phone that has waited this long without sending shows a red warning.
-  WARN_AFTER_HOURS: 24
+  WARN_AFTER_HOURS: 24,
+  // The app's public address, for the Kongsi app QR and messages (never the sending link).
+  APP_URL: 'https://shasabah.github.io/e-book/'
 };

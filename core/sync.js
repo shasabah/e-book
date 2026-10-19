@@ -28,14 +28,28 @@ window.EA = window.EA || {};
   EA.cleanLink = function (l) { return String(l || '').replace(/[\s\u200B-\u200D\u2060\uFEFF]/g, ''); };
   EA.setSendLink = function (l) { set(K.link, EA.cleanLink(l)); };
 
-  // ID pattern from the rule book: ROOM-ESTATE-PHONE-000123
+  // ID pattern from the rule book: ROOM-ESTATE-PHONE-000123, plus a short tag made once per
+  // install (v1.9). A phone set up again after its data was cleared starts counting from 1, so
+  // without the tag its new entries would repeat numbers the office already has and stay stuck.
+  function installTag() {
+    var t = get('ea.install', '');
+    if (!t) { t = (Date.now().toString(36).slice(-3) + Math.random().toString(36).slice(2, 4)); set('ea.install', t); }
+    return t;
+  }
   function nextId(roomCode, estate) {
     var base = roomCode + '-' + estate + '-' + (EA.phone() || 'P00');
     var c = get(K.counters, {});
     c[base] = (c[base] || 0) + 1;
     set(K.counters, c);
-    return base + '-' + pad(c[base], 6);
+    return base + '-' + pad(c[base], 6) + '-' + installTag();
   }
+  // Office calls stop after 60 seconds on weak signal instead of hanging (v1.9). A send cut off
+  // halfway is safe to repeat: the office keeps each entry once by its number.
+  EA.fetchWait = function (url, opts, ms) {
+    var ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = ctl ? setTimeout(function () { ctl.abort(); }, ms || 60000) : null;
+    return fetch(url, Object.assign({}, opts, ctl ? { signal: ctl.signal } : {})).finally(function () { if (timer) clearTimeout(timer); });
+  };
 
   function changed() { document.dispatchEvent(new CustomEvent('ea:sync')); }
 
@@ -57,11 +71,26 @@ window.EA = window.EA || {};
       replaces: replaces || ''
     };
     Object.keys(fields || {}).forEach(function (k) { if (!(k in row)) row[k] = fields[k]; });
+    var item = { tab: tab, row: row, savedAt: Date.now() };
+    if (batchQ) { batchQ.push(item); return row; }
     var q = get(K.queue, []);
-    q.push({ tab: tab, row: row, savedAt: Date.now() });
+    q.push(item);
     if (!set(K.queue, q)) throw new Error('Phone storage is full');
     changed();
     return row;
+  };
+  // All the lines of one chit, day's work, collection or ticket go onto the waiting list in ONE
+  // write (v1.9): if the phone's storage is full, none of them is kept, so pressing SAVE again
+  // never leaves half a chit plus a second copy.
+  var batchQ = null;
+  EA.batchStart = function () { batchQ = []; };
+  EA.batchCancel = function () { batchQ = null; };
+  EA.batchEnd = function () {
+    var add = batchQ || []; batchQ = null;
+    if (!add.length) return;
+    var q = get(K.queue, []).concat(add);
+    if (!set(K.queue, q)) throw new Error('Phone storage is full');
+    changed();
   };
 
   EA.waiting = function () { return get(K.queue, []).length; };
@@ -92,7 +121,9 @@ window.EA = window.EA || {};
     if (!q.length) { set(K.lastSent, Date.now()); changed(); return { sent: 0 }; }
     var link = EA.sendLink();
     if (!link) {
-      if (!EA.config.TEST_MODE) return { error: 'nolink' };
+      // Pretend-sending is only for the made-up test people (codes T-…). A real person's entries
+      // always wait for the sending link, so nothing real is ever dropped (v1.9).
+      if (!EA.config.TEST_MODE || !/^T-/.test(String(user.code))) return { error: 'nolink' };
       // Test copy with no link: pretend to send, and keep a copy so it can be checked.
       var ids = {}; q.forEach(function (it) { ids[it.row.id] = true; });
       var done0 = get(K.testSent, []).concat(q).slice(-500);
@@ -104,8 +135,8 @@ window.EA = window.EA || {};
     sending = true; changed();
     var sent = 0, err = null, refusedAll = 0;
     function post(body) {
-      return fetch(link, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(Object.assign({ key: user.key, version: EA.VERSION }, body)) }).then(function (r) { return r.json(); });
+      return EA.fetchWait(link, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(Object.assign({ key: user.key, version: EA.VERSION, phone: EA.phone() }, body)) }).then(function (r) { return r.json(); });
     }
     try {
       // Everything waiting goes in one trip (up to 50 at a time).
@@ -179,8 +210,8 @@ window.EA = window.EA || {};
     if (!link || !user) return { ok: false, error: 'nolink' };
     if (!navigator.onLine) return { ok: false, error: 'offline' };
     try {
-      var res = await fetch(link, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(Object.assign({ action: action, key: user.key, version: EA.VERSION }, extra || {})) });
+      var res = await EA.fetchWait(link, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(Object.assign({ action: action, key: user.key, version: EA.VERSION, phone: EA.phone() }, extra || {})) });
       var j = null;
       try { j = await res.json(); } catch (e2) { j = null; }
       return j || { ok: false, error: 'busy' };
@@ -196,7 +227,7 @@ window.EA = window.EA || {};
   // random wait (so many phones do not all try at the same second): about
   // 20–40 s, then longer each time, at most 5–10 minutes. Errors a person must
   // fix (wrong key, phone code clash, another estate...) are not retried.
-  var NO_RETRY = /^(id_clash|not_your_estate|wrong_key|old_version|login|nolink|bad_|unknown_col|tab_missing_col)/;
+  var NO_RETRY = /^(id_clash|not_your_estate|not_allowed|wrong_key|old_version|login|nolink|bad_|unknown_col|tab_missing_col|no_id)/;
   var retryTimer = null, fails = 0;
   EA.nextRetry = 0;
   function planRetry(err) {

@@ -16,6 +16,8 @@
 
 // Oldest app version still accepted. Raise it 30 days after a release.
 var MIN_APP_VERSION = 1;
+// The harvesting job code (company job code list, 19 Oct 2026). Older rows used HV01.
+var HARVEST_CODE = 'HA';
 
 // The test sheet this script writes into (E-Book TEST sheet).
 // At the pilot, this changes to the live sheet's ID.
@@ -339,11 +341,11 @@ function standingRows_(tabName, estate) {
   return rows.filter(function (r) { return r.estate === estate && r.status === 'active' && !replaced[r.id]; });
 }
 
-// Field backlog per lot = bunches cut (harvesters, FH_WORK HV01) - bunches collected
+// Field backlog per lot = bunches cut (harvesters, FH_WORK HA) - bunches collected
 // to the ramp (FH_COLLECT), counted after the last time the lot was marked cleared.
 // Ramp backlog = collected - sent on lorries (FH_DISPATCH), after the ramp was last empty.
 function backlog(estate) {
-  var cut = standingRows_('FH_WORK', estate).filter(function (r) { return r.task_code === 'HV01'; });
+  var cut = standingRows_('FH_WORK', estate).filter(function (r) { return r.task_code === HARVEST_CODE; });
   var col = standingRows_('FH_COLLECT', estate);
   var dis = standingRows_('FH_DISPATCH', estate);
   var now = new Date();
@@ -478,7 +480,7 @@ function ungraded_(estate) {
   }
   // ===== end calcBacklog =====
 
-// Harvesters' bunches (FH_WORK, HV01) of the last 45 days not yet on a lorry, for the
+// Harvesters' bunches (FH_WORK, HA) of the last 45 days not yet on a lorry, for the
 // delivery note (the staff ticks the lots) and for a ticket whose lorry has no lots ticked.
 // A line leaves when it goes on a lorry (FH_DISPATCH_LOT) or is picked on a ticket (FH_TICKET_HARV, not 'dn').
 // Which row now stands for an older row: a correction replaces a row with a new id, so
@@ -503,7 +505,7 @@ function openHarvest(estate) {
   standingRows_('FH_DISPATCH_LOT', estate).forEach(function (r) { var w = newest(r.work_id); onTicket[w] = (onTicket[w] || 0) + (Number(r.bunches) || 0); });
   standingRows_('FH_TICKET_HARV', estate).forEach(function (r) { if (r.source !== 'dn') { var w = newest(r.work_id); onTicket[w] = (onTicket[w] || 0) + (Number(r.bunches) || 0); } });
   var lines = standingRows_('FH_WORK', estate).filter(function (r) {
-    return r.task_code === 'HV01' && Number(r.bunches) > 0 && r.date >= cut;
+    return r.task_code === HARVEST_CODE && Number(r.bunches) > 0 && r.date >= cut;
   }).map(function (r) { return { id: r.id, date: r.date, lot: r.lot, block: r.block, worker_id: r.worker_id, bunches: Number(r.bunches) - (onTicket[r.id] || 0) }; })
     .filter(function (r) { return r.bunches > 0; });
   return { ok: true, lines: lines };

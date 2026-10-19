@@ -171,8 +171,8 @@
     var testing = ctx.room.state !== 'live';
     var head = '<div class="room-top">' +
       '<button type="button" class="back-btn" id="tk-back">← <span class="inline"><span class="bm">Bilik</span></span></button>' +
-      '<div class="grow"><h1>Tiket kilang</h1><span class="en">Mill ticket · ' + esc(ctx.estate) + '</span></div>' +
-      (testing ? '<span class="test-badge">UJIAN · TEST</span>' : '') + '</div>' + EA.fh.tabs('ticket', ctx.user);
+      '<div class="grow"><h1>' + EA.t('Tiket kilang', 'Mill ticket') + '</h1><span class="brand-sub">' + esc(ctx.estate) + '</span></div>' +
+      (testing ? '<span class="test-badge">' + EA.t('UJIAN', 'TEST') + '</span>' : '') + '</div>' + EA.fh.tabs('ticket', ctx.user);
     if (!canKey(ctx.user)) {
       el.innerHTML = head + monthCard() + listCard();
       wireList(); $('#tk-back').onclick = function () { location.hash = ''; };
@@ -199,15 +199,15 @@
         field('tk-w2', 'Berat kedua (kg)', '2nd weight, kg', draft.w2, 'numeric', '') +
         field('tk-ded', 'Potongan (kg)', 'Deduction, kg', draft.ded, 'numeric', '') +
         field('tk-nett', 'Berat bersih (kg)', 'Net weight, kg', draft.nett, 'numeric', '') +
-      '</div><p class="hint">Isi dalam kg seperti di tiket. · Key in kg, as printed on the ticket.</p></section>' +
+      '</div><p class="hint">' + EA.t('Isi dalam kg seperti di tiket.', 'Key in kg, as printed on the ticket.') + '</p></section>' +
 
       '<section class="card" aria-labelledby="tk-s2"><h2 id="tk-s2"><span class="step">2</span><span class="inline"><span class="bm">Petak dalam lori ini</span> · <span class="en">The lots on this lorry</span></span></h2>' +
-      (fromDn() ? '<p class="hint">Dari nota hantar DN ' + esc(draft.do_no) + ' (ditanda oleh staf). Untuk ubah, staf betulkan DN di Kutip & hantar sebelum tiket disimpan. · From the delivery note, ticked by the staff. To change them, the staff corrects the delivery note on Collect & dispatch before the ticket is saved.</p>'
+      (fromDn() ? '<p class="hint">' + EA.t('Dari nota hantar DN ' + esc(draft.do_no) + ' (ditanda oleh staf). Untuk ubah, staf betulkan DN di Kutip & hantar sebelum tiket disimpan.', 'From the delivery note DN ' + esc(draft.do_no) + ', ticked by the staff. To change them, the staff corrects the delivery note on Collect & dispatch before the ticket is saved.') + '</p>'
         : '') +     // no delivery note or no lots on it: the note is drawn with the lots
       '<div id="tk-lots"></div><p class="hint" id="tk-sum"></p><div id="tk-bal"></div><div id="tk-harv"></div></section>' +
 
-      (canGrade(ctx.user) ? '<p class="hint">Selepas simpan, isi gred kilang dari kertas gred yang sama. · After saving, key the mill grading from the same WhatsApp post.</p>'
-        : '<p class="hint">Biasanya kerani ladang isi tiket dan gred dari kumpulan WhatsApp. Staf isi tiket hanya jika kerani tiada. · Usually the estate clerk keys the ticket and the grading from the WhatsApp group. The staff keys a ticket only when the clerk is away.</p>') +
+      (canGrade(ctx.user) ? '<p class="hint">' + EA.t('Selepas simpan, isi gred kilang dari kertas gred yang sama.', 'After saving, key the mill grading from the same WhatsApp post.') + '</p>'
+        : '<p class="hint">' + EA.t('Biasanya kerani ladang isi tiket dan gred dari kumpulan WhatsApp. Staf isi tiket hanya jika kerani tiada.', 'Usually the estate clerk keys the ticket and the grading from the WhatsApp group. The staff keys a ticket only when the clerk is away.') + '</p>') +
       field('tk-note', 'Catatan', 'Note (optional)', draft.note, 'text', '') +
       '<div class="bottom-bar"><button type="button" class="btn btn-main" id="tk-save">SAVE TICKET<small>Simpan tiket</small></button></div>' +
       monthCard() + listCard();
@@ -221,7 +221,7 @@
         if (id === 'tk-no' || id === 'tk-do') v = v.replace(/\s/g, '');
         if (['tk-w1', 'tk-w2', 'tk-ded', 'tk-nett'].indexOf(id) >= 0) {
           // Weights are kg as printed. A dot or comma usually means tonnes were typed (12.34): say so.
-          if (/[.,]/.test(v)) ui().toast('Berat dalam kg seperti dicetak, tanpa titik · Weights in kg as printed, no dot', 'bad');
+          if (/[.,]/.test(v)) ui().toast(EA.t('Berat dalam kg seperti dicetak, tanpa titik', 'Weights in kg as printed, no dot'), 'bad');
           v = v.replace(/[.,].*$/, '').replace(/[^\d]/g, ''); this.value = v;
         }
         draft[bind[id]] = v; keepDraft(); drawSums();
@@ -244,7 +244,7 @@
   function matchDn(quiet) {
     var x = trips().find(function (y) { return y.dn && y.dn === draft.do_no; });
     if (!x) return false;
-    useTrip(x); if (!quiet) ui().toast('Lori dijumpai: DN ' + x.dn + ' · Lorry load found');
+    useTrip(x); if (!quiet) ui().toast(EA.t('Lori dijumpai: DN ', 'Lorry load found: DN ') + x.dn);
     render(el, ctx); var i = $('#tk-do'); if (i && !quiet) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
     return true;
   }
@@ -262,7 +262,7 @@
   function drawTrip() {
     var list = trips();
     $('#tk-tripbox').innerHTML = '<div class="field"><label for="tk-trip"><span class="bm">Muatan lori (nota hantar)</span><span class="en">Lorry load (delivery note)</span></label>' +
-      '<select id="tk-trip" class="text-input"><option value="">' + (list.length ? '— Pilih · Choose —' : '— Tiada lori menunggu tiket · No lorry load waiting —') + '</option>' +
+      '<select id="tk-trip" class="text-input"><option value="">' + (list.length ? EA.t('— Pilih —', '— Choose —') : EA.t('— Tiada lori menunggu tiket —', '— No lorry load waiting —')) + '</option>' +
       list.map(function (x) { return '<option value="' + esc(x.trip) + '"' + (x.trip === draft.trip ? ' selected' : '') + '>' + esc(tripLabel(x)) + '</option>'; }).join('') + '</select></div>';
     $('#tk-trip').onchange = function () {
       var v = this.value, x = list.find(function (y) { return y.trip === v; });
@@ -279,7 +279,7 @@
       $('#tk-lots').innerHTML = '<div class="rows">' + Object.keys(g).sort(byLot).map(function (k) {
         return '<div class="list-line"><div><b>' + esc(EA.fh.lotLabel(k, g[k].block)) + '</b><span class="en">' + esc(g[k].who.map(person).join(', ')) + '</span></div><div class="mono">' + g[k].b + ' tandan</div></div>';
       }).join('') + c.blocks.filter(function (b) { return c.split[b].bunches > (inLots[b] || 0); }).map(function (b) {
-        return '<div class="list-line"><div><b>Blk ' + esc(b) + '</b><span class="en">tanpa rekod tuai · no harvest record</span></div><div class="mono">' + (c.split[b].bunches - (inLots[b] || 0)) + ' tandan</div></div>';
+        return '<div class="list-line"><div><b>Blk ' + esc(b) + '</b><span class="en">' + EA.t('tanpa rekod tuai', 'no harvest record') + '</span></div><div class="mono">' + (c.split[b].bunches - (inLots[b] || 0)) + ' tandan</div></div>';
       }).join('') + '</div>';
       return;
     }
@@ -288,23 +288,23 @@
       var bl = Object.keys(draft.blocks || {}).filter(function (b) { return num(draft.blocks[b]) > 0; }).sort();
       $('#tk-lots').innerHTML = !draft.trip
         ? '<p class="warn"><span class="bm">Taip No. DO dari tiket (atau pilih lori di atas). Petak datang dari nota hantar staf. Jika lori ini tiada dalam senarai, minta staf isi nota hantar di Kutip & hantar dahulu.</span><span class="en">Type the DO no. from the ticket (or choose the lorry above). The lots come from the staff\'s delivery note. If the lorry is not in the list, ask the staff to write its delivery note on Collect & dispatch first.</span></p>'
-        : '<p class="hint">Staf belum tanda petak untuk lori ini. Tiket boleh disimpan: tan dibahagi ikut blok sahaja, tan penuai belum dikira. Staf tanda petak di Kutip & hantar (CORRECT DN). · The staff has not ticked the lots for this lorry. The ticket can be saved: tonnes split by block only, harvesters\' tonnes not yet worked out. The staff ticks the lots on Collect & dispatch (CORRECT DN).</p>' +
-          (bl.length ? '<div class="rows">' + bl.map(function (b) { return '<div class="list-line"><div><b>Blk ' + esc(b) + '</b><span class="en">dari nota hantar · from the delivery note</span></div><div class="mono">' + num(draft.blocks[b]) + ' tandan</div></div>'; }).join('') + '</div>' : '');
+        : '<p class="hint">' + EA.t('Staf belum tanda petak untuk lori ini. Tiket boleh disimpan: tan dibahagi ikut blok sahaja, tan penuai belum dikira. Staf tanda petak di Kutip & hantar (CORRECT DN).', 'The staff has not ticked the lots for this lorry. The ticket can be saved: tonnes split by block only, harvesters\' tonnes not yet worked out. The staff ticks the lots on Collect & dispatch (CORRECT DN).') + '</p>' +
+          (bl.length ? '<div class="rows">' + bl.map(function (b) { return '<div class="list-line"><div><b>Blk ' + esc(b) + '</b><span class="en">' + EA.t('dari nota hantar', 'from the delivery note') + '</span></div><div class="mono">' + num(draft.blocks[b]) + ' tandan</div></div>'; }).join('') + '</div>' : '');
     }
   }
   function drawSums() {
     var c = calc(draft);
     if (num(draft.w1) && num(draft.w2) && $('#tk-nett') && document.activeElement !== $('#tk-nett')) { $('#tk-nett').value = String(c.nettKg); draft.nett = String(c.nettKg); }
     var f = flags(draft, c);
-    $('#tk-sum').innerHTML = 'Tiket ini · This ticket: <b>' + c.bunches + '</b> tandan · <b>' + c.nett.toFixed(2) + '</b> MT · ABW <b>' + (c.abw || 0) + '</b> kg/tandan' +
+    $('#tk-sum').innerHTML = EA.t('Tiket ini: <b>', 'This ticket: <b>') + c.bunches + '</b> tandan · <b>' + c.nett.toFixed(2) + '</b> MT · ABW <b>' + (c.abw || 0) + '</b> kg/tandan' +
       (c.blocks.length ? '<br>' + c.blocks.map(function (b) { return 'Blk ' + esc(b) + ': ' + c.split[b].bunches + ' tandan, ' + c.split[b].mt.toFixed(2) + ' MT'; }).join(' · ') : '') +
-      f.map(function (x) { return '<span class="warn" style="display:block;margin-top:6px">' + esc(x[0]) + ' · ' + esc(x[1]) + '</span>'; }).join('');
+      f.map(function (x) { return '<span class="warn" style="display:block;margin-top:6px">' + EA.t(esc(x[0]), esc(x[1])) + '</span>'; }).join('');
     var bal = Object.keys(c.balance).filter(function (b) { return c.balance[b] > 0; }).sort();
-    $('#tk-bal').innerHTML = bal.length ? '<p class="hint"><b>Baki blok selepas tiket ini · Block balance after this ticket:</b> ' +
+    $('#tk-bal').innerHTML = bal.length ? '<p class="hint"><b>' + EA.t('Baki blok selepas tiket ini:', 'Block balance after this ticket:') + '</b> ' +
       bal.map(function (b) { return 'Blk ' + esc(b) + ' ' + c.balance[b] + ' tandan'; }).join(' · ') + '</p>' : '';
     var byW = {};
     c.harv.forEach(function (h) { var x = byW[h.worker_id] || (byW[h.worker_id] = { b: 0, mt: 0, lots: [] }); x.b += h.bunches; x.mt = r3(x.mt + h.mt); if (x.lots.indexOf(h.lot) < 0) x.lots.push(h.lot); });
-    $('#tk-harv').innerHTML = c.harv.length && c.nett ? '<p class="hint"><b>Tan setiap penuai · Each harvester\'s tonnes</b></p><div class="rows">' + Object.keys(byW).map(function (w) {
+    $('#tk-harv').innerHTML = c.harv.length && c.nett ? '<p class="hint"><b>' + EA.t('Tan setiap penuai', 'Each harvester\'s tonnes') + '</b></p><div class="rows">' + Object.keys(byW).map(function (w) {
       return '<div class="list-line"><div><b>' + esc(person(w)) + '</b><span class="en">' + esc(w) + ' · petak ' + esc(byW[w].lots.join(', ')) + '</span></div><div class="mono">' + byW[w].b + ' tandan · ' + byW[w].mt.toFixed(3) + ' MT</div></div>';
     }).join('') + '</div>' : '';
   }
@@ -363,10 +363,10 @@
         EA.save(TAB_HARV, ROOM, ctx.estate, { date: old.date, ticket_no: old.ticket_no, work_id: wid, date_cut: h.date || '', block: h.block || '', lot: h.lot || '',
           worker_id: h.worker_id || '', bunches: String(h.bunches || ''), abw_kg: String(old.abw), mt: String(h.mt || ''), source: old.source || 'ticket' }, oldH[wid], 'removed');
       });
-    } catch (e) { ui().toast('Tidak dapat simpan: ' + e.message + ' · Could not save', 'bad'); return; }
+    } catch (e) { ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad'); return; }
     keepTicket(t);
     dropDraft();
-    ui().toast('Tiket disimpan · Ticket saved' + (old ? ' (dibetulkan · corrected)' : ''));
+    ui().toast(EA.t('Tiket disimpan', 'Ticket saved') + (old ? EA.t(' (dibetulkan)', ' (corrected)') : ''));
     if (navigator.onLine && EA.sendLink()) EA.send();
     render(el, ctx);
     // The clerk keys the grading sheet from the same WhatsApp post, straight after the ticket.
@@ -390,12 +390,12 @@
     var todo = ungraded();
     var done = gradings().filter(function (g) { return g.estate === ctx.estate; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 5);
     $('#tk-gradelist').innerHTML =
-      (todo.length ? '<p class="hint"><b>Menunggu gred · Waiting for grading</b></p>' + todo.map(function (t) {
+      (todo.length ? '<p class="hint"><b>' + EA.t('Menunggu gred', 'Waiting for grading') + '</b></p>' + todo.map(function (t) {
         return '<div class="list-line"><div><b>' + esc(sd(t.date)) + ' · tiket ' + esc(t.ticket_no) + '</b><span class="en">' + esc(t.mill || '') + (t.nett_mt ? ' · ' + num(t.nett_mt).toFixed(2) + ' MT' : '') + (t.do_no ? ' · DO ' + esc(t.do_no) : '') + '</span></div>' +
           '<div class="acts"><button type="button" class="btn btn-ok" data-grade="' + esc(t.ticket_no) + '" data-gdate="' + esc(t.date) + '">GRADE<small>Isi gred</small></button></div></div>';
-      }).join('') : '<p class="hint">Tiada tiket menunggu gred. · No ticket waiting for grading.</p>') +
-      (done.length ? '<p class="hint"><b>Sudah digred · Graded</b></p>' + done.map(function (g) {
-        return '<div class="list-line"><div><b>' + esc(sd(g.date)) + ' · tiket ' + esc(g.ticket_no) + '</b><span class="en' + (g.flag ? ' warn-t' : '') + '">' + esc(g.flag || 'Gred baik · Grading fine') + '</span></div>' +
+      }).join('') : '<p class="hint">' + EA.t('Tiada tiket menunggu gred.', 'No ticket waiting for grading.') + '</p>') +
+      (done.length ? '<p class="hint"><b>' + EA.t('Sudah digred', 'Graded') + '</b></p>' + done.map(function (g) {
+        return '<div class="list-line"><div><b>' + esc(sd(g.date)) + ' · tiket ' + esc(g.ticket_no) + '</b><span class="en' + (g.flag ? ' warn-t' : '') + '">' + esc(g.flag || EA.t('Gred baik', 'Grading fine')) + '</span></div>' +
           '<div class="acts"><button type="button" class="btn btn-ghost" data-grade="' + esc(g.ticket_no) + '" data-gdate="' + esc(g.date) + '">CORRECT<small>Betulkan</small></button></div></div>';
       }).join('') : '');
     el.querySelectorAll('[data-grade]').forEach(function (b) { b.onclick = function () { gradeSheet(b.dataset.grade, b.dataset.gdate); }; });
@@ -424,9 +424,9 @@
     }
     ui().openSheet('<h2 id="sheet-title"><span class="bm">Gred kilang · tiket ' + esc(ticketNo) + '</span><span class="en">Mill grading sheet, ' + esc(sd(date)) + '</span></h2>' +
       '<div class="fields">' + f('sample', 'Tandan digred', 'Bunches graded', 'sample', 'numeric') + f('millb', 'Jumlah tandan (kilang)', 'Total bunches counted by the mill', 'mill_bunches', 'numeric') + '</div>' +
-      '<p class="hint">Peratus (%) seperti di kertas gred. · Percent, as on the grading sheet.</p>' +
+      '<p class="hint">' + EA.t('Peratus (%) seperti di kertas gred.', 'Percent, as on the grading sheet.') + '</p>' +
       '<div class="grade-grid">' + GRADES.map(function (x) { return f('g-' + x[0], x[1] + ' · ' + x[2], x[3] + ' %', x[0]); }).join('') + '</div>' +
-      '<p class="hint"><b>Tandan ditolak · Rejected bunches</b></p><div class="grade-grid">' +
+      '<p class="hint"><b>' + EA.t('Tandan ditolak', 'Rejected bunches') + '</b></p><div class="grade-grid">' +
         f('rur', 'UR · Mentah', 'Unripe', 'rej_ur', 'numeric') + f('reb', 'EB · Kosong', 'Empty', 'rej_eb', 'numeric') + f('rrt', 'RT · Busuk', 'Rotten', 'rej_rt', 'numeric') + '</div>' +
       '<div class="fields">' + f('loose', 'Buah relai (kg)', 'Loose fruit, kg', 'loose') + f('pen', 'Penalti (%)', 'Penalty, %', 'penalty') + '</div>' +
       '<div id="gs-issues"></div>' +
@@ -446,10 +446,10 @@
           GRADES.forEach(function (x) { row['g_' + x[0]] = g[x[0]] || ''; });
           var id;
           try { id = EA.save(TAB_GRADE, ROOM, ctx.estate, row, old ? old.id : '').id; }
-          catch (e) { ui().toast('Tidak dapat simpan: ' + e.message + ' · Could not save', 'bad'); return; }
+          catch (e) { ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad'); return; }
           keepGrading({ estate: ctx.estate, ticket_no: ticketNo, date: date, g: g, flag: iss.join('; '), id: id, keyedName: ctx.user.name });
           done();
-          ui().toast('Gred disimpan · Grading saved');
+          ui().toast(EA.t('Gred disimpan', 'Grading saved'));
           if (navigator.onLine && EA.sendLink()) EA.send().then(function () { EA.fh.refreshBacklog(ctx.estate); });
           drawGradeList();
         };
@@ -478,7 +478,7 @@
       (s.n ? '<div class="list-line"><div><b>' + s.mt.toFixed(2) + ' MT · ' + s.n + ' tiket · ABW ' + s.abw + ' kg</b><span class="en">' +
         Object.keys(s.byBlock).sort().map(function (b) { return 'Blk ' + esc(b) + ' ' + s.byBlock[b].toFixed(2); }).join(' · ') + '</span><span class="en">' +
         Object.keys(s.byMill).map(function (m) { return esc(m) + ' ' + s.byMill[m].toFixed(2); }).join(' · ') + '</span></div></div>'
-        : '<p class="hint">Belum ada tiket bulan ini. · No tickets this month yet.</p>') + '</section>';
+        : '<p class="hint">' + EA.t('Belum ada tiket bulan ini.', 'No tickets this month yet.') + '</p>') + '</section>';
   }
   function allIds(t) { return [t.ids.ticket].concat(Object.keys(t.ids.blocks).map(function (b) { return t.ids.blocks[b]; }), Object.keys(t.ids.harv || {}).map(function (h) { return t.ids.harv[h]; })); }
   function listCard() {
@@ -488,10 +488,10 @@
         var waiting = allIds(t).some(function (i) { return EA.isWaiting(i); });
         return '<div class="list-line"><div><b>' + esc(sd(t.date)) + ' · ' + esc(t.ticket_no) + ' · ' + t.nett.toFixed(2) + ' MT</b><span class="en">' + esc(t.mill) + ' · ' +
           Object.keys(t.split).sort().map(function (b) { return 'Blk ' + esc(b) + ' ' + t.split[b].mt.toFixed(2); }).join(', ') + ' · ABW ' + t.abw + ' kg</span>' +
-          '<span class="pill ' + (waiting ? 'wait">Menunggu · Waiting' : 'ok">Dihantar · Sent') + '</span></div>' +
+          '<span class="pill ' + (waiting ? 'wait">' + EA.t('Menunggu', 'Waiting') : 'ok">' + EA.t('Dihantar', 'Sent')) + '</span></div>' +
           '<div class="acts"><button type="button" class="btn btn-ghost" data-tview="' + esc(t.key) + '">VIEW<small>Lihat</small></button>' +
           (canKey(ctx.user) ? '<button type="button" class="btn btn-ghost" data-tfix="' + esc(t.key) + '">CORRECT<small>Betulkan</small></button>' : '') + '</div></div>';
-      }).join('') : '<p class="hint">Belum ada. · None yet.</p>') + '</section>';
+      }).join('') : '<p class="hint">' + EA.t('Belum ada.', 'None yet.') + '</p>') + '</section>';
   }
   function wireList() {
     el.querySelectorAll('[data-tview]').forEach(function (b) { b.onclick = function () { showText(b.dataset.tview); }; });

@@ -75,7 +75,7 @@
   // ---------- small helpers ----------
   function person(id) { var w = EA.lists.worker(id); return w ? w.name : id; }
   function task(code) { return EA.lists.task(code); }
-  function jobName(code) { var t = task(code); return t ? t.bm : code; }
+  function jobName(code) { var t = task(code); return t ? EA.t(t.bm, t.en) : code; }
   function jobNameEn(code) { var t = task(code); return t ? t.en : code; }
   function job(key) { return draft.jobs.find(function (j) { return j.key === key; }) || null; }
   function jobShort(j) { return j.task + (j.block ? ' · Blk ' + j.block : '') + (j.lots.length ? ' · ' + j.lots.join(',') : ''); }
@@ -100,23 +100,23 @@
     return taken;
   }
   function blockOptions(selected, optional) {
-    return '<option value="">' + (optional ? '— Tiada blok · No block —' : '— Pilih blok · Choose block —') + '</option>' + EA.lists.blocksFor(ctx.estate).map(function (b) {
+    return '<option value="">' + (optional ? EA.t('— Tiada blok —', '— No block —') : EA.t('— Pilih blok —', '— Choose block —')) + '</option>' + EA.lists.blocksFor(ctx.estate).map(function (b) {
       var lots = EA.lists.lotsFor(ctx.estate, b.block);
       return '<option value="' + b.block + '"' + (b.block === selected ? ' selected' : '') + '>Blok ' + b.block + ' · ' + b.ha.toFixed(2) + ' Ha · ' + lots.length + ' petak · tanam ' + (lots[0] ? lots[0].planted : '') + '</option>';
     }).join('');
   }
   function taskOptions(selected) {
-    var html = '<option value="">— Pilih kerja · Choose job —</option>';
+    var html = '<option value="">' + EA.t('— Pilih kerja —', '— Choose job —') + '</option>';
     EA.lists.chitSections.forEach(function (s) {
-      html += '<optgroup label="' + esc(s.code + '. ' + s.bm + ' · ' + s.en) + '">' + s.tasks.map(function (c) {
+      html += '<optgroup label="' + esc(s.code + '. ' + EA.t(s.bm, s.en)) + '">' + s.tasks.map(function (c) {
         var t = task(c);
-        return '<option value="' + c + '"' + (c === selected ? ' selected' : '') + '>' + esc(c + ' ' + t.bm + ' · ' + t.en) + '</option>';
+        return '<option value="' + c + '"' + (c === selected ? ' selected' : '') + '>' + esc(c + ' ' + EA.t(t.bm, t.en)) + '</option>';
       }).join('') + '</optgroup>';
     });
     return html;
   }
   function lotPicks(block, chosen) {
-    if (!block) return '<p class="hint">Pilih blok dahulu. · Choose a block first.</p>';
+    if (!block) return '<p class="hint">' + EA.t('Pilih blok dahulu.', 'Choose a block first.') + '</p>';
     return '<div class="picks">' + EA.lists.lotsFor(ctx.estate, block).map(function (l) {
       return '<button type="button" class="pick" data-lot="' + l.lot + '" aria-pressed="' + (chosen.indexOf(l.lot) >= 0) + '"><b>' + l.lot + '</b><small>' + l.ha.toFixed(2) + ' Ha</small></button>';
     }).join('') + '</div>';
@@ -152,26 +152,26 @@
     function n(v) { return v ? v : '–'; }
     function tr(label, o, cls) { return '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td colspan="2">' + label + '</td><td>' + n(o.mdr) + '</td><td>' + n(o.m) + '</td><td>' + n(o.f) + '</td><td><b>' + s.tot(o) + '</b></td></tr>'; }
     var body = s.sections.map(function (x) {
-      return '<tr class="sec"><td colspan="6">' + x.s.code + '. ' + esc(x.s.bm) + ' <span class="en inline">· ' + esc(x.s.en) + '</span></td></tr>' +
+      return '<tr class="sec"><td colspan="6">' + x.s.code + '. ' + esc(EA.t(x.s.bm, x.s.en)) + '</td></tr>' +
         x.lines.map(function (l) {
           return '<tr><td class="mono">' + esc(l.block || '') + '</td><td>' + esc(jobName(l.task)) + (l.lots.length ? '<span class="en">Petak ' + esc(l.lots.join(', ')) + '</span>' : '') +
             '</td><td>' + n(l.mdr) + '</td><td>' + n(l.m) + '</td><td>' + n(l.f) + '</td><td><b>' + s.tot(l) + '</b></td></tr>';
         }).join('');
     }).join('');
-    return '<div class="chit-wrap"><table class="chit-t"><thead><tr><th>Blk</th><th>Kerja · Job</th><th>Mdr</th><th>L</th><th>P</th><th>Jml</th></tr></thead><tbody>' +
-      (body || '<tr><td colspan="6" class="hint">Belum ada orang bekerja. · Nobody working yet.</td></tr>') +
-      tr('Jumlah bekerja · Total working', s.worked, 'tot') +
-      AWAY.map(function (k) { return s.tot(s.away[k]) ? tr(MARKS[k][0] + ' · ' + MARKS[k][1], s.away[k]) : ''; }).join('') +
-      tr('Jumlah tidak bekerja · Total not working', s.notw, 'tot') +
-      tr('Jumlah besar · Grand total', s.grand, 'grand') +
-      '</tbody></table></div><p class="hint">L = lelaki · male, P = perempuan · female.</p>';
+    return '<div class="chit-wrap"><table class="chit-t"><thead><tr><th>Blk</th><th>' + EA.t('Kerja', 'Job') + '</th><th>Mdr</th><th>L</th><th>P</th><th>Jml</th></tr></thead><tbody>' +
+      (body || '<tr><td colspan="6" class="hint">' + EA.t('Belum ada orang bekerja.', 'Nobody working yet.') + '</td></tr>') +
+      tr(EA.t('Jumlah bekerja', 'Total working'), s.worked, 'tot') +
+      AWAY.map(function (k) { return s.tot(s.away[k]) ? tr(EA.t(MARKS[k][0], MARKS[k][1]), s.away[k]) : ''; }).join('') +
+      tr(EA.t('Jumlah tidak bekerja', 'Total not working'), s.notw, 'tot') +
+      tr(EA.t('Jumlah besar', 'Grand total'), s.grand, 'grand') +
+      '</tbody></table></div><p class="hint">' + EA.t('L = lelaki, P = perempuan.', 'L = male, P = female.') + '</p>';
   }
 
   // ---------- the screen ----------
   // The room's screens, as tabs at the top. Built once here for both screens.
   function tabs(active, user) {
     var loaderOnly = user && user.role === 'Worker';
-    return '<nav class="tabs" aria-label="Skrin · Screens">' +
+    return '<nav class="tabs" aria-label="' + EA.t('Skrin', 'Screens') + '">' +
       (loaderOnly ? '' :
       '<a href="#field-harvest"' + (active === 'muster' ? ' aria-current="page"' : '') + '><span class="bm">Chit pagi</span><span class="en">Morning chit</span></a>' +
       '<a href="#field-harvest/work"' + (active === 'work' ? ' aria-current="page"' : '') + '><span class="bm">Kerja harian</span><span class="en">Day\'s work</span></a>') +
@@ -322,16 +322,16 @@
   function backlogCard(estate) {
     var b = getBacklog(estate);
     var t = b && b.tonnage;
-    var body = !b ? '<p class="hint">Belum ada. Perlu isyarat sekali untuk ambil dari pejabat. · Not yet: needs signal once to get it from the office.</p>' :
-      (t ? '<div class="list-line"><div><b>Tan bulan ini · Month to date: ' + Number(t.mt || 0).toFixed(2) + ' MT</b><span class="en">' +
-        (t.tickets ? esc(t.tickets + ' tiket · ' + t.bunches + ' tandan' + (t.abw ? ' · ABW ' + t.abw + ' kg' : '')) : 'Belum ada tiket bulan ini · no tickets this month yet') + '</span>' +
+    var body = !b ? '<p class="hint">' + EA.t('Belum ada. Perlu isyarat sekali untuk ambil dari pejabat.', 'Not yet: needs signal once to get it from the office.') + '</p>' :
+      (t ? '<div class="list-line"><div><b>' + EA.t('Tan bulan ini: ', 'Month to date: ') + Number(t.mt || 0).toFixed(2) + ' MT</b><span class="en">' +
+        (t.tickets ? esc(t.tickets + ' tiket · ' + t.bunches + ' tandan' + (t.abw ? ' · ABW ' + t.abw + ' kg' : '')) : EA.t('Belum ada tiket bulan ini', 'No tickets this month yet')) + '</span>' +
         (Object.keys(t.blocks || {}).length ? '<span class="en">' + Object.keys(t.blocks).sort().map(function (k) { return 'Blk ' + esc(k) + ' ' + Number(t.blocks[k]).toFixed(2); }).join(' · ') + '</span>' : '') +
-        '<span class="en">Bajet akan datang · budget to date comes when the 2027 budget is loaded</span></div></div>' : '') +
-      '<div class="list-line"><div><b>Ladang · Field: ' + (b.fieldTotal || 0) + ' tandan</b><span class="en">' +
-        (b.field.length ? b.field.map(function (x) { return 'Petak ' + esc(x.lot) + ': ' + x.bunches + ' (sejak ' + shortDate(x.since) + ')'; }).join(' · ') : 'Tiada baki · none left') + '</span></div></div>' +
-      '<div class="list-line"><div><b>Ramp: ' + ((b.ramp && b.ramp.bunches) || 0) + ' tandan</b><span class="en">' +
-        (b.ramp && b.ramp.bunches ? 'Belum dihantar ke kilang: ' + esc(rampText(b.ramp)) + ' · not yet sent to the mill' : 'Kosong · empty') + '</span></div></div>' +
-      '<p class="hint">' + (b.local ? 'Dikira dari telefon ini (salinan ujian) · from this phone (test copy)' : 'Dikira pejabat ' + esc(b.at) + ' · worked out by the office') + '</p>';
+        '<span class="en">' + EA.t('Bajet akan datang bila bajet 2027 dimuatkan', 'Budget to date comes when the 2027 budget is loaded') + '</span></div></div>' : '') +
+      '<div class="list-line"><div><b>' + EA.t('Ladang: ', 'Field: ') + (b.fieldTotal || 0) + EA.t(' tandan', ' bunches') + '</b><span class="en">' +
+        (b.field.length ? b.field.map(function (x) { return EA.t('Petak ', 'Lot ') + esc(x.lot) + ': ' + x.bunches + EA.t(' (sejak ', ' (since ') + shortDate(x.since) + ')'; }).join(' · ') : EA.t('Tiada baki', 'None left')) + '</span></div></div>' +
+      '<div class="list-line"><div><b>Ramp: ' + ((b.ramp && b.ramp.bunches) || 0) + EA.t(' tandan', ' bunches') + '</b><span class="en">' +
+        (b.ramp && b.ramp.bunches ? EA.t('Belum dihantar ke kilang: ', 'Not yet sent to the mill: ') + esc(rampText(b.ramp)) : EA.t('Kosong', 'Empty')) + '</span></div></div>' +
+      '<p class="hint">' + (b.local ? EA.t('Dikira dari telefon ini (salinan ujian)', 'Worked out from this phone (test copy)') : EA.t('Dikira pejabat ', 'Worked out by the office ') + esc(b.at)) + '</p>';
     return '<section class="card" id="fh-backlog" data-estate="' + esc(estate) + '" aria-labelledby="fh-bl"><div class="room-top"><h2 id="fh-bl" class="grow"><span class="inline"><span class="bm">Tan & baki buah</span> · <span class="en">Tonnes and crop backlog</span></span></h2>' +
       '<button type="button" class="btn btn-ghost" data-refresh-backlog="1">REFRESH<small>Kemas kini</small></button></div>' + body + '</section>';
   }
@@ -341,7 +341,7 @@
         b.disabled = true;
         var r = await refreshBacklog(estate);
         b.disabled = false;
-        if (!r) EA.ui.toast('Tiada isyarat atau pautan · No signal or link', 'wait');
+        if (!r) EA.ui.toast(EA.t('Tiada isyarat atau pautan', 'No signal or link'), 'wait');
       };
     });
   }
@@ -399,12 +399,12 @@
     var list = alertsFrom(getBacklog(ctx.estate));
     if (!list.length) return '';
     return '<section class="card alert-card" id="fh-alerts" aria-labelledby="fh-s0"><h2 id="fh-s0"><span class="step">!</span><span class="inline"><span class="bm">Amaran</span> · <span class="en">Alerts for the Assistant Manager</span></span></h2>' +
-      '<p class="hint">Tulis apa berlaku dan tindakan. Masuk chit dan WhatsApp untuk Penolong Pengurus. · Say what happened and the action. It goes on the chit and to WhatsApp for the Assistant Manager.</p>' +
+      '<p class="hint">' + EA.t('Tulis apa berlaku dan tindakan. Masuk chit dan WhatsApp untuk Penolong Pengurus.', 'Say what happened and the action. It goes on the chit and to WhatsApp for the Assistant Manager.') + '</p>' +
       list.map(function (a) {
         var n = alertNote(a.key, a.def);
         return '<div class="field"><label for="al-' + esc(a.key) + '"><span class="bm">' + esc(a.bm) + '</span><span class="en">' + esc(a.en) +
-          (n.carried ? ' · dari chit ' + esc(shortDate(n.date)) + ', tukar jika ada berita baru · from an earlier chit, change if there is news' : '') + '</span></label>' +
-          '<input id="al-' + esc(a.key) + '" class="text-input" data-alert="' + esc(a.key) + '" value="' + esc(n.note) + '" placeholder="Apa berlaku / tindakan · What happened / action"></div>';
+          (n.carried ? ' · ' + EA.t('dari chit ' + esc(shortDate(n.date)) + ', tukar jika ada berita baru', 'from the chit of ' + esc(shortDate(n.date)) + ', change if there is news') : '') + '</span></label>' +
+          '<input id="al-' + esc(a.key) + '" class="text-input" data-alert="' + esc(a.key) + '" value="' + esc(n.note) + '" placeholder="' + EA.t('Apa berlaku / tindakan', 'What happened / action') + '"></div>';
       }).join('') + '</section>';
   }
   function wireAlerts() {
@@ -429,8 +429,8 @@
     var testing = ctx.room.state !== 'live';
     var head = '<div class="room-top">' +
       '<button type="button" class="back-btn" id="fh-back">← <span class="inline"><span class="bm">Bilik</span></span></button>' +
-      '<div class="grow"><h1>Chit muster pagi</h1><span class="en">Morning muster chit · ' + esc(ctx.estate) + '</span></div>' +
-      (testing ? '<span class="test-badge">UJIAN · TEST</span>' : '') + '</div>' + tabs('muster', ctx.user);
+      '<div class="grow"><h1>' + EA.t('Chit muster pagi', 'Morning muster chit') + '</h1><span class="brand-sub">' + esc(ctx.estate) + '</span></div>' +
+      (testing ? '<span class="test-badge">' + EA.t('UJIAN', 'TEST') + '</span>' : '') + '</div>' + tabs('muster', ctx.user);
 
     if (!canKey(ctx.user)) {
       el.innerHTML = head + '<div class="card"><p><span class="bm">Pandangan pejabat untuk chit muster akan datang kemudian.</span>' +
@@ -444,7 +444,7 @@
         '<p class="msg ok-msg"><span class="bm">Chit hari ini sudah disimpan. Tekan VIEW untuk lihat, atau CORRECT untuk betulkan.</span>' +
         '<span class="en">Today\'s chit is saved. Tap VIEW to see it, or CORRECT to fix it.</span></p>' +
         todayCard() + backlogCard(ctx.estate) +
-        '<button type="button" class="btn btn-ghost" id="fh-new">+ NEW CHIT<small>Chit baru (jarang · rarely needed)</small></button>';
+        '<button type="button" class="btn btn-ghost" id="fh-new">+ NEW CHIT<small>Chit baru (' + EA.t('jarang perlu', 'rarely needed') + ')</small></button>';
       $('#fh-new').onclick = function () { draft.newChit = true; keepDraft(); render(el, ctx); };
       wireCommon(); wireBacklog(el, ctx.estate); refreshBacklog(ctx.estate);
       return;
@@ -465,7 +465,7 @@
       '</section>' +
 
       '<section class="card" aria-labelledby="fh-s2"><h2 id="fh-s2"><span class="step">2</span><span class="inline"><span class="bm">Kehadiran</span> · <span class="en">Attendance</span></span></h2>' +
-      '<p class="hint">H Hadir · present &nbsp; S Sakit · sick &nbsp; C Cuti · leave &nbsp; T Tak hadir · absent &nbsp; ⋯ Hari Buruh / Pindah · labour day / transfer. Tekan sekali lagi untuk buang. · Tap again to clear.</p>' +
+      '<p class="hint">' + EA.t('H Hadir &nbsp; S Sakit &nbsp; C Cuti &nbsp; T Tak hadir &nbsp; ⋯ Hari Buruh / Pindah. Tekan sekali lagi untuk buang.', 'H present &nbsp; S sick &nbsp; C leave &nbsp; T absent &nbsp; ⋯ labour day / transfer. Tap again to clear.') + '</p>' +
       '<div class="rows" id="fh-rows"></div>' +
       '</section>' +
 
@@ -514,9 +514,9 @@
       draft.marks[r.worker_id] = 'H'; draft.jobOf[r.worker_id] = j.key;
     });
     keepDraft(); render(el, ctx);
-    ui().toast('Disalin. Ubah petak dan yang berbeza · Copied. Change the lots and anything different');
+    ui().toast(EA.t('Disalin. Ubah petak dan yang berbeza', 'Copied. Change the lots and anything different'));
   }
-  function drawRain() { $('#fh-rainmtd').textContent = 'Bulan ini · Month to date: ' + rainMonth(EA.today(), draft.rain_mm).toFixed(2) + ' mm (dari chit di telefon ini · from chits on this phone)'; }
+  function drawRain() { $('#fh-rainmtd').textContent = EA.t('Bulan ini: ', 'Month to date: ') + rainMonth(EA.today(), draft.rain_mm).toFixed(2) + ' mm (' + EA.t('dari chit di telefon ini', 'from chits on this phone') + ')'; }
   function draftRows() {
     var rows = [];
     everyone().forEach(function (w) {
@@ -537,14 +537,14 @@
       // The mandor in charge is not one of the workers in the target (v1.3).
       var nw = rows.filter(function (r) { return r.muster === 'H' && jobFor(r.worker_id) === j && r.worker_id !== j.mandor; }).length;
       var li = lotsInfo(j.lots), tg = targetLine(j, nw, li);
-      return '<div class="list-line' + (tg && tg.short ? ' flag-line' : '') + '"><div><b>' + esc(sec.code + '. ' + j.task + ' ' + jobName(j.task)) + '</b><span class="en">' + esc(jobNameEn(j.task)) +
-        (j.block ? ' · Blok ' + esc(j.block) : '') + (j.lots.length ? ' · Petak ' + esc(j.lots.join(', ')) + ' (' + li.ha.toFixed(2) + ' Ha)' : '') +
+      return '<div class="list-line' + (tg && tg.short ? ' flag-line' : '') + '"><div><b>' + esc(sec.code + '. ' + j.task + ' ' + jobName(j.task)) + '</b><span class="en">' +
+        (j.block ? 'Blok ' + esc(j.block) : '') + (j.lots.length ? ' · Petak ' + esc(j.lots.join(', ')) + ' (' + li.ha.toFixed(2) + ' Ha)' : '') +
         (j.mandor ? ' · Mandor ' + esc(person(j.mandor)) : '') + '</span>' +
         (tg ? '<span class="en' + (tg.short ? ' warn-t' : '') + '">' + tg.text + '</span>' : '') + '</div>' +
         '<div class="acts"><span class="pill plain">' + n + ' orang</span>' +
         '<button type="button" class="btn btn-ghost" data-pick="' + j.key + '">PICK<small>Pilih orang</small></button>' +
         '<button type="button" class="btn btn-ghost" data-edit="' + j.key + '">EDIT<small>Ubah</small></button></div></div>';
-    }).join('') : '<p class="hint">Belum ada kerja. Tekan + ADD JOB untuk setiap kerja hari ini. · No jobs yet. Tap + ADD JOB for each job today.</p>';
+    }).join('') : '<p class="hint">' + EA.t('Belum ada kerja. Tekan + ADD JOB untuk setiap kerja hari ini.', 'No jobs yet. Tap + ADD JOB for each job today.') + '</p>';
     el.querySelectorAll('#fh-jobs [data-edit]').forEach(function (b) { b.onclick = function () { editJob(b.dataset.edit); }; });
     el.querySelectorAll('#fh-jobs [data-pick]').forEach(function (b) { b.onclick = function () { pickPeople(b.dataset.pick); }; });
   }
@@ -555,13 +555,13 @@
     var t = EA.lists.target && EA.lists.target(j.task, ctx.estate);
     if (!t) return null;
     var u = t.unit === 'bag' ? 'beg' : t.unit === 'palm' ? 'pokok' : t.unit;
-    if (!n) return { text: esc('Sasaran · Target: ' + t.per + ' ' + u + ' seorang · per person'), short: false };
+    if (!n) return { text: esc(EA.t('Sasaran: ', 'Target: ') + t.per + ' ' + u + ' ' + EA.t('seorang', 'per person')), short: false };
     var total = Math.round(t.per * n * 100) / 100;
-    var base = 'Sasaran · Target: ' + n + ' × ' + t.per + ' = <b>' + total + ' ' + esc(u) + '</b>';
+    var base = EA.t('Sasaran: ', 'Target: ') + n + ' × ' + t.per + ' = <b>' + total + ' ' + esc(u) + '</b>';
     if (t.unit !== 'Ha') return { text: base, short: false };
-    if (!j.lots.length) return { text: base + ' · pilih petak · choose the lots', short: true };
-    if (li.ha + 0.005 < total) return { text: base + ' · rancangan · planned <b>' + li.ha.toFixed(2) + ' Ha</b>: KURANG ' + (total - li.ha).toFixed(2) + ' Ha · below target', short: true };
-    return { text: base + ' · rancangan · planned ' + li.ha.toFixed(2) + ' Ha ✓', short: false };
+    if (!j.lots.length) return { text: base + ' · ' + EA.t('pilih petak', 'choose the lots'), short: true };
+    if (li.ha + 0.005 < total) return { text: base + ' · ' + EA.t('rancangan', 'planned') + ' <b>' + li.ha.toFixed(2) + ' Ha</b>: ' + EA.t('KURANG ' + (total - li.ha).toFixed(2) + ' Ha', (total - li.ha).toFixed(2) + ' Ha below target'), short: true };
+    return { text: base + ' · ' + EA.t('rancangan', 'planned') + ' ' + li.ha.toFixed(2) + ' Ha ✓', short: false };
   }
 
   function unmarked() {
@@ -571,23 +571,23 @@
   function drawRows() {
     var taken = onOtherChit();
     var left = unmarked();
-    $('#fh-rows').innerHTML = (left.length ? '<p class="warn"><span class="bm">' + left.length + ' orang belum ditanda.</span><span class="en">' + left.length + ' people not marked yet.</span></p>' : '<p class="hint">Semua orang sudah ditanda. · Everyone is marked.</p>') +
+    $('#fh-rows').innerHTML = (left.length ? '<p class="warn"><span class="bm">' + left.length + ' orang belum ditanda.</span><span class="en">' + left.length + ' people not marked yet.</span></p>' : '<p class="hint">' + EA.t('Semua orang sudah ditanda.', 'Everyone is marked.') + '</p>') +
       everyone().map(function (w) {
       var other = taken[w.id];
       var m = draft.marks[w.id] || '';
       var j = m === 'H' ? jobFor(w.id) : null;
       var line = '';
-      if (other) line = '<span class="hint">Sudah dalam chit lain · Already on chit ' + esc(other) + '</span>';
+      if (other) line = '<span class="hint">' + EA.t('Sudah dalam chit lain ', 'Already on chit ') + esc(other) + '</span>';
       else if (m === 'H') {
         line = draft.jobs.length ? '<div class="picks">' + draft.jobs.map(function (x) {
           return '<button type="button" class="pick" data-w="' + w.id + '" data-job="' + x.key + '" aria-pressed="' + (j === x) + '"><b>' + esc(x.task) + '</b><small>' + esc(x.block ? 'Blk ' + x.block : jobName(x.task)) + '</small></button>';
-        }).join('') + '</div>' + (j ? '' : '<b class="bad-text">Pilih kerja · Choose a job</b>') : '<b class="bad-text">Tambah kerja dahulu · Add a job first</b>';
-      } else if (m && m !== 'H') line = '<span class="pill plain">' + esc(MARKS[m][0] + ' · ' + MARKS[m][1]) + '</span>';
+        }).join('') + '</div>' + (j ? '' : '<b class="bad-text">' + EA.t('Pilih kerja', 'Choose a job') + '</b>') : '<b class="bad-text">' + EA.t('Tambah kerja dahulu', 'Add a job first') + '</b>';
+      } else if (m && m !== 'H') line = '<span class="pill plain">' + esc(EA.t(MARKS[m][0], MARKS[m][1])) + '</span>';
       var more = (m === 'L' || m === 'X') ? m : '⋯';
       return '<div class="wrow' + (other ? ' off' : '') + '">' +
         '<div class="who-w"><b>' + esc(w.name) + '</b><span class="en">' + esc(w.id) + ' · ' + (w.mdr ? 'Mandor' : esc(w.gang)) + ' · ' + (w.sex === 'F' ? 'P' : 'L') + '</span></div>' +
         '<div class="seg" role="group" aria-label="' + esc(w.id) + '">' + ['H', 'S', 'C', 'T'].map(function (k) {
-          return '<button type="button" data-w="' + w.id + '" data-k="' + k + '" aria-pressed="' + (m === k) + '" title="' + MARKS[k][0] + ' · ' + MARKS[k][1] + '"' + (other ? ' disabled' : '') + '>' + k + '</button>';
+          return '<button type="button" data-w="' + w.id + '" data-k="' + k + '" aria-pressed="' + (m === k) + '" title="' + EA.t(MARKS[k][0], MARKS[k][1]) + '"' + (other ? ' disabled' : '') + '>' + k + '</button>';
         }).join('') + '<button type="button" data-w="' + w.id + '" data-more="1" aria-pressed="' + (m === 'L' || m === 'X') + '" title="Hari Buruh / Pindah"' + (other ? ' disabled' : '') + '>' + more + '</button></div>' +
         (line ? '<div class="job">' + line + '</div>' : '') + '</div>';
     }).join('');
@@ -626,12 +626,12 @@
       '<div class="field"><label for="jb-task"><span class="bm">Kerja</span><span class="en">Job code</span></label><select id="jb-task" class="text-input">' + taskOptions(pick.task) + '</select></div>' +
       '<div class="field"><label for="jb-block"><span class="bm">Blok</span><span class="en">Block</span></label><select id="jb-block" class="text-input"></select></div>' +
       '<div class="field"><span class="inline"><span class="bm">Petak</span> · <span class="en">Lots (optional)</span></span><div id="jb-lots"></div></div>' +
-      '<div class="field"><label for="jb-mdr"><span class="bm">Mandor</span><span class="en">Foreman (optional)</span></label><select id="jb-mdr" class="text-input"><option value="">— Tiada · None —</option>' +
+      '<div class="field"><label for="jb-mdr"><span class="bm">Mandor</span><span class="en">Foreman (optional)</span></label><select id="jb-mdr" class="text-input"><option value="">' + EA.t('— Tiada —', '— None —') + '</option>' +
         EA.lists.mandorsFor(ctx.estate).map(function (m) { return '<option value="' + m.id + '"' + (m.id === pick.mandor ? ' selected' : '') + '>' + esc(m.name) + '</option>'; }).join('') + '</select></div>' +
       '<div class="actions">' + (key ? '<button class="btn btn-ghost" type="button" id="jb-del"' + (used ? ' disabled title="Ada orang dalam kerja ini"' : '') + '>REMOVE<small>Buang</small></button>' : '') +
       '<button class="btn btn-ghost" type="button" id="jb-cancel">CANCEL<small>Batal</small></button>' +
       '<button class="btn btn-ok" type="button" id="jb-save">SAVE<small>Simpan</small></button></div>' +
-      (used ? '<p class="hint">' + used + ' orang dalam kerja ini. Pindahkan mereka dahulu untuk buang. · ' + used + ' people on this job; move them first to remove it.</p>' : ''),
+      (used ? '<p class="hint">' + EA.t(used + ' orang dalam kerja ini. Pindahkan mereka dahulu untuk buang.', used + ' people on this job; move them first to remove it.') + '</p>' : ''),
       function (s) {
         function fill() {
           var needs = pick.task ? EA.lists.sectionOf(pick.task).block : true;
@@ -656,11 +656,11 @@
           keepDraft(); ui().closeSheet(); drawAll();
         };
         s.querySelector('#jb-save').onclick = function () {
-          if (!pick.task) { ui().toast('Pilih kerja · Choose the job', 'bad'); return; }
-          if (EA.lists.sectionOf(pick.task).block && !pick.block) { ui().toast('Kerja ladang perlu blok · Field work needs a block', 'bad'); return; }
+          if (!pick.task) { ui().toast(EA.t('Pilih kerja', 'Choose the job'), 'bad'); return; }
+          if (EA.lists.sectionOf(pick.task).block && !pick.block) { ui().toast(EA.t('Kerja ladang perlu blok', 'Field work needs a block'), 'bad'); return; }
           pick.lots = sortLots(pick.lots);
           var same = draft.jobs.find(function (x) { return x.key !== key && x.task === pick.task && x.block === pick.block && x.lots.join(' ') === pick.lots.join(' '); });
-          if (same) { ui().toast('Kerja ini sudah ada · This job is already on the chit', 'bad'); return; }
+          if (same) { ui().toast(EA.t('Kerja ini sudah ada', 'This job is already on the chit'), 'bad'); return; }
           if (j0) { j0.task = pick.task; j0.block = pick.block; j0.lots = pick.lots; j0.mandor = pick.mandor; }
           else { var nj = { key: 'j' + (draft.nextJob++), task: pick.task, block: pick.block, lots: pick.lots, mandor: pick.mandor }; draft.jobs.push(nj);
                  if (pick.mandor && !draft.marks[pick.mandor]) draft.marks[pick.mandor] = 'H'; }
@@ -682,8 +682,8 @@
     var chosen = {};
     list.forEach(function (w) { if (draft.marks[w.id] === 'H' && jobFor(w.id) === j) chosen[w.id] = true; });
     var first = gangFirst(j.task);
-    var groups = {};
-    list.forEach(function (w) { (groups[w.gang || 'Lain-lain · Other'] = groups[w.gang || 'Lain-lain · Other'] || []).push(w); });
+    var groups = {}, other = EA.t('Lain-lain', 'Other');
+    list.forEach(function (w) { (groups[w.gang || other] = groups[w.gang || other] || []).push(w); });
     var order = Object.keys(groups).sort(function (a, b) { var fa = first.test(a), fb = first.test(b); return fa === fb ? (a < b ? -1 : 1) : (fa ? -1 : 1); });
     var last = lastChit(), before = [];
     if (last) last.rows.forEach(function (r) { if (r.muster === 'H' && r.task_code === j.task && (!j.block || r.block === j.block) && list.some(function (w) { return w.id === r.worker_id; })) before.push(r.worker_id); });
@@ -693,11 +693,11 @@
     }
     ui().openSheet('<h2 id="sheet-title"><span class="bm">' + esc(j.task + ' ' + jobName(j.task)) + (j.block ? ' · Blok ' + esc(j.block) : '') + '</span><span class="en">Tick the people on this job</span></h2>' +
       (before.length ? '<div class="actions"><button class="btn btn-ghost" type="button" id="pp-last">SAME AS LAST TIME<small>Sama seperti ' + esc(niceDate(last.date)) + ' · ' + before.length + ' orang</small></button></div>' : '') +
-      '<input class="text-input" id="pp-find" placeholder="Cari nama · search a name" autocomplete="off">' +
+      '<input class="text-input" id="pp-find" placeholder="' + EA.t('Cari nama', 'Search a name') + '" autocomplete="off">' +
       '<div id="pp-list">' + order.map(function (g) {
         return '<p class="hint pick-group"><b>' + esc(g) + '</b></p><div class="picks">' + groups[g].slice().sort(function (a, b) { return a.name < b.name ? -1 : 1; }).map(card).join('') + '</div>';
       }).join('') + '</div>' +
-      '<p class="hint">Yang ditanda menjadi Hadir dalam kerja ini. · Ticked people become present on this job.</p>' +
+      '<p class="hint">' + EA.t('Yang ditanda menjadi Hadir dalam kerja ini.', 'Ticked people become present on this job.') + '</p>' +
       '<div class="actions"><button class="btn btn-ghost" type="button" id="pp-cancel">CANCEL<small>Batal</small></button>' +
       '<button class="btn btn-ok" type="button" id="pp-ok">DONE<small>Siap</small></button></div>',
       function (s) {
@@ -766,10 +766,10 @@
       '<div class="rows">' + left.map(function (w) {
         return '<div class="wrow"><div class="who-w"><b>' + esc(w.name) + '</b><span class="en">' + esc(w.id) + ' · ' + (w.mdr ? 'Mandor' : esc(w.gang)) + '</span></div>' +
           '<div class="seg" role="group" aria-label="' + esc(w.id) + '">' + ['S', 'C', 'T'].map(function (k) {
-            return '<button type="button" data-lw="' + w.id + '" data-k="' + k + '" aria-pressed="false" title="' + MARKS[k][0] + ' · ' + MARKS[k][1] + '">' + k + '</button>';
+            return '<button type="button" data-lw="' + w.id + '" data-k="' + k + '" aria-pressed="false" title="' + EA.t(MARKS[k][0], MARKS[k][1]) + '">' + k + '</button>';
           }).join('') + '</div></div>';
       }).join('') + '</div>' +
-      '<p class="hint">S Sakit · sick &nbsp; C Cuti · leave &nbsp; T Tak hadir · absent. Yang bekerja: tekan BACK dan beri kerja. · Anyone who worked: tap BACK and give them a job.</p>' +
+      '<p class="hint">' + EA.t('S Sakit &nbsp; C Cuti &nbsp; T Tak hadir. Yang bekerja: tekan BACK dan beri kerja.', 'S sick &nbsp; C leave &nbsp; T absent. Anyone who worked: tap BACK and give them a job.') + '</p>' +
       '<div class="actions"><button class="btn btn-wait" type="button" id="lo-all">REST ABSENT<small>Baki semua tak hadir</small></button>' +
       '<button class="btn btn-ok" type="button" id="lo-next">NEXT<small>Seterusnya</small></button></div>' +
       '<div class="actions"><button class="btn btn-ghost" type="button" id="lo-back">BACK<small>Kembali ke senarai</small></button></div>',
@@ -804,7 +804,7 @@
   // directly (no mandor confirmation on the phone).
   function confirmSheet() {
     var empty = emptyJobs();
-    var preview = chitText(buildChit('(belum disimpan · not saved yet)', EA.ui.hhmm(new Date()), ctx.user.code));
+    var preview = chitText(buildChit('(' + EA.t('belum disimpan', 'not saved yet') + ')', EA.ui.hhmm(new Date()), ctx.user.code));
     ui().openSheet('<h2 id="sheet-title"><span class="bm">Semak chit ini</span><span class="en">Check this chit, then save</span></h2>' +
       (empty.length ? '<p class="warn"><span class="bm">Kerja tanpa orang tidak masuk chit: ' + esc(empty.map(function (j) { return j.task; }).join(', ')) + '</span><span class="en">Jobs with nobody are left off the chit.</span></p>' : '') +
       '<pre class="chit">' + esc(preview) + '</pre>' +
@@ -865,12 +865,12 @@
         working: s.tot(s.worked), not_working: s.tot(s.notw), grand_total: s.tot(s.grand),
         confirmed_by: c.checker, confirmed_at: stamp, note: '' }, old && old.chitRowId ? old.chitRowId : '').id;
     } catch (e) {
-      ui().toast('Tidak dapat simpan: ' + e.message + ' · Could not save', 'bad');
+      ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad');
       return;
     }
     keepChit(c);
     dropDraft();
-    ui().toast('Chit disimpan · Chit saved' + (old ? ' (dibetulkan · corrected)' : ''));
+    ui().toast(EA.t('Chit disimpan', 'Chit saved') + (old ? ' (' + EA.t('dibetulkan', 'corrected') + ')' : ''));
     if (navigator.onLine && EA.sendLink()) EA.send();
     render(el, ctx);
     showChit(c.chit);
@@ -938,12 +938,12 @@
       });
   }
   function copyText(t) {
-    function done() { ui().toast('Disalin · Copied'); }
+    function done() { ui().toast(EA.t('Disalin', 'Copied')); }
     if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(t).then(done, fallback); } else fallback();
     function fallback() {
       var a = document.createElement('textarea'); a.value = t; a.setAttribute('readonly', ''); a.style.position = 'fixed'; a.style.opacity = '0';
       document.body.appendChild(a); a.select();
-      try { document.execCommand('copy'); done(); } catch (e) { ui().toast('Tekan lama pada teks untuk salin · Long-press the text to copy', 'wait'); }
+      try { document.execCommand('copy'); done(); } catch (e) { ui().toast(EA.t('Tekan lama pada teks untuk salin', 'Long-press the text to copy'), 'wait'); }
       document.body.removeChild(a);
     }
   }
@@ -956,13 +956,13 @@
         var s = summary(c.rows);
         var ids = c.rows.map(function (r) { return r.id; }).concat(c.chitRowId ? [c.chitRowId] : []);
         var waiting = ids.some(function (i) { return EA.isWaiting(i); });
-        return '<div class="list-line"><div><b>Chit ' + esc(c.chit.split('-').pop()) + '</b> · ' + esc(c.confirmedAt) + (c.rev > 1 ? ' · dibetulkan' : '') +
-          '<span class="en">Bekerja ' + s.tot(s.worked) + ' · Tidak bekerja ' + s.tot(s.notw) + ' · Jumlah ' + s.tot(s.grand) + '</span></div>' +
-          '<div class="acts"><span class="pill ' + (waiting ? 'wait">Menunggu · Waiting' : 'ok">Dihantar · Sent') + '</span>' +
+        return '<div class="list-line"><div><b>Chit ' + esc(c.chit.split('-').pop()) + '</b> · ' + esc(c.confirmedAt) + (c.rev > 1 ? ' · ' + EA.t('dibetulkan', 'corrected') : '') +
+          '<span class="en">' + EA.t('Bekerja ', 'Working ') + s.tot(s.worked) + ' · ' + EA.t('Tidak bekerja ', 'Not working ') + s.tot(s.notw) + ' · ' + EA.t('Jumlah ', 'Total ') + s.tot(s.grand) + '</span></div>' +
+          '<div class="acts"><span class="pill ' + (waiting ? 'wait">' + EA.t('Menunggu', 'Waiting') : 'ok">' + EA.t('Dihantar', 'Sent')) + '</span>' +
           '<button type="button" class="btn btn-ghost" data-view="' + esc(c.chit) + '">VIEW<small>Lihat</small></button>' +
           (canKey(ctx.user) ? '<button type="button" class="btn btn-ghost" data-fix="' + esc(c.chit) + '">CORRECT<small>Betulkan</small></button>' : '') +
           '</div></div>';
-      }).join('') + '</div>' : '<p class="hint">Belum ada chit hari ini. · No chit yet today.</p>') +
+      }).join('') + '</div>' : '<p class="hint">' + EA.t('Belum ada chit hari ini.', 'No chit yet today.') + '</p>') +
       '</section>';
   }
 

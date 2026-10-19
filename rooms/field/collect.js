@@ -87,9 +87,9 @@
     var sel = lorrySel(list), n = sumOf(sel) + (lorryOn() ? sumOf(draft.dispatch.extra) : 0), a = abwNow(), after = {};
     list.forEach(function (r) { after[r.block] = (after[r.block] || 0) + r.open - (sel[r.lot] || 0); });
     var bl = Object.keys(after).filter(function (k) { return after[k] > 0; }).sort();
-    return (lorryOn() ? '<p class="hint" id="cl-dtot">Jumlah ke lori · Total on the lorry: <b>' + n + '</b> tandan' +
-        (n && a ? ' · anggaran · estimated <b>' + (n * a / 1000).toFixed(1) + ' MT</b> (ABW ' + a.toFixed(1) + ' kg)' : '') + '</p>' : '') +
-      (bl.length ? '<p class="hint"><b>Baki blok' + (lorryOn() ? ' selepas lori ini · Block balance after this lorry' : ' · Block balance (field + ramp)') + ':</b> ' +
+    return (lorryOn() ? '<p class="hint" id="cl-dtot">' + EA.t('Jumlah ke lori: <b>', 'Total on the lorry: <b>') + n + '</b> tandan' +
+        (n && a ? ' · ' + EA.t('anggaran', 'estimated') + ' <b>' + (n * a / 1000).toFixed(1) + ' MT</b> (ABW ' + a.toFixed(1) + ' kg)' : '') + '</p>' : '') +
+      (bl.length ? '<p class="hint"><b>' + (lorryOn() ? EA.t('Baki blok selepas lori ini', 'Block balance after this lorry') : EA.t('Baki blok', 'Block balance (field + ramp)')) + ':</b> ' +
         bl.map(function (k) { return 'Blk ' + esc(k) + ' ' + after[k] + ' tandan'; }).join(' · ') + '</p>' : '');
   }
 
@@ -99,8 +99,8 @@
     var testing = ctx.room.state !== 'live';
     var head = '<div class="room-top">' +
       '<button type="button" class="back-btn" id="cl-back">← <span class="inline"><span class="bm">Bilik</span></span></button>' +
-      '<div class="grow"><h1>Kutip & hantar</h1><span class="en">Collect & dispatch · ' + esc(ctx.estate) + '</span></div>' +
-      (testing ? '<span class="test-badge">UJIAN · TEST</span>' : '') + '</div>';
+      '<div class="grow"><h1>' + EA.t('Kutip & hantar', 'Collect & dispatch') + '</h1><span class="brand-sub">' + esc(ctx.estate) + '</span></div>' +
+      (testing ? '<span class="test-badge">' + EA.t('UJIAN', 'TEST') + '</span>' : '') + '</div>';
     if (ctx.user.role === 'Worker') {
       // Parked for the pilot (v22): the tractor driver and loader keep the paper; the staff keys it.
       el.innerHTML = head + '<section class="card"><p class="msg"><span class="bm">Belum dibuka untuk pemandu traktor dan pemuat. Teruskan dengan kertas; staf akan isi dalam aplikasi.</span>' +
@@ -115,15 +115,15 @@
       (fixing() ? '<p class="warn"><span class="bm">Membetulkan nota hantar DN ' + esc(d.dn) + '. Yang lama kekal; yang baru menggantikannya.</span><span class="en">Correcting a delivery note. The old one stays on record; this one replaces it.</span> <button type="button" class="btn btn-ghost" id="cl-fixstop">STOP<small>Batal betulkan</small></button></p>' : '') +
 
       '<section class="card" aria-labelledby="cl-s1"><h2 id="cl-s1"><span class="step">1</span><span class="inline"><span class="bm">Petak · tandan</span> · <span class="en">Lots and bunches</span></span></h2>' +
-      (fixing() ? '' : '<p class="hint">Nombor dari Kerja harian (tandan menuai). Ubah hanya jika kertas pemuat berbeza. · Numbers from Day\'s work (bunches harvested). Change them only where the loader\'s paper differs.</p>' +
-        '<div class="choice" role="group" aria-label="Lori hari ini · Lorry today">' +
+      (fixing() ? '' : '<p class="hint">' + EA.t('Nombor dari Kerja harian (tandan menuai). Ubah hanya jika kertas pemuat berbeza.', 'Numbers from Day\'s work (bunches harvested). Change them only where the loader\'s paper differs.') + '</p>' +
+        '<div class="choice" role="group" aria-label="' + EA.t('Lori hari ini', 'Lorry today') + '">' +
           '<button type="button" class="btn ' + (d.on ? 'btn-main' : 'btn-ghost') + '" id="cl-lorry-yes" aria-pressed="' + (d.on ? 'true' : 'false') + '">ADA LORI<small>A lorry went to the mill</small></button>' +
           '<button type="button" class="btn ' + (d.on ? 'btn-ghost' : 'btn-main') + '" id="cl-lorry-no" aria-pressed="' + (d.on ? 'false' : 'true') + '">TIADA LORI<small>No lorry</small></button>' +
         '</div>') +
       '<div id="cl-rows"></div>' +
       (lorryOn() ? '<details class="card-sub" id="cl-extra"' + (sumOf(d.extra) ? ' open' : '') + '><summary><span class="bm">Tandan tanpa rekod tuai, ikut blok</span> · <span class="en">Bunches with no harvest record, by block</span></summary>' +
         '<div class="blk-in">' + EA.lists.blocksFor(ctx.estate).map(function (b) {
-          return '<div class="field"><label for="cl-db-' + esc(b.block) + '"><span class="bm">Blok ' + esc(b.block) + '</span><span class="en">tandan · bunches</span></label>' +
+          return '<div class="field"><label for="cl-db-' + esc(b.block) + '"><span class="bm">Blok ' + esc(b.block) + '</span><span class="en">' + EA.t('tandan', 'bunches') + '</span></label>' +
             '<input id="cl-db-' + esc(b.block) + '" class="text-input" inputmode="numeric" data-dblock="' + esc(b.block) + '" value="' + esc(d.extra[b.block] || '') + '" placeholder=""></div>';
         }).join('') + '</div></details>' : '') +
       '<div id="cl-tot"></div></section>' +
@@ -136,7 +136,7 @@
         '<div class="field"><label for="cl-ml"><span class="bm">Kilang</span><span class="en">Mill or collecting centre</span></label><select id="cl-ml" class="text-input">' +
           EA.lists.mills.concat(['Lain-lain · Other']).map(function (m) { return '<option' + (m === d.mill ? ' selected' : '') + '>' + esc(m) + '</option>'; }).join('') + '</select></div>' +
       '</div>' +
-      '<label class="inline-check"><input type="checkbox" id="cl-rc"' + (d.ramp_cleared === 'Y' ? ' checked' : '') + '> Ramp kosong selepas lori ini · ramp empty after this lorry</label>' +
+      '<label class="inline-check"><input type="checkbox" id="cl-rc"' + (d.ramp_cleared === 'Y' ? ' checked' : '') + '> ' + EA.t('Ramp kosong selepas lori ini', 'Ramp empty after this lorry') + '</label>' +
       '</section>' : '') +
 
       '<div class="bottom-bar"><button type="button" class="btn btn-main" id="cl-save">SAVE<small>Simpan</small></button></div>' +
@@ -173,15 +173,15 @@
       var x = lorryOf(r), h = habis(r);
       return '<div class="list-line lot-row" data-row="' + esc(r.lot) + '"><div class="grow">' +
         '<b>' + esc(EA.fh.lotLabel(r.lot, r.block)) + '</b>' +
-        '<span class="en">Menuai · harvested ' + r.dates.map(EA.fh.shortDate).join(', ') + ' · ' + esc(r.workers.map(person).join(', ')) + '</span>' +
-        '<span class="en">Ladang · field <b>' + r.field + '</b> · Ramp <b>' + r.ramp + '</b> · belum dihantar · not yet sent ' + r.open + '</span>' +
-        (!fixing() && r.field > 0 ? '<div class="wline"><label class="inline-label">Dikutip · collected <input class="qty" inputmode="numeric" data-dik="' + esc(r.lot) + '" value="' + dik(r) + '" aria-label="Dikutip petak ' + esc(r.lot) + '"></label>' +
-          '<label class="inline-check"><input type="checkbox" data-hab="' + esc(r.lot) + '"' + (h === 'Y' ? ' checked' : '') + '> Habis · lot cleared</label></div>' : '') +
-        (on ? '<div class="wline"><label class="inline-check"><input type="checkbox" data-lon="' + esc(r.lot) + '"' + (x.on ? ' checked' : '') + '> Ke lori · on lorry</label>' +
+        '<span class="en">' + EA.t('Menuai ', 'Harvested ') + r.dates.map(EA.fh.shortDate).join(', ') + ' · ' + esc(r.workers.map(person).join(', ')) + '</span>' +
+        '<span class="en">' + EA.t('Ladang <b>', 'Field <b>') + r.field + '</b> · Ramp <b>' + r.ramp + '</b> · ' + EA.t('belum dihantar ', 'not yet sent ') + r.open + '</span>' +
+        (!fixing() && r.field > 0 ? '<div class="wline"><label class="inline-label">' + EA.t('Dikutip ', 'Collected ') + '<input class="qty" inputmode="numeric" data-dik="' + esc(r.lot) + '" value="' + dik(r) + '" aria-label="Dikutip petak ' + esc(r.lot) + '"></label>' +
+          '<label class="inline-check"><input type="checkbox" data-hab="' + esc(r.lot) + '"' + (h === 'Y' ? ' checked' : '') + '>' + EA.t(' Habis', ' Lot cleared') + '</label></div>' : '') +
+        (on ? '<div class="wline"><label class="inline-check"><input type="checkbox" data-lon="' + esc(r.lot) + '"' + (x.on ? ' checked' : '') + '>' + EA.t(' Ke lori', ' On lorry') + '</label>' +
           '<input class="qty" inputmode="numeric" data-ln="' + esc(r.lot) + '" value="' + (x.on ? x.n : '') + '"' + (x.on ? '' : ' disabled') + ' aria-label="Ke lori petak ' + esc(r.lot) + '"></div>' : '') +
         '</div></div>';
     }).join('') + '</div>'
-      : '<p class="hint">Tiada buah belum dihantar. Isi tandan penuai di Kerja harian dahulu. · No crop waiting. Key the harvesters\' bunches on Day\'s work first.</p>';
+      : '<p class="hint">' + EA.t('Tiada buah belum dihantar. Isi tandan penuai di Kerja harian dahulu.', 'No crop waiting. Key the harvesters\' bunches on Day\'s work first.') + '</p>';
     function rowOf(lot) { return list.find(function (r) { return r.lot === lot; }); }
     function refreshRow(r) {
       var hb = el.querySelector('input[data-hab="' + r.lot + '"]'); if (hb) hb.checked = habis(r) === 'Y';
@@ -223,7 +223,7 @@
           '<span class="en">Harvested ' + r.field + ' (not yet collected), collected ' + dik(r) + '. How many bunches went to the ramp?</span></label>' +
           '<input id="sh-' + esc(r.lot) + '" class="text-input" inputmode="numeric" data-sh="' + esc(r.lot) + '" value="' + dik(r) + '"></div>';
       }).join('') +
-      '<p class="hint">Baki yang tidak dikutip kekal sebagai baki di ladang, dan keluar dalam chit pagi esok. · What was not collected stays as field backlog and shows on tomorrow\'s morning chit.</p>' +
+      '<p class="hint">' + EA.t('Baki yang tidak dikutip kekal sebagai baki di ladang, dan keluar dalam chit pagi esok.', 'What was not collected stays as field backlog and shows on tomorrow\'s morning chit.') + '</p>' +
       '<div class="actions"><button class="btn btn-ghost" type="button" id="sh-back">BACK<small>Kembali</small></button>' +
       '<button class="btn btn-ok" type="button" id="sh-ok">SAVE<small>Simpan</small></button></div>',
       function (sh) {
@@ -261,7 +261,7 @@
     if (short.length && !draft.shortOk) return shortSheet(short);
     draft.shortOk = false;
     var old = fixing() ? saved().find(function (s) { return s.dispatch && s.dispatch.trip === dis.replacing && !s.dispatch.replacedBy; }) : null;
-    if (fixing() && !old) { ui().toast('Nota hantar lama tidak dijumpai · Old delivery note not found', 'bad'); return; }
+    if (fixing() && !old) { ui().toast(EA.t('Nota hantar lama tidak dijumpai', 'Old delivery note not found'), 'bad'); return; }
     var now = new Date();
     // One trip code ties together the rows of this lorry (one per block); a correction keeps it.
     var trip = old ? old.dispatch.trip : 'LR-' + ctx.estate + '-' + (EA.phone() || 'P00') + '-' + EA.today().replace(/-/g, '') + '-' + EA.ui.hhmm(now).replace(':', '') + String(now.getSeconds()).padStart(2, '0') + String(now.getMilliseconds()).padStart(3, '0');
@@ -280,12 +280,12 @@
         rec.ids.push(l.id);
       });
       if (hasDis) EA.fh.harvest.writeDn(ctx.estate, rec, old);
-    } catch (e) { ui().toast('Tidak dapat simpan: ' + e.message + ' · Could not save', 'bad'); return; }
+    } catch (e) { ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad'); return; }
     var all = EA.local.get(K.saved, []);
     if (old) all.forEach(function (s) { if (s.dispatch && s.dispatch.trip === trip && !s.dispatch.replacedBy) s.dispatch.replacedBy = rec.at; });
     all.push(rec); EA.local.set(K.saved, all);
     dropDraft();
-    ui().toast(old ? 'Nota hantar dibetulkan · Delivery note corrected' : 'Disimpan · Saved');
+    ui().toast(old ? EA.t('Nota hantar dibetulkan', 'Delivery note corrected') : EA.t('Disimpan', 'Saved'));
     render(el, ctx);
     if (navigator.onLine && EA.sendLink()) EA.send().then(function () {
       return Promise.all([EA.fh.refreshBacklog(ctx.estate), EA.fh.harvest.refreshOpen(ctx.estate)]);
@@ -300,11 +300,11 @@
         return '<div class="list-line"><div><b>' + esc(s.at) + '</b><span class="en">' +
           (s.lines.length ? 'Kutip: ' + s.lines.map(function (l) { return l.lot + ' ' + (l.bunches || 0) + (l.cleared === 'Y' ? ' (habis)' : ''); }).join(', ') : '') +
           (s.dispatch ? (s.lines.length ? ' · ' : '') + 'Lori ' + esc(s.dispatch.lorry || '') + ': ' + (s.dispatch.bunches || 0) + ' tandan' + (s.dispatch.blocks && Object.keys(s.dispatch.blocks).length ? ' (' + Object.keys(s.dispatch.blocks).map(function (b) { return 'Blk ' + b + ' ' + s.dispatch.blocks[b]; }).join(', ') + ')' : '') + ' ke ' + esc(s.dispatch.mill) + (s.dispatch.ramp_cleared === 'Y' ? ' (ramp kosong)' : '') : '') +
-          (s.dispatch && s.dispatch.replacedBy ? ' <i>(dibetulkan · corrected)</i>' : '') +
-          (refusedDn(s) ? '<br><b class="warn-t">Pembetulan ditolak: lori ini sudah ada tiket. Hubungi kerani. · Correction refused: this lorry already has a ticket. Call the clerk.</b>' : '') +
-          '</span><span class="pill ' + (waiting ? 'wait">Menunggu · Waiting' : 'ok">Dihantar · Sent') + '</span></div>' +
+          (s.dispatch && s.dispatch.replacedBy ? ' <i>' + EA.t('(dibetulkan)', '(corrected)') + '</i>' : '') +
+          (refusedDn(s) ? '<br><b class="warn-t">' + EA.t('Pembetulan ditolak: lori ini sudah ada tiket. Hubungi kerani.', 'Correction refused: this lorry already has a ticket. Call the clerk.') + '</b>' : '') +
+          '</span><span class="pill ' + (waiting ? 'wait">' + EA.t('Menunggu', 'Waiting') : 'ok">' + EA.t('Dihantar', 'Sent')) + '</span></div>' +
           (canFix(s) ? '<div class="acts"><button type="button" class="btn btn-ghost" data-dfix="' + esc(s.dispatch.trip) + '">CORRECT DN<small>Betulkan</small></button></div>' : '') + '</div>';
-      }).join('') : '<p class="hint">Belum ada hari ini. · Nothing yet today.</p>') + '</section>';
+      }).join('') : '<p class="hint">' + EA.t('Belum ada hari ini.', 'Nothing yet today.') + '</p>') + '</section>';
   }
   function refusedDn(s) { var r = EA.local.get('ea.refused', []); return !!(s.dispatch && r.some(function (x) { return x.trip === s.dispatch.trip; })); }
   // A delivery note can be corrected (by the staff, not the loader) until its lorry has a mill ticket.

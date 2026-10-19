@@ -77,7 +77,7 @@ const out = process.argv[2] || require('os').tmpdir();
   await p.click('#tt-close');
   await p.click('.tabs a[href="#field-harvest"]'); await p.waitForTimeout(500);
   const card = t(await p.textContent('#fh-backlog'));
-  check('chit shows month-to-date 15.70 MT and the ramp', /Month to date: 15\.70 MT/.test(card) && /Ramp: 450/.test(card), card.slice(0, 400));
+  check('chit shows month-to-date 15.70 MT and the ramp', /Tan bulan ini: 15\.70 MT/.test(card) && /Ramp: 450/.test(card), card.slice(0, 400));
   await p.screenshot({ path: out + '/v22-chit.png', fullPage: false });
   await logout();
   check('staff has no ticket tab', !staffTabs.includes('Tiket kilang'), staffTabs);

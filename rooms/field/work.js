@@ -44,7 +44,9 @@
     var t = task(code);
     if (!t) return 'day';
     if (code === 'HV01') return 'bunches';
-    if (t.unit === 'MT') return 'ticket';
+    // Crop jobs are paid from the mill ticket; loading stumps (FM02) never goes on a ticket,
+    // so its tonnes are keyed (v1.3).
+    if (t.unit === 'MT' && code !== 'FM02') return 'ticket';
     if (t.unit === 'day') return 'day';
     if (t.unit === 'hour') return 'hour';
     return 'qty';
@@ -56,8 +58,7 @@
 
   // ---------- which chit ----------
   function chitsFor(estate) {
-    var t = EA.today(), y = new Date(); y.setDate(y.getDate() - 1);
-    var yd = y.toISOString().slice(0, 10);
+    var t = EA.today(), yd = daysAgo(1);     // the phone's own day (Malaysia), not UTC
     return EA.fh.allChits().filter(function (c) { return c.estate === estate && (c.date === t || c.date === yd); })
       .sort(function (a, b) { return (a.date + a.confirmedAt) < (b.date + b.confirmedAt) ? 1 : -1; });
   }
@@ -80,14 +81,30 @@
 
   // ---------- phone memory ----------
   function saved() { return EA.local.get(K.saved, []).filter(function (s) { return s.date >= daysAgo(40); }); }
-  function daysAgo(n) { var d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); }
+  function daysAgo(n) { var d = new Date(); d.setDate(d.getDate() - n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function savedFor(chitId) { return saved().find(function (s) { return s.chit === chitId; }) || null; }
   function keepSaved(s) { var list = saved().filter(function (x) { return x.chit !== s.chit; }); list.push(s); EA.local.set(K.saved, list); }
   function loadDraft(c) {
     var all = EA.local.get(K.draft, {});
     var d = all[c.chit];
-    if (d) { d.prog = d.prog || {}; d.manual = d.manual || {}; d.bags = d.bags || {}; return d; }
-    d = { chit: c.chit, lines: {}, status: {}, checker: c.checker || '', replacing: '', prog: {}, manual: {}, bags: {} };
+    if (d) {
+      d.prog = d.prog || {}; d.manual = d.manual || {}; d.bags = d.bags || {};
+      // The morning chit was corrected after this draft began (v1.3): people added get their
+      // lines, people taken off lose theirs; what was already keyed for the others stays.
+      if ((d.chitRev || 1) !== (c.rev || 1)) {
+        var fresh = freshDraft(c), keep = d.lines;
+        d.lines = {};
+        Object.keys(fresh.lines).forEach(function (w) { d.lines[w] = keep[w] || fresh.lines[w]; });
+        Object.keys(fresh.status).forEach(function (k) { if (!d.status[k]) d.status[k] = fresh.status[k]; });
+        Object.keys(fresh.prog).forEach(function (k) { if (!d.prog[k]) d.prog[k] = fresh.prog[k]; });
+        d.chitRev = c.rev || 1;
+      }
+      return d;
+    }
+    return freshDraft(c);
+  }
+  function freshDraft(c) {
+    var d = { chit: c.chit, chitRev: c.rev || 1, lines: {}, status: {}, checker: c.checker || '', replacing: '', prog: {}, manual: {}, bags: {} };
     var mine = ownLots();
     jobsOf(c).forEach(function (j) {
       j.people.forEach(function (w) {
@@ -154,7 +171,7 @@
         qty += num(l.qty); bunches += num(l.bunches); pb += num(l.bunches);
         if (l.lot) byLot[l.lot] = r2((byLot[l.lot] || 0) + num(k === 'bunches' ? l.bunches : l.qty));
       });
-      if (k === 'bunches' && pb > 0 && pb < LOW_BUNCHES) flags.push({ w: w, text: w + ' ' + pb + ' tandan (bawah ' + LOW_BUNCHES + ')', bad: false });
+      if (k === 'bunches' && pb > 0 && pb < LOW_BUNCHES) flags.push({ w: w, text: person(w) + ' ' + pb + ' tandan (bawah ' + LOW_BUNCHES + ')', bad: false });
     });
     if (task(j.task) && task(j.task).unit === 'Ha') {
       Object.keys(byLot).forEach(function (lot) {
@@ -166,7 +183,8 @@
     // Against the target: Ha done, or bags used for manuring (targeted in bags), or the unit itself.
     var tg = targetOf(j), actual = null, unit = '';
     if (tg && j.people.length) {
-      if (isBagTarget(j)) { actual = num((draft.bags || {})[j.key]); unit = 'beg'; }
+      // Bags not filled in: no below-target flag (an empty box is not 0 bags).
+      if (isBagTarget(j)) { var bg = (draft.bags || {})[j.key]; actual = String(bg == null ? '' : bg).trim() === '' ? null : num(bg); unit = 'beg'; }
       else if (tg.unit === (task(j.task) || {}).unit && k === 'qty') { actual = r2(qty); unit = tg.unit; }
       if (actual != null && actual < tg.total - 0.005) flags.push({ text: 'Bawah sasaran · below target: ' + actual + ' / ' + tg.total + ' ' + unit + ' (' + j.people.length + ' × ' + tg.per + ')', bad: true });
     }
@@ -286,7 +304,7 @@
     if (fix) fix.onclick = function () {
       var s = savedFor(chit.chit);
       draft = { chit: chit.chit, lines: JSON.parse(JSON.stringify(s.lines)), status: JSON.parse(JSON.stringify(s.status)), checker: s.checker, replacing: s.chit,
-                prog: JSON.parse(JSON.stringify(s.prog || {})), manual: JSON.parse(JSON.stringify(s.manual || {})), bags: JSON.parse(JSON.stringify(s.bags || {})) };
+                prog: JSON.parse(JSON.stringify(s.prog || {})), manual: JSON.parse(JSON.stringify(s.manual || {})), bags: JSON.parse(JSON.stringify(s.bags || {})), chitRev: s.chitRev || 1 };
       keepDraft(); render(el, ctx);
     };
     var view = $('#wk-view');
@@ -444,7 +462,7 @@
                       bunches: k === 'bunches' ? String(t.bunches) : '', plan_ha: t.planHa ? String(t.planHa) : '',
                       status: st.done === 'Y' ? 'done' : st.done === 'N' ? 'not_done' : '', reason: st.reason || '',
                       flags: t.flags.map(function (f) { return f.text; }).join('; '), progress: isHa(j) ? progText(j) : '',
-                      bags: isBagTarget(j) ? String(num((draft.bags || {})[j.key])) : '', target: t.target ? String(t.target.total) + ' ' + (t.tunit || t.target.unit) : '' });
+                      bags: isBagTarget(j) && String((draft.bags || {})[j.key] == null ? '' : draft.bags[j.key]).trim() !== '' ? String(num(draft.bags[j.key])) : '', target: t.target ? String(t.target.total) + ' ' + (t.tunit || t.target.unit) : '' });
     });
     return { chit: chit.chit, date: chit.date, estate: chit.estate, label: label, at: at, checker: checker,
              lines: lines, jobs: jobLines, keyedName: ctx.user.name };
@@ -463,6 +481,9 @@
         if (o && o.qty === l.qty && o.bunches === l.bunches) { l.id = o.id; delete oldLines[key]; return; }
         l.id = EA.save(TAB, ROOM, ctx.estate, { date: rec.date, chit: rec.chit, worker_id: l.worker_id, task_code: l.task_code, block: l.block, lot: l.lot,
           qty: l.qty, unit: l.unit, bunches: l.bunches, confirmed_by: rec.checker, confirmed_at: stamp, note: '' }, o ? o.id : '').id;
+        // v1.3: the line's earlier versions (id and bunches), so a lorry that already took the old
+        // line still counts against the corrected one (no lot counted twice).
+        if (o) l.hist = (o.hist || []).concat([[o.id, o.bunches]]);
         delete oldLines[key];
       });
       Object.keys(oldLines).forEach(function (key) {
@@ -480,7 +501,7 @@
           bags: j.bags, target: j.target, confirmed_by: rec.checker, confirmed_at: stamp }, o ? o.id : '').id;
       });
     } catch (e) { ui().toast('Tidak dapat simpan: ' + e.message + ' · Could not save', 'bad'); return; }
-    keepSaved({ chit: rec.chit, date: rec.date, estate: rec.estate, rec: rec, lines: draft.lines, status: draft.status, prog: draft.prog, manual: draft.manual, bags: draft.bags || {}, checker: draft.checker, rev: old ? (old.rev || 1) + 1 : 1 });
+    keepSaved({ chit: rec.chit, date: rec.date, estate: rec.estate, rec: rec, lines: draft.lines, status: draft.status, prog: draft.prog, manual: draft.manual, bags: draft.bags || {}, checker: draft.checker, rev: old ? (old.rev || 1) + 1 : 1, chitRev: chit.rev || 1 });
     dropDraft();
     ui().toast('Kerja harian disimpan · Day\'s work saved');
     if (navigator.onLine && EA.sendLink()) EA.send();
@@ -520,7 +541,10 @@
     var ids = s.rec.lines.map(function (l) { return l.id; }).concat(s.rec.jobs.map(function (j) { return j.id; }));
     var waiting = ids.some(function (i) { return i && EA.isWaiting(i); });
     var notDone = s.rec.jobs.filter(function (j) { return j.status === 'not_done'; }).length;
-    return '<section class="card" id="wk-saved"><div class="list-line"><div><b>' + esc(niceDate(s.date)) + ' · ' + esc(s.rec.at) + (s.rev > 1 ? ' · dibetulkan' : '') + '</b>' +
+    var chitFixed = chit && chit.chit === s.chit && (chit.rev || 1) > (s.chitRev || 1);
+    return (chitFixed ? '<p class="warn" id="wk-chitfixed"><span class="bm">Chit pagi ini dibetulkan selepas kerja harian disimpan. Tekan CORRECT untuk kemas kini.</span>' +
+      '<span class="en">The morning chit was corrected after the day\'s work was saved. Tap CORRECT to bring it up to date.</span></p>' : '') +
+      '<section class="card" id="wk-saved"><div class="list-line"><div><b>' + esc(niceDate(s.date)) + ' · ' + esc(s.rec.at) + (s.rev > 1 ? ' · dibetulkan' : '') + '</b>' +
       '<span class="en">' + s.rec.jobs.length + ' kerja · ' + (s.rec.jobs.length - notDone) + ' siap · ' + notDone + ' belum siap</span></div>' +
       '<div class="acts"><span class="pill ' + (waiting ? 'wait">Menunggu · Waiting' : 'ok">Dihantar · Sent') + '</span>' +
       '<button type="button" class="btn btn-ghost" id="wk-view">VIEW<small>Lihat</small></button>' +
@@ -549,7 +573,7 @@
   document.addEventListener('ea:sync', function () {
     if (!el || !document.body.contains(el) || el.hidden || !chit) return;
     var card = el.querySelector('#wk-saved'), s = savedFor(chit.chit);
-    if (card && s) { card.outerHTML = savedCard(s); wireTop(); }
+    if (card && s) { var w0 = el.querySelector('#wk-chitfixed'); if (w0) w0.remove(); card.outerHTML = savedCard(s); wireTop(); }
   });
 
   EA.fh.work = { render: render, reportText: reportText };

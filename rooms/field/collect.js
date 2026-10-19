@@ -23,7 +23,7 @@
   function num(v) { var n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isFinite(n) ? n : 0; }
   function person(id) { var w = EA.lists.worker(id); return w ? w.name : id; }
 
-  function saved() { var cut = new Date(); cut.setDate(cut.getDate() - 40); var from = cut.toISOString().slice(0, 10); return EA.local.get(K.saved, []).filter(function (s) { return s.date >= from; }); }
+  function saved() { var from = EA.dayAgo(40); return EA.local.get(K.saved, []).filter(function (s) { return s.date >= from; }); }
   function todays() { return saved().filter(function (s) { return s.estate === ctx.estate && s.date === EA.today(); }); }
   function blank() { return { v: 22, date: EA.today(), estate: ctx.estate, lots: {}, dispatch: blankDis() }; }
   function blankDis() { return { on: false, lot: {}, extra: {}, lorry: '', mill: EA.lists.mills[0], dn: '', driver: '', ramp_cleared: '', replacing: '' }; }

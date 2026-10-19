@@ -46,7 +46,7 @@
   function byLot(a, b) { return String(a).localeCompare(String(b), undefined, { numeric: true }); }
 
   // ---------- phone memory ----------
-  function daysAgo(n) { var d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); }
+  function daysAgo(n) { return EA.dayAgo(n); }
   function saved() { return EA.local.get(K.saved, []).filter(function (t) { return t.date >= daysAgo(70); }); }
   function keepTicket(t) { var list = EA.local.get(K.saved, []).filter(function (x) { return x.key !== t.key; }); list.push(t); EA.local.set(K.saved, list); }
   function gradings() { return EA.local.get(K.grades, []).filter(function (g) { return g.date >= daysAgo(70); }); }
@@ -208,7 +208,11 @@
         var v = this.value;
         if (id === 'tk-lorry') v = v.toUpperCase();
         if (id === 'tk-no' || id === 'tk-do') v = v.replace(/\s/g, '');
-        if (['tk-w1', 'tk-w2', 'tk-ded', 'tk-nett'].indexOf(id) >= 0) v = v.replace(/[^\d]/g, '');
+        if (['tk-w1', 'tk-w2', 'tk-ded', 'tk-nett'].indexOf(id) >= 0) {
+          // Weights are kg as printed. A dot or comma usually means tonnes were typed (12.34): say so.
+          if (/[.,]/.test(v)) ui().toast('Berat dalam kg seperti dicetak, tanpa titik · Weights in kg as printed, no dot', 'bad');
+          v = v.replace(/[.,].*$/, '').replace(/[^\d]/g, ''); this.value = v;
+        }
         draft[bind[id]] = v; keepDraft(); drawSums();
         if (id === 'tk-do' && !draft.trip) matchDn();
         if (id === 'tk-do' && draft.trip && draft.tripDn && draft.do_no !== draft.tripDn) { draft.trip = ''; draft.lorryBunches = 0; draft.dnLots = []; draft.blocks = {}; keepDraft(); matchDn() || render(el, ctx); var i2 = $('#tk-do'); if (i2) { i2.focus(); i2.setSelectionRange(i2.value.length, i2.value.length); } }

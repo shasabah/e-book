@@ -3,5 +3,5 @@
 // for an improvement, the first for a new room). Add a line to CHANGES.md at every change.
 // VERSION is the build count: it goes up by one at every publish, so LOAD IT knows a newer copy is out.
 var EA = (typeof self !== 'undefined' ? self : window).EA = (typeof self !== 'undefined' ? self : window).EA || {};
-EA.RELEASE = '1.4';
-EA.VERSION = 27;
+EA.RELEASE = '1.5';
+EA.VERSION = 28;

@@ -68,8 +68,12 @@ function doPost(e) {
   try { req = JSON.parse(e.postData.contents); } catch (err) { return reply({ ok: false, error: 'bad_request' }); }
   if (!req || (Number(req.version) || 0) < MIN_APP_VERSION) return reply({ ok: false, error: 'old_version' });
 
+  // Too many wrong keys in a short time (someone guessing keys): wait 15 minutes.
+  var cache = CacheService.getScriptCache();
+  var bad = Number(cache.get('badkeys') || 0);
+  if (bad >= 30) return reply({ ok: false, error: 'locked' });
   var user = findUser(req.key);
-  if (!user) return reply({ ok: false, error: 'wrong_key' });
+  if (!user) { cache.put('badkeys', String(bad + 1), 900); return reply({ ok: false, error: 'wrong_key' }); }
 
   if (req.action === 'login') {
     return reply({ ok: true, user: { code: user.user_code, name: user.name, role: user.role, estates: user.estates } });
@@ -88,7 +92,10 @@ function doPost(e) {
     if (user.estates.indexOf(req.estate) < 0) return reply({ ok: false, error: 'not_your_estate' });
     return reply(openTrips(req.estate));
   }
-  if (req.action === 'people') return reply(people_(user));
+  if (req.action === 'people') {
+    if (['Owner', 'HQ', 'Staff', 'Clerk'].indexOf(user.role) < 0) return reply({ ok: false, error: 'not_allowed' });
+    return reply(people_(user));
+  }
   if (req.action === 'backlog') {
     if (user.estates.indexOf(req.estate) < 0) return reply({ ok: false, error: 'not_your_estate' });
     return reply(backlog(req.estate));
@@ -158,6 +165,19 @@ function findUserInSheet_(key) {
 
 // ---------------- saving ----------------
 
+// Which roles may write which tabs (v1.3). Only the staff and the clerk key field work for now;
+// only the clerk keys the mill ticket and grading; only the Owner or HQ change the shared lists.
+// Errors from any phone are always accepted.
+var TICKET_TABS = ['FH_TICKET', 'FH_GRADING', 'FH_TICKET_BLOCK', 'FH_TICKET_HARV'];
+function canWrite_(user, tab) {
+  var r = user.role;
+  if (tab === 'APP_ERROR' || tab === 'CHECK') return true;
+  if (/^LIST_/.test(tab)) return r === 'Owner' || r === 'HQ';
+  if (TICKET_TABS.indexOf(tab) >= 0) return r === 'Clerk' || r === 'Owner' || r === 'HQ';
+  if (/^FH_/.test(tab)) return r === 'Staff' || r === 'Clerk' || r === 'Owner' || r === 'HQ';
+  return r === 'Owner' || r === 'HQ';
+}
+
 function saveRow(user, tab, row) {
   if (!tab || tab === USERS_TAB || !row || typeof row !== 'object') return { ok: false, error: 'bad_entry' };
   var sh = roomTab_(book_(), String(tab));
@@ -166,7 +186,7 @@ function saveRow(user, tab, row) {
   // Checks before writing
   if (!row.id) return { ok: false, error: 'no_id' };
   if (user.estates.indexOf(row.estate) < 0) return { ok: false, error: 'not_your_estate' };
-  if (/^LIST_/.test(String(tab)) && user.role !== 'Owner' && user.role !== 'HQ') return { ok: false, error: 'not_allowed' };
+  if (!canWrite_(user, String(tab))) return { ok: false, error: 'not_allowed' };
   if (STATUSES.indexOf(row.status) < 0) return { ok: false, error: 'bad_status' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(row.date))) return { ok: false, error: 'bad_date' };
   row.keyed_by = user.user_code;                 // always the person whose key it is
@@ -229,23 +249,29 @@ function saveBatch(user, items) {
       if (!sh || sh.getLastColumn() < 1) return (tabs[name] = null);
       var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
       var missing = STANDARD_COLS.filter(function (c) { return head.indexOf(c) < 0; });
-      var seen = {};
+      var seen = {}, older = {};
       var last = sh.getLastRow();
       if (!missing.length && last > 1) {
-        // Only the most recent rows are read (a resend comes within days, not months).
+        // The recent rows are read with who keyed them and when; the whole id column is read too,
+        // so a resend of an old entry (reply lost a long time ago) is never written twice.
         var ci = head.indexOf('id'), cb = head.indexOf('keyed_by'), ca = head.indexOf('keyed_at');
         var w = Math.max(ci, cb, ca) + 1;
         var from = Math.max(2, last - RECENT_ROWS + 1);
         var vals = sh.getRange(from, 1, last - from + 1, w).getDisplayValues();   // one read
         for (var i = 0; i < vals.length; i++) seen[vals[i][ci]] = vals[i][cb] + '|' + String(vals[i][ca]).slice(0, 16);
+        if (from > 2) {
+          var olderIds = sh.getRange(2, ci + 1, from - 2, 1).getDisplayValues();
+          for (var k = 0; k < olderIds.length; k++) older[olderIds[k][0]] = k + 2;
+        }
       }
-      return (tabs[name] = { sh: sh, head: head, missing: missing, seen: seen, add: [], last: last });
+      return (tabs[name] = { sh: sh, head: head, missing: missing, seen: seen, older: older, add: [], last: last });
     }
     items.forEach(function (it) {
       var row = it && it.row, tab = it && it.tab;
       var id = row && row.id;
       function fail(e) { results.push({ id: id || '', ok: false, error: e }); }
       if (!tab || tab === USERS_TAB || !row || typeof row !== 'object') return fail('bad_entry');
+      if (!canWrite_(user, String(tab))) return fail('not_allowed');
       var t = tabInfo(String(tab));
       if (!t) return fail('no_tab:' + tab);
       if (t.missing.length) return fail('tab_missing_col:' + t.missing[0]);
@@ -258,15 +284,11 @@ function saveBatch(user, items) {
       var extra = Object.keys(row).filter(function (k) { return t.head.indexOf(k) < 0; });
       if (extra.length) return fail('unknown_col:' + extra.join(','));
       var mark = row.keyed_by + '|' + String(row.keyed_at).slice(0, 16);
-      // An old entry arriving late (keyed more than 14 days ago) may be older than
-      // the rows read above: look for it in the whole tab, only for these.
-      if (t.seen[id] === undefined && String(row.keyed_at).slice(0, 10) < daysAgo_(14) && t.last > 1) {
-        var hit = t.sh.getRange(2, t.head.indexOf('id') + 1, t.last - 1, 1).createTextFinder(String(id)).matchEntireCell(true).findNext();
-        if (hit) {
-          var rr = hit.getRow();
-          t.seen[id] = t.sh.getRange(rr, t.head.indexOf('keyed_by') + 1).getDisplayValue() + '|' +
-                       String(t.sh.getRange(rr, t.head.indexOf('keyed_at') + 1).getDisplayValue()).slice(0, 16);
-        }
+      // An entry older than the rows read above: its row is read for who keyed it and when.
+      if (t.seen[id] === undefined && t.older[id]) {
+        var rr = t.older[id];
+        t.seen[id] = t.sh.getRange(rr, t.head.indexOf('keyed_by') + 1).getDisplayValue() + '|' +
+                     String(t.sh.getRange(rr, t.head.indexOf('keyed_at') + 1).getDisplayValue()).slice(0, 16);
       }
       if (t.seen[id] !== undefined) {
         if (t.seen[id] === mark) { results.push({ id: id, ok: true, already: true }); return; }
@@ -375,7 +397,7 @@ function ungraded_(estate) {
   // ===== calcBacklog: the same text is in rooms/field/muster.js and server/core.gs =====
   // cut: harvesters' bunches [{date, lot, block, bunches}]
   // col: loader's collection [{date, lot, block, bunches, cleared}]
-  // dis: lorry loads [{date, block, bunches, ramp_cleared}]
+  // dis: lorry loads [{date, block, bunches, ramp_cleared}]; col and dis may carry keyed_at (or at, HH:mm)
   // Field backlog per lot = cut - collected since the lot was last cleared ("Habis").
   // Count check: when a lot is cleared and the mandor's count and the loader's count
   // since the clearing before differ (last 7 days), or the loader has collected more
@@ -422,17 +444,21 @@ function ungraded_(estate) {
       if (last && last >= weekAgo && x.wCut !== x.wCol) checks.push({ lot: x.lot, block: x.block, mandor: x.wCut, loader: x.wCol, cleared: last });
     });
     field.sort(byLot); checks.sort(byLot);
+    // The ramp is worked out by day AND time keyed (v1.3), so a lorry that empties the ramp
+    // at noon does not hide bunches collected later that day, and an earlier lorry the same
+    // day is not taken off twice.
+    function when(r) { var t = String(r.keyed_at || r.at || ''); return r.date + ' ' + (/\d\d:\d\d$/.test(t) ? t.slice(-5) : '00:00'); }
     var empty = '';
-    dis.forEach(function (r) { if (r.ramp_cleared === 'Y' && r.date > empty) empty = r.date; });
+    dis.forEach(function (r) { if (r.ramp_cleared === 'Y' && when(r) > empty) empty = when(r); });
     var blocks = {}, since = '', inAll = 0, outAll = 0;
     function blk(b) { return blocks[b] || (blocks[b] = { block: b, bunches: 0 }); }
     col.forEach(function (r) {
-      if (r.date <= empty) return;
+      if (empty && when(r) <= empty) return;
       inAll += n(r.bunches); blk(r.block || '').bunches += n(r.bunches);
       if (n(r.bunches) && (!since || r.date < since)) since = r.date;
     });
     dis.forEach(function (r) {
-      if (r.date > empty || (r.date === empty && r.ramp_cleared !== 'Y')) { outAll += n(r.bunches); blk(r.block || '').bunches -= n(r.bunches); }
+      if (!empty || when(r) > empty) { outAll += n(r.bunches); blk(r.block || '').bunches -= n(r.bunches); }
     });
     // A lorry keyed without its block (before v12) cannot be split, so then no block list is shown.
     var rampBlocks = blocks[''] && blocks[''].bunches < 0 ? [] : Object.keys(blocks).map(function (k) { return blocks[k]; })
@@ -447,13 +473,27 @@ function ungraded_(estate) {
 // Harvesters' bunches (FH_WORK, HV01) of the last 45 days not yet on a lorry, for the
 // delivery note (the staff ticks the lots) and for a ticket whose lorry has no lots ticked.
 // A line leaves when it goes on a lorry (FH_DISPATCH_LOT) or is picked on a ticket (FH_TICKET_HARV, not 'dn').
+// Which row now stands for an older row: a correction replaces a row with a new id, so
+// anything that pointed at the old id (a lorry's lot line, a ticket) is moved to the newest one.
+function newestId_(tabName) {
+  var sh = book_().getSheetByName(tabName), next = {};
+  if (sh && sh.getLastRow() > 1) {
+    var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    var ci = head.indexOf('id'), cr = head.indexOf('replaces');
+    if (ci >= 0 && cr >= 0) sh.getRange(2, 1, sh.getLastRow() - 1, Math.max(ci, cr) + 1).getValues()
+      .forEach(function (v) { if (v[cr]) next[String(v[cr])] = String(v[ci]); });
+  }
+  return function (id) { var seen = 0; while (next[id] && seen++ < 50) id = next[id]; return id; };
+}
+
 function openHarvest(estate) {
   var cut = Utilities.formatDate(new Date(Date.now() - 45 * 864e5), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd');
   // A line can go on a ticket in parts (part of a lot on one lorry, the rest on the next):
-  // what is left is the block's balance and stays open.
-  var onTicket = {};
-  standingRows_('FH_DISPATCH_LOT', estate).forEach(function (r) { onTicket[r.work_id] = (onTicket[r.work_id] || 0) + (Number(r.bunches) || 0); });
-  standingRows_('FH_TICKET_HARV', estate).forEach(function (r) { if (r.source !== 'dn') onTicket[r.work_id] = (onTicket[r.work_id] || 0) + (Number(r.bunches) || 0); });
+  // what is left is the block's balance and stays open. A harvester's line corrected after it
+  // went on a lorry (new id) still counts what went (v1.3).
+  var onTicket = {}, newest = newestId_('FH_WORK');
+  standingRows_('FH_DISPATCH_LOT', estate).forEach(function (r) { var w = newest(r.work_id); onTicket[w] = (onTicket[w] || 0) + (Number(r.bunches) || 0); });
+  standingRows_('FH_TICKET_HARV', estate).forEach(function (r) { if (r.source !== 'dn') { var w = newest(r.work_id); onTicket[w] = (onTicket[w] || 0) + (Number(r.bunches) || 0); } });
   var lines = standingRows_('FH_WORK', estate).filter(function (r) {
     return r.task_code === 'HV01' && Number(r.bunches) > 0 && r.date >= cut;
   }).map(function (r) { return { id: r.id, date: r.date, lot: r.lot, block: r.block, worker_id: r.worker_id, bunches: Number(r.bunches) - (onTicket[r.id] || 0) }; })
@@ -502,7 +542,8 @@ function plain(v) {
   if (v === undefined || v === null) return '';
   if (typeof v === 'number' || typeof v === 'boolean') return v;
   var s = String(v);
-  if (/^[=+@]/.test(s)) return "'" + s;
+  // Also a leading minus that is not a number, a tab, or spaces before one of these.
+  if (/^[\s]*[=+@]/.test(s) || /^-(?![\d.])/.test(s) || /^\t/.test(s)) return "'" + s;
   // Lot numbers like 1-5 would be turned into dates by the sheet; keep them as text.
   if (/^\d+-\d+/.test(s) && !/^\d{4}-\d{2}-\d{2}/.test(s)) return "'" + s;
   // A date (2026-10-18) is kept as text too, so the sheet never turns it into a date in
@@ -557,6 +598,11 @@ function addUser(code, name, role, estates, key) {
   var sh = book_().getSheetByName(USERS_TAB);
   var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
   sh.appendRow([code, name, role, estates, hashKey(String(key)), 'active', now]);
+}
+
+/** Before the trial: switch off every made-up test key (T-…), so the public test keys open nothing. */
+function switchOffTestKeys() {
+  ['T-OWN', 'T-HQ', 'T-CLK', 'T-STF', 'T-MDR', 'T-STR', 'T-WRK'].forEach(switchOff);
 }
 
 /** Switch a person off (lost phone, person left). Their rows stay; they can no longer log in. */

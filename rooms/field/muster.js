@@ -195,7 +195,7 @@
     var cut = [], col = [], dis = [];
     EA.local.get('fh.work', []).forEach(function (s) {
       if (s.estate !== estate) return;
-      s.rec.lines.forEach(function (l) { if (l.task_code === 'HV01') cut.push({ date: s.date, lot: l.lot, block: l.block, bunches: l.bunches }); });
+      s.rec.lines.forEach(function (l) { if (l.task_code === EA.lists.HARVEST) cut.push({ date: s.date, lot: l.lot, block: l.block, bunches: l.bunches }); });
     });
     EA.local.get('fh.collect', []).forEach(function (s) {
       if (s.estate !== estate) return;
@@ -674,7 +674,7 @@
   // search box and SAME AS LAST TIME (the people on this job in the last chit).
   function gangFirst(task) {
     var g = (EA.lists.task(task) || {}).group;
-    return g === 'HV' ? /Tuai|Harvest/ : g === 'MT' || g === 'MN' ? /Rawatan|Maintenance/ : g === 'DR' || g === 'MC' || g === 'LD' ? /Pemandu|Driver|Muat|Load/ : g === 'DF' ? /durian/i : /Am|General/;
+    return g === 'HV' ? /Tuai|Harvest/ : g === 'UP' || g === 'PD' || g === 'CS' ? /Rawatan|Maintenance/ : g === 'TR' || g === 'WS' ? /Pemandu|Driver|Muat|Load/ : /Am|General/;
   }
   function pickPeople(key) {
     var j = job(key), taken = onOtherChit();

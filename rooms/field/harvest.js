@@ -3,7 +3,7 @@
 // lorry, and by the mill ticket, which takes the lots from that delivery note.
 //
 // Each line is one harvester's bunches on one lot and day (the mandor's count on Kerja harian,
-// task HV01). A line leaves the open list when it goes on a lorry (FH_DISPATCH_LOT), or, for a
+// task HA). A line leaves the open list when it goes on a lorry (FH_DISPATCH_LOT), or, for a
 // lorry with no lots ticked, when the ticket picks it (FH_TICKET_HARV with source 'ticket').
 // What is left of a line stays open: that is the block's balance.
 (function () {
@@ -24,7 +24,7 @@
     EA.local.get('fh.work', []).forEach(function (s) {
       if (s.estate !== estate) return;
       s.rec.lines.forEach(function (l) {
-        if (l.task_code === 'HV01' && num(l.bunches) > 0 && l.id) out.push({ id: l.id, date: s.date, lot: lotKey(l), block: l.block, worker_id: l.worker_id, bunches: num(l.bunches), hist: l.hist || [] });
+        if (l.task_code === EA.lists.HARVEST && num(l.bunches) > 0 && l.id) out.push({ id: l.id, date: s.date, lot: lotKey(l), block: l.block, worker_id: l.worker_id, bunches: num(l.bunches), hist: l.hist || [] });
       });
     });
     return out;

@@ -18,7 +18,7 @@
 
   // Harvest keyed by block only (no lot yet, v1.1) is one lot "Blk 03" for that block.
   function lotKey(h) { return h.lot || (h.block ? 'Blk ' + h.block : ''); }
-  EA.fh.lotLabel = function (lot, block) { return /^Blk /.test(lot) ? lot + ' (semua petak · all lots)' : 'Petak ' + lot + ' · Blk ' + block; };
+  EA.fh.lotLabel = function (lot, block) { return /^Blk /.test(lot) ? lot + ' (' + EA.t('semua petak', 'all lots') + ')' : 'Petak ' + lot + ' · Blk ' + block; };
   function localHarvest(estate) {
     var out = [];
     EA.local.get('fh.work', []).forEach(function (s) {

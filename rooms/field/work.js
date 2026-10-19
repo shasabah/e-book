@@ -27,7 +27,7 @@
   function $(sel) { return el.querySelector(sel); }
   function canKey(u) { return u.role !== 'HQ'; }
   function task(code) { return EA.lists.task(code); }
-  function jobName(code) { var t = task(code); return t ? t.bm : code; }
+  function jobName(code) { var t = task(code); return t ? EA.t(t.bm, t.en) : code; }
   function shortName(code) { return (EA.lists.chitNames && EA.lists.chitNames[code]) || (task(code) ? task(code).en : code); }
   function person(id) { var w = EA.lists.worker(id); return w ? w.name : id; }
   function num(v) { var n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isFinite(n) ? n : 0; }
@@ -196,8 +196,8 @@
     var testing = ctx.room.state !== 'live';
     var head = '<div class="room-top">' +
       '<button type="button" class="back-btn" id="wk-back">← <span class="inline"><span class="bm">Bilik</span></span></button>' +
-      '<div class="grow"><h1>Kerja harian</h1><span class="en">Day\'s work · ' + esc(ctx.estate) + '</span></div>' +
-      (testing ? '<span class="test-badge">UJIAN · TEST</span>' : '') + '</div>' + EA.fh.tabs('work', ctx.user);
+      '<div class="grow"><h1>' + EA.t('Kerja harian', 'Day\'s work') + '</h1><span class="brand-sub">' + esc(ctx.estate) + '</span></div>' +
+      (testing ? '<span class="test-badge">' + EA.t('UJIAN', 'TEST') + '</span>' : '') + '</div>' + EA.fh.tabs('work', ctx.user);
     var list = chitsFor(ctx.estate);
     var pick = EA.local.get('fh.workchit', '');
     chit = list.find(function (x) { return x.chit === pick; }) || list[0] || null;
@@ -221,11 +221,11 @@
       wireTop();
       return;
     }
-    if (!canKey(ctx.user)) { el.innerHTML = head + '<div class="card"><p class="hint">Pandangan pejabat akan datang kemudian. · The office view comes later.</p></div>'; wireTop(); return; }
+    if (!canKey(ctx.user)) { el.innerHTML = head + '<div class="card"><p class="hint">' + EA.t('Pandangan pejabat akan datang kemudian.', 'The office view comes later.') + '</p></div>'; wireTop(); return; }
 
     var jobs = jobsOf(chit);
     el.innerHTML = head + chooser +
-      '<p class="hint">Dari chit pagi ' + esc(niceDate(chit.date)) + ' · ' + jobs.reduce(function (a, j) { return a + j.people.length; }, 0) + ' orang bekerja, ' + jobs.length + ' kerja. · From the morning chit.</p>' +
+      '<p class="hint">' + EA.t('Dari chit pagi ', 'From the morning chit of ') + esc(niceDate(chit.date)) + ' · ' + jobs.reduce(function (a, j) { return a + j.people.length; }, 0) + EA.t(' orang bekerja, ', ' people working, ') + jobs.length + EA.t(' kerja.', ' jobs.') + '</p>' +
       (draft.replacing ? '<p class="warn"><span class="bm">Membetulkan kerja harian. Rekod lama kekal; yang baru menggantikannya.</span><span class="en">Correcting the day\'s work. The old record stays; this one replaces it.</span></p>' : '') +
       jobs.map(jobCard).join('') +
       '<section class="card"><h2><span class="inline"><span class="bm">Laporan petang</span> · <span class="en">Evening report</span></span></h2><pre class="chit" id="wk-preview"></pre></section>' +
@@ -240,7 +240,7 @@
     var p = draft.prog[j.key] || {};
     var others = EA.lists.lotsFor(ctx.estate, j.block).filter(function (l) { return progLots(j).indexOf(l.lot) < 0; });
     return '<div class="field"><span class="inline"><span class="bm">Berapa banyak petak siap?</span> · <span class="en">How much of each lot is done?</span></span>' +
-      '<p class="hint">Diisi 100% dari rancangan pagi; ubah hanya petak yang belum siap. · Filled at 100% from the morning plan; change only a lot not finished.</p>' +
+      '<p class="hint">' + EA.t('Diisi 100% dari rancangan pagi; ubah hanya petak yang belum siap.', 'Filled at 100% from the morning plan; change only a lot not finished.') + '</p>' +
       progLots(j).map(function (lot) {
         var v = p[lot] || '', ha = lotHa(lot);
         return '<div class="wline"><b class="mono">' + esc(lot) + '</b><span class="hint">' + ha.toFixed(2) + ' Ha</span>' +
@@ -248,14 +248,14 @@
           '<input class="qty" style="width:4.5em" inputmode="numeric" data-pj="' + j.key + '" data-pl="' + esc(lot) + '" value="' + esc(v) + '" placeholder="%">' +
           '<span data-pha="' + j.key + '|' + esc(lot) + '">= ' + (Math.round(ha * Math.min(num(v), 100)) / 100).toFixed(2) + ' Ha</span></div>';
       }).join('') +
-      (others.length ? '<div class="wline"><select class="text-input" data-paddlot="' + j.key + '"><option value="">+ Petak lain · another lot</option>' +
+      (others.length ? '<div class="wline"><select class="text-input" data-paddlot="' + j.key + '"><option value="">' + EA.t('+ Petak lain', '+ Another lot') + '</option>' +
         others.map(function (l) { return '<option>' + l.lot + '</option>'; }).join('') + '</select></div>' : '') + '</div>';
   }
 
   function jobCard(j) {
     var k = kind(j.task), sec = EA.lists.sectionOf(j.task), st = draft.status[j.key] || { done: '', reason: '' };
     if (auto(j)) shareOut(j);
-    var lotsText = j.lots.length ? 'Petak ' + j.lots.join(', ') + ' · ' + jobTotals(j).planHa.toFixed(2) + ' Ha' : '';
+    var lotsText = j.lots.length ? EA.t('Petak ', 'Lot ') + j.lots.join(', ') + ' · ' + jobTotals(j).planHa.toFixed(2) + ' Ha' : '';
     var lines = j.people.map(function (w) {
       var wl = draft.lines[w] || [];
       if (auto(j)) {
@@ -263,35 +263,35 @@
         return '<div class="wrow"><div class="who-w"><b>' + esc(person(w)) + '</b><span class="en">' + esc(w) + '</span></div>' +
           '<div class="mono" data-share="' + w + '">' + (Math.round(tot * 1000) / 1000) + ' Ha</div></div>';
       }
-      var rows = k === 'ticket' ? '<span class="hint">Ikut tiket kilang · from the mill ticket</span>' :
+      var rows = k === 'ticket' ? '<span class="hint">' + EA.t('Ikut tiket kilang', 'From the mill ticket') + '</span>' :
         wl.map(function (l, i) {
-          var lotSel = j.lots.length > 1 ? '<select class="text-input" data-w="' + w + '" data-i="' + i + '" data-f="lot"><option value="">Petak?</option>' +
+          var lotSel = j.lots.length > 1 ? '<select class="text-input" data-w="' + w + '" data-i="' + i + '" data-f="lot"><option value="">' + EA.t('Petak?', 'Lot?') + '</option>' +
             j.lots.map(function (n) { return '<option' + (n === l.lot ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select>' : (j.lots[0] ? '<span class="mono">' + esc(j.lots[0]) + '</span>' : '');
           var input = k === 'day'
             ? '<div class="seg"><button type="button" data-w="' + w + '" data-i="' + i + '" data-day="1" aria-pressed="' + (l.qty === '1') + '">1</button><button type="button" data-w="' + w + '" data-i="' + i + '" data-day="0.5" aria-pressed="' + (l.qty === '0.5') + '">½</button></div> hari'
             : '<input class="qty" inputmode="decimal" data-w="' + w + '" data-i="' + i + '" data-f="' + (k === 'bunches' ? 'bunches' : 'qty') + '" value="' + esc(k === 'bunches' ? l.bunches : l.qty) + '" placeholder="0"> ' + esc(unitLabel(j.task));
-          return '<div class="wline">' + lotSel + input + (i > 0 ? '<button type="button" class="link-btn" data-w="' + w + '" data-del="' + i + '">buang</button>' : '') + '</div>';
-        }).join('') + (j.lots.length > 1 && k !== 'day' ? '<button type="button" class="link-btn" data-w="' + w + '" data-add="1">+ petak lain · another lot</button>' : '');
+          return '<div class="wline">' + lotSel + input + (i > 0 ? '<button type="button" class="link-btn" data-w="' + w + '" data-del="' + i + '">' + EA.t('buang', 'remove') + '</button>' : '') + '</div>';
+        }).join('') + (j.lots.length > 1 && k !== 'day' ? '<button type="button" class="link-btn" data-w="' + w + '" data-add="1">' + EA.t('+ petak lain', '+ another lot') + '</button>' : '');
       return '<div class="wrow"><div class="who-w"><b>' + esc(person(w)) + '</b><span class="en">' + esc(w) + '</span></div><div></div><div class="job" style="display:block">' + rows + '</div></div>';
     }).join('');
     lines = j.mandors.map(function (m) {
-      return '<div class="wrow"><div class="who-w"><b>' + esc(person(m)) + '</b><span class="en">' + esc(m) + ' · Mandor · ikut kumpulan · goes by the gang</span></div><div></div></div>';
+      return '<div class="wrow"><div class="who-w"><b>' + esc(person(m)) + '</b><span class="en">' + esc(m) + ' · Mandor · ' + EA.t('ikut kumpulan', 'goes by the gang') + '</span></div><div></div></div>';
     }).join('') + lines;
     return '<section class="card" data-job="' + j.key + '"><h2>' + esc(sec.code + '. ' + jobName(j.task)) + (j.block ? ' · Blok ' + esc(j.block) : '') + '</h2>' +
-      '<p class="hint">' + esc(j.task + ' · ' + task(j.task).en) + (lotsText ? ' · ' + esc(lotsText) : '') + (j.mandor ? ' · Mandor ' + esc(person(j.mandor)) : '') + '</p>' +
-      (isBagTarget(j) ? '<div class="wline"><label class="inline-label">Beg baja digunakan (kumpulan) · bags used by the gang <input class="qty" inputmode="numeric" data-bags="' + j.key + '" value="' + esc((draft.bags || {})[j.key] || '') + '"></label>' +
-        '<span class="hint">sasaran · target ' + targetOf(j).total + ' beg</span></div>' : '') +
+      '<p class="hint">' + esc(j.task) + (lotsText ? ' · ' + esc(lotsText) : '') + (j.mandor ? ' · Mandor ' + esc(person(j.mandor)) : '') + '</p>' +
+      (isBagTarget(j) ? '<div class="wline"><label class="inline-label">' + EA.t('Beg baja digunakan (kumpulan) ', 'Bags used by the gang ') + '<input class="qty" inputmode="numeric" data-bags="' + j.key + '" value="' + esc((draft.bags || {})[j.key] || '') + '"></label>' +
+        '<span class="hint">' + EA.t('sasaran ', 'target ') + targetOf(j).total + EA.t(' beg', ' bags') + '</span></div>' : '') +
       (isHa(j) ? progBlock(j) +
-        '<div class="wline"><span class="hint">' + (auto(j) ? 'Dibahagi sama rata · shared equally.' : 'Diisi seorang-seorang · keyed per person.') + '</span>' +
+        '<div class="wline"><span class="hint">' + (auto(j) ? EA.t('Dibahagi sama rata.', 'Shared equally.') : EA.t('Diisi seorang-seorang.', 'Keyed per person.')) + '</span>' +
         '<button type="button" class="btn btn-ghost" data-manual="' + j.key + '">' + (auto(j) ? 'SET PER PERSON<small>Isi seorang-seorang</small>' : 'EQUAL SHARE<small>Kembali sama rata</small>') + '</button></div>' : '') +
-      (k !== 'ticket' && k !== 'day' && !auto(j) && !isHa(j) ? '<div class="wline"><span class="hint">Isi sama untuk semua yang kosong · Fill the same for everyone empty:</span><input class="qty" inputmode="decimal" data-fill="' + j.key + '" placeholder="0"> ' + esc(unitLabel(j.task)) + '<button type="button" class="btn btn-ghost" data-fillgo="' + j.key + '">FILL<small>Isi</small></button></div>' : '') +
+      (k !== 'ticket' && k !== 'day' && !auto(j) && !isHa(j) ? '<div class="wline"><span class="hint">' + EA.t('Isi sama untuk semua yang kosong:', 'Fill the same for everyone empty:') + '</span><input class="qty" inputmode="decimal" data-fill="' + j.key + '" placeholder="0"> ' + esc(unitLabel(j.task)) + '<button type="button" class="btn btn-ghost" data-fillgo="' + j.key + '">FILL<small>Isi</small></button></div>' : '') +
       '<div class="rows">' + lines + '</div>' +
       '<p class="hint" data-tot="' + j.key + '"></p><div data-flags="' + j.key + '"></div>' +
       '<div class="field"><span class="inline"><span class="bm">Kerja ini</span> · <span class="en">This job</span></span>' +
-        '<div class="seg"><button type="button" data-st="' + j.key + '" data-v="Y" aria-pressed="' + (st.done === 'Y') + '" style="min-width:110px">SIAP · Done</button>' +
-        '<button type="button" data-st="' + j.key + '" data-v="N" aria-pressed="' + (st.done === 'N') + '" style="min-width:140px">BELUM SIAP · Not done</button></div></div>' +
+        '<div class="seg"><button type="button" data-st="' + j.key + '" data-v="Y" aria-pressed="' + (st.done === 'Y') + '" style="min-width:110px">' + EA.t('SIAP', 'DONE') + '</button>' +
+        '<button type="button" data-st="' + j.key + '" data-v="N" aria-pressed="' + (st.done === 'N') + '" style="min-width:140px">' + EA.t('BELUM SIAP', 'NOT DONE') + '</button></div></div>' +
       '<div class="field" data-reasonbox="' + j.key + '"' + (st.done === 'N' ? '' : ' hidden') + '><label><span class="bm">Sebab & tindakan</span><span class="en">Why, and what will be done (counter-measure)</span></label>' +
-        '<textarea class="text-input" rows="2" data-reason="' + j.key + '" placeholder="cth: hujan 2 petang; sambung esok dengan 2 orang lagi">' + esc(st.reason) + '</textarea></div>' +
+        '<textarea class="text-input" rows="2" data-reason="' + j.key + '" placeholder="' + EA.t('cth: hujan 2 petang; sambung esok dengan 2 orang lagi', 'e.g. rain at 2pm; continue tomorrow with 2 more people') + '">' + esc(st.reason) + '</textarea></div>' +
       '</section>';
   }
 
@@ -388,12 +388,13 @@
   function refresh(jobs) {
     jobs.forEach(function (j) {
       var t = jobTotals(j), k = kind(j.task);
-      var line = k === 'bunches' ? j.people.length + ' orang · ' + t.bunches + ' tandan · purata ' + (j.people.length ? Math.round(t.bunches / j.people.length) : 0) + ' seorang'
-        : k === 'day' ? j.people.length + ' orang · ' + t.qty + ' hari'
-        : k === 'ticket' ? j.people.length + ' orang · tan ikut tiket kilang'
-        : j.people.length + ' orang · ' + t.qty + ' ' + unitLabel(j.task) + (task(j.task).unit === 'Ha' && t.planHa ? ' daripada ' + t.planHa.toFixed(2) + ' Ha dirancang' : '');
-      if (t.target && t.actual != null) line += ' · sasaran · target ' + t.target.total + ' ' + t.tunit;
-      var tot = el.querySelector('[data-tot="' + j.key + '"]'); if (tot) tot.textContent = 'Jumlah · Total: ' + line;
+      var orang = EA.t(' orang · ', ' people · ');
+      var line = k === 'bunches' ? j.people.length + orang + t.bunches + EA.t(' tandan · purata ', ' bunches · average ') + (j.people.length ? Math.round(t.bunches / j.people.length) : 0) + EA.t(' seorang', ' each')
+        : k === 'day' ? j.people.length + orang + t.qty + EA.t(' hari', ' days')
+        : k === 'ticket' ? j.people.length + orang + EA.t('tan ikut tiket kilang', 'tonnes per mill ticket')
+        : j.people.length + orang + t.qty + ' ' + unitLabel(j.task) + (task(j.task).unit === 'Ha' && t.planHa ? EA.t(' daripada ', ' of ') + t.planHa.toFixed(2) + EA.t(' Ha dirancang', ' Ha planned') : '');
+      if (t.target && t.actual != null) line += ' · ' + EA.t('sasaran ', 'target ') + t.target.total + ' ' + t.tunit;
+      var tot = el.querySelector('[data-tot="' + j.key + '"]'); if (tot) tot.textContent = EA.t('Jumlah: ', 'Total: ') + line;
       var fl = el.querySelector('[data-flags="' + j.key + '"]');
       if (fl) fl.innerHTML = t.flags.map(function (f) { return '<p class="flag' + (f.bad ? ' bad' : '') + '">' + esc(f.text) + '</p>'; }).join('');
     });
@@ -499,10 +500,10 @@
           qty: j.qty, unit: j.unit, bunches: j.bunches, plan_ha: j.plan_ha, job_status: j.status, reason: j.reason, flags: j.flags, progress: j.progress,
           bags: j.bags, target: j.target, confirmed_by: rec.checker, confirmed_at: stamp }, o ? o.id : '').id;
       });
-    } catch (e) { ui().toast('Tidak dapat simpan: ' + e.message + ' · Could not save', 'bad'); return; }
+    } catch (e) { ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad'); return; }
     keepSaved({ chit: rec.chit, date: rec.date, estate: rec.estate, rec: rec, lines: draft.lines, status: draft.status, prog: draft.prog, manual: draft.manual, bags: draft.bags || {}, checker: draft.checker, rev: old ? (old.rev || 1) + 1 : 1, chitRev: chit.rev || 1 });
     dropDraft();
-    ui().toast('Kerja harian disimpan · Day\'s work saved');
+    ui().toast(EA.t('Kerja harian disimpan', 'Day\'s work saved'));
     if (navigator.onLine && EA.sendLink()) EA.send();
     render(el, ctx);
     showReport(savedFor(rec.chit));
@@ -543,9 +544,9 @@
     var chitFixed = chit && chit.chit === s.chit && (chit.rev || 1) > (s.chitRev || 1);
     return (chitFixed ? '<p class="warn" id="wk-chitfixed"><span class="bm">Chit pagi ini dibetulkan selepas kerja harian disimpan. Tekan CORRECT untuk kemas kini.</span>' +
       '<span class="en">The morning chit was corrected after the day\'s work was saved. Tap CORRECT to bring it up to date.</span></p>' : '') +
-      '<section class="card" id="wk-saved"><div class="list-line"><div><b>' + esc(niceDate(s.date)) + ' · ' + esc(s.rec.at) + (s.rev > 1 ? ' · dibetulkan' : '') + '</b>' +
-      '<span class="en">' + s.rec.jobs.length + ' kerja · ' + (s.rec.jobs.length - notDone) + ' siap · ' + notDone + ' belum siap</span></div>' +
-      '<div class="acts"><span class="pill ' + (waiting ? 'wait">Menunggu · Waiting' : 'ok">Dihantar · Sent') + '</span>' +
+      '<section class="card" id="wk-saved"><div class="list-line"><div><b>' + esc(niceDate(s.date)) + ' · ' + esc(s.rec.at) + (s.rev > 1 ? ' · ' + EA.t('dibetulkan', 'corrected') : '') + '</b>' +
+      '<span class="en">' + s.rec.jobs.length + EA.t(' kerja · ', ' jobs · ') + (s.rec.jobs.length - notDone) + EA.t(' siap · ', ' done · ') + notDone + EA.t(' belum siap', ' not done') + '</span></div>' +
+      '<div class="acts"><span class="pill ' + (waiting ? 'wait">' + EA.t('Menunggu', 'Waiting') : 'ok">' + EA.t('Dihantar', 'Sent')) + '</span>' +
       '<button type="button" class="btn btn-ghost" id="wk-view">VIEW<small>Lihat</small></button>' +
       (canKey(ctx.user) ? '<button type="button" class="btn btn-ghost" id="wk-fix">CORRECT<small>Betulkan</small></button>' : '') + '</div></div></section>';
   }

@@ -243,7 +243,7 @@
       var wl = draft.lines[w] || [];
       if (auto(j)) {
         var tot = wl.reduce(function (a, l) { return a + num(l.qty); }, 0);
-        return '<div class="wrow"><div class="who-w"><b>' + esc(w) + '</b><span class="en">' + esc(person(w)) + '</span></div>' +
+        return '<div class="wrow"><div class="who-w"><b>' + esc(person(w)) + '</b><span class="en">' + esc(w) + '</span></div>' +
           '<div class="mono" data-share="' + w + '">' + (Math.round(tot * 1000) / 1000) + ' Ha</div></div>';
       }
       var rows = k === 'ticket' ? '<span class="hint">Ikut tiket kilang · from the mill ticket</span>' :
@@ -255,10 +255,10 @@
             : '<input class="qty" inputmode="decimal" data-w="' + w + '" data-i="' + i + '" data-f="' + (k === 'bunches' ? 'bunches' : 'qty') + '" value="' + esc(k === 'bunches' ? l.bunches : l.qty) + '" placeholder="0"> ' + esc(unitLabel(j.task));
           return '<div class="wline">' + lotSel + input + (i > 0 ? '<button type="button" class="link-btn" data-w="' + w + '" data-del="' + i + '">buang</button>' : '') + '</div>';
         }).join('') + (j.lots.length > 1 && k !== 'day' ? '<button type="button" class="link-btn" data-w="' + w + '" data-add="1">+ petak lain · another lot</button>' : '');
-      return '<div class="wrow"><div class="who-w"><b>' + esc(w) + '</b><span class="en">' + esc(person(w)) + '</span></div><div></div><div class="job" style="display:block">' + rows + '</div></div>';
+      return '<div class="wrow"><div class="who-w"><b>' + esc(person(w)) + '</b><span class="en">' + esc(w) + '</span></div><div></div><div class="job" style="display:block">' + rows + '</div></div>';
     }).join('');
     lines = j.mandors.map(function (m) {
-      return '<div class="wrow"><div class="who-w"><b>' + esc(m) + '</b><span class="en">' + esc(person(m)) + ' · Mandor · ikut kumpulan · goes by the gang</span></div><div></div></div>';
+      return '<div class="wrow"><div class="who-w"><b>' + esc(person(m)) + '</b><span class="en">' + esc(m) + ' · Mandor · ikut kumpulan · goes by the gang</span></div><div></div></div>';
     }).join('') + lines;
     return '<section class="card" data-job="' + j.key + '"><h2>' + esc(sec.code + '. ' + jobName(j.task)) + (j.block ? ' · Blok ' + esc(j.block) : '') + '</h2>' +
       '<p class="hint">' + esc(j.task + ' · ' + task(j.task).en) + (lotsText ? ' · ' + esc(lotsText) : '') + (j.mandor ? ' · Mandor ' + esc(person(j.mandor)) : '') + '</p>' +
@@ -395,7 +395,7 @@
           var ls = draft.lines[w] || [];
           return !ls.length || ls.some(function (l) { return (j.lots.length > 1 && !l.lot) || !(num(k === 'bunches' ? l.bunches : l.qty) > 0); });
         });
-        if (empty.length) p.push([shortName(j.task) + (j.block ? ' Blk ' + j.block : '') + ': belum lengkap untuk ' + empty.join(', '), 'Quantity or lot missing']);
+        if (empty.length) p.push([shortName(j.task) + (j.block ? ' Blk ' + j.block : '') + ': belum lengkap untuk ' + empty.map(person).join(', '), 'Quantity or lot missing']);
       }
       if (!st.done) p.push([shortName(j.task) + (j.block ? ' Blk ' + j.block : '') + ': pilih SIAP atau BELUM SIAP', 'Mark the job done or not done']);
       if (st.done === 'N' && String(st.reason || '').trim().length < 5) p.push([shortName(j.task) + ': tulis sebab dan tindakan', 'Write why and what will be done']);

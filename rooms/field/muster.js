@@ -575,7 +575,7 @@
       } else if (m && m !== 'H') line = '<span class="pill plain">' + esc(MARKS[m][0] + ' · ' + MARKS[m][1]) + '</span>';
       var more = (m === 'L' || m === 'X') ? m : '⋯';
       return '<div class="wrow' + (other ? ' off' : '') + '">' +
-        '<div class="who-w"><b>' + esc(w.id) + '</b><span class="en">' + esc(w.name) + ' · ' + (w.mdr ? 'Mandor' : esc(w.gang)) + ' · ' + (w.sex === 'F' ? 'P' : 'L') + '</span></div>' +
+        '<div class="who-w"><b>' + esc(w.name) + '</b><span class="en">' + esc(w.id) + ' · ' + (w.mdr ? 'Mandor' : esc(w.gang)) + ' · ' + (w.sex === 'F' ? 'P' : 'L') + '</span></div>' +
         '<div class="seg" role="group" aria-label="' + esc(w.id) + '">' + ['H', 'S', 'C', 'T'].map(function (k) {
           return '<button type="button" data-w="' + w.id + '" data-k="' + k + '" aria-pressed="' + (m === k) + '" title="' + MARKS[k][0] + ' · ' + MARKS[k][1] + '"' + (other ? ' disabled' : '') + '>' + k + '</button>';
         }).join('') + '<button type="button" data-w="' + w.id + '" data-more="1" aria-pressed="' + (m === 'L' || m === 'X') + '" title="Hari Buruh / Pindah"' + (other ? ' disabled' : '') + '>' + more + '</button></div>' +
@@ -660,15 +660,32 @@
   }
 
   // Tick the people on one job (quicker than one by one).
+  // Pick the people for a job by name (v1.2): grouped by gang, the job's own gang first, with a
+  // search box and SAME AS LAST TIME (the people on this job in the last chit).
+  function gangFirst(task) {
+    var g = (EA.lists.task(task) || {}).group;
+    return g === 'HV' ? /Tuai|Harvest/ : g === 'MT' || g === 'MN' ? /Rawatan|Maintenance/ : g === 'DR' || g === 'MC' || g === 'LD' ? /Pemandu|Driver|Muat|Load/ : g === 'DF' ? /durian/i : /Am|General/;
+  }
   function pickPeople(key) {
     var j = job(key), taken = onOtherChit();
     var list = EA.lists.workersFor(ctx.estate).filter(function (w) { return !taken[w.id]; });
     var chosen = {};
     list.forEach(function (w) { if (draft.marks[w.id] === 'H' && jobFor(w.id) === j) chosen[w.id] = true; });
+    var first = gangFirst(j.task);
+    var groups = {};
+    list.forEach(function (w) { (groups[w.gang || 'Lain-lain · Other'] = groups[w.gang || 'Lain-lain · Other'] || []).push(w); });
+    var order = Object.keys(groups).sort(function (a, b) { var fa = first.test(a), fb = first.test(b); return fa === fb ? (a < b ? -1 : 1) : (fa ? -1 : 1); });
+    var last = lastChit(), before = [];
+    if (last) last.rows.forEach(function (r) { if (r.muster === 'H' && r.task_code === j.task && (!j.block || r.block === j.block) && list.some(function (w) { return w.id === r.worker_id; })) before.push(r.worker_id); });
+    function card(w) {
+      var elsewhere = draft.marks[w.id] && draft.marks[w.id] !== 'H' ? MARKS[draft.marks[w.id]][0] : (draft.marks[w.id] === 'H' && jobFor(w.id) && jobFor(w.id) !== j ? jobFor(w.id).task : '');
+      return '<button type="button" class="pick pick-name" data-w="' + w.id + '" data-n="' + esc(String(w.name).toLowerCase()) + '" aria-pressed="' + !!chosen[w.id] + '"><b>' + esc(w.name) + '</b><small>' + esc(w.id + ' · ' + (w.sex === 'F' ? 'P' : 'L') + (elsewhere ? ' · ' + elsewhere : '')) + '</small></button>';
+    }
     ui().openSheet('<h2 id="sheet-title"><span class="bm">' + esc(j.task + ' ' + jobName(j.task)) + (j.block ? ' · Blok ' + esc(j.block) : '') + '</span><span class="en">Tick the people on this job</span></h2>' +
-      '<div class="picks" id="pp-list">' + list.map(function (w) {
-        var elsewhere = draft.marks[w.id] && draft.marks[w.id] !== 'H' ? MARKS[draft.marks[w.id]][0] : (draft.marks[w.id] === 'H' && jobFor(w.id) && jobFor(w.id) !== j ? jobFor(w.id).task : '');
-        return '<button type="button" class="pick" data-w="' + w.id + '" aria-pressed="' + !!chosen[w.id] + '"><b>' + esc(w.id.slice(-3)) + '</b><small>' + esc((w.sex === 'F' ? 'P' : 'L') + (elsewhere ? ' · ' + elsewhere : '')) + '</small></button>';
+      (before.length ? '<div class="actions"><button class="btn btn-ghost" type="button" id="pp-last">SAME AS LAST TIME<small>Sama seperti ' + esc(niceDate(last.date)) + ' · ' + before.length + ' orang</small></button></div>' : '') +
+      '<input class="text-input" id="pp-find" placeholder="Cari nama · search a name" autocomplete="off">' +
+      '<div id="pp-list">' + order.map(function (g) {
+        return '<p class="hint pick-group"><b>' + esc(g) + '</b></p><div class="picks">' + groups[g].slice().sort(function (a, b) { return a.name < b.name ? -1 : 1; }).map(card).join('') + '</div>';
       }).join('') + '</div>' +
       '<p class="hint">Yang ditanda menjadi Hadir dalam kerja ini. · Ticked people become present on this job.</p>' +
       '<div class="actions"><button class="btn btn-ghost" type="button" id="pp-cancel">CANCEL<small>Batal</small></button>' +
@@ -677,6 +694,13 @@
         s.querySelectorAll('#pp-list .pick').forEach(function (b) {
           b.onclick = function () { var w = b.dataset.w; chosen[w] = !chosen[w]; b.setAttribute('aria-pressed', chosen[w]); };
         });
+        if (s.querySelector('#pp-last')) s.querySelector('#pp-last').onclick = function () {
+          before.forEach(function (w) { chosen[w] = true; var b = s.querySelector('.pick[data-w="' + w + '"]'); if (b) b.setAttribute('aria-pressed', 'true'); });
+        };
+        s.querySelector('#pp-find').oninput = function () {
+          var q = this.value.trim().toLowerCase();
+          s.querySelectorAll('#pp-list .pick').forEach(function (b) { b.hidden = !!q && b.dataset.n.indexOf(q) < 0 && b.dataset.w.toLowerCase().indexOf(q) < 0; });
+        };
         s.querySelector('#pp-cancel').onclick = ui().closeSheet;
         s.querySelector('#pp-ok').onclick = function () {
           list.forEach(function (w) {
@@ -694,7 +718,7 @@
     if (!draft.jobs.length) p.push(['Tiada kerja lagi.', 'No jobs yet.']);
     if (!rows.length) p.push(['Tiada orang ditanda.', 'Nobody is marked.']);
     var noJob = rows.filter(function (r) { return r.muster === 'H' && !r.task_code; }).map(function (r) { return r.worker_id; });
-    if (noJob.length) p.push(['Belum ada kerja untuk: ' + noJob.join(', '), 'No job yet for: ' + noJob.join(', ')]);
+    if (noJob.length) p.push(['Belum ada kerja untuk: ' + noJob.map(person).join(', '), 'No job yet for these people']);
     var taken = onOtherChit();
     var twice = rows.filter(function (r) { return taken[r.worker_id]; }).map(function (r) { return r.worker_id; });
     if (twice.length) p.push(['Sudah dalam chit lain: ' + twice.join(', '), 'Already on another chit: ' + twice.join(', ')]);
@@ -730,7 +754,7 @@
   function leftoverSheet(left) {
     ui().openSheet('<h2 id="sheet-title"><span class="bm">' + left.length + ' orang belum ditanda</span><span class="en">' + left.length + ' people not marked yet. The chit counts everyone, working or not.</span></h2>' +
       '<div class="rows">' + left.map(function (w) {
-        return '<div class="wrow"><div class="who-w"><b>' + esc(w.id) + '</b><span class="en">' + esc(w.name) + ' · ' + (w.mdr ? 'Mandor' : esc(w.gang)) + '</span></div>' +
+        return '<div class="wrow"><div class="who-w"><b>' + esc(w.name) + '</b><span class="en">' + esc(w.id) + ' · ' + (w.mdr ? 'Mandor' : esc(w.gang)) + '</span></div>' +
           '<div class="seg" role="group" aria-label="' + esc(w.id) + '">' + ['S', 'C', 'T'].map(function (k) {
             return '<button type="button" data-lw="' + w.id + '" data-k="' + k + '" aria-pressed="false" title="' + MARKS[k][0] + ' · ' + MARKS[k][1] + '">' + k + '</button>';
           }).join('') + '</div></div>';
@@ -758,7 +782,7 @@
           var still = unmarked();
           if (!still.length) { confirmSheet(); return; }
           ui().openSheet('<h2 id="sheet-title"><span class="bm">Masih ' + still.length + ' orang belum ditanda</span><span class="en">Still ' + still.length + ' not marked</span></h2>' +
-            '<p><span class="bm" style="font-weight:400">' + esc(still.map(function (w) { return w.id; }).join(', ')) + '</span><span class="en">Continue only if they are on another chit.</span></p>' +
+            '<p><span class="bm" style="font-weight:400">' + esc(still.map(function (w) { return w.name; }).join(', ')) + '</span><span class="en">Continue only if they are on another chit.</span></p>' +
             '<div class="actions"><button class="btn btn-ghost" type="button" id="st-back">BACK<small>Kembali</small></button>' +
             '<button class="btn btn-ok" type="button" id="st-go">CONTINUE<small>Teruskan</small></button></div>',
             function (s2) { s2.querySelector('#st-back').onclick = function () { ui().closeSheet(); leftoverSheet(still); }; s2.querySelector('#st-go').onclick = function () { ui().closeSheet(); confirmSheet(); }; });

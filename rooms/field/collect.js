@@ -172,7 +172,7 @@
     $('#cl-rows').innerHTML = list.length ? '<div class="rows">' + list.map(function (r) {
       var x = lorryOf(r), h = habis(r);
       return '<div class="list-line lot-row" data-row="' + esc(r.lot) + '"><div class="grow">' +
-        '<b>Petak ' + esc(r.lot) + ' · Blk ' + esc(r.block) + '</b>' +
+        '<b>' + esc(EA.fh.lotLabel(r.lot, r.block)) + '</b>' +
         '<span class="en">Tuai ' + r.dates.map(EA.fh.shortDate).join(', ') + ' · ' + esc(r.workers.map(person).join(', ')) + '</span>' +
         '<span class="en">Ladang · field <b>' + r.field + '</b> · Ramp <b>' + r.ramp + '</b></span>' +
         (!fixing() && r.field > 0 ? '<div class="wline"><label class="inline-label">Dikutip · collected <input class="qty" inputmode="numeric" data-dik="' + esc(r.lot) + '" value="' + dik(r) + '" aria-label="Dikutip petak ' + esc(r.lot) + '"></label>' +

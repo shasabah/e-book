@@ -86,18 +86,37 @@
   function loadDraft(c) {
     var all = EA.local.get(K.draft, {});
     var d = all[c.chit];
-    if (d) { d.prog = d.prog || {}; d.manual = d.manual || {}; return d; }
-    d = { chit: c.chit, lines: {}, status: {}, checker: c.checker || '', replacing: '', prog: {}, manual: {} };
+    if (d) { d.prog = d.prog || {}; d.manual = d.manual || {}; d.bags = d.bags || {}; return d; }
+    d = { chit: c.chit, lines: {}, status: {}, checker: c.checker || '', replacing: '', prog: {}, manual: {}, bags: {} };
+    var mine = ownLots();
     jobsOf(c).forEach(function (j) {
       j.people.forEach(function (w) {
         var k = kind(j.task);
-        d.lines[w] = [{ lot: j.lots.length === 1 ? j.lots[0] : '', qty: k === 'day' ? '1' : '', bunches: '' }];
+        // A harvester keeps his own lot: the one he cut last time, when it is on today's job.
+        var own = k === 'bunches' && mine[w] && j.lots.indexOf(mine[w]) >= 0 ? mine[w] : '';
+        d.lines[w] = [{ lot: j.lots.length === 1 ? j.lots[0] : own, qty: k === 'day' ? '1' : '', bunches: '' }];
       });
       d.status[j.key] = { done: '', reason: '' };
+      // Ha jobs (CPS, manuring, slashing): the morning's lots start as done (100%);
+      // the staff changes only a lot that was not finished.
+      if (kind(j.task) === 'qty' && task(j.task) && task(j.task).unit === 'Ha' && j.lots.length) {
+        d.prog[j.key] = {}; j.lots.forEach(function (l) { d.prog[j.key][l] = '100'; });
+      }
     });
     return d;
   }
   function keepDraft() { var all = EA.local.get(K.draft, {}); all[draft.chit] = draft; EA.local.set(K.draft, all); }
+  // Each harvester's own lot (lots are fixed to a harvester): the lot of his last harvest line.
+  function ownLots() {
+    var m = {};
+    saved().slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; }).forEach(function (s) {
+      ((s.rec && s.rec.lines) || []).forEach(function (l) { if (l.task_code === 'HV01' && l.lot && !/^Blk /.test(l.lot)) m[l.worker_id] = l.lot; });
+    });
+    return m;
+  }
+  // The day's target for this job (2025 performance standard): people x target per person.
+  function targetOf(j) { var t = EA.lists.target && EA.lists.target(j.task, ctx.estate); return t ? { per: t.per, unit: t.unit, total: Math.round(t.per * j.people.length * 100) / 100 } : null; }
+  function isBagTarget(j) { var t = targetOf(j); return !!(t && t.unit === 'bag' && task(j.task) && task(j.task).unit === 'Ha'); }
   function dropDraft() { var all = EA.local.get(K.draft, {}); delete all[draft.chit]; EA.local.set(K.draft, all); }
 
   // ---------- Ha jobs: % of each lot, shared equally ----------
@@ -144,7 +163,14 @@
       });
     }
     var planHa = 0; j.lots.forEach(function (n) { var l = EA.lists.lot(ctx.estate, n); if (l) planHa += l.ha; });
-    return { qty: r2(qty), bunches: bunches, byLot: byLot, flags: flags, planHa: r2(planHa) };
+    // Against the target: Ha done, or bags used for manuring (targeted in bags), or the unit itself.
+    var tg = targetOf(j), actual = null, unit = '';
+    if (tg && j.people.length) {
+      if (isBagTarget(j)) { actual = num((draft.bags || {})[j.key]); unit = 'beg'; }
+      else if (tg.unit === (task(j.task) || {}).unit && k === 'qty') { actual = r2(qty); unit = tg.unit; }
+      if (actual != null && actual < tg.total - 0.005) flags.push({ text: 'Bawah sasaran · below target: ' + actual + ' / ' + tg.total + ' ' + unit + ' (' + j.people.length + ' × ' + tg.per + ')', bad: true });
+    }
+    return { qty: r2(qty), bunches: bunches, byLot: byLot, flags: flags, planHa: r2(planHa), target: tg, actual: actual, tunit: unit };
   }
 
   // ---------- the screen ----------
@@ -186,7 +212,7 @@
       (draft.replacing ? '<p class="warn"><span class="bm">Membetulkan kerja harian. Rekod lama kekal; yang baru menggantikannya.</span><span class="en">Correcting the day\'s work. The old record stays; this one replaces it.</span></p>' : '') +
       jobs.map(jobCard).join('') +
       '<section class="card"><h2><span class="inline"><span class="bm">Laporan petang</span> · <span class="en">Evening report</span></span></h2><pre class="chit" id="wk-preview"></pre></section>' +
-      '<div class="bottom-bar"><button type="button" class="btn btn-main" id="wk-check">CHECK WITH MANDOR<small>Semak dengan mandor</small></button></div>';
+      '<div class="bottom-bar"><button type="button" class="btn btn-main" id="wk-check">SAVE<small>Simpan kerja harian</small></button></div>';
     wireTop();
     wireJobs(jobs);
     $('#wk-check').onclick = function () { check(jobs); };
@@ -197,6 +223,7 @@
     var p = draft.prog[j.key] || {};
     var others = EA.lists.lotsFor(ctx.estate, j.block).filter(function (l) { return progLots(j).indexOf(l.lot) < 0; });
     return '<div class="field"><span class="inline"><span class="bm">Berapa banyak petak siap?</span> · <span class="en">How much of each lot is done?</span></span>' +
+      '<p class="hint">Diisi 100% dari rancangan pagi; ubah hanya petak yang belum siap. · Filled at 100% from the morning plan; change only a lot not finished.</p>' +
       progLots(j).map(function (lot) {
         var v = p[lot] || '', ha = lotHa(lot);
         return '<div class="wline"><b class="mono">' + esc(lot) + '</b><span class="hint">' + ha.toFixed(2) + ' Ha</span>' +
@@ -235,6 +262,8 @@
     }).join('') + lines;
     return '<section class="card" data-job="' + j.key + '"><h2>' + esc(sec.code + '. ' + jobName(j.task)) + (j.block ? ' · Blok ' + esc(j.block) : '') + '</h2>' +
       '<p class="hint">' + esc(j.task + ' · ' + task(j.task).en) + (lotsText ? ' · ' + esc(lotsText) : '') + (j.mandor ? ' · Mandor ' + esc(person(j.mandor)) : '') + '</p>' +
+      (isBagTarget(j) ? '<div class="wline"><label class="inline-label">Beg baja digunakan (kumpulan) · bags used by the gang <input class="qty" inputmode="numeric" data-bags="' + j.key + '" value="' + esc((draft.bags || {})[j.key] || '') + '"></label>' +
+        '<span class="hint">sasaran · target ' + targetOf(j).total + ' beg</span></div>' : '') +
       (isHa(j) ? progBlock(j) +
         '<div class="wline"><span class="hint">' + (auto(j) ? 'Dibahagi sama rata · shared equally.' : 'Diisi seorang-seorang · keyed per person.') + '</span>' +
         '<button type="button" class="btn btn-ghost" data-manual="' + j.key + '">' + (auto(j) ? 'SET PER PERSON<small>Isi seorang-seorang</small>' : 'EQUAL SHARE<small>Kembali sama rata</small>') + '</button></div>' : '') +
@@ -257,7 +286,7 @@
     if (fix) fix.onclick = function () {
       var s = savedFor(chit.chit);
       draft = { chit: chit.chit, lines: JSON.parse(JSON.stringify(s.lines)), status: JSON.parse(JSON.stringify(s.status)), checker: s.checker, replacing: s.chit,
-                prog: JSON.parse(JSON.stringify(s.prog || {})), manual: JSON.parse(JSON.stringify(s.manual || {})) };
+                prog: JSON.parse(JSON.stringify(s.prog || {})), manual: JSON.parse(JSON.stringify(s.manual || {})), bags: JSON.parse(JSON.stringify(s.bags || {})) };
       keepDraft(); render(el, ctx);
     };
     var view = $('#wk-view');
@@ -321,6 +350,9 @@
     el.querySelectorAll('[data-manual]').forEach(function (b) {
       b.onclick = function () { var key = b.dataset.manual; draft.manual[key] = !draft.manual[key]; if (!draft.manual[key]) shareOut(jobByKey(key)); keepDraft(); render(el, ctx); };
     });
+    el.querySelectorAll('[data-bags]').forEach(function (i) {
+      i.oninput = function () { draft.bags = draft.bags || {}; draft.bags[i.dataset.bags] = i.value.replace(/\D/g, ''); keepDraft(); refresh(jobs); };
+    });
     el.querySelectorAll('[data-st]').forEach(function (b) {
       b.onclick = function () {
         var key = b.dataset.st;
@@ -343,6 +375,7 @@
         : k === 'day' ? j.people.length + ' orang · ' + t.qty + ' hari'
         : k === 'ticket' ? j.people.length + ' orang · tan ikut tiket kilang'
         : j.people.length + ' orang · ' + t.qty + ' ' + unitLabel(j.task) + (task(j.task).unit === 'Ha' && t.planHa ? ' daripada ' + t.planHa.toFixed(2) + ' Ha dirancang' : '');
+      if (t.target && t.actual != null) line += ' · sasaran · target ' + t.target.total + ' ' + t.tunit;
       var tot = el.querySelector('[data-tot="' + j.key + '"]'); if (tot) tot.textContent = 'Jumlah · Total: ' + line;
       var fl = el.querySelector('[data-flags="' + j.key + '"]');
       if (fl) fl.innerHTML = t.flags.map(function (f) { return '<p class="flag' + (f.bad ? ' bad' : '') + '">' + esc(f.text) + '</p>'; }).join('');
@@ -380,19 +413,17 @@
         function (s) { s.querySelector('#wp-ok').onclick = ui().closeSheet; });
       return;
     }
-    var mandors = EA.lists.mandorsFor(ctx.estate);
     var red = [];
     jobs.forEach(function (j) { jobTotals(j).flags.forEach(function (f) { if (f.bad) red.push(f.text); }); });
-    ui().openSheet('<h2 id="sheet-title"><span class="bm">Mandor, semak kerja hari ini</span><span class="en">Mandor, check today\'s work on this phone</span></h2>' +
-      (red.length ? '<div class="msg"><span class="bm">Perhatian: ' + esc(red.join('; ')) + '</span><span class="en">Check these before confirming. They go into the report for HQ to see. If the map size of a lot is wrong, tell HQ.</span></div>' : '') +
-      '<pre class="chit">' + esc(reportText(buildRecord('(belum disimpan)', EA.ui.hhmm(new Date()), draft.checker))) + '</pre>' +
-      '<div class="field"><label for="wc-who"><span class="bm">Mandor yang menyemak</span><span class="en">Mandor who checked</span></label><select id="wc-who" class="text-input">' +
-        mandors.map(function (m) { return '<option value="' + m.id + '"' + (m.id === (draft.checker || chit.checker) ? ' selected' : '') + '>' + esc(m.name) + '</option>'; }).join('') + '</select></div>' +
+    // v1.1: the staff saves directly (no mandor confirmation on the phone for now).
+    ui().openSheet('<h2 id="sheet-title"><span class="bm">Semak kerja hari ini</span><span class="en">Check today\'s work, then save</span></h2>' +
+      (red.length ? '<div class="msg"><span class="bm">Perhatian: ' + esc(red.join('; ')) + '</span><span class="en">These go into the report for the Assistant Manager and HQ to see. If the map size of a lot is wrong, tell HQ.</span></div>' : '') +
+      '<pre class="chit">' + esc(reportText(buildRecord('(belum disimpan)', EA.ui.hhmm(new Date()), ctx.user.code))) + '</pre>' +
       '<div class="actions"><button class="btn btn-ghost" type="button" id="wc-back">BACK<small>Ubah</small></button>' +
-      '<button class="btn btn-ok" type="button" id="wc-ok">CONFIRM<small>Mandor sahkan</small></button></div>',
+      '<button class="btn btn-ok" type="button" id="wc-ok">SAVE<small>Simpan</small></button></div>',
       function (s) {
         s.querySelector('#wc-back').onclick = ui().closeSheet;
-        s.querySelector('#wc-ok').onclick = function () { draft.checker = s.querySelector('#wc-who').value; keepDraft(); ui().closeSheet(); save(jobs); };
+        s.querySelector('#wc-ok').onclick = function () { draft.checker = ctx.user.code; keepDraft(); ui().closeSheet(); save(jobs); };
       });
   }
 
@@ -412,7 +443,8 @@
                       qty: k === 'bunches' || k === 'ticket' ? '' : String(t.qty), unit: k === 'bunches' ? 'bunch' : task(j.task).unit,
                       bunches: k === 'bunches' ? String(t.bunches) : '', plan_ha: t.planHa ? String(t.planHa) : '',
                       status: st.done === 'Y' ? 'done' : st.done === 'N' ? 'not_done' : '', reason: st.reason || '',
-                      flags: t.flags.map(function (f) { return f.text; }).join('; '), progress: isHa(j) ? progText(j) : '' });
+                      flags: t.flags.map(function (f) { return f.text; }).join('; '), progress: isHa(j) ? progText(j) : '',
+                      bags: isBagTarget(j) ? String(num((draft.bags || {})[j.key])) : '', target: t.target ? String(t.target.total) + ' ' + (t.tunit || t.target.unit) : '' });
     });
     return { chit: chit.chit, date: chit.date, estate: chit.estate, label: label, at: at, checker: checker,
              lines: lines, jobs: jobLines, keyedName: ctx.user.name };
@@ -442,13 +474,13 @@
       if (old) old.rec.jobs.forEach(function (j) { oldJobs[j.task_code + '|' + j.block + '|' + j.lots] = j; });
       rec.jobs.forEach(function (j) {
         var o = oldJobs[j.task_code + '|' + j.block + '|' + j.lots];
-        if (o && o.qty === j.qty && o.bunches === j.bunches && o.status === j.status && o.reason === j.reason && o.workers === j.workers) { j.id = o.id; return; }
+        if (o && o.qty === j.qty && o.bunches === j.bunches && o.status === j.status && o.reason === j.reason && o.workers === j.workers && o.bags === j.bags) { j.id = o.id; return; }
         j.id = EA.save(TAB_JOB, ROOM, ctx.estate, { date: rec.date, chit: rec.chit, task_code: j.task_code, block: j.block, lots: j.lots, workers: j.workers,
           qty: j.qty, unit: j.unit, bunches: j.bunches, plan_ha: j.plan_ha, job_status: j.status, reason: j.reason, flags: j.flags, progress: j.progress,
-          confirmed_by: rec.checker, confirmed_at: stamp }, o ? o.id : '').id;
+          bags: j.bags, target: j.target, confirmed_by: rec.checker, confirmed_at: stamp }, o ? o.id : '').id;
       });
     } catch (e) { ui().toast('Tidak dapat simpan: ' + e.message + ' · Could not save', 'bad'); return; }
-    keepSaved({ chit: rec.chit, date: rec.date, estate: rec.estate, rec: rec, lines: draft.lines, status: draft.status, prog: draft.prog, manual: draft.manual, checker: draft.checker, rev: old ? (old.rev || 1) + 1 : 1 });
+    keepSaved({ chit: rec.chit, date: rec.date, estate: rec.estate, rec: rec, lines: draft.lines, status: draft.status, prog: draft.prog, manual: draft.manual, bags: draft.bags || {}, checker: draft.checker, rev: old ? (old.rev || 1) + 1 : 1 });
     dropDraft();
     ui().toast('Kerja harian disimpan · Day\'s work saved');
     if (navigator.onLine && EA.sendLink()) EA.send();
@@ -473,11 +505,13 @@
       L.push('• ' + shortName(j.task_code) + (j.block ? ' Blk ' + j.block : '') + ' — ' + j.workers + ' org — ' + what + ' — ' +
              (j.status === 'done' ? 'SIAP' : j.status === 'not_done' ? 'BELUM SIAP' : '?'));
       if (j.progress) L.push('   Petak: ' + j.progress.replace(/ /g, ', '));
+      if (j.bags) L.push('   Beg baja: ' + j.bags);
+      if (j.target) L.push('   Sasaran: ' + j.target);
       if (j.status === 'not_done' && j.reason) L.push('   Sebab/tindakan: ' + j.reason);
       if (j.flags) L.push('   Perhatian: ' + j.flags);
     });
     L.push('');
-    L.push('Disediakan: ' + (rec.keyedName || '') + ' · Disemak mandor: ' + person(rec.checker) + ' ' + rec.at);
+    L.push('Disediakan: ' + (rec.keyedName || '') + ' · ' + rec.at);
     L.push('E-Book ' + rec.chit);
     return L.join('\n');
   }

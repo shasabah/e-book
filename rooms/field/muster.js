@@ -220,6 +220,9 @@
   // than was cut. Ramp backlog per block = collected - sent since the ramp was last empty.
   function calcBacklog(cut, col, dis, today) {
     function n(v) { return Number(v) || 0; }
+    // Harvest keyed by block only (no lot yet, v1.1) counts as one lot "Blk 03" for that block.
+    function asLot(r) { return r.lot ? r : Object.assign({}, r, { lot: r.block ? 'Blk ' + r.block : '' }); }
+    cut = cut.map(asLot); col = col.map(asLot);
     function byLot(a, b) { return String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true }); }
     var d = new Date(today + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 7);
     var weekAgo = d.toISOString().slice(0, 10);
@@ -307,7 +310,6 @@
     if (!b) return [];
     var L = (b.tonnage ? ['Tan bulan ini · Month to date: ' + tonnageText(b.tonnage)] : []).concat(['Baki ladang · Field: ' + (b.fieldTotal || 0) + ' tandan' + (b.field && b.field.length ? ' (' + b.field.map(function (x) { return x.lot + ' ' + x.bunches; }).join(', ') + ')' : ''),
              'Baki ramp · Ramp: ' + ((b.ramp && b.ramp.bunches) || 0) + ' tandan' + (b.ramp && b.ramp.bunches ? ' (' + rampText(b.ramp) + ')' : '')]);
-    if (b.checks && b.checks.length) L.push('Semak kiraan · Count check: ' + b.checks.map(checkText).join('; '));
     return L;
   }
   function backlogCard(estate) {
@@ -322,9 +324,6 @@
         (b.field.length ? b.field.map(function (x) { return 'Petak ' + esc(x.lot) + ': ' + x.bunches + ' (sejak ' + shortDate(x.since) + ')'; }).join(' · ') : 'Tiada baki · none left') + '</span></div></div>' +
       '<div class="list-line"><div><b>Ramp: ' + ((b.ramp && b.ramp.bunches) || 0) + ' tandan</b><span class="en">' +
         (b.ramp && b.ramp.bunches ? 'Belum dihantar ke kilang: ' + esc(rampText(b.ramp)) + ' · not yet sent to the mill' : 'Kosong · empty') + '</span></div></div>' +
-      (b.checks && b.checks.length ? '<div class="list-line flag-line"><div><b class="warn-t">Semak kiraan · Count check</b><span class="en">' +
-        b.checks.map(function (x) { return esc(checkText(x)); }).join('<br>') +
-        '</span><span class="en">Kiraan mandor dan pemuat tidak sama: buah tertinggal, atau salah kira? · The mandor\'s and the loader\'s counts differ: bunches left behind, or a wrong count?</span></div></div>' : '') +
       '<p class="hint">' + (b.local ? 'Dikira dari telefon ini (salinan ujian) · from this phone (test copy)' : 'Dikira pejabat ' + esc(b.at) + ' · worked out by the office') + '</p>';
     return '<section class="card" id="fh-backlog" data-estate="' + esc(estate) + '" aria-labelledby="fh-bl"><div class="room-top"><h2 id="fh-bl" class="grow"><span class="inline"><span class="bm">Tan & baki buah</span> · <span class="en">Tonnes and crop backlog</span></span></h2>' +
       '<button type="button" class="btn btn-ghost" data-refresh-backlog="1">REFRESH<small>Kemas kini</small></button></div>' + body + '</section>';
@@ -363,10 +362,7 @@
       out.push({ key: 'F:' + x.lot, kind: 'field', block: x.block, lot: x.lot, detail: x.bunches + ' tandan sejak ' + shortDate(x.since),
                  bm: 'Buah tertinggal di ladang, petak ' + x.lot + ': ' + x.bunches + ' tandan sejak ' + shortDate(x.since), en: 'Bunches left in the field' });
     });
-    (b.checks || []).forEach(function (x) {
-      out.push({ key: 'K:' + x.lot + ':' + (x.cleared || 'open'), kind: 'count', block: x.block, lot: x.lot, detail: checkText(x),
-                 bm: 'Kiraan tidak sama, ' + checkText(x), en: 'Mandor and loader counts differ' });
-    });
+    // v1.1: no tally between the mandor, the loader and the staff for now, so no count alerts.
     // Poor mill grading (keyed by the clerk): the staff says what is going on in the estate,
     // once; after that morning it is closed (the office no longer sends it).
     var explained = {};
@@ -478,7 +474,7 @@
       '<section class="card" aria-labelledby="fh-s4"><h2 id="fh-s4"><span class="step">4</span><span class="inline"><span class="bm">Chit</span> · <span class="en">The chit</span></span></h2>' +
       '<div id="fh-table"></div></section>' +
 
-      '<div class="bottom-bar"><button type="button" class="btn btn-main" id="fh-check">CHECK WITH MANDOR<small>Semak dengan mandor</small></button></div>' +
+      '<div class="bottom-bar"><button type="button" class="btn btn-main" id="fh-check">SAVE CHIT<small>Simpan chit</small></button></div>' +
       todayCard();
 
     $('#fh-addjob').onclick = function () { editJob(null); };
@@ -530,16 +526,32 @@
     $('#fh-jobs').innerHTML = draft.jobs.length ? draft.jobs.map(function (j) {
       var n = rows.filter(function (r) { return r.muster === 'H' && jobFor(r.worker_id) === j; }).length;
       var sec = EA.lists.sectionOf(j.task);
-      var li = lotsInfo(j.lots);
-      return '<div class="list-line"><div><b>' + esc(sec.code + '. ' + j.task + ' ' + jobName(j.task)) + '</b><span class="en">' + esc(jobNameEn(j.task)) +
+      var li = lotsInfo(j.lots), tg = targetLine(j, n, li);
+      return '<div class="list-line' + (tg && tg.short ? ' flag-line' : '') + '"><div><b>' + esc(sec.code + '. ' + j.task + ' ' + jobName(j.task)) + '</b><span class="en">' + esc(jobNameEn(j.task)) +
         (j.block ? ' · Blok ' + esc(j.block) : '') + (j.lots.length ? ' · Petak ' + esc(j.lots.join(', ')) + ' (' + li.ha.toFixed(2) + ' Ha)' : '') +
-        (j.mandor ? ' · Mandor ' + esc(person(j.mandor)) : '') + '</span></div>' +
+        (j.mandor ? ' · Mandor ' + esc(person(j.mandor)) : '') + '</span>' +
+        (tg ? '<span class="en' + (tg.short ? ' warn-t' : '') + '">' + tg.text + '</span>' : '') + '</div>' +
         '<div class="acts"><span class="pill plain">' + n + ' orang</span>' +
         '<button type="button" class="btn btn-ghost" data-pick="' + j.key + '">PICK<small>Pilih orang</small></button>' +
         '<button type="button" class="btn btn-ghost" data-edit="' + j.key + '">EDIT<small>Ubah</small></button></div></div>';
     }).join('') : '<p class="hint">Belum ada kerja. Tekan + ADD JOB untuk setiap kerja hari ini. · No jobs yet. Tap + ADD JOB for each job today.</p>';
     el.querySelectorAll('#fh-jobs [data-edit]').forEach(function (b) { b.onclick = function () { editJob(b.dataset.edit); }; });
     el.querySelectorAll('#fh-jobs [data-pick]').forEach(function (b) { b.onclick = function () { pickPeople(b.dataset.pick); }; });
+  }
+
+  // The day's target for a job (from the 2025 performance standard): people x target per person.
+  // For an Ha job the planned lots are set against it; a plan lower than the target is shown red.
+  function targetLine(j, n, li) {
+    var t = EA.lists.target && EA.lists.target(j.task, ctx.estate);
+    if (!t) return null;
+    var u = t.unit === 'bag' ? 'beg' : t.unit === 'palm' ? 'pokok' : t.unit;
+    if (!n) return { text: esc('Sasaran · Target: ' + t.per + ' ' + u + ' seorang · per person'), short: false };
+    var total = Math.round(t.per * n * 100) / 100;
+    var base = 'Sasaran · Target: ' + n + ' × ' + t.per + ' = <b>' + total + ' ' + esc(u) + '</b>';
+    if (t.unit !== 'Ha') return { text: base, short: false };
+    if (!j.lots.length) return { text: base + ' · pilih petak · choose the lots', short: true };
+    if (li.ha + 0.005 < total) return { text: base + ' · rancangan · planned <b>' + li.ha.toFixed(2) + ' Ha</b>: KURANG ' + (total - li.ha).toFixed(2) + ' Ha · below target', short: true };
+    return { text: base + ' · rancangan · planned ' + li.ha.toFixed(2) + ' Ha ✓', short: false };
   }
 
   function unmarked() {
@@ -754,20 +766,19 @@
       });
   }
 
+  // v1.1: only the staff and the clerk use the app for now, so the staff saves the chit
+  // directly (no mandor confirmation on the phone).
   function confirmSheet() {
-    var onDuty = EA.lists.mandorsFor(ctx.estate).filter(function (m) { return draft.marks[m.id] === 'H'; });
     var empty = emptyJobs();
-    var preview = chitText(buildChit('(belum disimpan · not saved yet)', EA.ui.hhmm(new Date()), draft.checker || (onDuty[0] && onDuty[0].id) || ''));
-    ui().openSheet('<h2 id="sheet-title"><span class="bm">Mandor, semak chit ini</span><span class="en">Mandor, check this chit on this phone</span></h2>' +
+    var preview = chitText(buildChit('(belum disimpan · not saved yet)', EA.ui.hhmm(new Date()), ctx.user.code));
+    ui().openSheet('<h2 id="sheet-title"><span class="bm">Semak chit ini</span><span class="en">Check this chit, then save</span></h2>' +
       (empty.length ? '<p class="warn"><span class="bm">Kerja tanpa orang tidak masuk chit: ' + esc(empty.map(function (j) { return j.task; }).join(', ')) + '</span><span class="en">Jobs with nobody are left off the chit.</span></p>' : '') +
       '<pre class="chit">' + esc(preview) + '</pre>' +
-      '<div class="field"><label for="cf-who"><span class="bm">Mandor yang menyemak</span><span class="en">Mandor who checked</span></label><select id="cf-who" class="text-input">' +
-        (onDuty.length ? onDuty : EA.lists.mandorsFor(ctx.estate)).map(function (m) { return '<option value="' + m.id + '"' + (m.id === draft.checker ? ' selected' : '') + '>' + esc(m.name) + '</option>'; }).join('') + '</select></div>' +
       '<div class="actions"><button class="btn btn-ghost" type="button" id="cf-back">BACK<small>Ubah</small></button>' +
-      '<button class="btn btn-ok" type="button" id="cf-ok">CONFIRM<small>Mandor sahkan</small></button></div>',
+      '<button class="btn btn-ok" type="button" id="cf-ok">SAVE<small>Simpan</small></button></div>',
       function (s) {
         s.querySelector('#cf-back').onclick = ui().closeSheet;
-        s.querySelector('#cf-ok').onclick = function () { draft.checker = s.querySelector('#cf-who').value; keepDraft(); ui().closeSheet(); save(); };
+        s.querySelector('#cf-ok').onclick = function () { draft.checker = ctx.user.code; keepDraft(); ui().closeSheet(); save(); };
       });
   }
 
@@ -845,7 +856,7 @@
     L.push('*CHIT MUSTER ' + (est ? est.company + ' ' : '') + c.estate + '*' + (c.rev > 1 ? ' _(dibetulkan · corrected)_' : ''));
     L.push(ui().dayBm[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear());
     L.push('Hujan semalam: ' + (Number(c.rain_mm) || 0).toFixed(2) + ' mm' + (c.rain_time ? ' (' + c.rain_time + ')' : '') + ' · Bulan ini: ' + rainMonth(c.date, c.chit.indexOf('(') === 0 ? c.rain_mm : undefined).toFixed(2) + ' mm');
-    backlogLines(c.backlog).forEach(function (x) { if (!(c.alerts && c.alerts.length && x.indexOf('Semak kiraan') === 0)) L.push(x); });
+    backlogLines(c.backlog).forEach(function (x) { L.push(x); });
     if (c.alerts && c.alerts.length) {
       L.push('*⚠ AMARAN · ALERT — untuk tindakan Penolong Pengurus*');
       c.alerts.forEach(function (a) { L.push('• ' + a.text + ' → ' + a.note); });
@@ -868,7 +879,7 @@
     });
     var mdrs = EA.lists.mandorsFor(c.estate).filter(function (m) { return c.rows.some(function (r) { return r.worker_id === m.id && r.muster === 'H'; }); });
     if (mdrs.length) L.push('Mandor bertugas: ' + mdrs.map(function (m) { return m.name; }).join(', '));
-    L.push('Disediakan: ' + (c.keyedName || c.keyedBy) + ' · Disemak mandor: ' + person(c.checker) + ' ' + c.confirmedAt);
+    L.push('Disediakan: ' + (c.keyedName || c.keyedBy) + ' · ' + c.confirmedAt);
     L.push('E-Book ' + (EA.RELEASE || '') + ' · ' + c.chit);
     return L.join('\n');
   }

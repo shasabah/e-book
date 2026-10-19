@@ -262,7 +262,7 @@
       var g = {};
       draft.dnLots.forEach(function (h) { var x = g[h.lot] || (g[h.lot] = { lot: h.lot, block: h.block, b: 0, who: [] }); x.b += num(h.bunches); if (x.who.indexOf(h.worker_id) < 0) x.who.push(h.worker_id); });
       $('#tk-lots').innerHTML = '<div class="rows">' + Object.keys(g).sort(byLot).map(function (k) {
-        return '<div class="list-line"><div><b>Petak ' + esc(k) + ' · Blk ' + esc(g[k].block) + '</b><span class="en">' + esc(g[k].who.map(person).join(', ')) + '</span></div><div class="mono">' + g[k].b + ' tandan</div></div>';
+        return '<div class="list-line"><div><b>' + esc(EA.fh.lotLabel(k, g[k].block)) + '</b><span class="en">' + esc(g[k].who.map(person).join(', ')) + '</span></div><div class="mono">' + g[k].b + ' tandan</div></div>';
       }).join('') + c.blocks.filter(function (b) { return c.split[b].bunches > (inLots[b] || 0); }).map(function (b) {
         return '<div class="list-line"><div><b>Blk ' + esc(b) + '</b><span class="en">tanpa rekod tuai · no harvest record</span></div><div class="mono">' + (c.split[b].bunches - (inLots[b] || 0)) + ' tandan</div></div>';
       }).join('') + '</div>';

@@ -342,3 +342,29 @@ details.card-sub summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
 .hrow .s { display: block; font-size: .82rem; color: var(--muted); font-weight: 400; }
 .hrow .n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: .9rem; }
 .ok-t { color: var(--ok); font-weight: 700; }
+
+/* Pengguna & PIN · Users & PIN (v1.9) */
+.us { display: grid; gap: 12px; }
+.us-add { background: var(--sun); color: var(--sun-ink); width: 100%; min-height: 54px; font-weight: 800; }
+.us-row { width: 100%; background: none; border: 0; border-bottom: 1px solid var(--line); text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.us-row:last-child { border-bottom: 0; }
+.us-tag { font-size: .72rem; font-weight: 800; border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+.us-tag.on { background: var(--ok-soft); color: var(--ok); }
+.us-tag.off { background: var(--line); color: var(--muted); }
+.us-tag.test { background: var(--wait-soft); color: #9a5b00; }
+.us-bad { color: var(--bad); border-color: var(--bad); width: 100%; }
+.us-badfill { background: var(--bad); }
+.us-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.us-pills button { min-height: 42px; padding: 4px 14px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--surface); color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+.us-pills button[aria-pressed="true"] { background: var(--slate); color: #fff; border-color: transparent; }
+.us-pills .us-all { border-style: dashed; color: var(--muted); }
+.note-sun { margin: 0; padding: 10px 12px; border-radius: var(--r); background: var(--wait-soft); color: #6b4b00; font-size: .9rem; }
+.us-pincard { text-align: center; }
+.us-who { font-size: 1.3rem; font-weight: 800; }
+.us-pin { font: 800 2.6rem/1 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .12em; color: var(--slate); background: #fff8e6; border: 2px dashed var(--sun); border-radius: 16px; padding: 18px 0; margin: 4px 0; }
+.us-wa { background: #25a35a; }
+.us-pre { white-space: pre-wrap; margin: 0; font: inherit; font-size: .9rem; }
+.us-wamsg { background: #e7f6dc; }
+.us-first { border: 2px solid var(--sun); }
+#sheet > .btn { width: 100%; margin-top: 6px; }
+.us .actions .btn { flex: 1; }

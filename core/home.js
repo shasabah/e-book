@@ -33,7 +33,18 @@
   }
   function closeSheet() { $('sheet-back').hidden = true; $('sheet').innerHTML = ''; }
   // Shared screen pieces, built once here. Rooms use these, never their own copy.
-  EA.ui = { toast: toast, openSheet: openSheet, closeSheet: closeSheet, esc: esc,
+  // Copy text to the phone's clipboard (v1.9).
+  function copy(t) {
+    function done() { toast(EA.t('Disalin', 'Copied')); }
+    function fallback() {
+      var a = document.createElement('textarea'); a.value = t; a.setAttribute('readonly', ''); a.style.position = 'fixed'; a.style.opacity = '0';
+      document.body.appendChild(a); a.select();
+      try { document.execCommand('copy'); done(); } catch (e) { toast(EA.t('Tekan lama pada teks untuk salin', 'Long-press the text to copy'), 'wait'); }
+      document.body.removeChild(a);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, fallback); else fallback();
+  }
+  EA.ui = { toast: toast, openSheet: openSheet, closeSheet: closeSheet, esc: esc, copy: copy,
             dayBm: DAY_BM, dayEn: DAY_EN, monBm: MON_BM, monEn: MON_EN, hhmm: hhmm };
   $('sheet-back').addEventListener('click', function (e) { if (e.target === $('sheet-back')) closeSheet(); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('sheet-back').hidden) closeSheet(); });
@@ -71,13 +82,13 @@
 
   // ---------- login ----------
   var WHY = {
-    format: ['Kunci mesti 6 nombor.', 'The key must be 6 numbers.'],
-    wrong: ['Kunci tidak dikenali. Semak semula, atau tanya Yu Chen.', 'Key not known. Check it, or ask Yu Chen.'],
+    format: ['PIN mesti 6 nombor.', 'The PIN must be 6 numbers.'],
+    wrong: ['PIN tidak dikenali. Semak semula, atau tanya Yu Chen.', 'PIN not known. Check it, or ask Yu Chen.'],
     offline: ['Tiada isyarat, dan orang ini belum pernah masuk di telefon ini.', 'No signal, and this person has not logged in on this phone before.'],
     server: ['Pejabat sibuk sekarang. Cuba lagi sebentar.', 'The office side is busy. Try again in a moment.'],
     old: ['Versi app ini sudah lama. Tekan LOAD IT atau muat semula halaman.', 'This app version is too old. Tap LOAD IT or reload the page.'],
     nolink: ['Pautan hantar belum ditetapkan. Buka Tetapan telefon.', 'The sending link is not set. Open Phone setup.'],
-    locked: ['Terlalu banyak kunci salah. Tunggu 15 minit.', 'Too many wrong keys. Wait 15 minutes.']
+    locked: ['Terlalu banyak PIN salah. Tunggu 15 minit.', 'Too many wrong PINs. Wait 15 minutes.']
   };
   function loginError(why) {
     var m = WHY[why] || WHY.wrong;

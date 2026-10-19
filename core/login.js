@@ -44,6 +44,15 @@ window.EA = window.EA || {};
 
   EA.logout = function () { EA.local.del(USER); };
 
+  // The Owner made a new PIN for himself (v1.9): this phone keeps working with the new one.
+  EA.setMyPin = function (pin) {
+    var u = EA.currentUser();
+    if (!u || !/^\d{6}$/.test(String(pin))) return;
+    u.key = String(pin); EA.local.set(USER, u);
+    var last = EA.local.get(LAST, null);
+    if (last && last.code === u.code) { last.key = u.key; EA.local.set(LAST, last); }
+  };
+
   // Switch a person off on this phone (lost phone, person left).
   EA.forget = function () { EA.local.del(USER); EA.local.del(LAST); };
 })();

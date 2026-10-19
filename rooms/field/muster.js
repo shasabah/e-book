@@ -45,8 +45,7 @@
   function dropDraft() { var all = EA.local.get(K.draft, {}); delete all[ctx.estate]; EA.local.set(K.draft, all); }
 
   function chits() {
-    var cut = new Date(); cut.setDate(cut.getDate() - 40);       // kept 40 days for the month's rain to date
-    var keepFrom = cut.toISOString().slice(0, 10);
+    var keepFrom = EA.dayAgo(40);       // kept 40 days for the month's rain to date
     return EA.local.get(K.chits, []).filter(function (c) { return c.date >= keepFrom; });
   }
   function todaysChits() { return chits().filter(function (c) { return c.estate === ctx.estate && c.date === EA.today(); }); }
@@ -62,9 +61,12 @@
   // Rain this month (from the chits kept on this phone), for the "month to date" line.
   // One reading per day (the latest chit of that day); 'today' can be given
   // (the reading being keyed now). Days after 'date' are not counted.
+  // The reading on a chit is the rain of the day before, so it counts in that day's month
+  // (the 1 Nov chit closes October).
+  function dayBefore(d) { var x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() - 1); return x.toISOString().slice(0, 10); }
   function rainMonth(date, today) {
-    var m = date.slice(0, 7), byDay = {};
-    chits().forEach(function (c) { if (c.estate === ctx.estate && c.date.slice(0, 7) === m && c.date <= date) byDay[c.date] = Number(c.rain_mm) || 0; });
+    var m = dayBefore(date).slice(0, 7), byDay = {};
+    chits().forEach(function (c) { if (c.estate === ctx.estate && dayBefore(c.date).slice(0, 7) === m && c.date <= date) byDay[c.date] = Number(c.rain_mm) || 0; });
     if (today !== undefined) byDay[date] = Number(today) || 0;
     var sum = Object.keys(byDay).reduce(function (a, k) { return a + byDay[k]; }, 0);
     return Math.round(sum * 100) / 100;
@@ -197,11 +199,12 @@
     });
     EA.local.get('fh.collect', []).forEach(function (s) {
       if (s.estate !== estate) return;
-      s.lines.forEach(function (l) { col.push({ date: s.date, lot: l.lot, block: l.block, bunches: l.bunches, cleared: l.cleared }); });
+      s.lines.forEach(function (l) { col.push({ date: s.date, at: s.at, lot: l.lot, block: l.block, bunches: l.bunches, cleared: l.cleared }); });
       var d = s.dispatch;
       if (!d || d.replacedBy) return;     // a corrected delivery note: the new one counts
-      if (d.blocks) Object.keys(d.blocks).forEach(function (b) { dis.push({ date: s.date, block: b, bunches: d.blocks[b], ramp_cleared: d.ramp_cleared }); });
-      else dis.push({ date: s.date, block: '', bunches: d.bunches, ramp_cleared: d.ramp_cleared });
+      if (d.blocks) Object.keys(d.blocks).forEach(function (b) { dis.push({ date: s.date, at: s.at, block: b, bunches: d.blocks[b], ramp_cleared: d.ramp_cleared }); });
+      else dis.push({ date: s.date, at: s.at, block: '', bunches: d.bunches, ramp_cleared: d.ramp_cleared });
+      if (d.ramp_cleared === 'Y' && d.blocks && !Object.keys(d.blocks).length) dis.push({ date: s.date, at: s.at, block: '', bunches: 0, ramp_cleared: 'Y' });
     });
     var b = calcBacklog(cut, col, dis, EA.today());
     b.ok = true; b.estate = estate; b.at = EA.today() + ' ' + EA.ui.hhmm(new Date()); b.local = true;
@@ -213,7 +216,7 @@
   // ===== calcBacklog: the same text is in rooms/field/muster.js and server/core.gs =====
   // cut: harvesters' bunches [{date, lot, block, bunches}]
   // col: loader's collection [{date, lot, block, bunches, cleared}]
-  // dis: lorry loads [{date, block, bunches, ramp_cleared}]
+  // dis: lorry loads [{date, block, bunches, ramp_cleared}]; col and dis may carry keyed_at (or at, HH:mm)
   // Field backlog per lot = cut - collected since the lot was last cleared ("Habis").
   // Count check: when a lot is cleared and the mandor's count and the loader's count
   // since the clearing before differ (last 7 days), or the loader has collected more
@@ -260,17 +263,21 @@
       if (last && last >= weekAgo && x.wCut !== x.wCol) checks.push({ lot: x.lot, block: x.block, mandor: x.wCut, loader: x.wCol, cleared: last });
     });
     field.sort(byLot); checks.sort(byLot);
+    // The ramp is worked out by day AND time keyed (v1.3), so a lorry that empties the ramp
+    // at noon does not hide bunches collected later that day, and an earlier lorry the same
+    // day is not taken off twice.
+    function when(r) { var t = String(r.keyed_at || r.at || ''); return r.date + ' ' + (/\d\d:\d\d$/.test(t) ? t.slice(-5) : '00:00'); }
     var empty = '';
-    dis.forEach(function (r) { if (r.ramp_cleared === 'Y' && r.date > empty) empty = r.date; });
+    dis.forEach(function (r) { if (r.ramp_cleared === 'Y' && when(r) > empty) empty = when(r); });
     var blocks = {}, since = '', inAll = 0, outAll = 0;
     function blk(b) { return blocks[b] || (blocks[b] = { block: b, bunches: 0 }); }
     col.forEach(function (r) {
-      if (r.date <= empty) return;
+      if (empty && when(r) <= empty) return;
       inAll += n(r.bunches); blk(r.block || '').bunches += n(r.bunches);
       if (n(r.bunches) && (!since || r.date < since)) since = r.date;
     });
     dis.forEach(function (r) {
-      if (r.date > empty || (r.date === empty && r.ramp_cleared !== 'Y')) { outAll += n(r.bunches); blk(r.block || '').bunches -= n(r.bunches); }
+      if (!empty || when(r) > empty) { outAll += n(r.bunches); blk(r.block || '').bunches -= n(r.bunches); }
     });
     // A lorry keyed without its block (before v12) cannot be split, so then no block list is shown.
     var rampBlocks = blocks[''] && blocks[''].bunches < 0 ? [] : Object.keys(blocks).map(function (k) { return blocks[k]; })
@@ -479,7 +486,8 @@
 
     $('#fh-addjob').onclick = function () { editJob(null); };
     if ($('#fh-copy')) $('#fh-copy').onclick = copyLast;
-    $('#fh-rain').oninput = function () { draft.rain_mm = this.value.replace(/[^\d.]/g, ''); keepDraft(); drawRain(); };
+    // A comma is a decimal point too (many phone keyboards show only a comma): 2,5 = 2.5 mm.
+    $('#fh-rain').oninput = function () { var v = this.value.replace(',', '.').replace(/[^\d.]/g, ''); var i = v.indexOf('.'); if (i >= 0) v = v.slice(0, i + 1) + v.slice(i + 1).replace(/\./g, ''); draft.rain_mm = v; keepDraft(); drawRain(); };
     $('#fh-raint').oninput = function () { draft.rain_time = this.value; keepDraft(); };
     $('#fh-check').onclick = check;
     wireAlerts();
@@ -526,7 +534,9 @@
     $('#fh-jobs').innerHTML = draft.jobs.length ? draft.jobs.map(function (j) {
       var n = rows.filter(function (r) { return r.muster === 'H' && jobFor(r.worker_id) === j; }).length;
       var sec = EA.lists.sectionOf(j.task);
-      var li = lotsInfo(j.lots), tg = targetLine(j, n, li);
+      // The mandor in charge is not one of the workers in the target (v1.3).
+      var nw = rows.filter(function (r) { return r.muster === 'H' && jobFor(r.worker_id) === j && r.worker_id !== j.mandor; }).length;
+      var li = lotsInfo(j.lots), tg = targetLine(j, nw, li);
       return '<div class="list-line' + (tg && tg.short ? ' flag-line' : '') + '"><div><b>' + esc(sec.code + '. ' + j.task + ' ' + jobName(j.task)) + '</b><span class="en">' + esc(jobNameEn(j.task)) +
         (j.block ? ' · Blok ' + esc(j.block) : '') + (j.lots.length ? ' · Petak ' + esc(j.lots.join(', ')) + ' (' + li.ha.toFixed(2) + ' Ha)' : '') +
         (j.mandor ? ' · Mandor ' + esc(person(j.mandor)) : '') + '</span>' +
@@ -979,7 +989,8 @@
         d.alertNotes = {}; (c.alerts || []).forEach(function (a) { d.alertNotes[a.key] = a.note; });
         d.replacing = c.chit; d.rain_mm = c.rain_mm; d.rain_time = c.rain_time; d.checker = c.checker;
         d.jobs = JSON.parse(JSON.stringify(c.jobs || []));
-        d.nextJob = d.jobs.length + 1;
+        // Next job number after the highest used (a job removed earlier leaves a gap; never reuse a number).
+        d.nextJob = d.jobs.reduce(function (m, j) { return Math.max(m, Number(String(j.key).replace(/\D/g, '')) || 0); }, 0) + 1;
         c.rows.forEach(function (r) {
           if (r.status === 'removed') return;
           d.marks[r.worker_id] = r.muster;

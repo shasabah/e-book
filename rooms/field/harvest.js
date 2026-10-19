@@ -24,7 +24,7 @@
     EA.local.get('fh.work', []).forEach(function (s) {
       if (s.estate !== estate) return;
       s.rec.lines.forEach(function (l) {
-        if (l.task_code === 'HV01' && num(l.bunches) > 0 && l.id) out.push({ id: l.id, date: s.date, lot: lotKey(l), block: l.block, worker_id: l.worker_id, bunches: num(l.bunches) });
+        if (l.task_code === 'HV01' && num(l.bunches) > 0 && l.id) out.push({ id: l.id, date: s.date, lot: lotKey(l), block: l.block, worker_id: l.worker_id, bunches: num(l.bunches), hist: l.hist || [] });
       });
     });
     return out;
@@ -43,11 +43,26 @@
     var office = !!EA.sendLink();
     // The office list has already taken off what it received; this phone's own entries still waiting have not.
     var lines = (office ? EA.local.get(K.harv + estate, []) : localHarvest(estate)).map(function (h) { return Object.assign({}, h, { lot: lotKey(h), bunches: num(h.bunches) }); });
+    // A corrected harvester line has a new id; anything that took the old id counts against the new one.
+    var newer = {};
+    localHarvest(estate).forEach(function (h) { (h.hist || []).forEach(function (v) { newer[v[0]] = h.id; }); });
     if (office) {   // harvest keyed on this phone and not yet at the office (v22)
       var have = {}; lines.forEach(function (h) { have[h.id] = true; });
-      localHarvest(estate).forEach(function (h) { if (!have[h.id] && EA.isWaiting(h.id)) lines.push(h); });
+      localHarvest(estate).forEach(function (h) {
+        if (have[h.id] || !EA.isWaiting(h.id)) return;
+        // A correction still waiting: the office knows an earlier version (the newest one already
+        // sent there). Its balance moves to this line, changed by the difference in bunches.
+        var known = null;
+        (h.hist || []).forEach(function (v) { if (!EA.isWaiting(v[0])) known = v; });
+        if (!known) { lines.push(h); return; }
+        var at = lines.findIndex(function (y) { return y.id === known[0]; });
+        var left = (at >= 0 ? lines[at].bunches : 0) + h.bunches - num(known[1]);
+        if (at >= 0) lines.splice(at, 1);
+        if (left > 0) lines.push(Object.assign({}, h, { bunches: left }));
+      });
     }
     function adjust(h, n) {
+      if (newer[h.id]) h = Object.assign({}, h, { id: newer[h.id] });
       var x = lines.find(function (y) { return y.id === h.id; });
       if (x) x.bunches += n; else if (n > 0) lines.push({ id: h.id, date: h.date, lot: h.lot, block: h.block, worker_id: h.worker_id, bunches: n });
     }

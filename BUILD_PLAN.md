@@ -67,6 +67,7 @@ No new rooms for field crews in peak crop (Aug–Nov).
    - DONE 18 Oct (v21): staff keys no weights; the staff's ticket screen is the lorry and its lots only (SAVE LOTS corrects the delivery note); the clerk keys weights and grading.
    - DONE 18 Oct (v22): pilot keying by the staff only (mandor and loader on paper); Kutip & hantar as one list (collected and on-lorry filled in); no ticket tab for the staff; weight names 1st / 2nd / net; month-to-date tonnes on the morning chit. Office script version 21.
    - DONE 18 Oct (1.0 build 23): clean-up for the trial: dead staff-ticket code removed, release + build numbering, tests in tests/run.sh before every publish.
+   - DONE 19 Oct (1.1 build 24): no mandor confirmation; no count tally; 2025 daily targets on the chit and the day's work; area done filled in at 100%; manuring bags; harvester keeps his lot; harvest by block allowed; real worker list from the office sheet. Office script version 22.
    - Next: lorry request at 5 MT; monthly tonnes per harvester (pay check); Assistant Manager's direction on each alert; office view (Wawa: tonnage by block and mill); ticket photo; older-day corrections by the clerk.
 2. Build on the test copy; Sugut junior staff tests with made-up workers.
 3. Pilot from 4 Jan beside the paper pocket check roll for about a month.

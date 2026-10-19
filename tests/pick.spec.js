@@ -11,9 +11,9 @@ const { chromium } = require('playwright');
     const n = new Date(); const d = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0');
     const y = new Date(n); y.setDate(y.getDate() - 1); const yd = y.getFullYear() + '-' + String(y.getMonth() + 1).padStart(2, '0') + '-' + String(y.getDate()).padStart(2, '0');
     localStorage.setItem('fh.chits2', JSON.stringify([{ chit: 'C-Y', date: yd, estate: 'SSGT', confirmedAt: '06:30', jobs: [], rev: 1,
-      rows: [{ worker_id: 'W-SSGT-007', muster: 'H', task_code: 'MT03', block: '03', lots: '3-30' }, { worker_id: 'W-SSGT-008', muster: 'H', task_code: 'MT03', block: '03', lots: '3-30' }] }]));
+      rows: [{ worker_id: 'W-SSGT-007', muster: 'H', task_code: 'CPS', block: '03', lots: '3-30' }, { worker_id: 'W-SSGT-008', muster: 'H', task_code: 'CPS', block: '03', lots: '3-30' }] }]));
     localStorage.setItem('fh.draft2', JSON.stringify({ SSGT: { date: d, estate: 'SSGT', marks: {}, jobOf: {}, rain_mm: '', rain_time: '', checker: '', replacing: '', nextJob: 2, alertNotes: {}, newChit: true,
-      jobs: [{ key: 'j1', task: 'MT03', block: '03', lots: ['3-30'], mandor: '' }] } }));
+      jobs: [{ key: 'j1', task: 'CPS', block: '03', lots: ['3-30'], mandor: '' }] } }));
   });
   await p.reload(); await p.fill('#key', '777777'); await p.waitForSelector('#home:not([hidden])');
   await p.click('[data-room="field-harvest"]'); await p.waitForTimeout(400);

@@ -16,7 +16,7 @@ const { chromium } = require('playwright');
     ['W-SSGT-007', 'W-SSGT-008', 'W-SSGT-009'].forEach(w => { marks[w] = 'H'; jobOf[w] = 'j1'; });
     ['W-SSGT-001', 'W-SSGT-002'].forEach(w => { marks[w] = 'H'; jobOf[w] = 'j2'; });
     localStorage.setItem('fh.draft2', JSON.stringify({ SSGT: { date: d, estate: 'SSGT', marks, jobOf, rain_mm: '0', rain_time: '', checker: '', replacing: '', nextJob: 3, alertNotes: {},
-      jobs: [{ key: 'j1', task: 'MT03', block: '03', lots: ['3-30', '3-31'], mandor: '' }, { key: 'j2', task: 'HV01', block: '02', lots: [], mandor: '' }] } }));
+      jobs: [{ key: 'j1', task: 'CPS', block: '03', lots: ['3-30', '3-31'], mandor: '' }, { key: 'j2', task: 'HA', block: '02', lots: [], mandor: '' }] } }));
   });
   await p.reload(); await p.fill('#key', '777777'); await p.waitForSelector('#home:not([hidden])');
   await p.click('[data-room="field-harvest"]'); await p.waitForTimeout(400);
@@ -45,9 +45,9 @@ const { chromium } = require('playwright');
   check('work: no mandor to choose before saving', (await p.locator('#wc-who').count()) === 0);
   await p.click('#wc-ok'); await p.waitForTimeout(400);
   const q = await p.evaluate(() => JSON.parse(localStorage.getItem('ea.queue')));
-  const hv = q.filter(x => x.tab === 'FH_WORK' && x.row.task_code === 'HV01').map(x => x.row.block + '/' + (x.row.lot || '-') + '=' + x.row.bunches).join(', ');
+  const hv = q.filter(x => x.tab === 'FH_WORK' && x.row.task_code === 'HA').map(x => x.row.block + '/' + (x.row.lot || '-') + '=' + x.row.bunches).join(', ');
   check('work: harvest by block saved with no lot', hv === '02/-=120, 02/-=80', hv);
-  const jd = q.filter(x => x.tab === 'FH_JOBDAY' && x.row.task_code === 'MT03').map(x => x.row.target + ' | ' + x.row.flags)[0] || '';
+  const jd = q.filter(x => x.tab === 'FH_JOBDAY' && x.row.task_code === 'CPS').map(x => x.row.target + ' | ' + x.row.flags)[0] || '';
   check('work: job line carries its target', /7\.5 Ha/.test(jd), jd);
   await p.keyboard.press('Escape'); await p.waitForTimeout(200);
   // Kutip & hantar: the block's harvest shows as one row

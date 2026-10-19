@@ -12,7 +12,7 @@ const { chromium } = require('playwright');
     // a chit draft as saved by version 12 (no alertNotes)
     localStorage.setItem('fh.draft2', JSON.stringify({ SSGT: { date: d, estate: 'SSGT', jobs: [], marks: {}, jobOf: {}, rain_mm: '', rain_time: '', checker: '', replacing: '', nextJob: 1 } }));
     const y = new Date(); y.setDate(y.getDate() - 2); const yd = y.toISOString().slice(0, 10);
-    localStorage.setItem('fh.work', JSON.stringify([{ chit: 'Y1', date: yd, estate: 'SSGT', rec: { lines: [{ id: 'W1', worker_id: 'W-SSGT-001', task_code: 'HV01', block: '03', lot: '3-24', bunches: '160' }], jobs: [] } }]));
+    localStorage.setItem('fh.work', JSON.stringify([{ chit: 'Y1', date: yd, estate: 'SSGT', rec: { lines: [{ id: 'W1', worker_id: 'W-SSGT-001', task_code: 'HA', block: '03', lot: '3-24', bunches: '160' }], jobs: [] } }]));
   });
   const keys = await p.evaluate(() => Object.keys(localStorage));
   await p.reload(); await p.fill('#key', '777777'); await p.waitForTimeout(500);

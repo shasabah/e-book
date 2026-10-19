@@ -10,13 +10,13 @@ Sheet.prototype.getRange = function (r, c, nr, nc) { const s = this; return { ge
 const std = ['id','date','company','estate','keyed_by','keyed_at','phone','status','replaces'];
 const D = s => new Date(s + 'T00:00:00');
 const work = new Sheet([std.concat(['chit','worker_id','task_code','block','lot','qty','unit','bunches']),
-  ['w1', D('2026-10-16'),'SPLT','SSGT','T','','P07','active','', 'c','W1','HV01','03','3-24','','bunch','160'],
-  ['w2', D('2026-10-16'),'SPLT','SSGT','T','','P07','active','', 'c','W2','HV01','03','3-25','','bunch','100'],
-  ['w3', '2026-10-17','SPLT','SSGT','T','','P07','active','', 'c','W1','HV01','03','3-25','','bunch','50'],
-  ['w4', '2026-10-17','SPLT','SSGT','T','','P07','active','', 'c','W3','HV01','03','3-26','','bunch','90'],
-  ['w5', '2026-10-17','SPLT','SSGT','T','','P07','active','w4','c','W3','HV01','03','3-26','','bunch','80'],   // correction of w4
+  ['w1', D('2026-10-16'),'SPLT','SSGT','T','','P07','active','', 'c','W1','HA','03','3-24','','bunch','160'],
+  ['w2', D('2026-10-16'),'SPLT','SSGT','T','','P07','active','', 'c','W2','HA','03','3-25','','bunch','100'],
+  ['w3', '2026-10-17','SPLT','SSGT','T','','P07','active','', 'c','W1','HA','03','3-25','','bunch','50'],
+  ['w4', '2026-10-17','SPLT','SSGT','T','','P07','active','', 'c','W3','HA','03','3-26','','bunch','90'],
+  ['w5', '2026-10-17','SPLT','SSGT','T','','P07','active','w4','c','W3','HA','03','3-26','','bunch','80'],   // correction of w4
   ['w6', '2026-10-17','SPLT','SSGT','T','','P07','active','', 'c','W4','MN01','02','2-10','0.5','Ha',''],
-  ['w7', '2026-10-17','SPLT','MELU','T','','P07','active','', 'c','W9','HV01','01','1-1','','bunch','999']]);
+  ['w7', '2026-10-17','SPLT','MELU','T','','P07','active','', 'c','W9','HA','01','1-1','','bunch','999']]);
 const col = new Sheet([std.concat(['block','lot','bunches','cleared','tractor','loader','note']),
   ['c1', D('2026-10-16'),'SPLT','SSGT','L','','P01','active','','03','3-24','160','Y','','',''],
   ['c2', '2026-10-17','SPLT','SSGT','L','','P01','active','','03','3-25','120','','','',''],

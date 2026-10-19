@@ -12,9 +12,9 @@ const out = process.argv[2] || require('os').tmpdir();
     const D = n => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
     localStorage.setItem('fh.work', JSON.stringify([
       { chit: 'Y0', date: D(0), estate: 'SSGT', rec: { lines: [
-        { id: 'W-1', worker_id: 'W-SSGT-001', task_code: 'HV01', block: '03', lot: '3-30', bunches: '600' },
-        { id: 'W-2', worker_id: 'W-SSGT-002', task_code: 'HV01', block: '03', lot: '3-31', bunches: '500' },
-        { id: 'W-3', worker_id: 'W-SSGT-003', task_code: 'HV01', block: '02', lot: '2-5', bunches: '400' }], jobs: [] } }]));
+        { id: 'W-1', worker_id: 'W-SSGT-001', task_code: 'HA', block: '03', lot: '3-30', bunches: '600' },
+        { id: 'W-2', worker_id: 'W-SSGT-002', task_code: 'HA', block: '03', lot: '3-31', bunches: '500' },
+        { id: 'W-3', worker_id: 'W-SSGT-003', task_code: 'HA', block: '02', lot: '2-5', bunches: '400' }], jobs: [] } }]));
   });
   const t = s => (s || '').replace(/\s+/g, ' ').trim();
   const login = async (key) => { await p.reload(); await p.fill('#key', key); await p.waitForSelector('#home:not([hidden])'); await p.click('[data-room="field-harvest"]'); await p.waitForTimeout(300); };

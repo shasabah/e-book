@@ -57,3 +57,8 @@ One line per release: date, version, what changed.
   - Each person's entries are sent with their own key: on a shared phone the clerk logging in no longer sends the staff's entries as hers; the bar says whose entries wait.
   - Test copy with no sending link now says "Ujian · tidak ke pejabat · Test · not sent to office" instead of "All sent". Messages move to the top while a sheet is open (they covered SAVE/CANCEL). LOAD IT shows on the login screen when the version is too old. An office error page at login says "office busy", not "no signal". The phone asks the browser to keep its records. LOAD IT keeps the newest copy for no-signal use. Mill ticket weights: a dot or comma (tonnes typed) is warned.
   - New tests: tests/v13-office.spec.js, tests/v13-phone.spec.js.
+- 2026-10-19 — 1.4 (27) (test copy) — Yu Chen's answers on the crop checks:
+  - A lorry must carry ticked lots (a lorry of "no harvest record" bunches only is refused). Bunches not ticked stay as ramp backlog.
+  - "Habis" ticked with fewer bunches collected than harvested: the app asks Ferezelly how many went to the ramp; what was not collected stays as field backlog for that lot (it is not marked cleared) and shows on the next morning chit.
+  - The clerk only reads the delivery note and lots keyed by the staff; if the staff corrected them before the ticket is saved, the newest ones are taken. Once a lorry has a ticket the office refuses any change to its delivery note; the phone shows "Correction refused: this lorry already has a ticket. Call the clerk." (the refused entry leaves the waiting list).
+  - Wording: "Menuai · harvested" instead of "Tuai" on Collect & dispatch; the hint no longer says the mandor's count.

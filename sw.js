@@ -16,6 +16,7 @@ var FILES = [
   'core/config.js',
   'core/rooms.js',
   'core/sync.js',
+  'core/lang.js',
   'core/login.js',
   'core/update.js',
   'core/home.js',

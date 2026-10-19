@@ -16,7 +16,11 @@
   <div class="login-card">
     <div class="brand">
       <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M3 5.5c2.6-1.1 5.6-.9 9 1.2v13c-3.4-2.1-6.4-2.3-9-1.2z"/><path d="M21 5.5c-2.6-1.1-5.6-.9-9 1.2v13c3.4-2.1 6.4-2.3 9-1.2z"/></svg></div>
-      <div><span class="bm">Estate Book</span><span class="en">E-Book · Buku Ladang · SPLT &amp; PJSB</span></div>
+      <div><span class="brand-name">Estate Book</span><span class="brand-sub">E-Book · Buku Ladang · SPLT &amp; PJSB</span></div>
+    </div>
+    <div class="lang-pick" role="group" aria-label="Bahasa · Language">
+      <button type="button" data-lang="bm">Bahasa Malaysia</button>
+      <button type="button" data-lang="en">English</button>
     </div>
     <form id="login-form" class="field" novalidate>
       <label for="key"><span class="bm">Kunci 6 digit anda</span><span class="en">Your 6-digit key</span></label>
@@ -43,9 +47,9 @@
       <div class="top-in">
         <div class="brand">
           <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M3 5.5c2.6-1.1 5.6-.9 9 1.2v13c-3.4-2.1-6.4-2.3-9-1.2z"/><path d="M21 5.5c-2.6-1.1-5.6-.9-9 1.2v13c3.4-2.1 6.4-2.3 9-1.2z"/></svg></div>
-          <div><span class="bm">Estate Book</span><span class="en">E-Book · Buku Ladang</span></div>
+          <div><span class="brand-name">Estate Book</span><span class="brand-sub">E-Book · Buku Ladang</span></div>
         </div>
-        <div class="who"><span class="bm" id="who-name"></span><span class="en" id="who-role"></span></div>
+        <div class="who"><span class="brand-name" id="who-name"></span><span class="brand-sub" id="who-role"></span></div>
         <button id="logout" class="btn btn-ghost" type="button">LOG OUT<small>Keluar</small></button>
       </div>
       <div id="estate-chips" class="estates" role="group" aria-label="Ladang / Estate"></div>
@@ -80,7 +84,7 @@
 
   <main id="home-main" class="main wrap">
     <div class="greet">
-      <div><h1 id="greet-bm"></h1><span class="en" id="greet-en"></span></div>
+      <div><h1 id="greet-bm"></h1></div>
       <div class="date"><span class="bm" id="date-bm"></span><span class="en" id="date-en"></span></div>
     </div>
     <div id="layout" class="layout">
@@ -99,10 +103,10 @@
 
   <footer class="foot">
     <div class="wrap foot-in">
-      <span>Versi <span class="mono" id="ver"></span> · Version</span>
-      <span>Telefon <span class="mono" id="foot-phone"></span> · Phone</span>
-      <span id="offline-mark" hidden>Boleh buka tanpa isyarat · Opens with no signal</span>
-      <button class="link-btn" type="button" data-open-setup>Tetapan telefon · Phone setup</button>
+      <span><span class="bm">Versi</span><span class="en">Version</span> <span class="mono" id="ver"></span></span>
+      <span><span class="bm">Telefon</span><span class="en">Phone</span> <span class="mono" id="foot-phone"></span></span>
+      <span id="offline-mark" hidden><span class="bm">Boleh buka tanpa isyarat</span><span class="en">Opens with no signal</span></span>
+      <button class="link-btn" type="button" data-open-setup><span class="bm">Tetapan telefon</span><span class="en">Phone setup</span></button>
     </div>
   </footer>
 </div>
@@ -124,6 +128,7 @@
 <script src="lists/people.js"></script>
 <script src="core/rooms.js"></script>
 <script src="core/sync.js"></script>
+<script src="core/lang.js"></script>
 <script src="core/login.js"></script>
 <script src="core/update.js"></script>
 <script src="rooms/field/muster.js"></script>

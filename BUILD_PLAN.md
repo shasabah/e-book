@@ -73,3 +73,4 @@ No new rooms for field crews in peak crop (Aug–Nov).
 3. Pilot from 4 Jan beside the paper pocket check roll for about a month.
 - DONE 17 Oct: checks 11 of 11 on iPhone; app online at shasabah.github.io/e-book.
 - 1.2 (25), 19 Oct 2026: pick people by name (gang groups, search, SAME AS LAST TIME). Lot → harvester workbook sent for Ferezelly to fill this week.
+- 1.3 (26), 19 Oct 2026: whole-app check and fixes before the trial (office write rights, ramp by time, corrections after a lorry, chit correction, dates before 8 am, entries sent with the keyer's own key). Before the trial: real keys for Ferezelly and Ria, then switchOffTestKeys().

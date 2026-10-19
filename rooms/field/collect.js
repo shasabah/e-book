@@ -275,12 +275,14 @@
     }
     var rec = { date: old ? old.date : EA.today(), estate: ctx.estate, at: EA.ui.hhmm(now), tractor: '', loader: '', lines: lines, dispatch: dcopy, ids: [], disIds: {}, lotIds: {} };
     try {
+      EA.batchStart();
       lines.forEach(function (l) {
         l.id = EA.save(TAB, ROOM, ctx.estate, { block: l.block, lot: l.lot, bunches: l.bunches, cleared: l.cleared, tractor: '', loader: '', note: '' }).id;
         rec.ids.push(l.id);
       });
       if (hasDis) EA.fh.harvest.writeDn(ctx.estate, rec, old);
-    } catch (e) { ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad'); return; }
+      EA.batchEnd();
+    } catch (e) { EA.batchCancel(); ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad'); return; }
     var all = EA.local.get(K.saved, []);
     if (old) all.forEach(function (s) { if (s.dispatch && s.dispatch.trip === trip && !s.dispatch.replacedBy) s.dispatch.replacedBy = rec.at; });
     all.push(rec); EA.local.set(K.saved, all);

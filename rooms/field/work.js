@@ -398,7 +398,7 @@
       var fl = el.querySelector('[data-flags="' + j.key + '"]');
       if (fl) fl.innerHTML = t.flags.map(function (f) { return '<p class="flag' + (f.bad ? ' bad' : '') + '">' + esc(f.text) + '</p>'; }).join('');
     });
-    var pv = $('#wk-preview'); if (pv) pv.textContent = reportText(buildRecord('(belum disimpan)', EA.ui.hhmm(new Date()), draft.checker));
+    var pv = $('#wk-preview'); if (pv) pv.textContent = reportText(buildRecord(EA.t('(belum disimpan)', '(not saved yet)'), EA.ui.hhmm(new Date()), draft.checker));
   }
 
   // ---------- check, confirm, save ----------
@@ -474,6 +474,7 @@
     var rec = buildRecord('', at, draft.checker);
     var stamp = EA.today() + ' ' + at;
     try {
+      EA.batchStart();
       var oldLines = {};
       if (old) old.rec.lines.forEach(function (l) { oldLines[l.worker_id + '|' + l.task_code + '|' + l.lot] = l; });
       rec.lines.forEach(function (l) {
@@ -500,7 +501,8 @@
           qty: j.qty, unit: j.unit, bunches: j.bunches, plan_ha: j.plan_ha, job_status: j.status, reason: j.reason, flags: j.flags, progress: j.progress,
           bags: j.bags, target: j.target, confirmed_by: rec.checker, confirmed_at: stamp }, o ? o.id : '').id;
       });
-    } catch (e) { ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad'); return; }
+      EA.batchEnd();
+    } catch (e) { EA.batchCancel(); ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad'); return; }
     keepSaved({ chit: rec.chit, date: rec.date, estate: rec.estate, rec: rec, lines: draft.lines, status: draft.status, prog: draft.prog, manual: draft.manual, bags: draft.bags || {}, checker: draft.checker, rev: old ? (old.rev || 1) + 1 : 1, chitRev: chit.rev || 1 });
     dropDraft();
     ui().toast(EA.t('Kerja harian disimpan', 'Day\'s work saved'));

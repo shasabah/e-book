@@ -43,10 +43,9 @@
   function kind(code) {
     var t = task(code);
     if (!t) return 'day';
-    if (code === 'HV01') return 'bunches';
-    // Crop jobs are paid from the mill ticket; loading stumps (FM02) never goes on a ticket,
-    // so its tonnes are keyed (v1.3).
-    if (t.unit === 'MT' && code !== 'FM02') return 'ticket';
+    if (code === EA.lists.HARVEST) return 'bunches';
+    // Crop jobs (loaders) are paid from the mill ticket tonnes.
+    if (t.unit === 'MT') return 'ticket';
     if (t.unit === 'day') return 'day';
     if (t.unit === 'hour') return 'hour';
     return 'qty';
@@ -127,7 +126,7 @@
   function ownLots() {
     var m = {};
     saved().slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; }).forEach(function (s) {
-      ((s.rec && s.rec.lines) || []).forEach(function (l) { if (l.task_code === 'HV01' && l.lot && !/^Blk /.test(l.lot)) m[l.worker_id] = l.lot; });
+      ((s.rec && s.rec.lines) || []).forEach(function (l) { if (l.task_code === EA.lists.HARVEST && l.lot && !/^Blk /.test(l.lot)) m[l.worker_id] = l.lot; });
     });
     return m;
   }

@@ -47,18 +47,22 @@
       '<input id="set-phone" class="text-input mono" maxlength="4" autocomplete="off" value="' + esc(EA.phone()) + '" placeholder="P07"></div>' +
       '<div class="field"><label for="set-link"><span class="bm">Pautan hantar</span><span class="en">Sending link (from Yu Chen)</span></label>' +
       '<input id="set-link" class="text-input" type="url" autocomplete="off" value="' + esc(EA.sendLink()) + '" placeholder="https://script.google.com/…"></div>' +
-      '<p class="en">Disimpan di telefon ini sahaja. · Kept on this phone only.</p>' +
+      '<div class="field"><span class="inline"><span class="bm">Bahasa di telefon ini</span><span class="en">Language on this phone</span></span>' +
+      '<div class="lang-pick" role="group"><button type="button" data-setlang="bm" aria-pressed="' + (EA.lang() === 'bm') + '">Bahasa Malaysia</button>' +
+      '<button type="button" data-setlang="en" aria-pressed="' + (EA.lang() === 'en') + '">English</button></div></div>' +
+      '<p class="en quiet"><span class="bm">Disimpan di telefon ini sahaja.</span><span class="en">Kept on this phone only.</span></p>' +
       '<div class="actions"><button class="btn btn-ghost" type="button" id="set-cancel">CANCEL<small>Batal</small></button>' +
       '<button class="btn btn-ok" type="button" id="set-save">SAVE<small>Simpan</small></button></div>',
       function (s) {
         s.querySelector('#set-cancel').onclick = closeSheet;
+        s.querySelectorAll('[data-setlang]').forEach(function (b) { b.onclick = function () { EA.setLang(b.dataset.setlang); s.querySelectorAll('[data-setlang]').forEach(function (x) { x.setAttribute('aria-pressed', x === b); }); render(); }; });
         s.querySelector('#set-save').onclick = function () {
           var p = s.querySelector('#set-phone').value.trim().toUpperCase();
           var l = EA.cleanLink(s.querySelector('#set-link').value);
-          if (!/^P\d{2,3}$/.test(p)) { s.querySelector('#set-phone').focus(); toast('Kod telefon: P dan nombor, cth P07 · Phone code: P and a number, e.g. P07', 'bad'); return; }
-          if (l && !/^https:\/\/script\.google\.com\//.test(l)) { s.querySelector('#set-link').focus(); toast('Pautan mesti bermula https://script.google.com/ · Link must start with https://script.google.com/', 'bad'); return; }
+          if (!/^P\d{2,3}$/.test(p)) { s.querySelector('#set-phone').focus(); toast(EA.t('Kod telefon: P dan nombor, cth P07', 'Phone code: P and a number, e.g. P07'), 'bad'); return; }
+          if (l && !/^https:\/\/script\.google\.com\//.test(l)) { s.querySelector('#set-link').focus(); toast(EA.t('Pautan mesti bermula https://script.google.com/', 'Link must start with https://script.google.com/'), 'bad'); return; }
           EA.setPhone(p); EA.setSendLink(l);
-          closeSheet(); toast('Disimpan · Saved'); render();
+          closeSheet(); toast(EA.t('Disimpan', 'Saved')); render();
         };
       });
   }
@@ -84,14 +88,14 @@
     if (why === 'old') $('login-load').onclick = EA.loadUpdate;
   }
   async function tryLogin(key) {
-    if (!EA.phone()) { openSetup('Tetapkan kod telefon dahulu. · Set the phone code first.'); return; }
+    if (!EA.phone()) { openSetup(EA.t('Tetapkan kod telefon dahulu.', 'Set the phone code first.')); return; }
     $('login-btn').disabled = true;
     var r = await EA.login(key);
     $('login-btn').disabled = false;
     if (!r.ok) { loginError(r.why); $('key').select(); return; }
     $('key').value = ''; $('login-msg').hidden = true;
     render();
-    toast('Selamat datang, ' + r.user.name + ' · Welcome');
+    toast(EA.t('Selamat datang, ', 'Welcome, ') + r.user.name);
   }
   $('login-form').addEventListener('submit', function (e) { e.preventDefault(); tryLogin($('key').value); });
   $('key').addEventListener('input', function () {
@@ -102,14 +106,15 @@
 
   function renderLogin() {
     var p = EA.phone();
-    $('phone-line').textContent = p ? 'Telefon ' + p + ' · Phone ' + p : 'Kod telefon belum ditetapkan · Phone code not set';
+    $('phone-line').textContent = p ? EA.t('Telefon ', 'Phone ') + p : EA.t('Kod telefon belum ditetapkan', 'Phone code not set');
+    document.querySelectorAll('.lang-pick [data-lang]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.lang === EA.lang()); b.onclick = function () { EA.setLang(b.dataset.lang); render(); }; });
     var showTest = EA.config.TEST_MODE && !EA.sendLink();
     $('test-keys').hidden = !showTest;
     if (showTest) {
       $('test-table').innerHTML = EA.lists.testUsers.map(function (u) {
         var r = EA.roleNames[u.role];
         return '<tr><td><button type="button" data-key="' + u.key + '">' + u.key + '</button></td><td>' +
-          esc(r.bm) + ' · ' + esc(r.en) + ' — ' + esc(u.estates.length > 1 ? 'semua ladang · all estates' : u.estates[0]) + '</td></tr>';
+          esc(EA.t(r.bm, r.en)) + ' — ' + esc(u.estates.length > 1 ? EA.t('semua ladang', 'all estates') : u.estates[0]) + '</td></tr>';
       }).join('');
       $('test-table').querySelectorAll('button').forEach(function (b) {
         b.onclick = function () { $('key').value = b.dataset.key; tryLogin(b.dataset.key); };
@@ -127,7 +132,7 @@
     $('top').className = 'top' + (isHQ(u) ? ' hq' : '');
     $('who-name').textContent = u.name;
     var r = EA.roleNames[u.role] || { bm: u.role, en: u.role };
-    $('who-role').textContent = r.bm + ' · ' + r.en;
+    $('who-role').textContent = EA.t(r.bm, r.en);
     $('estate-chips').innerHTML = u.estates.map(function (code) {
       return '<button class="chip" type="button" data-estate="' + code + '" aria-pressed="' + (code === estate) + '">' + code + '</button>';
     }).join('');
@@ -139,8 +144,7 @@
   function renderGreeting() {
     var d = new Date(), h = d.getHours();
     var g = h < 12 ? ['Selamat pagi', 'Good morning'] : h < 14 ? ['Selamat tengah hari', 'Good afternoon'] : h < 19 ? ['Selamat petang', 'Good afternoon'] : ['Selamat malam', 'Good evening'];
-    $('greet-bm').textContent = g[0];
-    $('greet-en').textContent = g[1];
+    $('greet-bm').textContent = EA.t(g[0], g[1]);
     $('date-bm').textContent = DAY_BM[d.getDay()] + ', ' + d.getDate() + ' ' + MON_BM[d.getMonth()] + ' ' + d.getFullYear();
     $('date-en').textContent = DAY_EN[d.getDay()] + ', ' + d.getDate() + ' ' + MON_EN[d.getMonth()] + ' ' + d.getFullYear();
   }
@@ -161,7 +165,7 @@
       return '<button class="tile ' + r.state + '" type="button" data-room="' + r.id + '">' +
         '<span class="mark" aria-hidden="true">' + r.mark + '</span>' +
         '<span class="name"><span class="bm">' + esc(r.bm) + '</span><span class="en">' + esc(r.en) + '</span></span>' +
-        '<span class="when">' + esc(r.when) + (enterable(r) && r.state !== 'live' ? '<br><b>UJIAN · boleh cuba · TEST · try it</b>' : '') + '</span></button>';
+        '<span class="when">' + esc(r.when) + (enterable(r) && r.state !== 'live' ? '<br><b>' + EA.t('UJIAN · boleh cuba', 'TEST · try it') + '</b>' : '') + '</span></button>';
     }).join('');
     $('tiles').querySelectorAll('.tile').forEach(function (t) {
       t.onclick = function () {
@@ -196,22 +200,22 @@
     var n = EA.waiting(), oldest = EA.oldestWaiting(), last = EA.lastSent();
     var tooOld = n > 0 && oldest && (Date.now() - oldest) > EA.config.WARN_AFTER_HOURS * 3600000;
     var pill = $('wait-pill');
-    if (tooOld) { pill.className = 'pill bad'; pill.textContent = n + ' menunggu lebih 24 jam · waiting over 24 hours'; }
-    else if (n > 0) { pill.className = 'pill wait'; pill.textContent = n + ' menunggu · waiting'; }
-    else if (EA.config.TEST_MODE && !EA.sendLink()) { pill.className = 'pill wait'; pill.textContent = 'Ujian · tidak ke pejabat · Test · not sent to office'; }
-    else { pill.className = 'pill ok'; pill.textContent = 'Semua dihantar · All sent'; }
+    if (tooOld) { pill.className = 'pill bad'; pill.textContent = n + EA.t(' menunggu lebih 24 jam', ' waiting over 24 hours'); }
+    else if (n > 0) { pill.className = 'pill wait'; pill.textContent = n + EA.t(' menunggu', ' waiting'); }
+    else if (EA.config.TEST_MODE && !EA.sendLink()) { pill.className = 'pill wait'; pill.textContent = EA.t('Ujian · tidak dihantar ke pejabat', 'Test · not sent to the office'); }
+    else { pill.className = 'pill ok'; pill.textContent = EA.t('Semua dihantar', 'All sent'); }
     var others = EA.waitingOthers ? EA.waitingOthers() : [];
-    if (others.length) pill.textContent += ' · ' + others.map(function (o) { return o.n + ' milik ' + o.code; }).join(', ') + ' (hantar bila dia masuk · sent when they log in)';
+    if (others.length) pill.textContent += ' · ' + others.map(function (o) { return o.n + EA.t(' milik ', ' from ') + o.code; }).join(', ') + EA.t(' (dihantar bila dia masuk)', ' (sent when they log in)');
     if (last) {
       var d = new Date(last), sameDay = d.toDateString() === new Date().toDateString();
-      $('last-sent').textContent = 'Dihantar ' + (sameDay ? hhmm(d) : d.getDate() + ' ' + MON_BM[d.getMonth()] + ' ' + hhmm(d)) + ' · Last sent';
+      $('last-sent').textContent = EA.t('Dihantar ', 'Last sent ') + (sameDay ? hhmm(d) : d.getDate() + ' ' + EA.t(MON_BM, MON_EN)[d.getMonth()] + ' ' + hhmm(d));
     } else {
-      $('last-sent').textContent = 'Belum pernah dihantar · Never sent';
+      $('last-sent').textContent = EA.t('Belum pernah dihantar', 'Never sent');
     }
-    if (n > 0 && EA.nextRetry > Date.now()) $('last-sent').textContent += ' · Cuba lagi sendiri ' + hhmm(new Date(EA.nextRetry)) + ' · retries by itself';
+    if (n > 0 && EA.nextRetry > Date.now()) $('last-sent').textContent += EA.t(' · Cuba lagi sendiri ', ' · Retries by itself ') + hhmm(new Date(EA.nextRetry));
     var sending = EA.isSending();
     $('send-btn').disabled = sending || !EA.waitingMine();
-    $('send-btn').innerHTML = sending ? 'SENDING<small>Menghantar…</small>' : 'SEND<small>Hantar</small>';
+    $('send-btn').textContent = sending ? EA.t('MENGHANTAR…', 'SENDING…') : EA.t('HANTAR', 'SEND');
     var noLink = !EA.sendLink();
     $('test-mark').hidden = !(EA.config.TEST_MODE && noLink);
     $('notice-link').hidden = !(noLink && !EA.config.TEST_MODE);
@@ -261,16 +265,16 @@
   // ---------- actions ----------
   $('send-btn').onclick = async function () {
     var r = await EA.send();
-    if (r.error === 'offline' || r.error === 'network') toast('Tiada isyarat. Akan dihantar bila ada isyarat · No signal. Will send when signal returns', 'wait');
-    else if (r.error === 'nolink') toast('Tiada pautan hantar · No sending link', 'bad');
+    if (r.error === 'offline' || r.error === 'network') toast(EA.t('Tiada isyarat. Akan dihantar bila ada isyarat.', 'No signal. Will send when signal returns.'), 'wait');
+    else if (r.error === 'nolink') toast(EA.t('Tiada pautan hantar', 'No sending link'), 'bad');
     else if (r.error === 'id_clash') openSheet('<h2 id="sheet-title"><span class="bm">Kod telefon ini sama dengan telefon lain</span><span class="en">This phone code is already used by another phone</span></h2>' +
       '<p><span class="bm" style="font-weight:400">Pejabat menolak catatan ini supaya tiada data hilang. Catatan kekal di telefon ini. Hubungi Yu Chen untuk kod telefon baru.</span>' +
       '<span class="en">The office refused these entries so nothing is lost. They stay on this phone. Ask Yu Chen for a new phone code.</span></p>' +
       '<div class="actions"><button class="btn btn-main" type="button" id="clash-ok">OK<small>Faham</small></button></div>',
       function (s) { s.querySelector('#clash-ok').onclick = closeSheet; });
-    else if (r.error) toast('Pejabat menolak: ' + r.error + ' · Office refused', 'bad');
-    else if (r.refused) toast(r.refused + ' pembetulan DN ditolak: lori sudah ada tiket. Hubungi kerani. · DN correction refused: lorry already ticketed', 'bad');
-    else if (r.sent) toast(r.sent + ' dihantar' + (r.test ? ' (ujian)' : '') + ' · sent' + (r.test ? ' (test)' : ''));
+    else if (r.error) toast(EA.t('Pejabat menolak: ', 'Office refused: ') + r.error, 'bad');
+    else if (r.refused) toast(r.refused + EA.t(' pembetulan DN ditolak: lori sudah ada tiket. Hubungi kerani.', ' DN correction refused: the lorry already has a ticket. Call the clerk.'), 'bad');
+    else if (r.sent) toast(r.sent + EA.t(' dihantar', ' sent') + (r.test ? EA.t(' (ujian)', ' (test)') : ''));
   };
 
   $('logout').onclick = function () {

@@ -17,6 +17,8 @@ window.EA = window.EA || {};
   function today() { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1, 2) + '-' + pad(d.getDate(), 2); }
   function stamp() { var d = new Date(); return today() + ' ' + pad(d.getHours(), 2) + ':' + pad(d.getMinutes(), 2); }
   EA.today = today;
+  // The phone's own date n days ago (Malaysia time on the phone, never UTC).
+  EA.dayAgo = function (n) { var d = new Date(); d.setDate(d.getDate() - n); return d.getFullYear() + '-' + pad(d.getMonth() + 1, 2) + '-' + pad(d.getDate(), 2); };
 
   EA.phone = function () { return get(K.phone, ''); };
   EA.setPhone = function (p) { set(K.phone, String(p || '').toUpperCase().replace(/\s+/g, '')); };
@@ -63,6 +65,8 @@ window.EA = window.EA || {};
   };
 
   EA.waiting = function () { return get(K.queue, []).length; };
+  // Entries this person can send now (their own).
+  EA.waitingMine = function () { var u = EA.currentUser(); return u ? get(K.queue, []).filter(mine(u)).length : 0; };
   // Is this entry still waiting on the phone?
   EA.isWaiting = function (id) { return get(K.queue, []).some(function (q) { return q.row.id === id; }); };
   EA.lastSent = function () { return get(K.lastSent, 0); };
@@ -70,18 +74,30 @@ window.EA = window.EA || {};
 
   // Send waiting entries (all in one trip). Anything refused stays waiting.
   var sending = false;
+  // Each person's entries are sent with that person's own key, so "who keyed it" stays
+  // right on a shared phone. Someone else's entries wait until they log in again.
+  function mine(user) { return function (it) { return !it.row.keyed_by || it.row.keyed_by === user.code; }; }
+  EA.waitingOthers = function () {
+    var u = EA.currentUser(); if (!u) return [];
+    var by = {};
+    get(K.queue, []).forEach(function (it) { if (!mine(u)(it)) by[it.row.keyed_by] = (by[it.row.keyed_by] || 0) + 1; });
+    return Object.keys(by).map(function (k) { return { code: k, n: by[k] }; });
+  };
   async function sendNow() {
     if (sending) return { busy: true };
-    var q = get(K.queue, []);
-    if (!q.length) { set(K.lastSent, Date.now()); changed(); return { sent: 0 }; }
-    var link = EA.sendLink();
     var user = EA.currentUser();
     if (!user) return { error: 'login' };
+    var isMine = mine(user);
+    var q = get(K.queue, []).filter(isMine);
+    if (!q.length) { set(K.lastSent, Date.now()); changed(); return { sent: 0 }; }
+    var link = EA.sendLink();
     if (!link) {
       if (!EA.config.TEST_MODE) return { error: 'nolink' };
-      // Test copy: pretend to send, and keep a copy so it can be checked.
-      var done = get(K.testSent, []).concat(q).slice(-500);
-      set(K.testSent, done); set(K.queue, []); set(K.lastSent, Date.now()); changed();
+      // Test copy with no link: pretend to send, and keep a copy so it can be checked.
+      var ids = {}; q.forEach(function (it) { ids[it.row.id] = true; });
+      var done0 = get(K.testSent, []).concat(q).slice(-500);
+      set(K.testSent, done0); set(K.queue, get(K.queue, []).filter(function (it) { return !ids[it.row.id]; }));
+      set(K.lastSent, Date.now()); changed();
       return { sent: q.length, test: true };
     }
     if (!navigator.onLine) return { error: 'offline' };
@@ -103,19 +119,21 @@ window.EA = window.EA || {};
         (j.results || []).forEach(function (r) { if (r.ok) done[r.id] = true; else if (!firstErr) firstErr = r.error; });
         // Read the list again: something may have been saved while this was sending.
         var now = get(K.queue, []), before = now.length;
-        q = now.filter(function (it) { return !done[it.row.id]; });
-        sent += before - q.length;
-        set(K.queue, q); set(K.lastSent, Date.now()); changed();
+        now = now.filter(function (it) { return !done[it.row.id]; });
+        sent += before - now.length;
+        set(K.queue, now); set(K.lastSent, Date.now()); changed();
         if (firstErr) { err = firstErr; break; }
-        if (before === q.length) { err = 'refused'; break; }
+        if (before === now.length) { err = 'refused'; break; }
+        q = now.filter(isMine);
       }
       // Older office script: one entry per trip, as before.
       while (oneByOne && q.length) {
         var item = q[0];
         var r1 = await post({ action: 'save', tab: item.tab, row: item.row });
         if (!r1 || !r1.ok) { err = (r1 && r1.error) || 'refused'; break; }
-        q = get(K.queue, []).filter(function (it) { return it.row.id !== item.row.id; }); sent++;
-        set(K.queue, q); set(K.lastSent, Date.now()); changed();
+        set(K.queue, get(K.queue, []).filter(function (it) { return it.row.id !== item.row.id; })); sent++;
+        q = get(K.queue, []).filter(isMine);
+        set(K.lastSent, Date.now()); changed();
       }
     } catch (e) { err = 'network'; }
     sending = false; changed();
@@ -173,13 +191,13 @@ window.EA = window.EA || {};
     changed();
   }
   function autoSend() {
-    if (!EA.currentUser() || !EA.waiting() || sending) return;
+    if (!EA.currentUser() || !EA.waitingMine() || sending) return;
     EA.send();
   }
   EA.send = async function () {
     if (sending) return { busy: true };
     var r = await sendNow();
-    if (!r.test) planRetry(r.error || (EA.waiting() ? 'refused' : ''));
+    if (!r.test) planRetry(r.error || (EA.waitingMine() ? 'refused' : ''));
     return r;
   };
   EA.isSending = function () { return sending; };

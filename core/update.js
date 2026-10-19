@@ -46,7 +46,8 @@ EA.loadUpdate = async function () {
       else if (latest) {
         // Still nothing new: drop the phone's old copy so the page loads fresh from the site.
         var keys = await caches.keys();
-        await Promise.all(keys.filter(function (k) { return k.indexOf('ebook-') === 0; }).map(function (k) { return caches.delete(k); }));
+        // Keep the newest version's copy (it may already be on the phone), drop the older ones.
+        await Promise.all(keys.filter(function (k) { return k.indexOf('ebook-') === 0 && k !== 'ebook-v' + latest; }).map(function (k) { return caches.delete(k); }));
       }
     }
   } catch (e) {}

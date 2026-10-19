@@ -117,8 +117,8 @@
       '<section class="card" aria-labelledby="cl-s1"><h2 id="cl-s1"><span class="step">1</span><span class="inline"><span class="bm">Petak · tandan</span> · <span class="en">Lots and bunches</span></span></h2>' +
       (fixing() ? '' : '<p class="hint">' + EA.t('Nombor dari Kerja harian (tandan menuai). Ubah hanya jika kertas pemuat berbeza.', 'Numbers from Day\'s work (bunches harvested). Change them only where the loader\'s paper differs.') + '</p>' +
         '<div class="choice" role="group" aria-label="' + EA.t('Lori hari ini', 'Lorry today') + '">' +
-          '<button type="button" class="btn ' + (d.on ? 'btn-main' : 'btn-ghost') + '" id="cl-lorry-yes" aria-pressed="' + (d.on ? 'true' : 'false') + '">ADA LORI<small>A lorry went to the mill</small></button>' +
-          '<button type="button" class="btn ' + (d.on ? 'btn-ghost' : 'btn-main') + '" id="cl-lorry-no" aria-pressed="' + (d.on ? 'false' : 'true') + '">TIADA LORI<small>No lorry</small></button>' +
+          '<button type="button" class="btn ' + (d.on ? 'btn-main' : 'btn-ghost') + '" id="cl-lorry-yes" aria-pressed="' + (d.on ? 'true' : 'false') + '">A LORRY WENT<small>Ada lori</small></button>' +
+          '<button type="button" class="btn ' + (d.on ? 'btn-ghost' : 'btn-main') + '" id="cl-lorry-no" aria-pressed="' + (d.on ? 'false' : 'true') + '">NO LORRY<small>Tiada lori</small></button>' +
         '</div>') +
       '<div id="cl-rows"></div>' +
       (lorryOn() ? '<details class="card-sub" id="cl-extra"' + (sumOf(d.extra) ? ' open' : '') + '><summary><span class="bm">Tandan tanpa rekod tuai, ikut blok</span> · <span class="en">Bunches with no harvest record, by block</span></summary>' +

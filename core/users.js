@@ -29,20 +29,35 @@ EA.roomViews = EA.roomViews || {};
     user_off: ['Akses pengguna ini ditutup. Buka semula dahulu.', 'This user is switched off. Switch them on first.'],
     not_self: ['Anda tidak boleh buat ini untuk diri sendiri.', 'You cannot do this to yourself.'],
     wrong_key: ['PIN anda tidak lagi dikenali. Keluar dan masuk semula.', 'Your PIN is no longer known. Log out and log in again.'],
-    locked: ['Terlalu banyak PIN salah. Tunggu 15 minit.', 'Too many wrong PINs. Wait 15 minutes.']
+    locked: ['Terlalu banyak PIN salah. Tunggu 15 minit.', 'Too many wrong PINs. Wait 15 minutes.'],
+    bad_pin: ['PIN mesti 6 nombor.', 'The PIN must be 6 numbers.'],
+    pick_another: ['PIN ini tidak boleh dipakai. Pilih PIN lain (jangan nombor mudah seperti 123456 atau 112233).', 'This PIN cannot be used. Pick another (not an easy one like 123456 or 112233).'],
+    same_pin: ['Ini PIN anda sekarang. Pilih PIN baru.', 'That is your PIN now. Pick a new one.'],
+    not_same: ['Dua PIN tidak sama. Taip semula.', 'The two PINs are not the same. Type them again.']
   };
   function errText(e) { var m = ERR[e] || [EA.t('Pejabat menolak: ', 'Office refused: ') + e, EA.t('Pejabat menolak: ', 'Office refused: ') + e]; return EA.t(m[0], m[1]); }
 
+  // The last list is kept on the Owner's phone, so the screen shows at once and refreshes behind (v1.9.1).
+  var CACHE = 'ea.usersCache';
+  function keepCache(j) {
+    try { EA.local.set(CACHE, { code: ctx.user.code, at: Date.now(), users: j.users, me: j.me, firstOwner: !!j.firstOwner }); } catch (e) {}
+  }
+  function fromCache() {
+    var c = EA.local.get(CACHE, null);
+    return c && ctx && c.code === ctx.user.code ? { ok: true, users: c.users, me: c.me, firstOwner: c.firstOwner, at: c.at, cached: true } : null;
+  }
   async function call(action, extra) {
     var j = await EA.askFull(action, extra);
-    if (j && j.ok && j.users) data = j;
+    if (j && j.ok && j.users) { data = j; data.at = Date.now(); keepCache(j); }
     return j;
   }
   async function load() {
-    loading = true; failed = ''; draw();
+    loading = true; failed = '';
+    if (!data) data = fromCache();
+    draw();
     var j = await call('users');
     loading = false;
-    if (!j.ok) failed = j.error || 'busy';
+    if (!j.ok) { failed = j.error || 'busy'; if (failed === 'test_user' || failed === 'not_allowed') data = null; }
     draw();
   }
 
@@ -59,7 +74,11 @@ EA.roomViews = EA.roomViews || {};
     if (loading && !data) h += '<div class="card"><p class="hint">' + EA.t('Memuat dari pejabat…', 'Loading from the office…') + '</p></div>';
     else if (failed && !data) h += '<div class="card"><p class="msg">' + esc(errText(failed)) + '</p>' +
       '<div class="actions"><button class="btn btn-main" type="button" id="us-retry">TRY AGAIN<small>Cuba lagi</small></button></div></div>';
-    else if (data) h += listHtml();
+    else if (data) {
+      if (loading) h += '<p class="hint us-fresh">' + EA.t('Memuat dari pejabat…', 'Loading from the office…') + '</p>';
+      else if (failed) h += '<p class="warn">' + esc(errText(failed)) + ' ' + EA.t('Senarai di bawah dari ', 'The list below is from ') + esc(ui().hhmm(new Date(data.at || Date.now()))) + '.</p>';
+      h += listHtml();
+    }
     el.innerHTML = '<div class="us">' + h + '</div>';
     wireList();
   }
@@ -199,7 +218,7 @@ EA.roomViews = EA.roomViews || {};
       '<div class="us-pin" id="us-pin">' + esc(s.pin.slice(0, 3)) + ' ' + esc(s.pin.slice(3)) + '</div>' +
       '<p class="msg">' + EA.t('Hantar atau tulis PIN ini sekarang. Selepas TUTUP ia tidak boleh dilihat lagi.', 'Send or write this PIN now. After CLOSE it cannot be seen again.') + '</p></div>';
     if (s.self) h += '<p class="warn">' + EA.t('Ini PIN baru anda sendiri. Telefon ini sudah guna PIN baru. PIN lama tidak berfungsi lagi.', 'This is your own new PIN. This phone already uses it. The old PIN no longer works.') + '</p>';
-    if (s.first) h += '<p class="warn">' + EA.t('Langkah seterusnya: tulis PIN ini, tekan SELESAI, KELUAR, dan masuk dengan PIN baru ini.', 'Next: write this PIN down, tap DONE, LOG OUT, and log in with this new PIN.') + '</p>';
+    if (s.first) h += '<p class="warn">' + EA.t('Langkah seterusnya: tulis PIN ini, tekan SELESAI, KELUAR, dan masuk dengan PIN baru ini. Selepas itu anda boleh tukar ke PIN pilihan sendiri (tekan nama anda → Tukar PIN saya).', 'Next: write this PIN down, tap DONE, LOG OUT, and log in with it. After that you can change to a PIN of your own choice (tap your name → Change my PIN).') + '</p>';
     if (!s.self) h += '<div class="actions"><button class="btn btn-ghost" type="button" id="us-copy">COPY<small>Salin</small></button>' +
       '<button class="btn btn-ok us-wa" type="button" id="us-wa">SEND TO WHATSAPP<small>Hantar ke WhatsApp</small></button></div>' +
       '<div class="card us-wamsg"><div class="hint">' + EA.t('Mesej WhatsApp:', 'WhatsApp message:') + '</div><pre class="us-pre">' + esc(text) + '</pre></div>' +
@@ -230,6 +249,8 @@ EA.roomViews = EA.roomViews || {};
     if (on) {
       h += '<button class="btn btn-ghost" type="button" id="ps-pin">NEW PIN<small>PIN baru</small></button>' +
         '<p class="hint">' + (self ? EA.t('PIN lama anda berhenti serta-merta. Telefon ini terus guna PIN baru.', 'Your old PIN stops at once. This phone switches to the new one.') : EA.t('PIN lama berhenti serta-merta. Guna bila lupa PIN atau telefon bertukar.', 'The old PIN stops at once. Use it when the PIN is forgotten or the phone changes.')) + '</p>' +
+        (self ? '<button class="btn btn-main" type="button" id="ps-mine">CHANGE MY PIN<small>Tukar PIN saya</small></button>' +
+          '<p class="hint">' + EA.t('Taip PIN 6 digit pilihan anda sendiri.', 'Type a 6-digit PIN of your own choice.') + '</p>' : '') +
         '<button class="btn btn-ghost" type="button" id="ps-edit">CHANGE ESTATES / ROLE<small>Ubah ladang / tugas</small></button>';
       if (!self) h += '<button class="btn btn-ghost us-bad" type="button" id="ps-off">SWITCH OFF<small>Tutup akses</small></button>' +
         '<p class="hint">' + EA.t('Telefon hilang atau berhenti kerja. Rekod lama kekal. Boleh dibuka semula.', 'Lost phone or left the job. Old records stay. Can be switched on again.') + '</p>';
@@ -243,6 +264,7 @@ EA.roomViews = EA.roomViews || {};
       var p = s.querySelector('#ps-pin'); if (p) p.onclick = function () { confirmPin(u, self); };
       var e = s.querySelector('#ps-edit'); if (e) e.onclick = function () { ui().closeSheet(); form = { mode: 'edit', code: u.code, name: u.name, role: u.role, estates: u.estates.slice(), self: self }; draw(); window.scrollTo(0, 0); };
       var o = s.querySelector('#ps-off'); if (o) o.onclick = function () { confirmOff(u); };
+      var mp = s.querySelector('#ps-mine'); if (mp) mp.onclick = function () { myPinSheet(u); };
       var n = s.querySelector('#ps-on'); if (n) n.onclick = function () { simple('userOn', { code: u.code }, EA.t('Akses dibuka semula', 'Switched on again')); };
     });
   }
@@ -261,6 +283,35 @@ EA.roomViews = EA.roomViews || {};
           ui().closeSheet();
           shown = { pin: j.pin, name: j.name, code: j.code, role: u.role, estates: u.estates, self: !!j.self };
           draw(); window.scrollTo(0, 0);
+        };
+      });
+  }
+  // Tukar PIN saya: the Owner types his own PIN twice. The PIN is never shown or kept, except as
+  // this phone's own login (EA.setMyPin).
+  function myPinSheet(u) {
+    var inp = function (id, label) {
+      return '<div class="field"><label for="' + id + '">' + label + '</label><input id="' + id + '" class="key-input" type="password" inputmode="numeric" autocomplete="new-password" maxlength="6" placeholder="······"></div>';
+    };
+    ui().openSheet('<h2 id="sheet-title">' + EA.t('Tukar PIN saya', 'Change my PIN') + '</h2>' +
+      inp('mp-1', EA.t('PIN baru (6 nombor)', 'New PIN (6 numbers)')) + inp('mp-2', EA.t('Taip sekali lagi', 'Type it again')) +
+      '<p class="hint">' + EA.t('Jangan nombor mudah seperti 123456, 111111 atau 112233. Telefon ini terus guna PIN baru.', 'Not an easy one like 123456, 111111 or 112233. This phone switches to the new PIN.') + '</p>' +
+      '<p class="msg" id="mp-err" hidden></p>' +
+      '<div class="actions"><button class="btn btn-ghost" type="button" id="mp-back">BACK<small>Kembali</small></button>' +
+      '<button class="btn btn-main" type="button" id="mp-ok">SAVE PIN<small>Simpan PIN</small></button></div>',
+      function (s) {
+        var a = s.querySelector('#mp-1'), b = s.querySelector('#mp-2'), m = s.querySelector('#mp-err');
+        [a, b].forEach(function (x) { x.oninput = function () { x.value = x.value.replace(/\D/g, '').slice(0, 6); m.hidden = true; }; });
+        function err(e) { m.textContent = errText(e); m.hidden = false; }
+        s.querySelector('#mp-back').onclick = function () { personSheet(u.code); };
+        s.querySelector('#mp-ok').onclick = async function () {
+          if (!/^\d{6}$/.test(a.value)) return err('bad_pin');
+          if (a.value !== b.value) return err('not_same');
+          this.disabled = true;
+          var pin = a.value;
+          var j = await call('userMyPin', { code: u.code, pin: pin });
+          if (!j.ok) { this.disabled = false; return err(j.error); }
+          EA.setMyPin(pin); a.value = b.value = '';
+          ui().closeSheet(); draw(); ui().toast(EA.t('PIN anda sudah ditukar', 'Your PIN is changed'));
         };
       });
   }

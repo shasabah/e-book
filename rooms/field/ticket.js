@@ -296,16 +296,16 @@
     var c = calc(draft);
     if (num(draft.w1) && num(draft.w2) && $('#tk-nett') && document.activeElement !== $('#tk-nett')) { $('#tk-nett').value = String(c.nettKg); draft.nett = String(c.nettKg); }
     var f = flags(draft, c);
-    $('#tk-sum').innerHTML = EA.t('Tiket ini: <b>', 'This ticket: <b>') + c.bunches + '</b> tandan · <b>' + c.nett.toFixed(2) + '</b> MT · ABW <b>' + (c.abw || 0) + '</b> kg/tandan' +
-      (c.blocks.length ? '<br>' + c.blocks.map(function (b) { return 'Blk ' + esc(b) + ': ' + c.split[b].bunches + ' tandan, ' + c.split[b].mt.toFixed(2) + ' MT'; }).join(' · ') : '') +
+    $('#tk-sum').innerHTML = EA.t('Tiket ini: <b>', 'This ticket: <b>') + c.bunches + '</b> ' + EA.t('tandan', 'bunches') + ' · <b>' + c.nett.toFixed(2) + '</b> MT · ABW <b>' + (c.abw || 0) + '</b> ' + EA.t('kg/tandan', 'kg/bunch') +
+      (c.blocks.length ? '<br>' + c.blocks.map(function (b) { return 'Blk ' + esc(b) + ': ' + c.split[b].bunches + EA.t(' tandan, ', ' bunches, ') + c.split[b].mt.toFixed(2) + ' MT'; }).join(' · ') : '') +
       f.map(function (x) { return '<span class="warn" style="display:block;margin-top:6px">' + EA.t(esc(x[0]), esc(x[1])) + '</span>'; }).join('');
     var bal = Object.keys(c.balance).filter(function (b) { return c.balance[b] > 0; }).sort();
     $('#tk-bal').innerHTML = bal.length ? '<p class="hint"><b>' + EA.t('Baki blok selepas tiket ini:', 'Block balance after this ticket:') + '</b> ' +
-      bal.map(function (b) { return 'Blk ' + esc(b) + ' ' + c.balance[b] + ' tandan'; }).join(' · ') + '</p>' : '';
+      bal.map(function (b) { return 'Blk ' + esc(b) + ' ' + c.balance[b] + EA.t(' tandan', ' bunches'); }).join(' · ') + '</p>' : '';
     var byW = {};
     c.harv.forEach(function (h) { var x = byW[h.worker_id] || (byW[h.worker_id] = { b: 0, mt: 0, lots: [] }); x.b += h.bunches; x.mt = r3(x.mt + h.mt); if (x.lots.indexOf(h.lot) < 0) x.lots.push(h.lot); });
     $('#tk-harv').innerHTML = c.harv.length && c.nett ? '<p class="hint"><b>' + EA.t('Tan setiap penuai', 'Each harvester\'s tonnes') + '</b></p><div class="rows">' + Object.keys(byW).map(function (w) {
-      return '<div class="list-line"><div><b>' + esc(person(w)) + '</b><span class="en">' + esc(w) + ' · petak ' + esc(byW[w].lots.join(', ')) + '</span></div><div class="mono">' + byW[w].b + ' tandan · ' + byW[w].mt.toFixed(3) + ' MT</div></div>';
+      return '<div class="list-line"><div><b>' + esc(person(w)) + '</b><span class="en">' + esc(w) + EA.t(' · petak ', ' · lot ') + esc(byW[w].lots.join(', ')) + '</span></div><div class="mono">' + byW[w].b + EA.t(' tandan · ', ' bunches · ') + byW[w].mt.toFixed(3) + ' MT</div></div>';
     }).join('') + '</div>' : '';
   }
 
@@ -340,6 +340,7 @@
               source: c.source, dnLots: JSON.parse(JSON.stringify(draft.dnLots || [])), blocks: JSON.parse(JSON.stringify(draft.blocks || {})), tripDn: draft.tripDn || '',
               keyedName: ctx.user.name, rev: old ? (old.rev || 1) + 1 : 1, ids: { blocks: {}, harv: {} } };
     try {
+      EA.batchStart();
       t.ids.ticket = EA.save(TAB, ROOM, ctx.estate, { date: t.date, ticket_no: t.ticket_no, trip: t.trip, mill: t.mill, do_no: t.do_no, lorry: t.lorry, driver: t.driver, time: t.time,
         first_kg: String(num(t.w1) || ''), second_kg: String(num(t.w2) || ''), deduct_kg: String(num(t.ded)), nett_kg: String(t.nettKg), nett_mt: String(t.nett),
         bunches: String(t.bunches), lorry_bunches: String(t.lorryBunches || ''), abw_kg: String(t.abw), note: t.note }, old ? old.ids.ticket : '').id;
@@ -363,7 +364,8 @@
         EA.save(TAB_HARV, ROOM, ctx.estate, { date: old.date, ticket_no: old.ticket_no, work_id: wid, date_cut: h.date || '', block: h.block || '', lot: h.lot || '',
           worker_id: h.worker_id || '', bunches: String(h.bunches || ''), abw_kg: String(old.abw), mt: String(h.mt || ''), source: old.source || 'ticket' }, oldH[wid], 'removed');
       });
-    } catch (e) { ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad'); return; }
+      EA.batchEnd();
+    } catch (e) { EA.batchCancel(); ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad'); return; }
     keepTicket(t);
     dropDraft();
     ui().toast(EA.t('Tiket disimpan', 'Ticket saved') + (old ? EA.t(' (dibetulkan)', ' (corrected)') : ''));

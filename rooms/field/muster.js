@@ -440,6 +440,20 @@
       wireCommon();
       return;
     }
+    // A real person on a phone that has not yet got the people list from the office (v1.9).
+    if (EA.lists.needPeople && EA.lists.needPeople(ctx.estate)) {
+      el.innerHTML = head + '<div class="card"><p class="warn">' + EA.t('Senarai pekerja belum dimuat di telefon ini. Dapatkan isyarat sekali, kemudian tekan MUAT SENARAI.',
+        'The people list is not on this phone yet. Get signal once, then tap LOAD LIST.') + '</p>' +
+        '<div class="actions"><button class="btn btn-main" type="button" id="fh-loadppl">LOAD LIST<small>Muat senarai</small></button></div></div>';
+      wireCommon();
+      el.querySelector('#fh-loadppl').onclick = async function () {
+        this.disabled = true;
+        var got = await EA.lists.refreshPeople(true);
+        this.disabled = false;
+        if (got) render(container, c); else ui().toast(EA.t('Tiada isyarat atau pejabat sibuk. Cuba lagi.', 'No signal or the office is busy. Try again.'), 'wait');
+      };
+      return;
+    }
     var started = draft.jobs.length || Object.keys(draft.marks).length || draft.replacing || draft.newChit;
     if (todaysChits().length && !started) {
       el.innerHTML = head +
@@ -832,6 +846,7 @@
     if (old) c.rev = (old.rev || 1) + 1;
     var stamp = c.date + ' ' + confirmedAt;
     try {
+      EA.batchStart();
       var oldBy = {};
       if (old) old.rows.forEach(function (r) { if (r.status !== 'removed') oldBy[r.worker_id] = r; });
       c.rows.forEach(function (r) {
@@ -866,7 +881,9 @@
       c.chitRowId = EA.save(TAB_CHIT, ROOM, ctx.estate, { chit: c.chit, rain_mm: c.rain_mm, rain_time: c.rain_time,
         working: s.tot(s.worked), not_working: s.tot(s.notw), grand_total: s.tot(s.grand),
         confirmed_by: c.checker, confirmed_at: stamp, note: '' }, old && old.chitRowId ? old.chitRowId : '').id;
+      EA.batchEnd();
     } catch (e) {
+      EA.batchCancel();
       ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad');
       return;
     }

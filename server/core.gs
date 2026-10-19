@@ -36,7 +36,7 @@ var ROOM_TABS = {
   FH_MUSTER: ['chit', 'block', 'lots', 'mandor', 'worker_id', 'task_code', 'muster', 'confirmed_by', 'confirmed_at', 'note'],
   FH_CHIT:   ['chit', 'rain_mm', 'rain_time', 'working', 'not_working', 'grand_total', 'confirmed_by', 'confirmed_at', 'note'],
   FH_WORK:   ['chit', 'worker_id', 'task_code', 'block', 'lot', 'qty', 'unit', 'bunches', 'confirmed_by', 'confirmed_at', 'note'],
-  FH_JOBDAY: ['chit', 'task_code', 'block', 'lots', 'workers', 'qty', 'unit', 'bunches', 'plan_ha', 'job_status', 'reason', 'flags', 'confirmed_by', 'confirmed_at', 'progress'],
+  FH_JOBDAY: ['chit', 'task_code', 'block', 'lots', 'workers', 'qty', 'unit', 'bunches', 'plan_ha', 'job_status', 'reason', 'flags', 'confirmed_by', 'confirmed_at', 'progress', 'bags', 'target'],
   FH_COLLECT: ['block', 'lot', 'bunches', 'cleared', 'tractor', 'loader', 'note'],
   FH_DISPATCH: ['bunches', 'lorry', 'mill', 'ramp_cleared', 'note', 'block', 'trip', 'dn_no', 'driver'],
   // The lots ticked on a delivery note: one row per harvester line on the lorry (v19).
@@ -50,6 +50,9 @@ var ROOM_TABS = {
   // source: 'dn' = lots from the delivery note; 'ticket' (or empty, before v19) = lots ticked on the ticket.
   FH_TICKET_HARV: ['ticket_no', 'work_id', 'date_cut', 'block', 'lot', 'worker_id', 'bunches', 'abw_kg', 'mt', 'source'],
   FH_ALERT: ['chit', 'kind', 'block', 'lot', 'detail', 'staff_note', 'direction', 'direction_by', 'ref'],
+  // Shared list: people (owned by HR). Name, job, worker code, gender and gang only; never IC,
+  // passport, date of birth, bank or pay (Rule 8). Written only by the Owner or HQ (v1.1).
+  LIST_PEOPLE: ['worker_id', 'name', 'job', 'gang', 'sex', 'mandor', 'active'],
   // Errors on phones, so the builder can see what went wrong without asking for screenshots.
   APP_ERROR: ['where', 'message', 'stack', 'version', 'agent']
 };
@@ -85,6 +88,7 @@ function doPost(e) {
     if (user.estates.indexOf(req.estate) < 0) return reply({ ok: false, error: 'not_your_estate' });
     return reply(openTrips(req.estate));
   }
+  if (req.action === 'people') return reply(people_(user));
   if (req.action === 'backlog') {
     if (user.estates.indexOf(req.estate) < 0) return reply({ ok: false, error: 'not_your_estate' });
     return reply(backlog(req.estate));
@@ -162,6 +166,7 @@ function saveRow(user, tab, row) {
   // Checks before writing
   if (!row.id) return { ok: false, error: 'no_id' };
   if (user.estates.indexOf(row.estate) < 0) return { ok: false, error: 'not_your_estate' };
+  if (/^LIST_/.test(String(tab)) && user.role !== 'Owner' && user.role !== 'HQ') return { ok: false, error: 'not_allowed' };
   if (STATUSES.indexOf(row.status) < 0) return { ok: false, error: 'bad_status' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(row.date))) return { ok: false, error: 'bad_date' };
   row.keyed_by = user.user_code;                 // always the person whose key it is
@@ -317,6 +322,18 @@ function backlog(estate) {
            field: b.field, fieldTotal: b.fieldTotal, ramp: b.ramp, checks: b.checks, grading: gradingAlerts_(estate, now), tonnage: tonnageMtd_(estate, now) };
 }
 
+// The people list for the user's estates (active only), for the phones' muster and day's work.
+function people_(user) {
+  var out = [];
+  user.estates.forEach(function (est) {
+    standingRows_('LIST_PEOPLE', est).forEach(function (r) {
+      if (String(r.active).toUpperCase() === 'N') return;
+      out.push({ id: r.worker_id, name: r.name, job: r.job, gang: r.gang, sex: r.sex, mdr: String(r.mandor).toUpperCase() === 'Y', estate: est });
+    });
+  });
+  return { ok: true, people: out };
+}
+
 // Month-to-date tonnes from the mill tickets, for the morning chit (v22). Counted by the delivery
 // note date (the day the crop left the estate); a ticket with no delivery note by its own date.
 function tonnageMtd_(estate, now) {
@@ -365,6 +382,9 @@ function ungraded_(estate) {
   // than was cut. Ramp backlog per block = collected - sent since the ramp was last empty.
   function calcBacklog(cut, col, dis, today) {
     function n(v) { return Number(v) || 0; }
+    // Harvest keyed by block only (no lot yet, v1.1) counts as one lot "Blk 03" for that block.
+    function asLot(r) { return r.lot ? r : Object.assign({}, r, { lot: r.block ? 'Blk ' + r.block : '' }); }
+    cut = cut.map(asLot); col = col.map(asLot);
     function byLot(a, b) { return String(a.lot).localeCompare(String(b.lot), undefined, { numeric: true }); }
     var d = new Date(today + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 7);
     var weekAgo = d.toISOString().slice(0, 10);

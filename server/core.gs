@@ -107,6 +107,8 @@ function doPost(e) {
     if (user.estates.indexOf(req.estate) < 0) return reply({ ok: false, error: 'not_your_estate' });
     return reply(backlog(req.estate));
   }
+  // Users and PIN screen (v1.9): the Owner only.
+  if (/^user/.test(String(req.action)) || req.action === 'testOff') return reply(usersAction_(user, req));
   return reply({ ok: false, error: 'unknown_action' });
 }
 
@@ -633,6 +635,168 @@ function plain(v) {
   // Codes with a leading zero, like block 01, would lose the zero; keep them as text.
   if (/^0\d+$/.test(s)) return "'" + s;
   return s;
+}
+
+// ---------------- users and PIN (Owner screen, v1.9) ----------------
+// The Owner adds people, makes a new PIN, changes role or estates, switches people off and on,
+// and switches off the public test PINs. The office makes each PIN at random and keeps only its
+// scrambled form; the PIN goes back to the Owner's phone once. Every change is one line in USERS_LOG.
+// Nothing is deleted. Test users (codes T-…) may only make the first real Owner, while none exists.
+var USERS_LOG_TAB = 'USERS_LOG';
+var USERS_LOG_COLS = ['at', 'by_code', 'by_name', 'action', 'user_code', 'name', 'detail'];
+var ROLE_PREFIX = { Owner: 'OWN', HQ: 'HQ', Staff: 'STF', Clerk: 'CLK', Mandor: 'MDR', Store: 'STR', Worker: 'WRK' };
+
+function isTestCode_(code) { return /^T-/.test(String(code)); }
+
+function readUsers_() {
+  var sh = book_().getSheetByName(USERS_TAB);
+  var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  var n = sh.getLastRow() - 1;
+  var rows = n > 0 ? sh.getRange(2, 1, n, head.length).getValues() : [];
+  return { sh: sh, head: head, list: rows.map(function (r, i) {
+    var u = { row: i + 2 };
+    head.forEach(function (c, j) { u[c] = r[j]; });
+    u.user_code = String(u.user_code); u.status = String(u.status || '');
+    return u;
+  }) };
+}
+
+function realOwner_(list) {
+  return list.some(function (u) { return u.role === 'Owner' && u.status === 'active' && !isTestCode_(u.user_code); });
+}
+
+function usersOut_(list) {
+  return list.map(function (u) {
+    var at = u.added_at instanceof Date ? Utilities.formatDate(u.added_at, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm') : String(u.added_at || '').replace(/^'/, '');
+    return { code: u.user_code, name: String(u.name), role: String(u.role), estates: String(u.estates).split(',').map(function (s) { return s.trim(); }).filter(String),
+             status: u.status, added: at, test: isTestCode_(u.user_code) };
+  });
+}
+
+// A random 6-digit PIN nobody else has (switched-off people included), and not an easy one.
+function newPin_(list) {
+  var used = {};
+  list.forEach(function (u) { used[String(u.key_hash)] = true; });
+  for (var tries = 0; tries < 200; tries++) {
+    var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, Utilities.getUuid() + ':' + new Date().getTime() + ':' + tries);
+    var num = 0;
+    for (var i = 0; i < 6; i++) num = (num * 256 + (bytes[i] & 0xff)) % 1000000;
+    var pin = ('000000' + num).slice(-6);
+    if (/^(\d)\1{5}$/.test(pin) || '0123456789012'.indexOf(pin) >= 0 || '9876543210987'.indexOf(pin) >= 0) continue;
+    if (/^(\d\d)\1\1$/.test(pin) || /^(\d{3})\1$/.test(pin)) continue;
+    if (used[hashKey(pin)]) continue;
+    return pin;
+  }
+  throw new Error('no_pin');
+}
+
+function logUser_(by, action, u, detail) {
+  var ss = book_();
+  var sh = ss.getSheetByName(USERS_LOG_TAB);
+  if (!sh) { sh = ss.insertSheet(USERS_LOG_TAB); sh.appendRow(USERS_LOG_COLS); }
+  var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
+  sh.appendRow([plain(now), plain(by.user_code), plain(by.name), action, plain(u.user_code), plain(u.name), plain(detail || '')]);
+}
+
+function forgetCache_(hash) { if (hash) CacheService.getScriptCache().remove('u:' + hash); }
+
+function cleanEstates_(v) {
+  var list = (Array.isArray(v) ? v : String(v || '').split(',')).map(function (s) { return String(s).trim(); }).filter(String);
+  var out = ESTATES.filter(function (e) { return list.indexOf(e) >= 0; });
+  return out.length === list.length && out.length ? out : null;
+}
+
+function usersAction_(user, req) {
+  if (user.role !== 'Owner') return { ok: false, error: 'not_allowed' };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (e) { return { ok: false, error: 'busy' }; }
+  try {
+    var U = readUsers_(), list = U.list, sh = U.sh, head = U.head;
+    var col = function (name) { return head.indexOf(name) + 1; };
+    var me = list.find(function (u) { return u.user_code === String(user.user_code); });
+    var testMe = isTestCode_(user.user_code), haveOwner = realOwner_(list);
+    var out = function (extra) {
+      var fresh = readUsers_().list;
+      return Object.assign({ ok: true, users: usersOut_(fresh), me: String(user.user_code), firstOwner: testMe && !realOwner_(fresh) }, extra || {});
+    };
+    // Test users: only the list and the first real Owner, while there is none.
+    if (testMe) {
+      if (haveOwner) return { ok: false, error: 'test_user' };
+      if (req.action !== 'users' && !(req.action === 'userAdd' && req.role === 'Owner')) return { ok: false, error: 'first_owner_only' };
+    }
+    if (req.action === 'users') return out();
+
+    if (req.action === 'userAdd') {
+      var name = String(req.name || '').replace(/\s+/g, ' ').trim();
+      if (name.length < 2 || name.length > 40) return { ok: false, error: 'bad_name' };
+      if (ROLES.indexOf(req.role) < 0) return { ok: false, error: 'bad_role' };
+      var est = cleanEstates_(req.estates);
+      if (!est) return { ok: false, error: 'bad_estates' };
+      var stem = ROLE_PREFIX[req.role] + '-' + (est.length === ESTATES.length ? 'ALL' : est[0]) + '-';
+      var n = 1, code;
+      do { code = stem + ('0' + n).slice(-2); n++; } while (list.some(function (u) { return u.user_code === code; }));
+      var pin = newPin_(list);
+      var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
+      var row = head.map(function (c) {
+        return { user_code: code, name: plain(name), role: req.role, estates: est.join(','), key_hash: hashKey(pin), status: 'active', added_at: plain(now) }[c];
+      }).map(function (v) { return v === undefined ? '' : v; });
+      sh.appendRow(row);
+      logUser_(user, 'add', { user_code: code, name: name }, req.role + ' · ' + est.join(','));
+      return out({ pin: pin, code: code, name: name });
+    }
+
+    var t = list.find(function (u) { return u.user_code === String(req.code || ''); });
+    if (req.action !== 'testOff') {
+      if (!t) return { ok: false, error: 'no_user' };
+      if (isTestCode_(t.user_code)) return { ok: false, error: 'test_user_row' };
+    }
+    var self = t && me && t.user_code === me.user_code;
+
+    if (req.action === 'userPin') {
+      if (t.status !== 'active') return { ok: false, error: 'user_off' };
+      var p2 = newPin_(list), old = String(t.key_hash);
+      sh.getRange(t.row, col('key_hash')).setValue(hashKey(p2));
+      forgetCache_(old);
+      logUser_(user, 'new_pin', t, self ? 'own PIN' : '');
+      return out({ pin: p2, code: t.user_code, name: String(t.name), self: !!self });
+    }
+    if (req.action === 'userSet') {
+      if (ROLES.indexOf(req.role) < 0) return { ok: false, error: 'bad_role' };
+      var e2 = cleanEstates_(req.estates);
+      if (!e2) return { ok: false, error: 'bad_estates' };
+      if (self && req.role !== 'Owner') return { ok: false, error: 'not_self' };
+      var before = t.role + ' · ' + t.estates;
+      sh.getRange(t.row, col('role')).setValue(req.role);
+      sh.getRange(t.row, col('estates')).setValue(e2.join(','));
+      forgetCache_(String(t.key_hash));
+      logUser_(user, 'change', t, before + ' → ' + req.role + ' · ' + e2.join(','));
+      return out();
+    }
+    if (req.action === 'userOff') {
+      if (self) return { ok: false, error: 'not_self' };
+      sh.getRange(t.row, col('status')).setValue('off');
+      forgetCache_(String(t.key_hash));
+      logUser_(user, 'off', t, String(req.reason || '').slice(0, 80));
+      return out();
+    }
+    if (req.action === 'userOn') {
+      sh.getRange(t.row, col('status')).setValue('active');
+      forgetCache_(String(t.key_hash));
+      logUser_(user, 'on', t, '');
+      return out();
+    }
+    if (req.action === 'testOff') {
+      var n2 = 0;
+      list.forEach(function (u) {
+        if (isTestCode_(u.user_code) && u.status === 'active') {
+          sh.getRange(u.row, col('status')).setValue('off'); forgetCache_(String(u.key_hash)); n2++;
+        }
+      });
+      logUser_(user, 'test_off', { user_code: 'T-*', name: 'test PINs' }, n2 + ' off');
+      return out({ switchedOff: n2 });
+    }
+    return { ok: false, error: 'unknown_action' };
+  } finally { lock.releaseLock(); }
 }
 
 // ---------------- admin, run from the script editor ----------------

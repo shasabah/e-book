@@ -10,9 +10,9 @@ Sheet.prototype.getRange = function (r, c, nr, nc) { const s = this; return { ge
 const std = ['id','date','company','estate','keyed_by','keyed_at','phone','status','replaces'];
 const T = new Date(); const D = n => { const d = new Date(T); d.setDate(d.getDate() - n); return d.toISOString().slice(0,10); };
 const work = new Sheet([std.concat(['chit','worker_id','task_code','block','lot','qty','unit','bunches']),
-  ['w1', D(1),'SPLT','SSGT','T','','P07','active','', 'c','W1','HV01','03','3-30','','bunch','600'],
-  ['w2', D(1),'SPLT','SSGT','T','','P07','active','', 'c','W2','HV01','03','3-31','','bunch','500'],
-  ['w3', D(1),'SPLT','SSGT','T','','P07','active','', 'c','W3','HV01','02','2-5','','bunch','400']]);
+  ['w1', D(1),'SPLT','SSGT','T','','P07','active','', 'c','W1','HA','03','3-30','','bunch','600'],
+  ['w2', D(1),'SPLT','SSGT','T','','P07','active','', 'c','W2','HA','03','3-31','','bunch','500'],
+  ['w3', D(1),'SPLT','SSGT','T','','P07','active','', 'c','W3','HA','02','2-5','','bunch','400']]);
 const dis = new Sheet([std.concat(['bunches','lorry','mill','ramp_cleared','note','block','trip','dn_no','driver']),
   ['d1', D(0),'SPLT','SSGT','S','','P07','active','','900','SA1','BOU','','','03','LR-1','8524','X'],
   ['d2', D(0),'SPLT','SSGT','S','','P07','active','d1','1100','SA1','BOU','','','03','LR-1','8524','X'],   // corrected

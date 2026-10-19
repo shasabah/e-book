@@ -14,7 +14,7 @@ const { chromium } = require('playwright');
     localStorage.clear(); localStorage.setItem('ea.phone', JSON.stringify('P97'));
     const chit = (id, date, rev, rows, jobs) => ({ chit: id, date, estate: 'SSGT', confirmedAt: '06:30', checker: 'T-STF', rev, rain_mm: '0', rain_time: '', alerts: [], jobs, rows });
     localStorage.setItem('fh.chits2', JSON.stringify([
-      chit('C-Y', '2026-10-18', 1, [{ worker_id: 'W-SSGT-001', muster: 'H', task_code: 'HV01', block: '03', lots: '3-30' }], [{ key: 'j1', task: 'HV01', block: '03', lots: ['3-30'], mandor: '' }])]));
+      chit('C-Y', '2026-10-18', 1, [{ worker_id: 'W-SSGT-001', muster: 'H', task_code: 'HA', block: '03', lots: '3-30' }], [{ key: 'j1', task: 'HA', block: '03', lots: ['3-30'], mandor: '' }])]));
   });
   const today = await p.evaluate(() => [EA.today(), EA.dayAgo(1)].join(' '));
   check('phone date at 05:30 Sabah time is 19 Oct, yesterday 18 Oct', today === '2026-10-19 2026-10-18', today);
@@ -27,8 +27,8 @@ const { chromium } = require('playwright');
   await p.evaluate(() => {
     const list = JSON.parse(localStorage.getItem('fh.chits2'));
     list.push({ chit: 'C-T', date: '2026-10-19', estate: 'SSGT', confirmedAt: '06:40', checker: 'T-STF', rev: 1, rain_mm: '0', rain_time: '', alerts: [],
-      jobs: [{ key: 'j1', task: 'HV01', block: '03', lots: ['3-30', '3-31'], mandor: '' }, { key: 'j3', task: 'MT03', block: '01', lots: ['1-1'], mandor: '' }],
-      rows: [{ worker_id: 'W-SSGT-001', muster: 'H', task_code: 'HV01', block: '03', lots: '3-30 3-31' }, { worker_id: 'W-SSGT-010', muster: 'H', task_code: 'MT03', block: '01', lots: '1-1' }] });
+      jobs: [{ key: 'j1', task: 'HA', block: '03', lots: ['3-30', '3-31'], mandor: '' }, { key: 'j3', task: 'CPS', block: '01', lots: ['1-1'], mandor: '' }],
+      rows: [{ worker_id: 'W-SSGT-001', muster: 'H', task_code: 'HA', block: '03', lots: '3-30 3-31' }, { worker_id: 'W-SSGT-010', muster: 'H', task_code: 'CPS', block: '01', lots: '1-1' }] });
     localStorage.setItem('fh.chits2', JSON.stringify(list)); localStorage.setItem('fh.workchit', JSON.stringify('C-T'));
   });
   await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForTimeout(200);
@@ -38,7 +38,7 @@ const { chromium } = require('playwright');
   await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForTimeout(400);
   await p.click('[data-fix="C-T"]'); await p.waitForTimeout(300);
   await p.click('#fh-addjob'); await p.waitForSelector('#jb-task');
-  await p.selectOption('#jb-task', 'MT01'); await p.selectOption('#jb-block', '02'); await p.waitForTimeout(150);
+  await p.selectOption('#jb-task', 'SL'); await p.selectOption('#jb-block', '02'); await p.waitForTimeout(150);
   await p.click('#jb-save'); await p.waitForTimeout(200);
   const keys = await p.evaluate(() => JSON.parse(localStorage.getItem('fh.draft2')).SSGT.jobs.map(j => j.key).join(','));
   check('a job added on a correction gets a new number (no clash with j3)', keys === 'j1,j3,j4', keys);

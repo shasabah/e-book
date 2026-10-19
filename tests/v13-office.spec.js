@@ -12,10 +12,10 @@ const std = ['id','date','company','estate','keyed_by','keyed_at','phone','statu
 const T = new Date(); const D = n => { const d = new Date(T); d.setDate(d.getDate() - n); return d.toISOString().slice(0,10); };
 // Ali cut 120 in 3-30; all 120 went on DN 501; then his line was corrected to 118 (w1b replaces w1).
 const work = new Sheet([std.concat(['chit','worker_id','task_code','block','lot','qty','unit','bunches']),
-  ['w1', D(1),'SPLT','SSGT','T','','P07','active','', 'c','W1','HV01','03','3-30','','bunch','120'],
-  ['w1b',D(1),'SPLT','SSGT','T','','P07','active','w1','c','W1','HV01','03','3-30','','bunch','118'],
-  ['w2', D(1),'SPLT','SSGT','T','','P07','active','', 'c','W2','HV01','03','3-31','','bunch','100'],
-  ['w2b',D(1),'SPLT','SSGT','T','','P07','active','w2','c','W2','HV01','03','3-31','','bunch','130']]);
+  ['w1', D(1),'SPLT','SSGT','T','','P07','active','', 'c','W1','HA','03','3-30','','bunch','120'],
+  ['w1b',D(1),'SPLT','SSGT','T','','P07','active','w1','c','W1','HA','03','3-30','','bunch','118'],
+  ['w2', D(1),'SPLT','SSGT','T','','P07','active','', 'c','W2','HA','03','3-31','','bunch','100'],
+  ['w2b',D(1),'SPLT','SSGT','T','','P07','active','w2','c','W2','HA','03','3-31','','bunch','130']]);
 const lot = new Sheet([std.concat(['trip','dn_no','block','lot','work_id','date_cut','worker_id','bunches']),
   ['l1', D(0),'SPLT','SSGT','S','','P07','active','','LR-1','501','03','3-30','w1',D(1),'W1','120'],
   ['l2', D(0),'SPLT','SSGT','S','','P07','active','','LR-1','501','03','3-31','w2',D(1),'W2','100']]);

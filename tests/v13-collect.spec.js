@@ -9,7 +9,7 @@ const { chromium } = require('playwright');
   await p.evaluate(() => {
     localStorage.clear(); localStorage.setItem('ea.phone', JSON.stringify('P96'));
     localStorage.setItem('fh.work', JSON.stringify([{ chit: 'Y0', date: EA.today(), estate: 'SSGT', rec: { lines: [
-      { id: 'W-1', worker_id: 'W-SSGT-001', task_code: 'HV01', block: '03', lot: '3-30', bunches: '100' }], jobs: [] } }]));
+      { id: 'W-1', worker_id: 'W-SSGT-001', task_code: 'HA', block: '03', lot: '3-30', bunches: '100' }], jobs: [] } }]));
   });
   await p.reload(); await p.fill('#key', '777777'); await p.waitForSelector('#home:not([hidden])');
   await p.evaluate(() => { location.hash = 'field-harvest/collect'; }); await p.waitForSelector('#cl-rows');

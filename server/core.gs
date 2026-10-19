@@ -235,6 +235,12 @@ function saveRow(user, tab, row) {
 var BATCH_MAX = 100;
 var RECENT_ROWS = 5000;            // about 20 days of all estates' muster rows
 function daysAgo_(n) { return Utilities.formatDate(new Date(Date.now() - n * 86400000), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd'); }
+var TICKETED_ = {};
+function ticketed_(estate) {
+  if (TICKETED_[estate]) return TICKETED_[estate];
+  var m = {}; standingRows_('FH_TICKET', estate).forEach(function (r) { if (r.trip) m[r.trip] = true; });
+  return (TICKETED_[estate] = m);
+}
 function saveBatch(user, items) {
   if (!items || !items.length || items.length > BATCH_MAX) return { ok: false, error: 'bad_batch' };
   var ss = book_();
@@ -272,6 +278,8 @@ function saveBatch(user, items) {
       function fail(e) { results.push({ id: id || '', ok: false, error: e }); }
       if (!tab || tab === USERS_TAB || !row || typeof row !== 'object') return fail('bad_entry');
       if (!canWrite_(user, String(tab))) return fail('not_allowed');
+      // v1.3: a lorry's delivery note cannot be changed once its mill ticket is keyed.
+      if ((tab === 'FH_DISPATCH' || tab === 'FH_DISPATCH_LOT') && row.replaces && row.trip && ticketed_(row.estate)[row.trip]) return fail('ticketed');
       var t = tabInfo(String(tab));
       if (!t) return fail('no_tab:' + tab);
       if (t.missing.length) return fail('tab_missing_col:' + t.missing[0]);

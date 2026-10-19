@@ -600,8 +600,8 @@
       b.onclick = function () {
         var w = b.dataset.w;
         ui().openSheet('<h2 id="sheet-title"><span class="bm">' + esc(w) + '</span><span class="en">Other reasons</span></h2>' +
-          '<div class="actions"><button class="btn btn-ghost" type="button" data-r="L">HARI BURUH<small>Labour day</small></button>' +
-          '<button class="btn btn-ghost" type="button" data-r="X">PINDAH<small>Transfer</small></button></div>' +
+          '<div class="actions"><button class="btn btn-ghost" type="button" data-r="L">LABOUR DAY<small>Hari buruh</small></button>' +
+          '<button class="btn btn-ghost" type="button" data-r="X">TRANSFER<small>Pindah</small></button></div>' +
           '<div class="actions"><button class="btn btn-ghost" type="button" data-r="">CLEAR<small>Buang</small></button></div>',
           function (s) { s.querySelectorAll('[data-r]').forEach(function (x) { x.onclick = function () { ui().closeSheet(); setMark(w, x.dataset.r); }; }); });
       };

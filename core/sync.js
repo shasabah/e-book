@@ -173,15 +173,22 @@ window.EA = window.EA || {};
   window.addEventListener('error', function (e) { EA.reportError('page', e.error || e.message); });
   window.addEventListener('unhandledrejection', function (e) { EA.reportError('promise', e.reason); });
 
-  EA.ask = async function (action, extra) {
+  // EA.askFull: the office's whole answer, or { ok:false, error:'nolink'|'offline'|'busy' } (v1.9).
+  EA.askFull = async function (action, extra) {
     var link = EA.sendLink(), user = EA.currentUser();
-    if (!link || !user || !navigator.onLine) return null;
+    if (!link || !user) return { ok: false, error: 'nolink' };
+    if (!navigator.onLine) return { ok: false, error: 'offline' };
     try {
       var res = await fetch(link, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(Object.assign({ action: action, key: user.key, version: EA.VERSION }, extra || {})) });
-      var j = await res.json();
-      return j && j.ok ? j : null;
-    } catch (e) { return null; }
+      var j = null;
+      try { j = await res.json(); } catch (e2) { j = null; }
+      return j || { ok: false, error: 'busy' };
+    } catch (e) { return { ok: false, error: 'offline' }; }
+  };
+  EA.ask = async function (action, extra) {
+    var j = await EA.askFull(action, extra);
+    return j && j.ok ? j : null;
   };
 
   // ---------- trying again by itself ----------

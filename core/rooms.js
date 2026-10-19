@@ -32,7 +32,12 @@ EA.rooms = [
     state: 'later', when: 'Bertambah · Grows with each room',
     note: { bm: 'Kos sehektar, kos setan, bajet berbanding sebenar. Bertambah setiap kali bilik baru dibuka.',
             en: 'Cost per hectare, cost per tonne, budget against actual. Grows as each room goes live.' },
-    roles: ['Owner', 'HQ'] }
+    roles: ['Owner', 'HQ'] },
+  // Part of the Foundation (v1.9), not a room: who may log in, and their PINs. Owner only.
+  { id: 'users', mark: 'PIN', bm: 'Pengguna & PIN', en: 'Users & PIN',
+    state: 'live', when: 'Pemilik sahaja · Owner only',
+    note: { bm: 'Tambah pengguna, buat PIN baru, tutup akses.', en: 'Add users, make a new PIN, switch people off.' },
+    roles: ['Owner'] }
 ];
 
 // Milestones from the Growth Plan, shown to Owner and HQ.

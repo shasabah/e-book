@@ -115,7 +115,7 @@
       (fixing() ? '<p class="warn"><span class="bm">Membetulkan nota hantar DN ' + esc(d.dn) + '. Yang lama kekal; yang baru menggantikannya.</span><span class="en">Correcting a delivery note. The old one stays on record; this one replaces it.</span> <button type="button" class="btn btn-ghost" id="cl-fixstop">STOP<small>Batal betulkan</small></button></p>' : '') +
 
       '<section class="card" aria-labelledby="cl-s1"><h2 id="cl-s1"><span class="step">1</span><span class="inline"><span class="bm">Petak · tandan</span> · <span class="en">Lots and bunches</span></span></h2>' +
-      (fixing() ? '' : '<p class="hint">Nombor dari Kerja harian (kiraan mandor). Ubah hanya jika kertas pemuat berbeza. · Numbers from Day\'s work (the mandor\'s count). Change them only where the loader\'s paper differs.</p>' +
+      (fixing() ? '' : '<p class="hint">Nombor dari Kerja harian (tandan menuai). Ubah hanya jika kertas pemuat berbeza. · Numbers from Day\'s work (bunches harvested). Change them only where the loader\'s paper differs.</p>' +
         '<div class="choice" role="group" aria-label="Lori hari ini · Lorry today">' +
           '<button type="button" class="btn ' + (d.on ? 'btn-main' : 'btn-ghost') + '" id="cl-lorry-yes" aria-pressed="' + (d.on ? 'true' : 'false') + '">ADA LORI<small>A lorry went to the mill</small></button>' +
           '<button type="button" class="btn ' + (d.on ? 'btn-ghost' : 'btn-main') + '" id="cl-lorry-no" aria-pressed="' + (d.on ? 'false' : 'true') + '">TIADA LORI<small>No lorry</small></button>' +
@@ -173,8 +173,8 @@
       var x = lorryOf(r), h = habis(r);
       return '<div class="list-line lot-row" data-row="' + esc(r.lot) + '"><div class="grow">' +
         '<b>' + esc(EA.fh.lotLabel(r.lot, r.block)) + '</b>' +
-        '<span class="en">Tuai ' + r.dates.map(EA.fh.shortDate).join(', ') + ' · ' + esc(r.workers.map(person).join(', ')) + '</span>' +
-        '<span class="en">Ladang · field <b>' + r.field + '</b> · Ramp <b>' + r.ramp + '</b></span>' +
+        '<span class="en">Menuai · harvested ' + r.dates.map(EA.fh.shortDate).join(', ') + ' · ' + esc(r.workers.map(person).join(', ')) + '</span>' +
+        '<span class="en">Ladang · field <b>' + r.field + '</b> · Ramp <b>' + r.ramp + '</b> · belum dihantar · not yet sent ' + r.open + '</span>' +
         (!fixing() && r.field > 0 ? '<div class="wline"><label class="inline-label">Dikutip · collected <input class="qty" inputmode="numeric" data-dik="' + esc(r.lot) + '" value="' + dik(r) + '" aria-label="Dikutip petak ' + esc(r.lot) + '"></label>' +
           '<label class="inline-check"><input type="checkbox" data-hab="' + esc(r.lot) + '"' + (h === 'Y' ? ' checked' : '') + '> Habis · lot cleared</label></div>' : '') +
         (on ? '<div class="wline"><label class="inline-check"><input type="checkbox" data-lon="' + esc(r.lot) + '"' + (x.on ? ' checked' : '') + '> Ke lori · on lorry</label>' +
@@ -216,6 +216,29 @@
       '<div class="actions"><button class="btn btn-main" type="button" id="cp-ok">OK<small>Betulkan</small></button></div>',
       function (s) { s.querySelector('#cp-ok').onclick = ui().closeSheet; });
   }
+  function shortSheet(short) {
+    ui().openSheet('<h2 id="sheet-title"><span class="bm">Tandan tidak sama</span><span class="en">The counts do not match</span></h2>' +
+      short.map(function (r) {
+        return '<div class="field"><label for="sh-' + esc(r.lot) + '"><span class="bm">' + esc(EA.fh.lotLabel(r.lot, r.block)) + ': menuai ' + r.field + ' (belum dikutip), dikutip ' + dik(r) + '. Berapa tandan dihantar ke ramp?</span>' +
+          '<span class="en">Harvested ' + r.field + ' (not yet collected), collected ' + dik(r) + '. How many bunches went to the ramp?</span></label>' +
+          '<input id="sh-' + esc(r.lot) + '" class="text-input" inputmode="numeric" data-sh="' + esc(r.lot) + '" value="' + dik(r) + '"></div>';
+      }).join('') +
+      '<p class="hint">Baki yang tidak dikutip kekal sebagai baki di ladang, dan keluar dalam chit pagi esok. · What was not collected stays as field backlog and shows on tomorrow\'s morning chit.</p>' +
+      '<div class="actions"><button class="btn btn-ghost" type="button" id="sh-back">BACK<small>Kembali</small></button>' +
+      '<button class="btn btn-ok" type="button" id="sh-ok">SAVE<small>Simpan</small></button></div>',
+      function (sh) {
+        sh.querySelector('#sh-back').onclick = ui().closeSheet;
+        sh.querySelector('#sh-ok').onclick = function () {
+          short.forEach(function (r) {
+            var v = num(String(sh.querySelector('[data-sh="' + r.lot + '"]').value).replace(/\D/g, ''));
+            var o = draft.lots[r.lot] = draft.lots[r.lot] || {};
+            o.block = r.block; o.bunches = String(v);
+            o.cleared = v >= r.field ? 'Y' : '';      // all collected: cleared; otherwise the rest stays in the field
+          });
+          draft.shortOk = true; keepDraft(); ui().closeSheet(); save();
+        };
+      });
+  }
   function save() {
     var list = rows(), dis = draft.dispatch;
     var lines = list.filter(function (r) { return !fixing() && r.field > 0 && (dik(r) > 0 || habis(r) === 'Y'); })
@@ -227,8 +250,16 @@
     if (lorryOn() && total > 0 && !dis.dn) p.push(['Isi no. nota hantar (DN).', 'Fill in the delivery note number.']);
     if (lorryOn() && total > 0 && !dis.lorry.trim()) p.push(['Isi no. lori.', 'Fill in the lorry number.']);
     if (lorryOn() && !total && dis.ramp_cleared !== 'Y') p.push(['Tanda petak ke lori, atau pilih TIADA LORI.', 'Tick the lots on the lorry, or choose NO LORRY.']);
+    // v1.3 (Yu Chen): a lorry must carry ticked lots, so each harvester's tonnes follow from the ticket.
+    // Bunches not ticked stay at the ramp (ramp backlog).
+    if (lorryOn() && total > 0 && !sumOf(sel)) p.push(['Tanda sekurang-kurangnya satu petak ke lori. Tandan yang tidak ditanda kekal di ramp.', 'Tick at least one lot on the lorry. Bunches not ticked stay at the ramp.']);
     if (fixing() && !total) p.push(['Nota hantar yang dibetulkan mesti ada tandan.', 'A corrected delivery note needs its bunches.']);
     if (p.length) return problemSheet(p);
+    // v1.3 (Yu Chen): "Habis" ticked but fewer bunches collected than harvested: ask how many went to
+    // the ramp; whatever was not collected stays as field backlog (the lot is not marked cleared).
+    var short = list.filter(function (r) { return !fixing() && r.field > 0 && habis(r) === 'Y' && dik(r) < r.field; });
+    if (short.length && !draft.shortOk) return shortSheet(short);
+    draft.shortOk = false;
     var old = fixing() ? saved().find(function (s) { return s.dispatch && s.dispatch.trip === dis.replacing && !s.dispatch.replacedBy; }) : null;
     if (fixing() && !old) { ui().toast('Nota hantar lama tidak dijumpai · Old delivery note not found', 'bad'); return; }
     var now = new Date();
@@ -270,10 +301,12 @@
           (s.lines.length ? 'Kutip: ' + s.lines.map(function (l) { return l.lot + ' ' + (l.bunches || 0) + (l.cleared === 'Y' ? ' (habis)' : ''); }).join(', ') : '') +
           (s.dispatch ? (s.lines.length ? ' · ' : '') + 'Lori ' + esc(s.dispatch.lorry || '') + ': ' + (s.dispatch.bunches || 0) + ' tandan' + (s.dispatch.blocks && Object.keys(s.dispatch.blocks).length ? ' (' + Object.keys(s.dispatch.blocks).map(function (b) { return 'Blk ' + b + ' ' + s.dispatch.blocks[b]; }).join(', ') + ')' : '') + ' ke ' + esc(s.dispatch.mill) + (s.dispatch.ramp_cleared === 'Y' ? ' (ramp kosong)' : '') : '') +
           (s.dispatch && s.dispatch.replacedBy ? ' <i>(dibetulkan · corrected)</i>' : '') +
+          (refusedDn(s) ? '<br><b class="warn-t">Pembetulan ditolak: lori ini sudah ada tiket. Hubungi kerani. · Correction refused: this lorry already has a ticket. Call the clerk.</b>' : '') +
           '</span><span class="pill ' + (waiting ? 'wait">Menunggu · Waiting' : 'ok">Dihantar · Sent') + '</span></div>' +
           (canFix(s) ? '<div class="acts"><button type="button" class="btn btn-ghost" data-dfix="' + esc(s.dispatch.trip) + '">CORRECT DN<small>Betulkan</small></button></div>' : '') + '</div>';
       }).join('') : '<p class="hint">Belum ada hari ini. · Nothing yet today.</p>') + '</section>';
   }
+  function refusedDn(s) { var r = EA.local.get('ea.refused', []); return !!(s.dispatch && r.some(function (x) { return x.trip === s.dispatch.trip; })); }
   // A delivery note can be corrected (by the staff, not the loader) until its lorry has a mill ticket.
   function canFix(s) {
     var d = s.dispatch;

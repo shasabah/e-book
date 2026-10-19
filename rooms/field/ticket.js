@@ -103,9 +103,20 @@
     useTrip(list[0]);
     return true;
   }
+  // The clerk only reads the staff's delivery note: if the staff corrected it before the ticket is
+  // saved, the newest lots and block totals are taken again (v1.3).
+  function syncTrip() {
+    if (!draft || !draft.trip || draft.replacing) return;
+    var x = trips().find(function (y) { return y.trip === draft.trip; });
+    if (!x) return;
+    draft.lorryBunches = x.bunches; draft.tripDn = x.dn || draft.tripDn;
+    draft.dnLots = (x.lots || []).map(function (h) { return Object.assign({}, h); });
+    draft.blocks = {}; Object.keys(x.blocks).forEach(function (b) { draft.blocks[b] = String(x.blocks[b]); });
+  }
   async function refreshOffice() {
     if (!EA.sendLink()) return;
     await EA.fh.harvest.refreshOpen(ctx.estate);
+    syncTrip();
     if (!draft.trip && draft.do_no) matchDn(true);
     else if (autoPick() && el && document.body.contains(el) && !el.hidden && $('#tk-tripbox')) render(el, ctx);
     if (canGrade(ctx.user)) { var r3x = await EA.ask('ungraded', { estate: ctx.estate }); if (r3x && r3x.tickets) EA.local.set(K.ungraded + ctx.estate, r3x.tickets); }
@@ -318,6 +329,7 @@
       function (s) { s.querySelector('#' + id).onclick = ui().closeSheet; });
   }
   function save() {
+    syncTrip();
     var c = calc(draft), p = problems(c);
     if (p.length) return problemSheet(p, 'tp-ok');
     var old = draft.replacing ? saved().find(function (t) { return t.key === draft.replacing; }) : null;

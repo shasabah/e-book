@@ -73,6 +73,9 @@ button, input { font: inherit; color: inherit; }
 .pill.hq { background: var(--hq-soft); color: var(--hq); }
 .pill.plain { background: transparent; color: var(--muted); border: 1px solid var(--line); }
 .pill.plain::before { display: none; }
+/* The sending pill can carry a longer message: it wraps instead of widening the page. */
+#wait-pill { white-space: normal; max-width: 100%; border-radius: 12px; }
+#wait-pill::before { flex: 0 0 8px; }
 .test-badge { display: inline-block; border: 1.5px dashed currentColor; border-radius: 6px; padding: 1px 8px; font-size: .72rem; font-weight: 700; letter-spacing: .08em; }
 
 /* Login */
@@ -177,6 +180,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 30;
   background: var(--ok); color: #fff; padding: 10px 16px; border-radius: 999px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,.2); max-width: calc(100% - 32px); }
+.toast { pointer-events: none; }
+/* With a sheet open, the message goes to the top so it never covers the sheet's buttons. */
+.sheet-back:not([hidden]) ~ .toast { bottom: auto; top: calc(12px + env(safe-area-inset-top, 0px)); }
 .toast.bad { background: var(--bad); }
 .toast.wait { background: var(--wait); }
 

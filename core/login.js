@@ -14,24 +14,26 @@ window.EA = window.EA || {};
     if (!/^\d{6}$/.test(key)) return { ok: false, why: 'format' };
     var link = EA.sendLink();
     if (link) {
+      var res, j;
       try {
-        var res = await fetch(link, {
+        res = await fetch(link, {
           method: 'POST', credentials: 'omit',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ action: 'login', key: key, version: EA.VERSION })
         });
-        var j = await res.json();
-        if (j && j.ok && j.user) return keep(Object.assign({}, j.user, { key: key }));
-        // Only a real "wrong key" answer is called a wrong key. A busy or
-        // broken office side is "try again", so nobody thinks their key is bad.
-        var err = j && j.error;
-        return { ok: false, why: err === 'wrong_key' ? 'wrong' : err === 'old_version' ? 'old' : 'server' };
       } catch (e) {
         // No signal: the last person who logged in on this phone may come back in.
         var last = EA.local.get(LAST, null);
         if (last && last.key === key) return keep(last);
         return { ok: false, why: 'offline' };
       }
+      // The office answered, but not with its usual reply (an error page): "office busy".
+      try { j = await res.json(); } catch (e2) { j = null; }
+      if (j && j.ok && j.user) return keep(Object.assign({}, j.user, { key: key }));
+      // Only a real "wrong key" answer is called a wrong key. A busy or
+      // broken office side is "try again", so nobody thinks their key is bad.
+      var err = j && j.error;
+      return { ok: false, why: err === 'wrong_key' ? 'wrong' : err === 'old_version' ? 'old' : err === 'locked' ? 'locked' : 'server' };
     }
     if (EA.config.TEST_MODE) {
       var u = (EA.lists.testUsers || []).find(function (x) { return x.key === key; });

@@ -72,13 +72,16 @@
     offline: ['Tiada isyarat, dan orang ini belum pernah masuk di telefon ini.', 'No signal, and this person has not logged in on this phone before.'],
     server: ['Pejabat sibuk sekarang. Cuba lagi sebentar.', 'The office side is busy. Try again in a moment.'],
     old: ['Versi app ini sudah lama. Tekan LOAD IT atau muat semula halaman.', 'This app version is too old. Tap LOAD IT or reload the page.'],
-    nolink: ['Pautan hantar belum ditetapkan. Buka Tetapan telefon.', 'The sending link is not set. Open Phone setup.']
+    nolink: ['Pautan hantar belum ditetapkan. Buka Tetapan telefon.', 'The sending link is not set. Open Phone setup.'],
+    locked: ['Terlalu banyak kunci salah. Tunggu 15 minit.', 'Too many wrong keys. Wait 15 minutes.']
   };
   function loginError(why) {
     var m = WHY[why] || WHY.wrong;
     var el = $('login-msg');
-    el.innerHTML = '<span class="bm">' + m[0] + '</span><span class="en">' + m[1] + '</span>';
+    el.innerHTML = '<span class="bm">' + m[0] + '</span><span class="en">' + m[1] + '</span>' +
+      (why === 'old' ? '<button class="btn btn-wait" type="button" id="login-load" style="margin-top:8px">LOAD IT<small>Muat versi baru</small></button>' : '');
     el.hidden = false;
+    if (why === 'old') $('login-load').onclick = EA.loadUpdate;
   }
   async function tryLogin(key) {
     if (!EA.phone()) { openSetup('Tetapkan kod telefon dahulu. · Set the phone code first.'); return; }
@@ -195,7 +198,10 @@
     var pill = $('wait-pill');
     if (tooOld) { pill.className = 'pill bad'; pill.textContent = n + ' menunggu lebih 24 jam · waiting over 24 hours'; }
     else if (n > 0) { pill.className = 'pill wait'; pill.textContent = n + ' menunggu · waiting'; }
+    else if (EA.config.TEST_MODE && !EA.sendLink()) { pill.className = 'pill wait'; pill.textContent = 'Ujian · tidak ke pejabat · Test · not sent to office'; }
     else { pill.className = 'pill ok'; pill.textContent = 'Semua dihantar · All sent'; }
+    var others = EA.waitingOthers ? EA.waitingOthers() : [];
+    if (others.length) pill.textContent += ' · ' + others.map(function (o) { return o.n + ' milik ' + o.code; }).join(', ') + ' (hantar bila dia masuk · sent when they log in)';
     if (last) {
       var d = new Date(last), sameDay = d.toDateString() === new Date().toDateString();
       $('last-sent').textContent = 'Dihantar ' + (sameDay ? hhmm(d) : d.getDate() + ' ' + MON_BM[d.getMonth()] + ' ' + hhmm(d)) + ' · Last sent';
@@ -204,7 +210,7 @@
     }
     if (n > 0 && EA.nextRetry > Date.now()) $('last-sent').textContent += ' · Cuba lagi sendiri ' + hhmm(new Date(EA.nextRetry)) + ' · retries by itself';
     var sending = EA.isSending();
-    $('send-btn').disabled = sending || n === 0;
+    $('send-btn').disabled = sending || !EA.waitingMine();
     $('send-btn').innerHTML = sending ? 'SENDING<small>Menghantar…</small>' : 'SEND<small>Hantar</small>';
     var noLink = !EA.sendLink();
     $('test-mark').hidden = !(EA.config.TEST_MODE && noLink);
@@ -267,7 +273,7 @@
   };
 
   $('logout').onclick = function () {
-    var n = EA.waiting();
+    var n = EA.waitingMine();
     if (!n) { EA.logout(); render(); return; }
     openSheet('<h2 id="sheet-title"><span class="bm">' + n + ' catatan belum dihantar</span><span class="en">' + n + ' entries not sent yet</span></h2>' +
       '<p><span class="bm" style="font-weight:400">Ia kekal di telefon ini dan akan dihantar bila anda masuk semula.</span><span class="en">They stay on this phone and are sent when you log in again.</span></p>' +
@@ -290,6 +296,8 @@
   setInterval(function () { if (EA.currentUser()) { renderSync(); renderGreeting(); } }, 60000);
   setInterval(checkUpdate, 30 * 60000);
 
+  // Ask the browser to keep this phone's records (the waiting list) even when space runs low.
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {}); } catch (e) {}
   // Keep a copy of the app on this phone, so it opens with no signal.
   document.addEventListener('ea:offline-ready', function () { $('offline-mark').hidden = false; });
   EA.startOffline('sw.js');

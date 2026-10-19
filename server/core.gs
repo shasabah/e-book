@@ -70,12 +70,15 @@ function doPost(e) {
   try { req = JSON.parse(e.postData.contents); } catch (err) { return reply({ ok: false, error: 'bad_request' }); }
   if (!req || (Number(req.version) || 0) < MIN_APP_VERSION) return reply({ ok: false, error: 'old_version' });
 
-  // Too many wrong keys in a short time (someone guessing keys): wait 15 minutes.
+  // Too many wrong PINs in a short time (someone guessing): that phone waits 15 minutes (v1.9).
+  // Counted per phone code, so one phone guessing cannot lock out Ria and Ferezelly; the whole
+  // office stops only after very many wrong PINs from everywhere.
   var cache = CacheService.getScriptCache();
-  var bad = Number(cache.get('badkeys') || 0);
-  if (bad >= 30) return reply({ ok: false, error: 'locked' });
+  var pk = 'badkeys:' + String(req.phone || 'none').replace(/[^A-Z0-9-]/gi, '').slice(0, 12);
+  var bad = Number(cache.get(pk) || 0), badAll = Number(cache.get('badkeys') || 0);
+  if (bad >= 20 || badAll >= 300) return reply({ ok: false, error: 'locked' });
   var user = findUser(req.key);
-  if (!user) { cache.put('badkeys', String(bad + 1), 900); return reply({ ok: false, error: 'wrong_key' }); }
+  if (!user) { cache.put(pk, String(bad + 1), 900); cache.put('badkeys', String(badAll + 1), 900); return reply({ ok: false, error: 'wrong_key' }); }
 
   if (req.action === 'login') {
     return reply({ ok: true, user: { code: user.user_code, name: user.name, role: user.role, estates: user.estates } });

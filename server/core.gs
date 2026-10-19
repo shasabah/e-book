@@ -98,6 +98,11 @@ function doPost(e) {
     if (['Owner', 'HQ', 'Staff', 'Clerk'].indexOf(user.role) < 0) return reply({ ok: false, error: 'not_allowed' });
     return reply(people_(user));
   }
+  if (req.action === 'history') {
+    if (user.estates.indexOf(req.estate) < 0) return reply({ ok: false, error: 'not_your_estate' });
+    if (!/^\d{4}-\d{2}$/.test(String(req.month || ''))) return reply({ ok: false, error: 'bad_month' });
+    return reply(history_(req.estate, String(req.month)));
+  }
   if (req.action === 'backlog') {
     if (user.estates.indexOf(req.estate) < 0) return reply({ ok: false, error: 'not_your_estate' });
     return reply(backlog(req.estate));
@@ -320,9 +325,12 @@ function saveBatch(user, items) {
 
 // ---------------- reading back: crop backlog ----------------
 // Rows that still stand: status 'active' and not replaced by a later row.
-function standingRows_(tabName, estate) {
+function standingRows_(tabName, estate) { return readRows_(tabName, estate).standing; }
+// All of an estate's rows in a tab (corrections and removed rows too, for History), and the
+// rows that still stand.
+function readRows_(tabName, estate) {
   var sh = book_().getSheetByName(tabName);
-  if (!sh || sh.getLastRow() < 2) return [];
+  if (!sh || sh.getLastRow() < 2) return { all: [], standing: [] };
   var vals = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getValues();
   var head = vals.shift(), replaced = {};
   // Dates the sheet turned into real dates (older rows) come back as text again. The script
@@ -338,7 +346,68 @@ function standingRows_(tabName, estate) {
   }
   var rows = vals.map(function (v) { var o = {}; head.forEach(function (c, i) { o[c] = txt(v[i], c); }); return o; });
   rows.forEach(function (r) { if (r.replaces) replaced[r.replaces] = true; });
-  return rows.filter(function (r) { return r.estate === estate && r.status === 'active' && !replaced[r.id]; });
+  var mine = rows.filter(function (r) { return r.estate === estate; });
+  return { all: mine, standing: mine.filter(function (r) { return r.status === 'active' && !replaced[r.id]; }) };
+}
+
+// ---------- History (v1.7): one month of an estate's days, read only ----------
+// Each day: its chits (with the people, and every version: who changed what, when), the day's
+// work per job, harvest bunches, lorries and their mill tickets. The phone shows it as it is.
+function history_(estate, month) {
+  function inM(d) { return String(d).slice(0, 7) === month; }
+  function hm(v) { var m = String(v || '').match(/(\d\d:\d\d)$/); return m ? m[1] : ''; }
+  var days = {};
+  function day(d) { return days[d] || (days[d] = { date: d, chits: [], work: [], harvest: 0, lorries: [], tickets: [] }); }
+  var chitT = readRows_('FH_CHIT', estate), mus = readRows_('FH_MUSTER', estate), byChit = {};
+  chitT.standing.forEach(function (r) {
+    if (!inM(r.date)) return;
+    var c = { id: r.chit, at: hm(r.confirmed_at) || hm(r.keyed_at), by: r.keyed_by, rain: r.rain_mm, rows: [], versions: [] };
+    byChit[r.chit] = c; day(r.date).chits.push(c);
+  });
+  mus.standing.forEach(function (r) {
+    if (byChit[r.chit]) byChit[r.chit].rows.push({ worker_id: r.worker_id, muster: r.muster, task_code: r.task_code, block: r.block, lots: r.lots, mandor: r.mandor });
+  });
+  // Versions: every save of a chit writes its rows with one time stamp (confirmed_at).
+  var rowById = {}, stamps = {};
+  mus.all.forEach(function (r) { rowById[r.id] = r; });
+  mus.all.concat(chitT.all).forEach(function (r) {
+    if (!byChit[r.chit]) return;
+    var k = r.chit + '|' + (r.confirmed_at || r.keyed_at);
+    var v = stamps[k] || (stamps[k] = { chit: r.chit, stamp: String(r.confirmed_at || r.keyed_at), at: hm(r.confirmed_at || r.keyed_at), by: r.keyed_by, changes: [] });
+    if (r.worker_id === undefined) return;                   // the chit's own row
+    var old = r.replaces ? rowById[r.replaces] : null;
+    if (r.status === 'removed') v.changes.push({ kind: 'off', w: r.worker_id, task: r.task_code, block: r.block, muster: r.muster });
+    else if (old) v.changes.push({ kind: 'move', w: r.worker_id, task: r.task_code, block: r.block, muster: r.muster, from: { task: old.task_code, block: old.block, muster: old.muster } });
+    else v.changes.push({ kind: 'add', w: r.worker_id, task: r.task_code, block: r.block, muster: r.muster });
+  });
+  Object.keys(stamps).map(function (k) { return stamps[k]; }).sort(function (a, b) { return a.stamp < b.stamp ? -1 : 1; })
+    .forEach(function (v) {
+      var c = byChit[v.chit];
+      if (!c.versions.length) v.changes = [];                // the first save is the chit itself, not a change
+      c.versions.push({ at: v.at, by: v.by, changes: v.changes });
+    });
+  readRows_('FH_JOBDAY', estate).standing.forEach(function (r) {
+    if (!inM(r.date)) return;
+    day(r.date).work.push({ task: r.task_code, block: r.block, lots: r.lots, workers: Number(r.workers) || 0, qty: r.qty, unit: r.unit,
+      bunches: r.bunches, status: r.job_status, reason: r.reason, progress: r.progress, target: r.target });
+  });
+  standingRows_('FH_WORK', estate).forEach(function (r) {
+    if (inM(r.date) && r.task_code === HARVEST_CODE) day(r.date).harvest += Number(r.bunches) || 0;
+  });
+  var trips = {};
+  standingRows_('FH_DISPATCH', estate).forEach(function (r) {
+    if (!inM(r.date) || !r.trip) return;
+    var t = trips[r.trip];
+    if (!t) { t = trips[r.trip] = { trip: r.trip, dn: r.dn_no, lorry: r.lorry, mill: r.mill, bunches: 0, ticket: null }; day(r.date).lorries.push(t); }
+    t.bunches += Number(r.bunches) || 0;
+  });
+  standingRows_('FH_TICKET', estate).forEach(function (r) {
+    var t = { no: r.ticket_no, trip: r.trip, mt: Number(r.nett_mt) || 0, bunches: Number(r.bunches) || 0, abw: Number(r.abw_kg) || 0, date: r.date };
+    if (r.trip && trips[r.trip]) trips[r.trip].ticket = t;
+    else if (inM(r.date) && !r.trip) day(r.date).tickets.push(t);
+  });
+  return { ok: true, estate: estate, month: month, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'),
+           days: Object.keys(days).sort().reverse().map(function (d) { return days[d]; }) };
 }
 
 // Field backlog per lot = bunches cut (harvesters, FH_WORK HA) - bunches collected

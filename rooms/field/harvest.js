@@ -16,12 +16,15 @@
   function waiting(ids) { return (ids || []).some(function (i) { return EA.isWaiting(i); }); }
   function values(o) { return Object.keys(o || {}).map(function (k) { return o[k]; }); }
 
+  // Harvest keyed by block only (no lot yet, v1.1) is one lot "Blk 03" for that block.
+  function lotKey(h) { return h.lot || (h.block ? 'Blk ' + h.block : ''); }
+  EA.fh.lotLabel = function (lot, block) { return /^Blk /.test(lot) ? lot + ' (semua petak · all lots)' : 'Petak ' + lot + ' · Blk ' + block; };
   function localHarvest(estate) {
     var out = [];
     EA.local.get('fh.work', []).forEach(function (s) {
       if (s.estate !== estate) return;
       s.rec.lines.forEach(function (l) {
-        if (l.task_code === 'HV01' && num(l.bunches) > 0 && l.id) out.push({ id: l.id, date: s.date, lot: l.lot, block: l.block, worker_id: l.worker_id, bunches: num(l.bunches) });
+        if (l.task_code === 'HV01' && num(l.bunches) > 0 && l.id) out.push({ id: l.id, date: s.date, lot: lotKey(l), block: l.block, worker_id: l.worker_id, bunches: num(l.bunches) });
       });
     });
     return out;
@@ -39,7 +42,7 @@
     skip = skip || {};
     var office = !!EA.sendLink();
     // The office list has already taken off what it received; this phone's own entries still waiting have not.
-    var lines = (office ? EA.local.get(K.harv + estate, []) : localHarvest(estate)).map(function (h) { return Object.assign({}, h, { bunches: num(h.bunches) }); });
+    var lines = (office ? EA.local.get(K.harv + estate, []) : localHarvest(estate)).map(function (h) { return Object.assign({}, h, { lot: lotKey(h), bunches: num(h.bunches) }); });
     if (office) {   // harvest keyed on this phone and not yet at the office (v22)
       var have = {}; lines.forEach(function (h) { have[h.id] = true; });
       localHarvest(estate).forEach(function (h) { if (!have[h.id] && EA.isWaiting(h.id)) lines.push(h); });

@@ -233,6 +233,8 @@
       catch (err) { roomError(err, room, screen, estate); }
     } else $('room').innerHTML = '';
     renderSync();
+    // The people list comes from the office (never GitHub); fetched now and then, kept for no-signal days.
+    if (EA.lists.refreshPeople) EA.lists.refreshPeople().then(function (got) { if (got && !room) render(); }).catch(function () {});
     $('ver').textContent = (EA.RELEASE || '') + ' (' + EA.VERSION + ')';
     $('foot-phone').textContent = EA.phone() || '—';
   }

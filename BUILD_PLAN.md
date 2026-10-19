@@ -72,3 +72,4 @@ No new rooms for field crews in peak crop (Aug–Nov).
 2. Build on the test copy; Sugut junior staff tests with made-up workers.
 3. Pilot from 4 Jan beside the paper pocket check roll for about a month.
 - DONE 17 Oct: checks 11 of 11 on iPhone; app online at shasabah.github.io/e-book.
+- 1.2 (25), 19 Oct 2026: pick people by name (gang groups, search, SAME AS LAST TIME). Lot → harvester workbook sent for Ferezelly to fill this week.

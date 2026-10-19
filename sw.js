@@ -29,10 +29,9 @@ var FILES = [
   'rooms/field/work.js',
   'rooms/field/harvest.js', 'rooms/field/collect.js', 'rooms/field/ticket.js',
   'rooms/field/history.js',
-  'core/users.js',
+  'core/users.js', 'core/qr-app.svg',
   'lists/test-workers.js',
-  'lists/people.js',
-  'checks/core.html'
+  'lists/people.js'
 ];
 
 self.addEventListener('install', function (e) {

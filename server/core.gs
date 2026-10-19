@@ -673,18 +673,22 @@ function usersOut_(list) {
   });
 }
 
+// An easy PIN: all one digit, a run up or down, a repeated pair or half, doubled digits (112233).
+function weakPin_(pin) {
+  return /^(\d)\1{5}$/.test(pin) || '0123456789012'.indexOf(pin) >= 0 || '9876543210987'.indexOf(pin) >= 0 ||
+    /^(\d\d)\1\1$/.test(pin) || /^(\d{3})\1$/.test(pin) || /^(\d)\1(\d)\2(\d)\3$/.test(pin);
+}
+function usedHashes_(list) { var used = {}; list.forEach(function (u) { used[String(u.key_hash)] = true; }); return used; }
+
 // A random 6-digit PIN nobody else has (switched-off people included), and not an easy one.
 function newPin_(list) {
-  var used = {};
-  list.forEach(function (u) { used[String(u.key_hash)] = true; });
+  var used = usedHashes_(list);
   for (var tries = 0; tries < 200; tries++) {
     var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, Utilities.getUuid() + ':' + new Date().getTime() + ':' + tries);
     var num = 0;
     for (var i = 0; i < 6; i++) num = (num * 256 + (bytes[i] & 0xff)) % 1000000;
     var pin = ('000000' + num).slice(-6);
-    if (/^(\d)\1{5}$/.test(pin) || '0123456789012'.indexOf(pin) >= 0 || '9876543210987'.indexOf(pin) >= 0) continue;
-    if (/^(\d\d)\1\1$/.test(pin) || /^(\d{3})\1$/.test(pin)) continue;
-    if (used[hashKey(pin)]) continue;
+    if (weakPin_(pin) || used[hashKey(pin)]) continue;
     return pin;
   }
   throw new Error('no_pin');
@@ -708,6 +712,12 @@ function cleanEstates_(v) {
 
 function usersAction_(user, req) {
   if (user.role !== 'Owner') return { ok: false, error: 'not_allowed' };
+  // Reading the list needs no lock (faster; v1.9.1).
+  if (req.action === 'users') {
+    var L = readUsers_().list, tm = isTestCode_(user.user_code), ho = realOwner_(L);
+    if (tm && ho) return { ok: false, error: 'test_user' };
+    return { ok: true, users: usersOut_(L), me: String(user.user_code), firstOwner: tm && !ho };
+  }
   var lock = LockService.getScriptLock();
   try { lock.waitLock(15000); } catch (e) { return { ok: false, error: 'busy' }; }
   try {
@@ -724,7 +734,6 @@ function usersAction_(user, req) {
       if (haveOwner) return { ok: false, error: 'test_user' };
       if (req.action !== 'users' && !(req.action === 'userAdd' && req.role === 'Owner')) return { ok: false, error: 'first_owner_only' };
     }
-    if (req.action === 'users') return out();
 
     if (req.action === 'userAdd') {
       var name = String(req.name || '').replace(/\s+/g, ' ').trim();
@@ -759,6 +768,22 @@ function usersAction_(user, req) {
       forgetCache_(old);
       logUser_(user, 'new_pin', t, self ? 'own PIN' : '');
       return out({ pin: p2, code: t.user_code, name: String(t.name), self: !!self });
+    }
+    // The Owner types his own PIN (v1.9.1). Others' PINs stay random.
+    if (req.action === 'userMyPin') {
+      if (!self) return { ok: false, error: 'not_self' };
+      var mine = String(req.pin || '');
+      if (!/^\d{6}$/.test(mine)) return { ok: false, error: 'bad_pin' };
+      // An easy PIN or one someone else has: the same answer, so nobody learns another person's PIN.
+      if (weakPin_(mine)) return { ok: false, error: 'pick_another' };
+      var h = hashKey(mine);
+      if (h === String(t.key_hash)) return { ok: false, error: 'same_pin' };
+      if (usedHashes_(list)[h]) return { ok: false, error: 'pick_another' };
+      var oldH = String(t.key_hash);
+      sh.getRange(t.row, col('key_hash')).setValue(h);
+      forgetCache_(oldH);
+      logUser_(user, 'own_pin_set', t, '');
+      return out({ self: true });
     }
     if (req.action === 'userSet') {
       if (ROLES.indexOf(req.role) < 0) return { ok: false, error: 'bad_role' };

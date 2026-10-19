@@ -20,7 +20,9 @@ const lot = new Sheet([std.concat(['trip','dn_no','block','lot','work_id','date_
   ['l1', D(0),'SPLT','SSGT','S','','P07','active','','LR-1','501','03','3-30','w1',D(1),'W1','120'],
   ['l2', D(0),'SPLT','SSGT','S','','P07','active','','LR-1','501','03','3-31','w2',D(1),'W2','100']]);
 const ppl = new Sheet([std.concat(['worker_id','name','job','gang','sex','mandor','active','received_at'])]);
-const tabs = { FH_WORK: work, FH_DISPATCH_LOT: lot, LIST_PEOPLE: ppl };
+const tk = new Sheet([std.concat(['ticket_no','trip']), ['t1', D(0),'SPLT','SSGT','C','','P01','active','','469600','LR-1']]);
+const dis = new Sheet([std.concat(['bunches','lorry','mill','ramp_cleared','note','block','trip','dn_no','driver','received_at'])]);
+const tabs = { FH_WORK: work, FH_DISPATCH_LOT: lot, LIST_PEOPLE: ppl, FH_TICKET: tk, FH_DISPATCH: dis };
 const ctx = { SpreadsheetApp: { openById: () => ({ getSheetByName: n => tabs[n] || null }) },
   Utilities: { formatDate: d => d.toISOString().slice(0, 10) }, Session: { getScriptTimeZone: () => 'Etc/GMT' },
   LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) }, ContentService: {}, PropertiesService: {}, CacheService: {} };
@@ -35,6 +37,8 @@ check('a Staff key cannot write a mill ticket', s.results[0].error === 'not_allo
 const m = ctx.saveBatch({ estates: ['SSGT'], role: 'Mandor', user_code: 'T-MDR' }, [{ tab: 'FH_WORK', row: { id: 'm1', estate: 'SSGT', status: 'active', date: D(0) } }]);
 check('a Mandor key cannot key field work for now', m.results[0].error === 'not_allowed', JSON.stringify(m));
 check('formula guard: =, -cmd, tab, leading space before = kept as text; -5 stays a number', ["=1+1", "-cmd", "\tx", " =A1"].every(v => String(ctx.plain(v))[0] === "'") && ctx.plain('-5') === '-5');
+const fix = ctx.saveBatch({ estates: ['SSGT'], role: 'Staff', user_code: 'T-STF' }, [{ tab: 'FH_DISPATCH', row: { id: 'd9', estate: 'SSGT', status: 'active', date: D(0), keyed_at: D(0) + ' 11:00', trip: 'LR-1', replaces: 'd1', bunches: '300', block: '03' } }]);
+check('a delivery note cannot be changed once its lorry has a ticket', fix.results[0].error === 'ticketed', JSON.stringify(fix));
 // Ramp: worked out by day and time
 const src = code.slice(code.indexOf('// ===== calcBacklog'), code.indexOf('// ===== end calcBacklog'));
 const calcBacklog = new Function(src + '; return calcBacklog;')();

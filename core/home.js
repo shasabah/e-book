@@ -111,7 +111,7 @@
     format: ['PIN mesti 6 nombor.', 'The PIN must be 6 numbers.'],
     wrong: ['PIN tidak dikenali. Semak semula, atau tanya Yu Chen.', 'PIN not known. Check it, or ask Yu Chen.'],
     offline: ['Tiada isyarat, dan orang ini belum pernah masuk di telefon ini.', 'No signal, and this person has not logged in on this phone before.'],
-    server: ['Pejabat sibuk sekarang. Cuba lagi sebentar.', 'The office side is busy. Try again in a moment.'],
+    server: ['Google lambat atau pejabat sibuk. Cuba lagi sebentar.', 'Google is slow or the office is busy. Try again in a moment.'],
     old: ['Versi app ini sudah lama. Tekan LOAD IT atau muat semula halaman.', 'This app version is too old. Tap LOAD IT or reload the page.'],
     nolink: ['Pautan hantar belum ditetapkan. Buka Tetapan telefon.', 'The sending link is not set. Open Phone setup.'],
     locked: ['Terlalu banyak PIN salah. Tunggu 15 minit.', 'Too many wrong PINs. Wait 15 minutes.'],
@@ -318,6 +318,8 @@
     not_your_estate: ['Catatan untuk ladang yang bukan milik anda. Hubungi Yu Chen.', 'An entry for an estate that is not yours. Call Yu Chen.'],
     old_version: ['Versi app sudah lama. Tekan MUAT (LOAD IT).', 'The app version is old. Tap LOAD IT.'],
     busy: ['Pejabat sibuk. Akan cuba lagi sendiri.', 'The office is busy. It will try again by itself.'],
+    slow: ['Google lambat. Rekod selamat di telefon, akan cuba lagi sendiri.', 'Google is slow. Records are safe on the phone; it will try again by itself.'],
+    office_error: ['Pejabat ada masalah. Akan cuba lagi sendiri; jika berulang, beritahu Yu Chen.', 'The office had a problem. It will try again; if it keeps happening, tell Yu Chen.'],
     refused: ['Pejabat belum terima. Akan cuba lagi sendiri.', 'The office has not taken it yet. It will try again by itself.']
   };
   function refusalText(e) {
@@ -328,7 +330,8 @@
   // ---------- actions ----------
   $('send-btn').onclick = async function () {
     var r = await EA.send();
-    if (r.error === 'offline' || r.error === 'network') toast(EA.t('Tiada isyarat. Akan dihantar bila ada isyarat.', 'No signal. Will send when signal returns.'), 'wait');
+    if (r.error === 'slow') toast(EA.t('Google lambat. Rekod selamat di telefon dan akan dihantar sendiri. Jangan isi semula.', 'Google is slow. Records are safe on the phone and will send by themselves. Do not key them again.'), 'wait');
+    else if (r.error === 'offline' || r.error === 'network') toast(EA.t('Tiada isyarat. Akan dihantar bila ada isyarat.', 'No signal. Will send when signal returns.'), 'wait');
     else if (r.error === 'nolink') toast(EA.t('Tiada pautan hantar', 'No sending link'), 'bad');
     else if (r.error === 'id_clash') openSheet('<h2 id="sheet-title"><span class="bm">Kod telefon ini sama dengan telefon lain</span><span class="en">This phone code is already used by another phone</span></h2>' +
       '<p><span class="bm" style="font-weight:400">Pejabat menolak catatan ini supaya tiada data hilang. Catatan kekal di telefon ini. Hubungi Yu Chen untuk kod telefon baru.</span>' +

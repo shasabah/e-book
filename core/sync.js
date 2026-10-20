@@ -218,7 +218,7 @@ window.EA = window.EA || {};
         q = get(K.queue, []).filter(isMine);
         set(K.lastSent, Date.now()); changed();
       }
-    } catch (e) { err = 'network'; }
+    } catch (e) { err = e && (e.name === 'AbortError' || e.name === 'SyntaxError') ? 'slow' : 'network'; }   // v1.19: late or unreadable answer = Google slow
     sending = false; changed();
     return err ? { sent: sent, error: err, refused: refusedAll } : { sent: sent, refused: refusedAll };
   }
@@ -250,13 +250,14 @@ window.EA = window.EA || {};
     if (!link || !user) return { ok: false, error: 'nolink' };
     if (!navigator.onLine) return { ok: false, error: 'offline' };
     try {
+      // v1.19: asking for something back waits at most 30 s (sending still waits 60 s).
       var res = await EA.fetchWait(link, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(Object.assign({ action: action, key: user.key, version: EA.VERSION, phone: EA.phone(), waiting: get(K.queue, []).length }, extra || {})) });
+        body: JSON.stringify(Object.assign({ action: action, key: user.key, version: EA.VERSION, phone: EA.phone(), waiting: get(K.queue, []).length }, extra || {})) }, 30000);
       var j = null;
       try { j = await res.json(); } catch (e2) { j = null; }
       if (j && j.sw) EA.setSwitches(j.sw);
-      return j || { ok: false, error: 'busy' };
-    } catch (e) { return { ok: false, error: 'offline' }; }
+      return j || { ok: false, error: 'slow' };          // Google's own error page: Google is slow
+    } catch (e) { return { ok: false, error: e && e.name === 'AbortError' ? 'slow' : 'offline' }; }
   };
   EA.ask = async function (action, extra) {
     var j = await EA.askFull(action, extra);

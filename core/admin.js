@@ -22,6 +22,7 @@ EA.roomViews = EA.roomViews || {};
     not_ready: ['Belum boleh: semua orang sebenar mesti masuk sekali dahulu.', 'Not yet: every real person must log in once first.'],
     order: ['Ikut turutan: 1 → 2 → 3.', 'Follow the order: 1 → 2 → 3.'],
     unknown_action: ['Skrip pejabat belum dikemas kini.', 'The office script is not updated yet.'],
+    slow: ['Google lambat menjawab. Cuba lagi sebentar.', 'Google is slow to answer. Try again in a moment.'],
     office_error: ['Pejabat ada masalah. Cuba lagi; jika berulang, beritahu Yu Chen.', 'The office had a problem. Try again; if it keeps happening, tell Yu Chen.']
   };
   function esc(s) { return EA.ui.esc(s); }
@@ -39,6 +40,7 @@ EA.roomViews = EA.roomViews || {};
   function when(s) { var td = EA.today(); return String(s || '').slice(0, 10) === td ? hhmm(s) : dshort(s) + ' ' + hhmm(s); }
 
   async function load(p, action, extra) {
+    if (!action && busy[p]) return null;   // v1.19: already asking for this part
     busy[p] = true; draw();
     var j = await EA.askFull(action || PARTS[p], extra || {});
     busy[p] = false;

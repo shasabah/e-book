@@ -29,7 +29,7 @@ var FILES = [
   'rooms/field/work.js',
   'rooms/field/harvest.js', 'rooms/field/collect.js', 'rooms/field/ticket.js',
   'rooms/field/history.js',
-  'core/users.js', 'core/qr-app.svg',
+  'core/users.js', 'core/admin.js', 'core/qr-app.svg',
   'manifest.webmanifest', 'core/icons/logo.svg', 'core/icons/favicon-32.png', 'core/icons/apple-touch-icon.png',
   'core/icons/icon-192.png', 'core/icons/icon-512.png', 'core/icons/icon-maskable-512.png',
   'lists/test-workers.js',

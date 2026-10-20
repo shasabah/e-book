@@ -28,7 +28,7 @@ function book_() { return BOOK_ || (BOOK_ = SpreadsheetApp.openById(SHEET_ID)); 
 
 var USERS_TAB = 'USERS';
 var USER_COLS = ['user_code', 'name', 'role', 'estates', 'key_hash', 'status', 'added_at'];
-var ROLES = ['Owner', 'HQ', 'Staff', 'Clerk', 'Mandor', 'Store', 'Worker'];
+var ROLES = ['Owner', 'HQ', 'Staff', 'Clerk', 'Mandor', 'Store', 'Worker', 'Manager'];
 var ESTATES = ['SDK', 'MELU', 'SSGT', 'PTAN', 'TKRS', 'KWNN'];
 var STANDARD_COLS = ['id', 'date', 'company', 'estate', 'keyed_by', 'keyed_at', 'phone', 'status', 'replaces'];
 var STATUSES = ['active', 'corrected', 'removed', 'disposed'];
@@ -98,7 +98,7 @@ function doPost(e) {
     return reply(openTrips(req.estate));
   }
   if (req.action === 'people') {
-    if (['Owner', 'HQ', 'Staff', 'Clerk'].indexOf(user.role) < 0) return reply({ ok: false, error: 'not_allowed' });
+    if (['Owner', 'HQ', 'Staff', 'Clerk', 'Manager'].indexOf(user.role) < 0) return reply({ ok: false, error: 'not_allowed' });
     return reply(people_(user));
   }
   if (req.action === 'history') {
@@ -186,7 +186,9 @@ function canWrite_(user, tab) {
   if (tab === 'APP_ERROR' || tab === 'CHECK') return true;
   if (/^LIST_/.test(tab)) return r === 'Owner' || r === 'HQ';
   if (TICKET_TABS.indexOf(tab) >= 0) return r === 'Clerk' || r === 'Owner' || r === 'HQ';
-  if (/^FH_/.test(tab)) return r === 'Staff' || r === 'Clerk' || r === 'Owner' || r === 'HQ';
+  // v1.12: the clerk keys only tickets and grading (above); the chit, day's work and lorry only the
+  // staff (and Owner/HQ). The manager (Samsir) only looks: Operasi is view only.
+  if (/^FH_/.test(tab)) return r === 'Staff' || r === 'Owner' || r === 'HQ';
   return r === 'Owner' || r === 'HQ';
 }
 
@@ -647,7 +649,7 @@ function plain(v) {
 // Nothing is deleted. Test users (codes T-…) may only make the first real Owner, while none exists.
 var USERS_LOG_TAB = 'USERS_LOG';
 var USERS_LOG_COLS = ['at', 'by_code', 'by_name', 'action', 'user_code', 'name', 'detail'];
-var ROLE_PREFIX = { Owner: 'OWN', HQ: 'HQ', Staff: 'STF', Clerk: 'CLK', Mandor: 'MDR', Store: 'STR', Worker: 'WRK' };
+var ROLE_PREFIX = { Owner: 'OWN', HQ: 'HQ', Staff: 'STF', Clerk: 'CLK', Mandor: 'MDR', Store: 'STR', Worker: 'WRK', Manager: 'MGR' };
 
 function isTestCode_(code) { return /^T-/.test(String(code)); }
 
@@ -853,7 +855,8 @@ function setupTestCopy() {
     ['T-STF', 'Staf Sugut',     'Staff',  'SSGT', '777777'],
     ['T-MDR', 'Mandor Sugut',   'Mandor', 'SSGT', '444444'],
     ['T-STR', 'Stor Meliau',    'Store',  'MELU', '555555'],
-    ['T-WRK', 'Pekerja Durian', 'Worker', 'SSGT', '666666']
+    ['T-WRK', 'Pekerja Durian', 'Worker', 'SSGT', '666666'],
+    ['T-MGR', 'Pengurus Ujian', 'Manager', 'SSGT,PTAN,TKRS', '888888']
   ];
   people.forEach(function (p) { if (!findUser_(p[0])) addUser(p[0], p[1], p[2], p[3], p[4]); });
 }
@@ -873,7 +876,7 @@ function addUser(code, name, role, estates, key) {
 
 /** Before the trial: switch off every made-up test key (T-…), so the public test keys open nothing. */
 function switchOffTestKeys() {
-  ['T-OWN', 'T-HQ', 'T-CLK', 'T-STF', 'T-MDR', 'T-STR', 'T-WRK'].forEach(switchOff);
+  ['T-OWN', 'T-HQ', 'T-CLK', 'T-STF', 'T-MDR', 'T-STR', 'T-WRK', 'T-MGR'].forEach(switchOff);
 }
 
 /** Switch a person off (lost phone, person left). Their rows stay; they can no longer log in. */

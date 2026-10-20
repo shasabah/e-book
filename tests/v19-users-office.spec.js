@@ -37,7 +37,9 @@ tabs.USERS = new Sheet([['user_code', 'name', 'role', 'estates', 'key_hash', 'st
  ['T-CLK', 'Kerani Sugut', 'Clerk', 'SSGT,PTAN', '333333'], ['T-STF', 'Staf Sugut', 'Staff', 'SSGT', '777777']]
   .forEach(p => ctx.addUser(p[0], p[1], p[2], p[3], p[4]));
 
-const post = body => JSON.parse(ctx.doPost({ postData: { contents: JSON.stringify(Object.assign({ version: 99 }, body)) } }));
+// v1.14: a login carries the phone code; here each person logs in on their own first code.
+const ownPhone = key => { const u = ctx.findUser(key); return u ? (String(u.phones || '').split(',')[0] || 'P50') : 'P50'; };
+const post = body => JSON.parse(ctx.doPost({ postData: { contents: JSON.stringify(Object.assign({ version: 99 }, body.action === 'login' && !body.phone ? { phone: ownPhone(body.key) } : {}, body)) } }));
 
 // 1. Only the Owner
 check('a Staff PIN cannot open Users & PIN', post({ key: '777777', action: 'users' }).error === 'not_allowed');

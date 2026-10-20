@@ -101,7 +101,7 @@ const fs = require('fs'); const vm = require('vm'); const crypto = require('cryp
   Sheet.prototype.appendRow = function (r) { this.rows.push(r.slice()); };
   Sheet.prototype.getRange = function (r, c, nr, nc) { const s = this; return { getValues: () => s.rows.slice(r - 1, r - 1 + (nr || 1)).map(x => x.slice(c - 1, c - 1 + (nc || 1))), setValue: v => { s.rows[r - 1][c - 1] = v; } }; };
   const tabs = {}, props = {}, cache = {};
-  const ctx = { SpreadsheetApp: { openById: () => ({ getSheetByName: n => tabs[n] || null }) },
+  const ctx = { SpreadsheetApp: { openById: () => ({ getSheetByName: n => tabs[n] || null, insertSheet: n => (tabs[n] = new Sheet([])) }) },
     Utilities: { formatDate: d => d.toISOString().slice(0, 16).replace('T', ' '), getUuid: () => crypto.randomUUID(), DigestAlgorithm: { SHA_256: 's' },
       computeDigest: (a, s) => Array.from(crypto.createHash('sha256').update(s).digest()).map(x => x > 127 ? x - 256 : x) },
     PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] || null, setProperty: (k, v) => { props[k] = v; } }) },

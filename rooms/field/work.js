@@ -195,7 +195,7 @@
     el = container; ctx = c;
     var testing = !EA.roomLive(ctx.room, ctx.estate);
     var head = '<div class="room-top">' +
-      '<button type="button" class="back-btn" id="wk-back">← <span class="inline"><span class="bm">Bilik</span></span></button>' +
+      '<button type="button" class="back-btn" id="wk-back">‹ BACK<small>‹ BALIK</small></button>' +
       '<div class="grow"><h1>' + EA.t('Kerja harian', 'Day\'s work') + '</h1><span class="brand-sub">' + esc(ctx.estate) + '</span></div>' +
       (testing ? '<span class="test-badge">' + EA.t('UJIAN', 'TEST') + '</span>' : '') + '</div>' + EA.fh.tabs('work', ctx.user);
     var list = chitsFor(ctx.estate);
@@ -437,7 +437,7 @@
     ui().openSheet('<h2 id="sheet-title"><span class="bm">Semak kerja hari ini</span><span class="en">Check today\'s work, then save</span></h2>' +
       (red.length ? '<div class="msg"><span class="bm">Perhatian: ' + esc(red.join('; ')) + '</span><span class="en">These go into the report for the Assistant Manager and HQ to see. If the map size of a lot is wrong, tell HQ.</span></div>' : '') +
       '<pre class="chit">' + esc(reportText(buildRecord('(belum disimpan)', EA.ui.hhmm(new Date()), ctx.user.code))) + '</pre>' +
-      '<div class="actions"><button class="btn btn-ghost" type="button" id="wc-back">BACK<small>Ubah</small></button>' +
+      '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="wc-back">‹ CHANGE<small>‹ UBAH</small></button>' +
       '<button class="btn btn-ok" type="button" id="wc-ok">SAVE<small>Simpan</small></button></div>',
       function (s) {
         s.querySelector('#wc-back').onclick = ui().closeSheet;

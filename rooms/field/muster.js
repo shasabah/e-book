@@ -453,7 +453,7 @@
     draft = loadDraft();
     var testing = !EA.roomLive(ctx.room, ctx.estate);
     var head = '<div class="room-top">' +
-      '<button type="button" class="back-btn" id="fh-back">← <span class="inline"><span class="bm">Bilik</span></span></button>' +
+      '<button type="button" class="back-btn" id="fh-back">‹ BACK<small>‹ BALIK</small></button>' +
       '<div class="grow"><h1>' + EA.t('Chit muster pagi', 'Morning muster chit') + '</h1><span class="brand-sub">' + esc(ctx.estate) + '</span></div>' +
       (testing ? '<span class="test-badge">' + EA.t('UJIAN', 'TEST') + '</span>' : '') + '</div>' + tabs('muster', ctx.user);
 
@@ -799,7 +799,7 @@
       '<p class="hint">' + EA.t('S Sakit &nbsp; C Cuti &nbsp; T Tak hadir. Yang bekerja: tekan BACK dan beri kerja.', 'S sick &nbsp; C leave &nbsp; T absent. Anyone who worked: tap BACK and give them a job.') + '</p>' +
       '<div class="actions"><button class="btn btn-wait" type="button" id="lo-all">REST ABSENT<small>Baki semua tak hadir</small></button>' +
       '<button class="btn btn-ok" type="button" id="lo-next">NEXT<small>Seterusnya</small></button></div>' +
-      '<div class="actions"><button class="btn btn-ghost" type="button" id="lo-back">BACK<small>Kembali ke senarai</small></button></div>',
+      '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="lo-back">‹ BACK<small>‹ BALIK</small></button></div>',
       function (s) {
         var pick = {};
         s.querySelectorAll('[data-lw]').forEach(function (b) {
@@ -820,7 +820,7 @@
           if (!still.length) { confirmSheet(); return; }
           ui().openSheet('<h2 id="sheet-title"><span class="bm">Masih ' + still.length + ' orang belum ditanda</span><span class="en">Still ' + still.length + ' not marked</span></h2>' +
             '<p><span class="bm" style="font-weight:400">' + esc(still.map(function (w) { return w.name; }).join(', ')) + '</span><span class="en">Continue only if they are on another chit.</span></p>' +
-            '<div class="actions"><button class="btn btn-ghost" type="button" id="st-back">BACK<small>Kembali</small></button>' +
+            '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="st-back">‹ BACK<small>‹ BALIK</small></button>' +
             '<button class="btn btn-ok" type="button" id="st-go">CONTINUE<small>Teruskan</small></button></div>',
             function (s2) { s2.querySelector('#st-back').onclick = function () { ui().closeSheet(); leftoverSheet(still); }; s2.querySelector('#st-go').onclick = function () { ui().closeSheet(); confirmSheet(); }; });
         };
@@ -835,7 +835,7 @@
     ui().openSheet('<h2 id="sheet-title"><span class="bm">Semak chit ini</span><span class="en">Check this chit, then save</span></h2>' +
       (empty.length ? '<p class="warn"><span class="bm">Kerja tanpa orang tidak masuk chit: ' + esc(empty.map(function (j) { return j.task; }).join(', ')) + '</span><span class="en">Jobs with nobody are left off the chit.</span></p>' : '') +
       '<pre class="chit">' + esc(preview) + '</pre>' +
-      '<div class="actions"><button class="btn btn-ghost" type="button" id="cf-back">BACK<small>Ubah</small></button>' +
+      '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="cf-back">‹ CHANGE<small>‹ UBAH</small></button>' +
       '<button class="btn btn-ok" type="button" id="cf-ok">SAVE<small>Simpan</small></button></div>',
       function (s) {
         s.querySelector('#cf-back').onclick = ui().closeSheet;

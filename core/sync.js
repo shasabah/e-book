@@ -31,7 +31,39 @@ window.EA = window.EA || {};
   // v1.16: the trial switches come from the office (Pentadbir → Suis) with the login and each send,
   // so going live needs no new copy of the app.
   EA.switches = function () { return get('ea.switches', { testModeOff: false, live: {} }) || { testModeOff: false, live: {} }; };
-  EA.setSwitches = function (sw) { if (sw && typeof sw === 'object') { set('ea.switches', { testModeOff: !!sw.testModeOff, live: sw.live || {}, at: Date.now() }); } };
+  EA.setSwitches = function (sw) {
+    if (!sw || typeof sw !== 'object') return;
+    set('ea.switches', { testModeOff: !!sw.testModeOff, live: sw.live || {}, at: Date.now() });
+    if (sw.cleanFrom && get('ea.cleanDone', '') !== sw.cleanFrom) EA.cleanBefore(sw.cleanFrom);
+  };
+
+  // v1.18: the clean start of the Sugut trial. Once per trial date, this phone drops the practice records
+  // dated before it: field records kept on the phone, drafts, saved office answers, and entries still
+  // waiting to send. Real work (dated from the trial day) stays. The login, phone code, sending link,
+  // language and worker list stay too. Practice records never reached the clean office sheet, so nothing
+  // real is removed.
+  EA.cleanBefore = function (from) {
+    try {
+      var old = function (x) { return x && typeof x === 'object' && x.date && String(x.date) < from; };
+      set(K.queue, get(K.queue, []).filter(function (it) { return !(it && it.row && String(it.row.date) < from); }));
+      var keys = [];
+      for (var i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
+      keys.forEach(function (k) {
+        if (!/^fh\./.test(k) || k === 'fh.chitNo') return;
+        if (/^fh\.(hist|backlog|trips|harv|ungraded)\./.test(k)) { del(k); return; }      // saved office answers: fetched again
+        var v = get(k, null);
+        if (Array.isArray(v)) set(k, v.filter(function (x) { return !old(x); }));
+        else if (v && typeof v === 'object') {
+          if (old(v)) { del(k); return; }
+          Object.keys(v).forEach(function (e) { if (old(v[e])) delete v[e]; });          // drafts kept per estate
+          set(k, v);
+        }
+      });
+      ['ea.refused', 'ea.testSent', 'ea.errSeen'].forEach(del);
+      set('ea.cleanDone', from);
+      if (typeof changed === 'function') changed();
+    } catch (e) {}
+  };
   EA.testMode = function () { return !!EA.config.TEST_MODE && !EA.switches().testModeOff; };
   EA.roomLive = function (r, estate) { if (!r) return false; if (r.state === 'live') return true; var l = (EA.switches().live || {})[r.id] || []; return l.indexOf(estate) >= 0; };
 

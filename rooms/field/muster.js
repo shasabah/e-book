@@ -176,16 +176,29 @@
     work: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 11l2 2 4-4M9 17h6"/>',
     collect: '<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"/><circle cx="6" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
     ticket: '<path d="M4 6h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4z"/><path d="M14 6v12" stroke-dasharray="2 2"/>',
+    ops: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
     history: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'
   };
   function doneToday(key, estate) {
     var t = EA.today(), list = EA.local.get({ muster: 'fh.chits2', work: 'fh.work', collect: 'fh.collect' }[key] || '', []) || [];
     return list.some(function (x) { return x && x.date === t && (!estate || x.estate === estate); });
   }
+  // v1.12: who sees which buttons. The clerk keys tickets and looks at the day (Operasi); the
+  // manager (Samsir) only looks, so he has one screen and no bar.
+  function viewOnly(u) { return !!u && (u.role === 'Clerk' || u.role === 'Manager'); }
   function tabs(active, user) {
-    var loaderOnly = user && user.role === 'Worker';
-    var clerkish = user && /^(Clerk|Owner|HQ)$/.test(user.role);
     var estate = ctx && ctx.estate;
+    if (user && user.role === 'Manager') return '';
+    if (user && user.role === 'Clerk') {
+      return '<nav class="tabs botbar" aria-label="' + EA.t('Skrin', 'Screens') + '">' +
+        [['ticket', '#field-harvest/ticket', 'Tiket', 'Ticket'], ['history', '#field-harvest/history', 'Operasi', 'Operations']].map(function (it) {
+          return '<a href="' + it[1] + '"' + (active === it[0] ? ' aria-current="page"' : '') + ' data-tab="' + it[0] + '">' +
+            '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICON[it[0] === 'history' ? 'ops' : 'ticket'] + '</svg>' +
+            '<span class="bm">' + it[2] + '</span><span class="en">' + it[3] + '</span></a>';
+        }).join('') + '</nav>';
+    }
+    var loaderOnly = user && user.role === 'Worker';
+    var clerkish = user && /^(Owner|HQ)$/.test(user.role);
     var items = [];
     if (!loaderOnly) items.push(['muster', '#field-harvest', 'Pagi', 'Morning']);
     if (!loaderOnly) items.push(['work', '#field-harvest/work', 'Kerja', 'Work']);
@@ -443,6 +456,9 @@
   }
 
   function render(container, c) {
+    // v1.12: the clerk opens on Tiket and otherwise sees Operasi; the manager sees only Operasi.
+    if (c.user.role === 'Clerk' && (c.screen === '' || c.screen === 'ticket') && EA.fh.ticket) return EA.fh.ticket.render(container, Object.assign({}, c, { screen: 'ticket' }));
+    if (viewOnly(c.user) && EA.fh.history) return EA.fh.history.render(container, Object.assign({}, c, { screen: 'history' }));
     if (c.user.role === 'Worker' || c.screen === 'collect') return EA.fh.collect.render(container, c);
     if (c.screen === 'work' && EA.fh.work) return EA.fh.work.render(container, c);
     if (c.screen === 'ticket' && EA.fh.ticket) return EA.fh.ticket.render(container, c);
@@ -1064,6 +1080,7 @@
   EA.roomViews['field-harvest'] = { render: render, chitText: chitText, summary: summary };
   // Shared with the room's other screens (rooms/field/work.js).
   EA.fh = EA.fh || {};
+  EA.fh.viewOnly = viewOnly;
   EA.fh.allChits = chits;
   EA.fh.summary = summary;
   EA.fh.tabs = tabs;

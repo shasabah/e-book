@@ -102,9 +102,12 @@
     var list = merged(ctx.estate, month), thisMonth = ym(new Date());
     var sum = list.reduce(function (a, d) { var f = dayFacts(d); a.mt += f.mt; a.lorries += d.lorries.length; return a; }, { mt: 0, lorries: 0 });
     var cache = EA.local.get(K.cache + ctx.estate + '.' + month, null);
+    var vo = EA.fh.viewOnly && EA.fh.viewOnly(ctx.user);
     el.innerHTML = '<div class="room-top"><button type="button" class="back-btn" id="hs-back">← <span class="inline"><span class="bm">Bilik</span><span class="en">Rooms</span></span></button>' +
-      '<div class="grow"><h1>' + EA.t('Sejarah', 'History') + '</h1><span class="brand-sub">' + esc(ctx.estate) + '</span></div>' +
+      '<div class="grow"><h1>' + (vo ? EA.t('Operasi', 'Operations') : EA.t('Sejarah', 'History')) + '</h1><span class="brand-sub">' + esc(ctx.estate) + '</span></div>' +
+      (vo ? '<span class="view-badge">' + EA.t('LIHAT SAHAJA', 'VIEW ONLY') + '</span>' : '') +
       (testing ? '<span class="test-badge">' + EA.t('UJIAN', 'TEST') + '</span>' : '') + '</div>' + EA.fh.tabs('history', ctx.user) +
+      (vo && month === thisMonth ? todayCard(list) : '') +
       // v1.11: one line for any number of months: ‹ Month › and a year grid behind the month name.
       '<div class="mstep" role="group" aria-label="' + EA.t('Bulan', 'Month') + '">' +
         '<button type="button" id="hs-prev" aria-label="' + EA.t('Bulan sebelum', 'Month before') + '"' + (month <= FIRST_MONTH ? ' disabled' : '') + '>‹</button>' +
@@ -122,6 +125,29 @@
     $('#hs-pick').onclick = function () { pickMonth(Number(month.slice(0, 4)), go); };
     el.querySelectorAll('[data-day]').forEach(function (b) { b.onclick = function () { openDay = b.dataset.day; pane = 'chit'; render(el, ctx); window.scrollTo(0, 0); }; });
     refresh();
+  }
+  // v1.12 Operasi: the estate's day at a glance, for the clerk and the manager (view only).
+  function todayCard(list) {
+    var t = EA.today(), d = list.find(function (x) { return x.date === t; });
+    var cache = EA.local.get(K.cache + ctx.estate + '.' + month, null);
+    var at = cache && cache.at ? String(cache.at).slice(-5) : '';
+    var chit = d && d.chits.length ? d.chits[d.chits.length - 1] : null;
+    var f = d ? dayFacts(d) : null;
+    var workDone = d && d.work && d.work.length;
+    var lorries = d ? d.lorries.length : 0, waitTicket = f ? f.noTicket : 0;
+    var jobs = [];
+    if (chit) chit.rows.forEach(function (r) { if (r.muster === 'H' && r.task_code) { var k = (EA.lists.task(r.task_code) ? EA.t(EA.lists.task(r.task_code).bm, EA.lists.task(r.task_code).en) : r.task_code) + ' ' + EA.t('Blk ', 'Blk ') + (r.block || ''); if (jobs.indexOf(k) < 0) jobs.push(k); } });
+    function box(cls, big, small) { return '<div class="tc ' + cls + '"><b>' + big + '</b>' + small + '</div>'; }
+    return '<button type="button" class="card today-card"' + (d ? ' data-day="' + t + '"' : '') + '>' +
+      '<div class="tc-top"><b>' + EA.t('Hari ini', 'Today') + ' · ' + esc(dayLabel(t)) + '</b>' + (at ? '<span class="live">● ' + esc(at) + '</span>' : '') + '</div>' +
+      '<div class="tc-row">' +
+        box(chit ? 'ok' : 'wait', chit ? '✓ ' + esc(chit.at || '') : EA.t('Belum', 'Not yet'), EA.t('Pagi', 'Morning')) +
+        box(workDone ? 'ok' : 'wait', workDone ? '✓' : EA.t('Belum', 'Not yet'), EA.t('Kerja', 'Work')) +
+        box(waitTicket ? 'wait' : (lorries ? 'ok' : ''), lorries + EA.t(' lori', lorries === 1 ? ' lorry' : ' lorries'), waitTicket ? EA.t('Tiket belum', 'No ticket yet') : EA.t('Lori', 'Lorry')) +
+      '</div>' +
+      (chit ? '<p class="hint">' + f.working + EA.t(' hadir · ', ' at work · ') + f.away + EA.t(' tidak', ' not') + (jobs.length ? ' · ' + esc(jobs.slice(0, 3).join(' · ')) : '') + '</p>' :
+        '<p class="hint">' + EA.t('Belum ada rekod hari ini dari staf. Perlu isyarat untuk muat dari pejabat.', 'Nothing from the staff yet today. Needs signal to load from the office.') + '</p>') +
+      '</button>';
   }
   // The year grid: 12 months, a dot where this phone has records, months to come greyed out.
   function hasData(m) { return merged(ctx.estate, m).length > 0; }
@@ -173,9 +199,11 @@
     var d = merged(ctx.estate, openDay.slice(0, 7)).find(function (x) { return x.date === openDay; });
     if (!d) { openDay = ''; return render(el, ctx); }
     var f = dayFacts(d), nv = d.chits.reduce(function (a, c) { return a + Math.max(0, (c.versions || []).length - 1); }, 0);
-    var panes = [['chit', EA.t('Chit', 'Chit')], ['work', EA.t('Kerja', 'Work')], ['lorry', EA.t('Lori & tiket', 'Lorries & tickets')], ['fix', EA.t('Pembetulan', 'Corrections') + (nv ? ' · ' + nv : '')]];
-    el.innerHTML = '<div class="room-top"><button type="button" class="back-btn" id="hs-up">← ' + EA.t('Sejarah', 'History') + '</button>' +
-      '<div class="grow"><h1>' + esc(dayLabel(d.date)) + '</h1><span class="brand-sub">' + esc(ctx.estate) + ' · ' + esc(d.date) + '</span></div></div>' +
+    var vo = EA.fh.viewOnly && EA.fh.viewOnly(ctx.user);
+    var panes = [['chit', EA.t('Pagi', 'Morning')], ['work', EA.t('Kerja', 'Work')], ['lorry', EA.t('Lori & tiket', 'Lorries & tickets')], ['fix', EA.t('Pembetulan', 'Corrections') + (nv ? ' · ' + nv : '')]];
+    el.innerHTML = '<div class="room-top"><button type="button" class="back-btn" id="hs-up">← ' + (vo ? EA.t('Operasi', 'Operations') : EA.t('Sejarah', 'History')) + '</button>' +
+      '<div class="grow"><h1>' + esc(dayLabel(d.date)) + '</h1><span class="brand-sub">' + esc(ctx.estate) + ' · ' + esc(d.date) + '</span></div>' +
+      (vo ? '<span class="view-badge">' + EA.t('LIHAT SAHAJA', 'VIEW ONLY') + '</span>' : '') + '</div>' + EA.fh.tabs('history', ctx.user) +
       '<div class="seg2" role="tablist">' + panes.map(function (p) {
         return '<button type="button" role="tab" data-pane="' + p[0] + '" class="' + (pane === p[0] ? 'on' : '') + '" aria-selected="' + (pane === p[0]) + '">' + esc(p[1]) + '</button>';
       }).join('') + '</div><div id="hs-pane">' + (pane === 'work' ? workPane(d) : pane === 'lorry' ? lorryPane(d, f) : pane === 'fix' ? fixPane(d) : chitPane(d)) + '</div>';

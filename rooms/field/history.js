@@ -248,7 +248,7 @@
             (tg ? (l.lots.length ? ' · ' : '') + EA.t('sasaran ', 'target ') + Math.round(tg.per * n * 100) / 100 + ' ' + (tg.unit === 'bag' ? EA.t('beg', 'bags') : tg.unit === 'palm' ? EA.t('pokok', 'palms') : tg.unit) : '');
           return row(esc(jobName(l.task) + (l.block ? ' · Blk ' + l.block : '')), esc(sub), n + EA.t(' orang', ' people'));
         }).join('') +
-        row(EA.t('Hujan semalam', 'Rain last night'), '', esc(num(c.rain).toFixed(1)) + ' mm') +
+        (c.rain !== '' && c.rain !== undefined && c.rain !== null ? row(EA.t('Hujan semalam', 'Rain last night'), '', esc(num(c.rain).toFixed(1)) + ' mm') : '') +
         (c.raw ? '<button type="button" class="btn btn-ghost" data-wa="' + esc(c.id) + '" style="width:100%">WHATSAPP TEXT<small>Lihat teks WhatsApp</small></button>' : '') +
         '</section>';
     }).join('');

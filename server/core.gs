@@ -106,6 +106,50 @@ function doPost_(e) {
   }
   noteSeen_(user, req);
   if (req.action === 'switches') return reply({ ok: true, sw: switches_() });
+  if (READS_[req.action]) return readCached_(user, req);
+  var out = doWrite_(user, req);
+  newGen_();          // something may have changed: remembered answers are not used again
+  return out;
+}
+
+// ---- v1.19: read answers remembered for 60 s, shared by everyone asking the same thing ----
+// Any call that may write (save, users, switches, ...) makes a new "generation", so a remembered
+// answer is never older than the last change.
+var READS_ = { ungraded: 1, harvest: 1, trips: 1, people: 1, history: 1, backlog: 1, adminSummary: 1, adminPhones: 1, adminProblems: 1, adminSwitches: 1 };
+var READ_SECONDS = 60;
+function gen_() { return CacheService.getScriptCache().get('gen') || '0'; }
+function newGen_() { try { CacheService.getScriptCache().put('gen', String(Date.now()) + Math.floor(Math.random() * 1000), 21600); } catch (e) {} }
+function readCached_(user, req) {
+  var personal = req.action === 'people' || /^admin/.test(String(req.action));
+  var key = ['rd', req.action, String(req.estate || ''), String(req.month || ''), personal ? user.user_code : '', gen_()].join('|').slice(0, 240);
+  var c = CacheService.getScriptCache(), hit = null;
+  try { hit = c.get(key); } catch (e) {}
+  if (hit) return ContentService.createTextOutput(hit).setMimeType(ContentService.MimeType.JSON);
+  ROWS_MEMO_ = {};
+  var out;
+  try { out = doRead_(user, req); } finally { ROWS_MEMO_ = null; }
+  var s = JSON.stringify(out);
+  if (out && out.ok && s.length < 90000) { try { c.put(key, s, READ_SECONDS); } catch (e) {} }
+  return ContentService.createTextOutput(s).setMimeType(ContentService.MimeType.JSON);
+}
+function doRead_(user, req) {
+  if (/^admin/.test(String(req.action))) return adminAction_(user, req);
+  if (req.action === 'people') {
+    if (['Owner', 'HQ', 'Staff', 'Clerk', 'Manager'].indexOf(user.role) < 0) return { ok: false, error: 'not_allowed' };
+    return people_(user);
+  }
+  if (user.estates.indexOf(req.estate) < 0) return { ok: false, error: 'not_your_estate' };
+  if (req.action === 'ungraded') return ungraded_(req.estate);
+  if (req.action === 'harvest') return openHarvest(req.estate);
+  if (req.action === 'trips') return openTrips(req.estate);
+  if (req.action === 'backlog') return backlog(req.estate);
+  if (req.action === 'history') {
+    if (!/^\d{4}-\d{2}$/.test(String(req.month || ''))) return { ok: false, error: 'bad_month' };
+    return history_(req.estate, String(req.month));
+  }
+  return { ok: false, error: 'unknown_action' };
+}
+function doWrite_(user, req) {
   if (req.action === 'save') {
     var r1 = saveRow(user, req.tab, req.row);
     if (!r1.ok && r1.error !== 'busy') logRefused_(user, req, 'save', req.tab, r1.error, req.row && req.row.id);
@@ -117,33 +161,8 @@ function doPost_(e) {
     rb.sw = switches_();
     return reply(rb);
   }
-  // Pentadbir (v1.16): the Owner's admin page. HQ sees the summary only.
+  // Pentadbir (v1.16): the Owner's admin page; its reading parts are answered above.
   if (/^admin/.test(String(req.action))) return reply(adminAction_(user, req));
-  if (req.action === 'ungraded') {
-    if (user.estates.indexOf(req.estate) < 0) return reply({ ok: false, error: 'not_your_estate' });
-    return reply(ungraded_(req.estate));
-  }
-  if (req.action === 'harvest') {
-    if (user.estates.indexOf(req.estate) < 0) return reply({ ok: false, error: 'not_your_estate' });
-    return reply(openHarvest(req.estate));
-  }
-  if (req.action === 'trips') {
-    if (user.estates.indexOf(req.estate) < 0) return reply({ ok: false, error: 'not_your_estate' });
-    return reply(openTrips(req.estate));
-  }
-  if (req.action === 'people') {
-    if (['Owner', 'HQ', 'Staff', 'Clerk', 'Manager'].indexOf(user.role) < 0) return reply({ ok: false, error: 'not_allowed' });
-    return reply(people_(user));
-  }
-  if (req.action === 'history') {
-    if (user.estates.indexOf(req.estate) < 0) return reply({ ok: false, error: 'not_your_estate' });
-    if (!/^\d{4}-\d{2}$/.test(String(req.month || ''))) return reply({ ok: false, error: 'bad_month' });
-    return reply(history_(req.estate, String(req.month)));
-  }
-  if (req.action === 'backlog') {
-    if (user.estates.indexOf(req.estate) < 0) return reply({ ok: false, error: 'not_your_estate' });
-    return reply(backlog(req.estate));
-  }
   // Users and PIN screen (v1.9): the Owner only.
   if (/^user/.test(String(req.action)) || req.action === 'testOff') return reply(usersAction_(user, req));
   return reply({ ok: false, error: 'unknown_action' });
@@ -371,9 +390,17 @@ function saveBatch(user, items) {
 function standingRows_(tabName, estate) { return readRows_(tabName, estate).standing; }
 // All of an estate's rows in a tab (corrections and removed rows too, for History), and the
 // rows that still stand.
+// v1.19: in a read-only call each tab is read once, then shared (ROWS_MEMO_ is null in calls that write).
+var ROWS_MEMO_ = null;
 function readRows_(tabName, estate) {
+  var t = ROWS_MEMO_ && ROWS_MEMO_[tabName];
+  if (!t) { t = readTab_(tabName); if (ROWS_MEMO_) ROWS_MEMO_[tabName] = t; }
+  var mine = estate == null ? t.rows : t.rows.filter(function (r) { return r.estate === estate; });   // null: every estate (v1.16)
+  return { all: mine, standing: mine.filter(function (r) { return r.status === 'active' && !t.replaced[r.id]; }) };
+}
+function readTab_(tabName) {
   var sh = book_().getSheetByName(tabName);
-  if (!sh || sh.getLastRow() < 2) return { all: [], standing: [] };
+  if (!sh || sh.getLastRow() < 2) return { rows: [], replaced: {} };
   var vals = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getValues();
   var head = vals.shift(), replaced = {};
   // Dates the sheet turned into real dates (older rows) come back as text again. The script
@@ -389,8 +416,7 @@ function readRows_(tabName, estate) {
   }
   var rows = vals.map(function (v) { var o = {}; head.forEach(function (c, i) { o[c] = txt(v[i], c); }); return o; });
   rows.forEach(function (r) { if (r.replaces) replaced[r.replaces] = true; });
-  var mine = estate == null ? rows : rows.filter(function (r) { return r.estate === estate; });   // null: every estate (v1.16)
-  return { all: mine, standing: mine.filter(function (r) { return r.status === 'active' && !replaced[r.id]; }) };
+  return { rows: rows, replaced: replaced };
 }
 
 // ---------- History (v1.7): one month of an estate's days, read only ----------
@@ -1120,7 +1146,7 @@ function adminAction_(user, req) {
   if (req.action === 'adminSeen') {
     var seen = getJson_('PROBLEMS_SEEN', []);
     (req.ids || []).forEach(function (id) { id = String(id).slice(0, 80); if (id && seen.indexOf(id) < 0) seen.push(id); });
-    setJson_('PROBLEMS_SEEN', seen.slice(-400));
+    setJson_('PROBLEMS_SEEN', seen.slice(-150));   // v1.19: a setting holds about 9 KB
     return adminProblems_();
   }
   if (req.action === 'adminPhoneName') return adminPhoneName_(user, req);

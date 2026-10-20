@@ -28,8 +28,8 @@ const PAIRS = [/SIMPAN CHIT.{0,3}SAVE CHIT|SAVE CHIT.{0,3}SIMPAN CHIT/i, /Tetapa
     await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(200); await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
     return out;
   }
-  const bm = await sweep('bm', '333333');
-  const en = await sweep('en', '333333');
+  const bm = await sweep('bm', '111111');
+  const en = await sweep('en', '111111');
   const leaks = [];
   for (const s of screens) PAIRS.forEach(r => { if (r.test(bm[s].txt)) leaks.push('bm ' + s + ' ' + r); if (r.test(en[s].txt)) leaks.push('en ' + s + ' ' + r); });
   check('no Bahasa · English pairs on screen', leaks.length === 0, leaks.join(' | '));

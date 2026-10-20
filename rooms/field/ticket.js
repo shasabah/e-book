@@ -170,7 +170,7 @@
     if (autoPick()) keepDraft();
     var testing = !EA.roomLive(ctx.room, ctx.estate);
     var head = '<div class="room-top">' +
-      '<button type="button" class="back-btn" id="tk-back">← <span class="inline"><span class="bm">Bilik</span></span></button>' +
+      '<button type="button" class="back-btn" id="tk-back">‹ BACK<small>‹ BALIK</small></button>' +
       '<div class="grow"><h1>' + EA.t('Tiket kilang', 'Mill ticket') + '</h1><span class="brand-sub">' + esc(ctx.estate) + '</span></div>' +
       (testing ? '<span class="test-badge">' + EA.t('UJIAN', 'TEST') + '</span>' : '') + '</div>' + EA.fh.tabs('ticket', ctx.user);
     if (!canKey(ctx.user)) {

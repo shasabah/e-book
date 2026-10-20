@@ -98,7 +98,7 @@
     el = container; ctx = c;
     var testing = !EA.roomLive(ctx.room, ctx.estate);
     var head = '<div class="room-top">' +
-      '<button type="button" class="back-btn" id="cl-back">← <span class="inline"><span class="bm">Bilik</span></span></button>' +
+      '<button type="button" class="back-btn" id="cl-back">‹ BACK<small>‹ BALIK</small></button>' +
       '<div class="grow"><h1>' + EA.t('Kutip & hantar', 'Collect & dispatch') + '</h1><span class="brand-sub">' + esc(ctx.estate) + '</span></div>' +
       (testing ? '<span class="test-badge">' + EA.t('UJIAN', 'TEST') + '</span>' : '') + '</div>';
     if (ctx.user.role === 'Worker') {
@@ -224,7 +224,7 @@
           '<input id="sh-' + esc(r.lot) + '" class="text-input" inputmode="numeric" data-sh="' + esc(r.lot) + '" value="' + dik(r) + '"></div>';
       }).join('') +
       '<p class="hint">' + EA.t('Baki yang tidak dikutip kekal sebagai baki di ladang, dan keluar dalam chit pagi esok.', 'What was not collected stays as field backlog and shows on tomorrow\'s morning chit.') + '</p>' +
-      '<div class="actions"><button class="btn btn-ghost" type="button" id="sh-back">BACK<small>Kembali</small></button>' +
+      '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="sh-back">‹ BACK<small>‹ BALIK</small></button>' +
       '<button class="btn btn-ok" type="button" id="sh-ok">SAVE<small>Simpan</small></button></div>',
       function (sh) {
         sh.querySelector('#sh-back').onclick = ui().closeSheet;

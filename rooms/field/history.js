@@ -103,7 +103,7 @@
     var sum = list.reduce(function (a, d) { var f = dayFacts(d); a.mt += f.mt; a.lorries += d.lorries.length; return a; }, { mt: 0, lorries: 0 });
     var cache = EA.local.get(K.cache + ctx.estate + '.' + month, null);
     var vo = EA.fh.viewOnly && EA.fh.viewOnly(ctx.user);
-    el.innerHTML = '<div class="room-top"><button type="button" class="back-btn" id="hs-back">← <span class="inline"><span class="bm">Bilik</span><span class="en">Rooms</span></span></button>' +
+    el.innerHTML = '<div class="room-top"><button type="button" class="back-btn" id="hs-back">‹ BACK<small>‹ BALIK</small></button>' +
       '<div class="grow"><h1>' + (vo ? EA.t('Operasi', 'Operations') : EA.t('Sejarah', 'History')) + '</h1><span class="brand-sub">' + esc(ctx.estate) + '</span></div>' +
       (vo ? '<span class="view-badge">' + EA.t('LIHAT SAHAJA', 'VIEW ONLY') + '</span>' : '') +
       (testing ? '<span class="test-badge">' + EA.t('UJIAN', 'TEST') + '</span>' : '') + '</div>' + EA.fh.tabs('history', ctx.user) +
@@ -203,7 +203,7 @@
     var f = dayFacts(d), nv = d.chits.reduce(function (a, c) { return a + Math.max(0, (c.versions || []).length - 1); }, 0);
     var vo = EA.fh.viewOnly && EA.fh.viewOnly(ctx.user);
     var panes = [['chit', EA.t('Pagi', 'Morning')], ['work', EA.t('Kerja', 'Work')], ['lorry', EA.t('Lori & tiket', 'Lorries & tickets')], ['fix', EA.t('Pembetulan', 'Corrections') + (nv ? ' · ' + nv : '')]];
-    el.innerHTML = '<div class="room-top"><button type="button" class="back-btn" id="hs-up">← ' + (vo ? EA.t('Operasi', 'Operations') : EA.t('Sejarah', 'History')) + '</button>' +
+    el.innerHTML = '<div class="room-top"><button type="button" class="back-btn" id="hs-up">‹ BACK<small>‹ BALIK</small></button>' +
       '<div class="grow"><h1>' + esc(dayLabel(d.date)) + '</h1><span class="brand-sub">' + esc(ctx.estate) + ' · ' + esc(d.date) + '</span></div>' +
       (vo ? '<span class="view-badge">' + EA.t('LIHAT SAHAJA', 'VIEW ONLY') + '</span>' : '') + '</div>' + EA.fh.tabs('history', ctx.user) +
       '<div class="seg2" role="tablist">' + panes.map(function (p) {

@@ -420,3 +420,11 @@ body:has(#room:not([hidden]) .botbar) .foot { padding-bottom: 96px; }
 .today-card .tc b { display: block; font-size: .9rem; }
 .today-card .tc.ok { background: var(--ok-soft); color: var(--ok); }
 .today-card .tc.wait { background: var(--wait-soft); color: #9a5b00; }
+
+/* 1.14: phone codes on Pengguna & PIN */
+.us-phones { margin-top: 2px; }
+.us-code { font-style: normal; font: 700 .8rem ui-monospace, monospace; background: #e3f3fa; color: #13759c; border-radius: 7px; padding: 1px 6px; margin-left: 3px; }
+.us-big { display: flex; gap: 10px; justify-content: center; margin: 8px 0; }
+.us-big > div { flex: 1; text-align: center; border-radius: 14px; padding: 8px 4px; background: #f6f3ea; }
+.us-big span { display: block; font-size: .72rem; font-weight: 700; color: var(--muted); }
+.us-big .us-pin { display: block; margin: 0; font-size: 1.6rem; padding: 12px 0; letter-spacing: .02em; white-space: nowrap; }

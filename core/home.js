@@ -74,7 +74,10 @@
           var l = EA.cleanLink(s.querySelector('#set-link').value);
           if (!/^P\d{2,3}$/.test(p)) { s.querySelector('#set-phone').focus(); toast(EA.t('Kod telefon: P dan nombor, cth P07', 'Phone code: P and a number, e.g. P07'), 'bad'); return; }
           if (l && !/^https:\/\/script\.google\.com\//.test(l)) { s.querySelector('#set-link').focus(); toast(EA.t('Pautan mesti bermula https://script.google.com/', 'Link must start with https://script.google.com/'), 'bad'); return; }
+          // v1.14: a new phone code logs this phone out, so the next login is checked by the office.
+          var changed = EA.phone() && EA.phone() !== p;
           EA.setPhone(p); EA.setSendLink(l);
+          if (changed) { EA.forget(); closeSheet(); toast(EA.t('Kod telefon ditukar. Masuk semula dengan PIN anda.', 'Phone code changed. Log in again with your PIN.')); location.hash = ''; location.reload(); return; }
           closeSheet(); toast(EA.t('Disimpan', 'Saved')); render();
         };
       });
@@ -111,10 +114,12 @@
     server: ['Pejabat sibuk sekarang. Cuba lagi sebentar.', 'The office side is busy. Try again in a moment.'],
     old: ['Versi app ini sudah lama. Tekan LOAD IT atau muat semula halaman.', 'This app version is too old. Tap LOAD IT or reload the page.'],
     nolink: ['Pautan hantar belum ditetapkan. Buka Tetapan telefon.', 'The sending link is not set. Open Phone setup.'],
-    locked: ['Terlalu banyak PIN salah. Tunggu 15 minit.', 'Too many wrong PINs. Wait 15 minutes.']
+    locked: ['Terlalu banyak PIN salah. Tunggu 15 minit.', 'Too many wrong PINs. Wait 15 minutes.'],
+    phone_not_yours: ['Kod telefon {P} bukan milik anda. Semak kod dalam mesej WhatsApp anda dan betulkan di Tetapan telefon.', 'Phone code {P} is not yours. Check the code in your WhatsApp message and fix it in Phone setup.'],
+    no_phone: ['Kod telefon belum ditetapkan. Buka Tetapan telefon dan taip kod dari mesej WhatsApp anda.', 'The phone code is not set. Open Phone setup and type the code from your WhatsApp message.']
   };
   function loginError(why) {
-    var m = WHY[why] || WHY.wrong;
+    var m = (WHY[why] || WHY.wrong).map(function (t) { return t.replace('{P}', EA.ui.esc(EA.phone() || '')); });
     var el = $('login-msg');
     el.innerHTML = '<span class="bm">' + m[0] + '</span><span class="en">' + m[1] + '</span>' +
       (why === 'old' ? '<button class="btn btn-wait" type="button" id="login-load" style="margin-top:8px">LOAD IT<small>Muat versi baru</small></button>' : '');

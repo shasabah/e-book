@@ -42,6 +42,7 @@ window.EA = window.EA || {};
       // Only a real "wrong key" answer is called a wrong key. A busy or
       // broken office side is "try again", so nobody thinks their key is bad.
       var err = j && j.error;
+      if (err === 'phone_not_yours' || err === 'no_phone') return { ok: false, why: err };
       return { ok: false, why: err === 'wrong_key' ? 'wrong' : err === 'old_version' ? 'old' : err === 'locked' ? 'locked' : 'server' };
     }
     if (EA.config.TEST_MODE) {

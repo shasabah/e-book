@@ -304,7 +304,7 @@
     EA.reportError('room ' + room.id + '/' + (screen || 'main'), err, estate);
     $('room').innerHTML = '<div class="card"><p class="msg"><span class="bm">Skrin ini tidak dapat dibuka.</span><span class="en">This screen could not open. Tap LOAD IT for the newest copy, or go back.</span></p>' +
       '<p class="hint mono">' + esc(msg) + '</p>' +
-      '<div class="actions"><button class="btn btn-ghost" type="button" id="err-back">BACK<small>Kembali</small></button>' +
+      '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="err-back">‹ BACK<small>‹ BALIK</small></button>' +
       '<button class="btn btn-main" type="button" id="err-load">LOAD IT<small>Muat versi baru</small></button></div></div>';
     $('err-back').onclick = function () { location.hash = ''; };
     $('err-load').onclick = function () { EA.loadUpdate(); };

@@ -73,7 +73,7 @@ EA.roomViews = EA.roomViews || {};
 
   // ---------- drawing ----------
   function top(title, back) {
-    return '<div class="room-top"><button type="button" class="back-btn" id="us-back">← ' + back + '</button>' +
+    return '<div class="room-top"><button type="button" class="back-btn" id="us-back">‹ BACK<small>‹ BALIK</small></button>' +
       '<div class="grow"><h1>' + title + '</h1><span class="brand-sub">' + EA.t('Pemilik sahaja · perlu isyarat', 'Owner only · needs signal') + '</span></div></div>';
   }
   function draw() {
@@ -261,7 +261,7 @@ EA.roomViews = EA.roomViews || {};
     el.querySelector('#us-done').onclick = function () {
       ui().openSheet('<h2 id="sheet-title">' + EA.t('Sudah hantar atau tulis PIN?', 'Sent or written the PIN?') + '</h2>' +
         '<p>' + EA.t('Selepas ini PIN ' + s.name + ' tidak boleh dilihat lagi. Jika hilang, buat PIN baru.', 'After this, ' + s.name + '\'s PIN cannot be seen again. If it is lost, make a new PIN.') + '</p>' +
-        '<div class="actions"><button class="btn btn-ghost" type="button" id="dn-back">BACK<small>Kembali</small></button>' +
+        '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="dn-back">‹ BACK<small>‹ BALIK</small></button>' +
         '<button class="btn btn-main" type="button" id="dn-ok">YES, CLOSE<small>Ya, tutup</small></button></div>',
         function (sh) {
           sh.querySelector('#dn-back').onclick = ui().closeSheet;
@@ -296,7 +296,7 @@ EA.roomViews = EA.roomViews || {};
     }
     if (u.move) h += '<p class="warn">' + EA.t('Pindah ke ' + u.move.estates.join(', ') + ' mula ' + shortDate(u.move.date) + '.', 'Moving to ' + u.move.estates.join(', ') + ' from ' + shortDate(u.move.date) + '.') + '</p>';
     h += '<div class="us-log" id="ps-log"><div class="hint">' + EA.t('Log pengguna…', 'Users log…') + '</div></div>';
-    h += '<div class="actions"><button class="btn btn-ghost" type="button" id="ps-close">BACK<small>Kembali</small></button></div>';
+    h += '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="ps-close">‹ BACK<small>‹ BALIK</small></button></div>';
     ui().openSheet(h, function (s) {
       showLog(u, s.querySelector('#ps-log'));
       s.querySelector('#ps-close').onclick = ui().closeSheet;
@@ -363,7 +363,7 @@ EA.roomViews = EA.roomViews || {};
       '<div class="field"><label for="nm-new">' + EA.t('Nama betul', 'Right name') + '</label><input id="nm-new" class="text-input" maxlength="40" autocomplete="off" value="' + esc(u.name) + '"></div>' +
       '<p class="hint">' + EA.t('Rekod lama tetap milik orang yang sama.', 'Old records still belong to the same person.') + '</p>' +
       '<p class="msg" id="nm-err" hidden></p>' +
-      '<div class="actions"><button class="btn btn-ghost" type="button" id="nm-back">BACK<small>Kembali</small></button>' +
+      '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="nm-back">‹ BACK<small>‹ BALIK</small></button>' +
       '<button class="btn btn-main" type="button" id="nm-ok">SAVE NAME<small>Simpan nama</small></button></div>',
       function (s) {
         var inp = s.querySelector('#nm-new'), m = s.querySelector('#nm-err');
@@ -385,7 +385,7 @@ EA.roomViews = EA.roomViews || {};
     ui().openSheet('<h2 id="sheet-title">+ ' + EA.t('Peranti untuk ', 'Device for ') + esc(u.name) + '</h2>' +
       '<div class="field"><label for="dv-label">' + EA.t('Nama peranti (pilihan)', 'Device name (optional)') + '</label><input id="dv-label" class="text-input" maxlength="40" autocomplete="off" placeholder="' + EA.t('cth Telefon syarikat Sugut', 'e.g. Sugut company phone') + '"></div>' +
       '<p class="hint">' + EA.t('Pejabat buat satu kod telefon baru. PIN tidak berubah.', 'The office makes one new phone code. The PIN stays the same.') + '</p>' +
-      '<div class="actions"><button class="btn btn-ghost" type="button" id="dv-back">BACK<small>Kembali</small></button>' +
+      '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="dv-back">‹ BACK<small>‹ BALIK</small></button>' +
       '<button class="btn btn-main" type="button" id="dv-make">MAKE CODE<small>Buat kod</small></button></div>',
       function (s) {
         s.querySelector('#dv-back').onclick = function () { personSheet(u.code); };
@@ -413,7 +413,7 @@ EA.roomViews = EA.roomViews || {};
   function confirmPin(u, self) {
     ui().openSheet('<h2 id="sheet-title">' + EA.t('PIN baru untuk ' + u.name + '?', 'New PIN for ' + u.name + '?') + '</h2>' +
       '<p>' + EA.t('PIN lama berhenti serta-merta.', 'The old PIN stops at once.') + '</p><p class="msg" id="cp-err" hidden></p>' +
-      '<div class="actions"><button class="btn btn-ghost" type="button" id="cp-back">BACK<small>Kembali</small></button>' +
+      '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="cp-back">‹ BACK<small>‹ BALIK</small></button>' +
       '<button class="btn btn-main" type="button" id="cp-ok">MAKE NEW PIN<small>Buat PIN baru</small></button></div>',
       function (s) {
         s.querySelector('#cp-back').onclick = function () { personSheet(u.code); };
@@ -438,7 +438,7 @@ EA.roomViews = EA.roomViews || {};
       inp('mp-1', EA.t('PIN baru (6 nombor)', 'New PIN (6 numbers)')) + inp('mp-2', EA.t('Taip sekali lagi', 'Type it again')) +
       '<p class="hint">' + EA.t('Jangan nombor mudah seperti 123456, 111111 atau 112233. Telefon ini terus guna PIN baru.', 'Not an easy one like 123456, 111111 or 112233. This phone switches to the new PIN.') + '</p>' +
       '<p class="msg" id="mp-err" hidden></p>' +
-      '<div class="actions"><button class="btn btn-ghost" type="button" id="mp-back">BACK<small>Kembali</small></button>' +
+      '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="mp-back">‹ BACK<small>‹ BALIK</small></button>' +
       '<button class="btn btn-main" type="button" id="mp-ok">SAVE PIN<small>Simpan PIN</small></button></div>',
       function (s) {
         var a = s.querySelector('#mp-1'), b = s.querySelector('#mp-2'), m = s.querySelector('#mp-err');
@@ -464,7 +464,7 @@ EA.roomViews = EA.roomViews || {};
       '<div class="us-pills" id="off-why">' + [['telefon hilang', 'Telefon hilang', 'Lost phone'], ['berhenti kerja', 'Berhenti kerja', 'Left the job'], ['lain', 'Lain-lain', 'Other']].map(function (r) {
         return '<button type="button" data-why="' + r[0] + '" aria-pressed="false">' + EA.t(r[1], r[2]) + '</button>'; }).join('') + '</div>' +
       '<p class="msg" id="off-err" hidden></p>' +
-      '<div class="actions"><button class="btn btn-ghost" type="button" id="off-back">BACK<small>Kembali</small></button>' +
+      '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="off-back">‹ BACK<small>‹ BALIK</small></button>' +
       '<button class="btn btn-main us-badfill" type="button" id="off-ok">SWITCH OFF<small>Tutup akses</small></button></div>',
       function (s) {
         s.querySelectorAll('[data-why]').forEach(function (b) { b.onclick = function () { why = b.dataset.why; s.querySelectorAll('[data-why]').forEach(function (x) { x.setAttribute('aria-pressed', x === b); }); }; });
@@ -487,7 +487,7 @@ EA.roomViews = EA.roomViews || {};
     ui().openSheet('<h2 id="sheet-title">' + EA.t('Tutup semua PIN ujian?', 'Switch off all test PINs?') + '</h2>' +
       '<p>' + EA.t('PIN 111111 hingga 777777 tidak boleh masuk lagi, di semua telefon. Pastikan Staf dan Kerani sudah ada PIN sendiri.', 'PINs 111111 to 777777 will no longer log in, on every phone. Make sure the staff and the clerk have their own PINs first.') + '</p>' +
       '<p class="msg" id="to-err" hidden></p>' +
-      '<div class="actions"><button class="btn btn-ghost" type="button" id="to-back">BACK<small>Kembali</small></button>' +
+      '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="to-back">‹ BACK<small>‹ BALIK</small></button>' +
       '<button class="btn btn-main us-badfill" type="button" id="to-ok">SWITCH OFF<small>Tutup semua</small></button></div>',
       function (s) {
         s.querySelector('#to-back').onclick = ui().closeSheet;

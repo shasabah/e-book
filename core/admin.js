@@ -64,7 +64,7 @@ EA.roomViews = EA.roomViews || {};
   function top(p) {
     var names = { summary: t('Ringkasan', 'Summary'), phones: t('Telefon', 'Phones'), problems: t('Masalah', 'Problems'), switches: t('Suis percubaan', 'Trial switches') };
     var c = cached(p), line = names[p] + (busy[p] ? ' · ' + t('memuat…', 'loading…') : c && c.at ? ' · ' + t('dimuat ', 'loaded ') + hhmm(c.at) : '');
-    return '<div class="room-top"><button type="button" class="back-btn" id="ad-back">← <span class="inline"><span class="bm">Bilik</span><span class="en">Rooms</span></span></button>' +
+    return '<div class="room-top"><button type="button" class="back-btn" id="ad-back">‹ BACK<small>‹ BALIK</small></button>' +
       '<div class="grow"><h1>' + t('Pentadbir', 'Admin') + '</h1><span class="brand-sub">' + esc(line) + '</span></div>' +
       '<button type="button" class="btn btn-ghost adm-reload" id="ad-reload"' + (busy[p] ? ' disabled' : '') + '>↻</button></div>';
   }
@@ -137,7 +137,7 @@ EA.roomViews = EA.roomViews || {};
     if (!x) return;
     EA.ui.openSheet('<h2 id="sheet-title">' + esc(x.phone) + ' · ' + esc(x.name) + '</h2>' +
       '<div class="field"><label for="dn-label">' + t('Nama peranti', 'Device name') + '</label><input id="dn-label" class="text-input" maxlength="40" value="' + esc(x.label || '') + '" placeholder="' + t('cth Telefon syarikat Sugut', 'e.g. Sugut company phone') + '"></div>' +
-      '<p class="msg" id="dn-err" hidden></p><div class="actions"><button class="btn btn-ghost" type="button" id="dn-back">BACK<small>Kembali</small></button>' +
+      '<p class="msg" id="dn-err" hidden></p><div class="actions"><button class="btn btn-ghost btn-back" type="button" id="dn-back">‹ BACK<small>‹ BALIK</small></button>' +
       '<button class="btn btn-main" type="button" id="dn-save">SAVE<small>Simpan</small></button></div>', function (s) {
         s.querySelector('#dn-back').onclick = EA.ui.closeSheet;
         s.querySelector('#dn-save').onclick = async function () {
@@ -190,7 +190,7 @@ EA.roomViews = EA.roomViews || {};
   }
   function confirmSwitch(which, on, estate, title, body) {
     EA.ui.openSheet('<h2 id="sheet-title">' + esc(title) + '</h2><p>' + esc(body) + '</p><p class="msg" id="cs-err" hidden></p>' +
-      '<div class="actions"><button class="btn btn-ghost" type="button" id="cs-back">BACK<small>Kembali</small></button>' +
+      '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="cs-back">‹ BACK<small>‹ BALIK</small></button>' +
       '<button class="btn btn-main" type="button" id="cs-ok">YES<small>Ya</small></button></div>', function (s) {
         s.querySelector('#cs-back').onclick = EA.ui.closeSheet;
         s.querySelector('#cs-ok').onclick = async function () {

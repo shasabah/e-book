@@ -224,7 +224,13 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .room-top h1 { margin: 0; font-size: 1.35rem; line-height: 1.15; }
 .room-top .grow { flex: 1; min-width: 0; }
 .room-top .brand-sub { display: block; font-size: .8rem; color: var(--muted); }
-.back-btn { background: none; border: 1px solid var(--line); border-radius: var(--r); min-height: 44px; padding: 4px 12px; cursor: pointer; color: inherit; font: inherit; font-weight: 600; }
+/* v1.21: BALIK, big and easy to see: thick green outline, one word in the phone's language: BALIK or BACK (option A, 20 Oct). */
+.back-btn { background: var(--surface); border: 3px solid var(--ok); color: var(--ok); border-radius: 16px; min-height: 60px; min-width: 112px;
+  padding: 4px 14px; cursor: pointer; font: inherit; font-weight: 800; font-size: 1.2rem; line-height: 1.05;
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center; }
+.back-btn .l-bm, .back-btn .l-en { display: none; }
+html[data-lang="bm"] .back-btn .l-bm, html[data-lang="en"] .back-btn .l-en { display: inline; }
+.btn.btn-back { background: var(--surface); border: 3px solid var(--ok); color: var(--ok); min-height: 56px; font-size: 1.05rem; font-weight: 800; }
 .card { background: var(--surface); border: 1px solid transparent; border-radius: var(--card-r); padding: 14px; display: grid; gap: 12px; box-shadow: var(--shadow); }
 .card h2 { margin: 0; font-size: 1rem; }
 .step { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--sun); color: var(--sun-ink); font-size: .8rem; font-weight: 700; margin-right: 8px; vertical-align: 2px; }

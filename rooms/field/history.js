@@ -98,7 +98,7 @@
     el = container; ctx = c;
     if (!month) month = ym(new Date());
     if (openDay) return renderDay();
-    var testing = ctx.room.state !== 'live';
+    var testing = !EA.roomLive(ctx.room, ctx.estate);
     var list = merged(ctx.estate, month), thisMonth = ym(new Date());
     var sum = list.reduce(function (a, d) { var f = dayFacts(d); a.mt += f.mt; a.lorries += d.lorries.length; return a; }, { mt: 0, lorries: 0 });
     var cache = EA.local.get(K.cache + ctx.estate + '.' + month, null);

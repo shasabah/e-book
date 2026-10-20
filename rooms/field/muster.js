@@ -465,7 +465,7 @@
     if (c.screen === 'history' && EA.fh.history) return EA.fh.history.render(container, c);
     el = container; ctx = c;
     draft = loadDraft();
-    var testing = ctx.room.state !== 'live';
+    var testing = !EA.roomLive(ctx.room, ctx.estate);
     var head = '<div class="room-top">' +
       '<button type="button" class="back-btn" id="fh-back">← <span class="inline"><span class="bm">Bilik</span></span></button>' +
       '<div class="grow"><h1>' + EA.t('Chit muster pagi', 'Morning muster chit') + '</h1><span class="brand-sub">' + esc(ctx.estate) + '</span></div>' +

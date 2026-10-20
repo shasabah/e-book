@@ -168,7 +168,7 @@
     el = container; ctx = c;
     draft = loadDraft();
     if (autoPick()) keepDraft();
-    var testing = ctx.room.state !== 'live';
+    var testing = !EA.roomLive(ctx.room, ctx.estate);
     var head = '<div class="room-top">' +
       '<button type="button" class="back-btn" id="tk-back">← <span class="inline"><span class="bm">Bilik</span></span></button>' +
       '<div class="grow"><h1>' + EA.t('Tiket kilang', 'Mill ticket') + '</h1><span class="brand-sub">' + esc(ctx.estate) + '</span></div>' +

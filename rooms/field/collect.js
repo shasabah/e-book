@@ -96,7 +96,7 @@
   // ---------- the screen ----------
   function render(container, c) {
     el = container; ctx = c;
-    var testing = ctx.room.state !== 'live';
+    var testing = !EA.roomLive(ctx.room, ctx.estate);
     var head = '<div class="room-top">' +
       '<button type="button" class="back-btn" id="cl-back">← <span class="inline"><span class="bm">Bilik</span></span></button>' +
       '<div class="grow"><h1>' + EA.t('Kutip & hantar', 'Collect & dispatch') + '</h1><span class="brand-sub">' + esc(ctx.estate) + '</span></div>' +

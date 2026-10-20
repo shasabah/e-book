@@ -118,7 +118,7 @@
     await EA.fh.harvest.refreshOpen(ctx.estate);
     syncTrip();
     if (!draft.trip && draft.do_no) matchDn(true);
-    else if (autoPick() && el && document.body.contains(el) && !el.hidden && $('#tk-tripbox')) render(el, ctx);
+    else if (autoPick() && el && document.body.contains(el) && !el.hidden && $('#tk-tripbox')) quietRender();
     if (canGrade(ctx.user)) { var r3x = await EA.ask('ungraded', { estate: ctx.estate }); if (r3x && r3x.tickets) EA.local.set(K.ungraded + ctx.estate, r3x.tickets); }
     if (el && document.body.contains(el) && !el.hidden && $('#tk-tripbox')) { keepDraft(); drawTrip(); drawLots(); drawSums(); drawGradeList(); }
   }
@@ -233,8 +233,10 @@
     $('#tk-mill').onchange = function () { draft.mill = this.value; keepDraft(); };
     $('#tk-save').onclick = save;
     drawTrip(); drawLots(); drawSums(); wireList(); drawGradeList();
-    refreshOffice();
+    if (!noRefresh) refreshOffice();   // v1.19: a redraw from the office answer does not ask again
   }
+  var noRefresh = false;
+  function quietRender() { noRefresh = true; try { render(el, ctx); } finally { noRefresh = false; } }
   function field(id, bm, en, val, mode, ph) {
     return '<div class="field"><label for="' + id + '"><span class="bm">' + esc(bm) + '</span><span class="en">' + esc(en) + '</span></label>' +
       '<input id="' + id + '" class="text-input"' + (mode && mode !== 'text' ? ' inputmode="' + mode + '"' : '') + ' value="' + esc(val || '') + '" placeholder="' + esc(ph || '') + '"></div>';
@@ -245,7 +247,7 @@
     var x = trips().find(function (y) { return y.dn && y.dn === draft.do_no; });
     if (!x) return false;
     useTrip(x); if (!quiet) ui().toast(EA.t('Lori dijumpai: DN ', 'Lorry load found: DN ') + x.dn);
-    render(el, ctx); var i = $('#tk-do'); if (i && !quiet) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
+    quietRender(); var i = $('#tk-do'); if (i && !quiet) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
     return true;
   }
   function useTrip(x) {

@@ -1,0 +1,32 @@
+{
+  "name": "Estate Book",
+  "short_name": "E-Book",
+  "description": "Buku Ladang · SPLT & PJSB",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d7a56",
+  "theme_color": "#0d7a56",
+  "lang": "ms",
+  "icons": [
+    {
+      "src": "core/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "core/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "core/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

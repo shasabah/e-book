@@ -169,15 +169,36 @@
 
   // ---------- the screen ----------
   // The room's screens, as tabs at the top. Built once here for both screens.
+  // v1.11: the room's screens as a bar fixed at the bottom (icon + one word), like WhatsApp.
+  // A green dot = done today on this phone. The screen title keeps the full name.
+  var ICON = {
+    muster: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+    work: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 11l2 2 4-4M9 17h6"/>',
+    collect: '<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"/><circle cx="6" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
+    ticket: '<path d="M4 6h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4z"/><path d="M14 6v12" stroke-dasharray="2 2"/>',
+    history: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'
+  };
+  function doneToday(key, estate) {
+    var t = EA.today(), list = EA.local.get({ muster: 'fh.chits2', work: 'fh.work', collect: 'fh.collect' }[key] || '', []) || [];
+    return list.some(function (x) { return x && x.date === t && (!estate || x.estate === estate); });
+  }
   function tabs(active, user) {
     var loaderOnly = user && user.role === 'Worker';
-    return '<nav class="tabs" aria-label="' + EA.t('Skrin', 'Screens') + '">' +
-      (loaderOnly ? '' :
-      '<a href="#field-harvest"' + (active === 'muster' ? ' aria-current="page"' : '') + '><span class="bm">Chit pagi</span><span class="en">Morning chit</span></a>' +
-      '<a href="#field-harvest/work"' + (active === 'work' ? ' aria-current="page"' : '') + '><span class="bm">Kerja harian</span><span class="en">Day\'s work</span></a>') +
-      '<a href="#field-harvest/collect"' + (active === 'collect' ? ' aria-current="page"' : '') + '><span class="bm">Kutip & hantar</span><span class="en">Collect & dispatch</span></a>' +
-      (loaderOnly || !(user && /^(Clerk|Owner|HQ)$/.test(user.role)) ? '' : '<a href="#field-harvest/ticket"' + (active === 'ticket' ? ' aria-current="page"' : '') + '><span class="bm">Tiket kilang</span><span class="en">Mill ticket</span></a>') +
-      (loaderOnly ? '' : '<a href="#field-harvest/history"' + (active === 'history' ? ' aria-current="page"' : '') + '><span class="bm">Sejarah</span><span class="en">History</span></a>') + '</nav>';
+    var clerkish = user && /^(Clerk|Owner|HQ)$/.test(user.role);
+    var estate = ctx && ctx.estate;
+    var items = [];
+    if (!loaderOnly) items.push(['muster', '#field-harvest', 'Pagi', 'Morning']);
+    if (!loaderOnly) items.push(['work', '#field-harvest/work', 'Kerja', 'Work']);
+    items.push(['collect', '#field-harvest/collect', 'Lori', 'Lorry']);
+    if (!loaderOnly && clerkish) items.push(['ticket', '#field-harvest/ticket', 'Tiket', 'Ticket']);
+    if (!loaderOnly) items.push(['history', '#field-harvest/history', 'Sejarah', 'History']);
+    return '<nav class="tabs botbar" aria-label="' + EA.t('Skrin', 'Screens') + '">' + items.map(function (it) {
+      var dot = (it[0] === 'muster' || it[0] === 'work' || it[0] === 'collect') && doneToday(it[0], estate);
+      return '<a href="' + it[1] + '"' + (active === it[0] ? ' aria-current="page"' : '') + ' data-tab="' + it[0] + '">' +
+        (dot ? '<span class="tab-ok" title="' + EA.t('Siap hari ini', 'Done today') + '"></span>' : '') +
+        '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICON[it[0]] + '</svg>' +
+        '<span class="bm">' + it[2] + '</span><span class="en">' + it[3] + '</span></a>';
+    }).join('') + '</nav>';
   }
 
   // ---------- crop backlog (field and ramp) ----------

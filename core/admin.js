@@ -21,7 +21,8 @@ EA.roomViews = EA.roomViews || {};
     test_user: ['PIN ujian tidak boleh buka Pentadbir. Masuk dengan PIN anda sendiri.', 'A test PIN cannot open Admin. Log in with your own PIN.'],
     not_ready: ['Belum boleh: semua orang sebenar mesti masuk sekali dahulu.', 'Not yet: every real person must log in once first.'],
     order: ['Ikut turutan: 1 → 2 → 3.', 'Follow the order: 1 → 2 → 3.'],
-    unknown_action: ['Skrip pejabat belum dikemas kini.', 'The office script is not updated yet.']
+    unknown_action: ['Skrip pejabat belum dikemas kini.', 'The office script is not updated yet.'],
+    office_error: ['Pejabat ada masalah. Cuba lagi; jika berulang, beritahu Yu Chen.', 'The office had a problem. Try again; if it keeps happening, tell Yu Chen.']
   };
   function esc(s) { return EA.ui.esc(s); }
   function t(bm, en) { return EA.t(bm, en); }

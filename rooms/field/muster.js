@@ -58,20 +58,6 @@
     EA.local.set(K.chitNo, n);
     return base + '-' + n[base];
   }
-  // Rain this month (from the chits kept on this phone), for the "month to date" line.
-  // One reading per day (the latest chit of that day); 'today' can be given
-  // (the reading being keyed now). Days after 'date' are not counted.
-  // The reading on a chit is the rain of the day before, so it counts in that day's month
-  // (the 1 Nov chit closes October).
-  function dayBefore(d) { var x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() - 1); return x.toISOString().slice(0, 10); }
-  function rainMonth(date, today) {
-    var m = dayBefore(date).slice(0, 7), byDay = {};
-    chits().forEach(function (c) { if (c.estate === ctx.estate && dayBefore(c.date).slice(0, 7) === m && c.date <= date) byDay[c.date] = Number(c.rain_mm) || 0; });
-    if (today !== undefined) byDay[date] = Number(today) || 0;
-    var sum = Object.keys(byDay).reduce(function (a, k) { return a + byDay[k]; }, 0);
-    return Math.round(sum * 100) / 100;
-  }
-
   // ---------- small helpers ----------
   function person(id) { var w = EA.lists.worker(id); return w ? w.name : id; }
   function task(code) { return EA.lists.task(code); }
@@ -522,16 +508,8 @@
       '<div class="rows" id="fh-rows"></div>' +
       '</section>' +
 
-      '<section class="card" aria-labelledby="fh-s3"><h2 id="fh-s3"><span class="step">3</span><span class="inline"><span class="bm">Hujan</span> · <span class="en">Rainfall (gauge reading)</span></span></h2>' +
-      '<div class="fields">' +
-        '<div class="field"><label for="fh-rain"><span class="bm">Hujan semalam (mm)</span><span class="en">Previous day, mm</span></label>' +
-          '<input id="fh-rain" class="text-input" inputmode="decimal" placeholder="0.00" value="' + esc(draft.rain_mm) + '"></div>' +
-        '<div class="field"><label for="fh-raint"><span class="bm">Masa hujan</span><span class="en">Time of rain, e.g. 7.00pm–8.00pm</span></label>' +
-          '<input id="fh-raint" class="text-input" placeholder="7.00pm–8.00pm" value="' + esc(draft.rain_time) + '"></div>' +
-      '</div><p class="hint" id="fh-rainmtd"></p>' +
-      '</section>' +
-
-      '<section class="card" aria-labelledby="fh-s4"><h2 id="fh-s4"><span class="step">4</span><span class="inline"><span class="bm">Chit</span> · <span class="en">The chit</span></span></h2>' +
+      // v1.17: no rain question here. Sugut rain is keyed once, in the Sugut DMS (decided 20 Oct 2026).
+      '<section class="card" aria-labelledby="fh-s4"><h2 id="fh-s4"><span class="step">3</span><span class="inline"><span class="bm">Chit</span> · <span class="en">The chit</span></span></h2>' +
       '<div id="fh-table"></div></section>' +
 
       '<div class="bottom-bar"><button type="button" class="btn btn-main" id="fh-check">SAVE CHIT<small>Simpan chit</small></button></div>' +
@@ -540,15 +518,13 @@
     $('#fh-addjob').onclick = function () { editJob(null); };
     if ($('#fh-copy')) $('#fh-copy').onclick = copyLast;
     // A comma is a decimal point too (many phone keyboards show only a comma): 2,5 = 2.5 mm.
-    $('#fh-rain').oninput = function () { var v = this.value.replace(',', '.').replace(/[^\d.]/g, ''); var i = v.indexOf('.'); if (i >= 0) v = v.slice(0, i + 1) + v.slice(i + 1).replace(/\./g, ''); draft.rain_mm = v; keepDraft(); drawRain(); };
-    $('#fh-raint').oninput = function () { draft.rain_time = this.value; keepDraft(); };
     $('#fh-check').onclick = check;
     wireAlerts();
     drawAll();
     wireCommon(); wireBacklog(el, ctx.estate); refreshBacklog(ctx.estate);
   }
 
-  function drawAll() { drawJobs(); drawRows(); drawRain(); drawTable(); }
+  function drawAll() { drawJobs(); drawRows(); drawTable(); }
   function niceDate(iso) { var d = new Date(iso + 'T00:00:00'); return ui().dayBm[d.getDay()] + ' ' + d.getDate() + ' ' + ui().monBm[d.getMonth()]; }
   // The latest chit of an earlier day on this phone.
   function lastChit() {
@@ -569,7 +545,6 @@
     keepDraft(); render(el, ctx);
     ui().toast(EA.t('Disalin. Ubah petak dan yang berbeza', 'Copied. Change the lots and anything different'));
   }
-  function drawRain() { $('#fh-rainmtd').textContent = EA.t('Bulan ini: ', 'Month to date: ') + rainMonth(EA.today(), draft.rain_mm).toFixed(2) + ' mm (' + EA.t('dari chit di telefon ini', 'from chits on this phone') + ')'; }
   function draftRows() {
     var rows = [];
     everyone().forEach(function (w) {
@@ -788,7 +763,6 @@
     if (!draft.alertNotes) draft.alertNotes = {};
     var noNote = chitAlerts().filter(function (a) { return !a.note; });
     if (noNote.length) p.push(['Tulis apa berlaku untuk setiap amaran (' + noNote.length + ' belum).', 'Say what happened for each alert (' + noNote.length + ' not done).']);
-    if (draft.rain_mm === '') p.push(['Isi hujan semalam (0 jika tiada hujan).', 'Fill in the rain (0 if no rain).']);
     return p;
   }
   function emptyJobs() {
@@ -962,7 +936,8 @@
     var L = [];
     L.push('*CHIT MUSTER ' + (est ? est.company + ' ' : '') + c.estate + '*' + (c.rev > 1 ? ' _(dibetulkan · corrected)_' : ''));
     L.push(ui().dayBm[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear());
-    L.push('Hujan semalam: ' + (Number(c.rain_mm) || 0).toFixed(2) + ' mm' + (c.rain_time ? ' (' + c.rain_time + ')' : '') + ' · Bulan ini: ' + rainMonth(c.date, c.chit.indexOf('(') === 0 ? c.rain_mm : undefined).toFixed(2) + ' mm');
+    // v1.17: an old chit keyed with rain still shows it; new chits have none (rain is in the Sugut DMS).
+    if (c.rain_mm !== '' && c.rain_mm !== undefined && c.rain_mm !== null) L.push('Hujan semalam: ' + (Number(c.rain_mm) || 0).toFixed(2) + ' mm' + (c.rain_time ? ' (' + c.rain_time + ')' : ''));
     backlogLines(c.backlog).forEach(function (x) { L.push(x); });
     if (c.alerts && c.alerts.length) {
       L.push('*⚠ AMARAN · ALERT — untuk tindakan Penolong Pengurus*');

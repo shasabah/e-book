@@ -405,3 +405,15 @@ body:has(#room:not([hidden]) .botbar) .foot { padding-bottom: 96px; }
 .mgrid button:disabled { color: var(--line); background: transparent; cursor: default; }
 .mgrid .dot { position: absolute; bottom: 6px; left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--ok); }
 .mgrid button.on .dot { background: #fff; }
+
+/* v1.12 Operasi (view only) for the clerk and the manager */
+.view-badge { font-size: .72rem; font-weight: 800; letter-spacing: .03em; color: #13759c; background: #e3f3fa; border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
+.today-card { width: 100%; text-align: left; font: inherit; color: inherit; border: 2px solid var(--ok); cursor: pointer; }
+.today-card .tc-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.today-card .tc-top b { font-size: 1.02rem; }
+.today-card .live { font-size: .75rem; font-weight: 700; color: var(--ok); white-space: nowrap; }
+.today-card .tc-row { display: flex; gap: 6px; }
+.today-card .tc { flex: 1; border-radius: 12px; padding: 8px 4px; text-align: center; font-size: .74rem; font-weight: 700; background: var(--paper); color: var(--muted); }
+.today-card .tc b { display: block; font-size: .9rem; }
+.today-card .tc.ok { background: var(--ok-soft); color: var(--ok); }
+.today-card .tc.wait { background: var(--wait-soft); color: #9a5b00; }

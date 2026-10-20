@@ -5,7 +5,7 @@
 window.EA = window.EA || {};
 EA.roomViews = EA.roomViews || {};
 (function () {
-  var ROLES = ['Staff', 'Clerk', 'Mandor', 'Store', 'HQ', 'Owner', 'Worker'];
+  var ROLES = ['Staff', 'Clerk', 'Manager', 'Mandor', 'Store', 'HQ', 'Owner', 'Worker'];
   var ALL = ['SDK', 'MELU', 'SSGT', 'PTAN', 'TKRS', 'KWNN'];
   var EST_NAME = { SDK: 'Sandakan HQ', MELU: 'Melu', SSGT: 'Sugut', PTAN: 'Paitan', TKRS: 'Tekara', KWNN: 'Kawananan' };
   var data = null, loading = false, failed = '', shown = null, form = null, el = null, ctx = null;

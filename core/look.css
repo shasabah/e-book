@@ -428,3 +428,7 @@ body:has(#room:not([hidden]) .botbar) .foot { padding-bottom: 96px; }
 .us-big > div { flex: 1; text-align: center; border-radius: 14px; padding: 8px 4px; background: #f6f3ea; }
 .us-big span { display: block; font-size: .72rem; font-weight: 700; color: var(--muted); }
 .us-big .us-pin { display: block; margin: 0; font-size: 1.6rem; padding: 12px 0; letter-spacing: .02em; white-space: nowrap; }
+
+/* 1.15: users log on the person sheet */
+.us-log { margin-top: 10px; }
+.us-logline { font-size: .8rem; line-height: 1.4; background: #f6f3ea; border-radius: 10px; padding: 7px 9px; margin-top: 6px; }

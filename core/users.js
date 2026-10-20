@@ -8,6 +8,11 @@ EA.roomViews = EA.roomViews || {};
   var ROLES = ['Staff', 'Clerk', 'Manager', 'Mandor', 'Store', 'HQ', 'Owner', 'Worker'];
   var ALL = ['SDK', 'MELU', 'SSGT', 'PTAN', 'TKRS', 'KWNN'];
   var EST_NAME = { SDK: 'Sandakan HQ', MELU: 'Melu', SSGT: 'Sugut', PTAN: 'Paitan', TKRS: 'Tekara', KWNN: 'Kawananan' };
+  // v1.15: job titles as on the organisation chart, and the app access each one usually has.
+  var POSITIONS = [['Trainee Field Staff', 'Staff'], ['Field Staff', 'Staff'], ['Senior Staff', 'Staff'], ['Estate Clerk', 'Clerk'],
+    ['Assistant Manager', 'Manager'], ['Senior Assistant Manager', 'Manager'], ['Mandor', 'Mandor'], ['Storekeeper', 'Store'], ['AGM', 'HQ'], ['GM', 'Owner']];
+  function posRole(p) { var x = POSITIONS.find(function (q) { return q[0] === p; }); return x ? x[1] : ''; }
+  function posShort(p) { return p === 'Senior Assistant Manager' ? 'Sr Assistant Manager' : p; }
   var data = null, loading = false, failed = '', shown = null, form = null, el = null, ctx = null;
 
   function ui() { return EA.ui; }
@@ -34,7 +39,11 @@ EA.roomViews = EA.roomViews || {};
     pick_another: ['PIN ini tidak boleh dipakai. Pilih PIN lain (jangan nombor mudah seperti 123456 atau 112233).', 'This PIN cannot be used. Pick another (not an easy one like 123456 or 112233).'],
     same_pin: ['Ini PIN anda sekarang. Pilih PIN baru.', 'That is your PIN now. Pick a new one.'],
     not_same: ['Dua PIN tidak sama. Taip semula.', 'The two PINs are not the same. Type them again.'],
-    no_phone_code: ['Pejabat kehabisan kod telefon. Hubungi pembina.', 'The office has run out of phone codes. Call the builder.']
+    no_phone_code: ['Pejabat kehabisan kod telefon. Hubungi pembina.', 'The office has run out of phone codes. Call the builder.'],
+    bad_position: ['Pilih jawatan dari senarai.', 'Pick a position from the list.'],
+    bad_date: ['Pilih tarikh mula.', 'Pick the start date.'],
+    same_name: ['Nama ini sama dengan sekarang.', 'That is the name already.'],
+    same_estates: ['Ladang baru sama dengan sekarang.', 'The new estates are the same as now.']
   };
   function errText(e) { var m = ERR[e] || [EA.t('Pejabat menolak: ', 'Office refused: ') + e, EA.t('Pejabat menolak: ', 'Office refused: ') + e]; return EA.t(m[0], m[1]); }
 
@@ -70,6 +79,7 @@ EA.roomViews = EA.roomViews || {};
   function draw() {
     if (!el) return;
     if (shown) return drawPin();
+    if (form && form.mode === 'move') return drawMove();
     if (form) return drawForm();
     var h = top(EA.t('Pengguna & PIN', 'Users & PIN'), '<span class="inline"><span class="bm">Bilik</span><span class="en">Rooms</span></span>');
     if (loading && !data) h += '<div class="card"><p class="hint">' + EA.t('Memuat dari pejabat…', 'Loading from the office…') + '</p></div>';
@@ -125,7 +135,8 @@ EA.roomViews = EA.roomViews || {};
   function rowHtml(u, me) {
     var on = u.status === 'active';
     return '<button type="button" class="hrow us-row" data-user="' + esc(u.code) + '"><div><b>' + esc(u.name) + (u.code === me ? ' · ' + EA.t('anda', 'you') : '') + '</b>' +
-      '<span class="s">' + esc(roleName(u.role)) + ' · ' + esc(u.estates.length === ALL.length ? EA.t('semua ladang', 'all estates') : u.estates.join(', ')) +
+      '<span class="s">' + esc(u.position ? posShort(u.position) : roleName(u.role)) + ' · ' + esc(u.estates.length === ALL.length ? EA.t('semua ladang', 'all estates') : u.estates.join(', ')) +
+      (u.move ? ' · ' + EA.t('pindah ke ', 'moving to ') + esc(u.move.estates.join(', ')) + ' ' + esc(shortDate(u.move.date)) : '') +
       (u.added ? ' · ' + EA.t('sejak ', 'since ') + esc(shortDate(u.added)) : '') + '</span>' + phonesHtml(u) + '</div>' +
       '<span class="us-tag ' + (on ? 'on' : 'off') + '">' + (on ? EA.t('AKTIF', 'ACTIVE') : EA.t('DITUTUP', 'OFF')) + '</span></button>';
   }
@@ -152,16 +163,19 @@ EA.roomViews = EA.roomViews || {};
   // ---------- add / change form ----------
   function drawForm() {
     var f = form, editing = f.mode === 'edit';
-    var title = editing ? EA.t('Ubah ladang / tugas', 'Change estates / role') : EA.t('Tambah pengguna', 'Add a user');
+    var title = editing ? EA.t('Ubah ladang / jawatan', 'Change estates / position') : EA.t('Tambah pengguna', 'Add a user');
     var h = top(title, EA.t('Pengguna', 'Users'));
     h += '<div class="card">';
     if (editing) h += '<div><b>' + esc(f.name) + '</b><span class="hint"> · ' + esc(f.code) + '</span></div>';
     else h += '<div class="field"><label for="us-name">' + EA.t('Nama', 'Name') + '</label>' +
       '<input id="us-name" class="text-input" maxlength="40" autocomplete="off" value="' + esc(f.name) + '" placeholder="' + EA.t('Nama penuh atau nama panggilan', 'Full name or the name people use') + '"></div>';
-    var roles = f.firstOwner ? ['Owner'] : (f.self ? ['Owner'] : ROLES);
-    h += '<div class="field"><label>' + EA.t('Tugas', 'Role') + '</label><div class="us-pills" id="us-roles">' + roles.map(function (r) {
-      return '<button type="button" data-role="' + r + '" aria-pressed="' + (f.role === r) + '">' + esc(roleName(r)) + '</button>';
+    if (!f.firstOwner && !f.self) h += '<div class="field"><label>' + EA.t('Jawatan · Position', 'Position · Jawatan') + '</label><div class="us-pills" id="us-pos">' + POSITIONS.map(function (q) {
+      return '<button type="button" data-pos="' + esc(q[0]) + '" aria-pressed="' + (f.position === q[0]) + '">' + esc(posShort(q[0])) + '</button>';
     }).join('') + '</div></div>';
+    var roles = f.firstOwner ? ['Owner'] : (f.self ? ['Owner'] : ROLES);
+    h += '<div class="field"><label>' + EA.t('Akses app · App access', 'App access · Akses app') + '</label><div class="us-pills" id="us-roles">' + roles.map(function (r) {
+      return '<button type="button" data-role="' + r + '" aria-pressed="' + (f.role === r) + '">' + esc(roleName(r)) + '</button>';
+    }).join('') + '</div>' + (f.firstOwner || f.self ? '' : '<p class="hint">' + EA.t('Diisi sendiri dari jawatan. Tukar hanya jika orang ini berbeza.', 'Filled in from the position. Change it only for an exception.') + '</p>') + '</div>';
     h += '<div class="field"><label>' + EA.t('Ladang', 'Estates') + '</label><div class="us-pills" id="us-ests">' + ALL.map(function (e) {
       return '<button type="button" data-est="' + e + '" aria-pressed="' + (f.estates.indexOf(e) >= 0) + '" title="' + esc(EST_NAME[e]) + '">' + e + '</button>';
     }).join('') + '<button type="button" data-est="*" class="us-all">' + EA.t('Semua', 'All') + '</button></div></div>';
@@ -173,6 +187,10 @@ EA.roomViews = EA.roomViews || {};
     el.querySelector('#us-back').onclick = el.querySelector('#us-cancel').onclick = function () { form = null; draw(); };
     var nm = el.querySelector('#us-name'); if (nm) nm.oninput = function () { f.name = nm.value; };
     el.querySelectorAll('[data-role]').forEach(function (b) { b.onclick = function () { f.role = b.dataset.role; drawForm(); }; });
+    el.querySelectorAll('[data-pos]').forEach(function (b) { b.onclick = function () {
+      f.position = f.position === b.dataset.pos ? '' : b.dataset.pos;
+      if (f.position && posRole(f.position) && !f.self) f.role = posRole(f.position);
+      drawForm(); }; });
     el.querySelectorAll('[data-est]').forEach(function (b) {
       b.onclick = function () {
         if (f.firstOwner) return;
@@ -194,7 +212,7 @@ EA.roomViews = EA.roomViews || {};
     if (f.name.length < 2) return showErr('bad_name');
     if (!f.estates.length) return showErr('bad_estates');
     busy(btn, true);
-    var j = await call('userAdd', { name: f.name, role: f.role, estates: f.estates });
+    var j = await call('userAdd', { name: f.name, role: f.role, estates: f.estates, position: f.position || '' });
     busy(btn, false);
     if (!j.ok) return showErr(j.error);
     form = null;
@@ -205,7 +223,7 @@ EA.roomViews = EA.roomViews || {};
     var f = form, btn = el.querySelector('#us-go');
     if (!f.estates.length) return showErr('bad_estates');
     busy(btn, true);
-    var j = await call('userSet', { code: f.code, role: f.role, estates: f.estates });
+    var j = await call('userSet', { code: f.code, role: f.role, estates: f.estates, position: f.position || '' });
     busy(btn, false);
     if (!j.ok) return showErr(j.error);
     form = null; draw(); ui().toast(EA.t('Disimpan', 'Saved'));
@@ -258,7 +276,7 @@ EA.roomViews = EA.roomViews || {};
     if (!u) return;
     var self = u.code === data.me, on = u.status === 'active';
     var h = '<h2 id="sheet-title">' + esc(u.name) + '</h2>' +
-      '<p class="hint">' + esc(roleName(u.role)) + ' · ' + esc(u.estates.join(', ')) + ' · ' + EA.t('kod ', 'code ') + esc(u.code) + (u.added ? ' · ' + EA.t('ditambah ', 'added ') + esc(shortDate(u.added)) : '') + '</p>' + phonesHtml(u);
+      '<p class="hint">' + (u.position ? esc(u.position) + ' · ' : '') + esc(roleName(u.role)) + ' · ' + esc(u.estates.join(', ')) + ' · ' + EA.t('kod ', 'code ') + esc(u.code) + (u.added ? ' · ' + EA.t('ditambah ', 'added ') + esc(shortDate(u.added)) : '') + '</p>' + phonesHtml(u);
     if (on) {
       h += '<button class="btn btn-ghost" type="button" id="ps-pin">NEW PIN<small>PIN baru</small></button>' +
         '<p class="hint">' + (self ? EA.t('PIN lama anda berhenti serta-merta. Telefon ini terus guna PIN baru.', 'Your old PIN stops at once. This phone switches to the new one.') : EA.t('PIN lama berhenti serta-merta. Guna bila lupa PIN atau telefon bertukar.', 'The old PIN stops at once. Use it when the PIN is forgotten or the phone changes.')) + '</p>' +
@@ -266,24 +284,101 @@ EA.roomViews = EA.roomViews || {};
           '<p class="hint">' + EA.t('Taip PIN 6 digit pilihan anda sendiri.', 'Type a 6-digit PIN of your own choice.') + '</p>' : '') +
         '<button class="btn btn-main" type="button" id="ps-dev">+ DEVICE<small>+ Peranti</small></button>' +
         '<p class="hint">' + EA.t('Satu kod telefon lagi untuk orang yang sama (laptop, telefon kedua). PIN tidak berubah.', 'One more phone code for the same person (a laptop, a second phone). The PIN stays the same.') + '</p>' +
-        '<button class="btn btn-ghost" type="button" id="ps-edit">CHANGE ESTATES / ROLE<small>Ubah ladang / tugas</small></button>';
+        '<button class="btn btn-ghost" type="button" id="ps-edit">CHANGE ESTATES / POSITION<small>Ubah ladang / jawatan</small></button>' +
+        '<p class="hint">' + EA.t('Tambah atau buang ladang, naik pangkat.', 'Add or remove an area, a promotion.') + '</p>' +
+        (self ? '' : '<button class="btn btn-main" type="button" id="ps-move">TRANSFER<small>Pindah</small></button>') +
+        '<button class="btn btn-ghost" type="button" id="ps-name">CHANGE NAME<small>Tukar nama</small></button>';
       if (!self) h += '<button class="btn btn-ghost us-bad" type="button" id="ps-off">SWITCH OFF<small>Tutup akses</small></button>' +
         '<p class="hint">' + EA.t('Telefon hilang atau berhenti kerja. Rekod lama kekal. Boleh dibuka semula.', 'Lost phone or left the job. Old records stay. Can be switched on again.') + '</p>';
     } else {
       h += '<button class="btn btn-main" type="button" id="ps-on">SWITCH ON AGAIN<small>Buka semula</small></button>' +
         '<p class="hint">' + EA.t('PIN lama berfungsi semula. Jika telefon hilang, buat PIN baru selepas ini.', 'The old PIN works again. If the phone was lost, make a new PIN after this.') + '</p>';
     }
+    if (u.move) h += '<p class="warn">' + EA.t('Pindah ke ' + u.move.estates.join(', ') + ' mula ' + shortDate(u.move.date) + '.', 'Moving to ' + u.move.estates.join(', ') + ' from ' + shortDate(u.move.date) + '.') + '</p>';
+    h += '<div class="us-log" id="ps-log"><div class="hint">' + EA.t('Log pengguna…', 'Users log…') + '</div></div>';
     h += '<div class="actions"><button class="btn btn-ghost" type="button" id="ps-close">BACK<small>Kembali</small></button></div>';
     ui().openSheet(h, function (s) {
+      showLog(u, s.querySelector('#ps-log'));
       s.querySelector('#ps-close').onclick = ui().closeSheet;
       var p = s.querySelector('#ps-pin'); if (p) p.onclick = function () { confirmPin(u, self); };
-      var e = s.querySelector('#ps-edit'); if (e) e.onclick = function () { ui().closeSheet(); form = { mode: 'edit', code: u.code, name: u.name, role: u.role, estates: u.estates.slice(), self: self }; draw(); window.scrollTo(0, 0); };
+      var e = s.querySelector('#ps-edit'); if (e) e.onclick = function () { ui().closeSheet(); form = { mode: 'edit', code: u.code, name: u.name, role: u.role, estates: u.estates.slice(), self: self, position: u.position || '' }; draw(); window.scrollTo(0, 0); };
+      var mv = s.querySelector('#ps-move'); if (mv) mv.onclick = function () { ui().closeSheet(); form = { mode: 'move', code: u.code, name: u.name, from: u.estates.slice(), estates: [], date: todayStr(), position: u.position || '', newPos: '' }; draw(); window.scrollTo(0, 0); };
+      var nmb = s.querySelector('#ps-name'); if (nmb) nmb.onclick = function () { nameSheet(u); };
       var o = s.querySelector('#ps-off'); if (o) o.onclick = function () { confirmOff(u); };
       var mp = s.querySelector('#ps-mine'); if (mp) mp.onclick = function () { myPinSheet(u); };
       var dv = s.querySelector('#ps-dev'); if (dv) dv.onclick = function () { addDevice(u, dv); };
       var n = s.querySelector('#ps-on'); if (n) n.onclick = function () { simple('userOn', { code: u.code }, EA.t('Akses dibuka semula', 'Switched on again')); };
     });
   }
+  // ---------- v1.15: users log, transfer, name ----------
+  function todayStr() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  var ACT = { add: ['Ditambah', 'Added'], change: ['Ubah', 'Changed'], move: ['Pindah', 'Transfer'], name: ['Nama', 'Name'], new_pin: ['PIN baru', 'New PIN'],
+    own_pin_set: ['Tukar PIN sendiri', 'Own PIN changed'], off: ['Akses ditutup', 'Switched off'], on: ['Akses dibuka', 'Switched on'], device: ['+ Peranti', '+ Device'], device_kept: ['Kod telefon disimpan', 'Phone code kept'] };
+  async function showLog(u, box) {
+    if (!box) return;
+    var j = await EA.askFull('userLog', { code: u.code });
+    if (!box.isConnected) return;
+    if (!j || !j.ok) { box.innerHTML = '<div class="hint">' + EA.t('Log tidak dapat dimuat (perlu isyarat).', 'The log could not load (needs signal).') + '</div>'; return; }
+    box.innerHTML = '<div class="hint"><b>' + EA.t('Log pengguna', 'Users log') + '</b></div>' + (j.log.length ? j.log.map(function (l) {
+      var a = ACT[l.action] ? EA.t(ACT[l.action][0], ACT[l.action][1]) : l.action;
+      return '<div class="us-logline"><b>' + esc(l.at) + ' · ' + esc(l.by) + '</b><br>' + esc(a) + (l.detail ? ': ' + esc(l.detail) : '') + '</div>';
+    }).join('') : '<div class="hint">' + EA.t('Belum ada.', 'Nothing yet.') + '</div>');
+  }
+  function drawMove() {
+    var f = form;
+    var h = top(EA.t('Pindah', 'Transfer'), EA.t('Pengguna', 'Users'));
+    h += '<div class="card"><div><b>' + esc(f.name) + '</b>' + (f.position ? '<span class="hint"> · ' + esc(f.position) + '</span>' : '') + '</div>' +
+      '<div class="field"><label>' + EA.t('Sekarang · Now', 'Now · Sekarang') + '</label><div class="us-pills">' + f.from.map(function (e) { return '<button type="button" aria-pressed="true" disabled>' + e + '</button>'; }).join('') + '</div></div>' +
+      '<div class="field"><label>' + EA.t('Ke ladang · To', 'To · Ke ladang') + '</label><div class="us-pills" id="mv-ests">' + ALL.map(function (e) {
+        return '<button type="button" data-mest="' + e + '" aria-pressed="' + (f.estates.indexOf(e) >= 0) + '" title="' + esc(EST_NAME[e]) + '">' + e + '</button>'; }).join('') + '</div></div>' +
+      '<div class="field"><label for="mv-date">' + EA.t('Mula · Starts', 'Starts · Mula') + '</label><input id="mv-date" class="text-input" type="date" value="' + esc(f.date) + '"></div>' +
+      '<div class="field"><label>' + EA.t('Jawatan baru? (pilihan)', 'New position? (optional)') + '</label><div class="us-pills" id="mv-pos">' +
+        '<button type="button" data-mpos="" aria-pressed="' + (!f.newPos) + '">' + EA.t('Sama', 'Same') + '</button>' +
+        POSITIONS.filter(function (q) { return q[0] !== f.position; }).map(function (q) { return '<button type="button" data-mpos="' + esc(q[0]) + '" aria-pressed="' + (f.newPos === q[0]) + '">' + esc(posShort(q[0])) + '</button>'; }).join('') + '</div></div>' +
+      '<p class="note-sun">' + EA.t('PIN dan kod telefon kekal. Rekod lama kekal di ' + f.from.join(', ') + '.', 'PIN and phone code stay. Old records stay under ' + f.from.join(', ') + '.') + '</p>' +
+      '<p class="msg" id="us-err" hidden></p>' +
+      '<div class="actions"><button class="btn btn-ghost" type="button" id="us-cancel">CANCEL<small>Batal</small></button>' +
+      '<button class="btn btn-main" type="button" id="mv-go">SAVE TRANSFER<small>Simpan pindah</small></button></div></div>';
+    el.innerHTML = '<div class="us">' + h + '</div>';
+    el.querySelector('#us-back').onclick = el.querySelector('#us-cancel').onclick = function () { form = null; draw(); };
+    el.querySelector('#mv-date').onchange = function () { f.date = this.value; };
+    el.querySelectorAll('[data-mest]').forEach(function (b) { b.onclick = function () { var e = b.dataset.mest;
+      f.estates = f.estates.indexOf(e) >= 0 ? f.estates.filter(function (x) { return x !== e; }) : f.estates.concat([e]); drawMove(); }; });
+    el.querySelectorAll('[data-mpos]').forEach(function (b) { b.onclick = function () { f.newPos = b.dataset.mpos; drawMove(); }; });
+    el.querySelector('#mv-go').onclick = async function () {
+      if (!f.estates.length) return showErr('bad_estates');
+      var sorted = ALL.filter(function (e) { return f.estates.indexOf(e) >= 0; });
+      if (sorted.join() === ALL.filter(function (e) { return f.from.indexOf(e) >= 0; }).join()) return showErr('same_estates');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(f.date || '')) return showErr('bad_date');
+      this.disabled = true;
+      var j = await call('userMove', { code: f.code, estates: sorted, date: f.date, position: f.newPos || '' });
+      this.disabled = false;
+      if (!j.ok) return showErr(j.error);
+      form = null; draw(); ui().toast(EA.t('Pindah disimpan', 'Transfer saved'));
+    };
+  }
+  function nameSheet(u) {
+    ui().openSheet('<h2 id="sheet-title">' + EA.t('Tukar nama', 'Change name') + '</h2>' +
+      '<div class="field"><label>' + EA.t('Nama sekarang', 'Name now') + '</label><div class="hint">' + esc(u.name) + '</div></div>' +
+      '<div class="field"><label for="nm-new">' + EA.t('Nama betul', 'Right name') + '</label><input id="nm-new" class="text-input" maxlength="40" autocomplete="off" value="' + esc(u.name) + '"></div>' +
+      '<p class="hint">' + EA.t('Rekod lama tetap milik orang yang sama.', 'Old records still belong to the same person.') + '</p>' +
+      '<p class="msg" id="nm-err" hidden></p>' +
+      '<div class="actions"><button class="btn btn-ghost" type="button" id="nm-back">BACK<small>Kembali</small></button>' +
+      '<button class="btn btn-main" type="button" id="nm-ok">SAVE NAME<small>Simpan nama</small></button></div>',
+      function (s) {
+        var inp = s.querySelector('#nm-new'), m = s.querySelector('#nm-err');
+        s.querySelector('#nm-back').onclick = function () { personSheet(u.code); };
+        s.querySelector('#nm-ok').onclick = async function () {
+          var v = inp.value.replace(/\s+/g, ' ').trim();
+          if (v.length < 2) { m.textContent = errText('bad_name'); m.hidden = false; return; }
+          this.disabled = true;
+          var j = await call('userName', { code: u.code, name: v });
+          if (!j.ok) { this.disabled = false; m.textContent = errText(j.error); m.hidden = false; return; }
+          ui().closeSheet(); draw(); ui().toast(EA.t('Nama disimpan', 'Name saved'));
+        };
+      });
+  }
+
   // + PERANTI (v1.14): the office makes one more phone code for this person.
   async function addDevice(u, btn) {
     btn.disabled = true;

@@ -10,7 +10,8 @@ EA.lists.testUsers = [
   { code: 'T-STF', key: '777777', name: 'Staf Sugut',     role: 'Staff',  estates: ['SSGT'] },
   { code: 'T-MDR', key: '444444', name: 'Mandor Sugut',   role: 'Mandor', estates: ['SSGT'] },
   { code: 'T-STR', key: '555555', name: 'Stor Meliau',    role: 'Store',  estates: ['MELU'] },
-  { code: 'T-WRK', key: '666666', name: 'Pekerja Durian', role: 'Worker', estates: ['SSGT'] }
+  { code: 'T-WRK', key: '666666', name: 'Pekerja Durian', role: 'Worker', estates: ['SSGT'] },
+  { code: 'T-MGR', key: '888888', name: 'Pengurus Ujian', role: 'Manager', estates: ['SSGT', 'PTAN', 'TKRS'] }
 ];
 // People with a given role at an estate (e.g. the mandors of Sugut).
 EA.lists.peopleFor = function (estate, role) {

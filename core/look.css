@@ -373,3 +373,35 @@ details.card-sub summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
 .share-qr { width: 236px; margin: 6px auto 4px; padding: 8px; border: 3px solid var(--sun); border-radius: 16px; background: #fff; }
 .share-qr img { width: 100%; height: auto; display: block; }
 .share-url { text-align: center; font-weight: 800; color: var(--slate); margin: 4px 0 0; word-break: break-all; }
+
+/* v1.11 Room screens as a bottom bar: icon + one word, fixed at the bottom (thumb reach) */
+.tabs.botbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; margin: 0; gap: 4px;
+  padding: 6px max(8px, env(safe-area-inset-left, 0px)) calc(8px + env(safe-area-inset-bottom, 0px));
+  background: var(--surface); border-top: 1px solid var(--line); box-shadow: 0 -4px 14px rgba(0,0,0,.06); }
+.tabs.botbar a { position: relative; flex: 1; max-width: 120px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 7px 2px 6px; border-radius: 14px; background: transparent; box-shadow: none; color: var(--muted); font-size: .78rem; font-weight: 700; line-height: 1.1; }
+.tabs.botbar a svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tabs.botbar a[aria-current="page"] { color: var(--slate); background: var(--ok-soft); }
+.tabs.botbar a .en { font-size: inherit; }
+.tabs.botbar .tab-ok { position: absolute; top: 5px; left: 50%; margin-left: 9px; width: 9px; height: 9px; border-radius: 50%; background: var(--ok); border: 2px solid var(--surface); }
+#room:has(.botbar) { padding-bottom: 96px; }
+body:has(#room:not([hidden]) .botbar) .toast { bottom: calc(92px + env(safe-area-inset-bottom, 0px)); }
+body:has(#room:not([hidden]) .botbar) .foot { padding-bottom: 96px; }
+#room:has(.botbar) .bottom-bar { bottom: calc(68px + env(safe-area-inset-bottom, 0px)); }
+
+/* v1.11 History: ‹ Month › stepper and the year grid */
+.mstep { display: flex; align-items: center; gap: 6px; background: var(--surface); border-radius: var(--card-r); padding: 6px; box-shadow: var(--shadow); }
+.mstep > button { flex: none; width: 46px; height: 46px; border: 0; border-radius: 12px; background: var(--ok-soft); color: var(--slate); font-size: 1.5rem; font-weight: 800; cursor: pointer; }
+.mstep > button:disabled { opacity: .3; cursor: default; }
+.mstep .m { flex: 1; width: auto; height: auto; background: none; font-size: 1rem; text-align: center; padding: 4px; color: inherit; }
+.mstep .m b { display: block; font-size: 1.05rem; }
+.mstep .m small { display: block; font-size: .78rem; font-weight: 500; color: var(--muted); }
+.yr { display: flex; align-items: center; justify-content: space-between; font-size: 1.1rem; }
+.yr button { width: 44px; height: 44px; border: 0; border-radius: 12px; background: var(--ok-soft); color: var(--slate); font-size: 1.4rem; font-weight: 800; }
+.yr button:disabled { opacity: .3; }
+.mgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.mgrid button { position: relative; min-height: 50px; border: 0; border-radius: 12px; background: var(--paper); font: inherit; font-weight: 700; color: inherit; cursor: pointer; }
+.mgrid button.on { background: var(--ok); color: #fff; }
+.mgrid button:disabled { color: var(--line); background: transparent; cursor: default; }
+.mgrid .dot { position: absolute; bottom: 6px; left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--ok); }
+.mgrid button.on .dot { background: #fff; }

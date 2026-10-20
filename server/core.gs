@@ -24,7 +24,14 @@ var HARVEST_CODE = 'HA';
 var SHEET_ID = '1N79YKsFE3CLvR6Z_lcy7clagEydOXhKKeTHI4sA3VWs';
 // Opened once per request (opening the sheet is the slowest step).
 var BOOK_ = null;
-function book_() { return BOOK_ || (BOOK_ = SpreadsheetApp.openById(SHEET_ID)); }
+// v1.18: from the Sugut trial (21 Oct 2026) the office writes into the clean E-Book LIVE sheet, made by
+// setupLiveSheet() and kept in the script settings. SHEET_ID above stays the test sheet, kept as it is.
+function liveSheetId_() { try { return PropertiesService.getScriptProperties().getProperty('SHEET_ID') || SHEET_ID; } catch (e) { return SHEET_ID; } }
+function book_() { return BOOK_ || (BOOK_ = SpreadsheetApp.openById(liveSheetId_())); }
+// Records dated before the trial began are practice from the phones: they are answered "done" so the
+// phone stops sending them, but never written into the clean sheet.
+function liveFrom_() { try { return PropertiesService.getScriptProperties().getProperty('LIVE_FROM') || ''; } catch (e) { return ''; } }
+function beforeLive_(user, row) { var lf = liveFrom_(); return !!(lf && row && String(row.date) < lf && !isTestCode_(user.user_code)); }
 
 var USERS_TAB = 'USERS';
 var USER_COLS = ['user_code', 'name', 'role', 'estates', 'key_hash', 'status', 'added_at', 'phones', 'position', 'move_estates', 'move_date', 'phone_names'];
@@ -222,6 +229,7 @@ function saveRow(user, tab, row) {
   if (!canWrite_(user, String(tab))) return { ok: false, error: 'not_allowed' };
   if (STATUSES.indexOf(row.status) < 0) return { ok: false, error: 'bad_status' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(row.date))) return { ok: false, error: 'bad_date' };
+  if (beforeLive_(user, row)) return { ok: true, skipped: 'before_live' };
   row.keyed_by = user.user_code;                 // always the person whose key it is
   row.received_at = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
 
@@ -320,6 +328,7 @@ function saveBatch(user, items) {
       if (user.estates.indexOf(row.estate) < 0) return fail('not_your_estate');
       if (STATUSES.indexOf(row.status) < 0) return fail('bad_status');
       if (!/^\d{4}-\d{2}-\d{2}$/.test(String(row.date))) return fail('bad_date');
+      if (beforeLive_(user, row)) { results.push({ id: id, ok: true, skipped: 'before_live' }); return; }
       row.keyed_by = user.user_code;
       row.received_at = now;
       var extra = Object.keys(row).filter(function (k) { return t.head.indexOf(k) < 0; });
@@ -1061,7 +1070,7 @@ function setJson_(k, v) { PropertiesService.getScriptProperties().setProperty(k,
 function phoneNames_(u) { try { var o = JSON.parse(String(u.phone_names || '{}').replace(/^'/, '')); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } }
 
 // The trial switches, sent to every phone with the login and each send.
-function switches_() { var w = getJson_('SWITCHES', {}); return { testModeOff: !!w.testModeOff, live: w.live || {} }; }
+function switches_() { var w = getJson_('SWITCHES', {}); return { testModeOff: !!w.testModeOff, live: w.live || {}, cleanFrom: liveFrom_() }; }
 
 // When each phone last reached the office, with its app version and how many records were waiting.
 // Written at most every 5 minutes per phone (or when the version or waiting count changes).
@@ -1248,4 +1257,47 @@ function adminSwitch_(user, req) {
     logUser_(user, 'switch', { user_code: '-', name: '-' }, detail);
   } finally { lock.releaseLock(); }
   return adminSwitches_();
+}
+
+
+// ================= Clean start for the Sugut trial (v1.18) =================
+/** Run ONCE from the script editor, the evening before the trial. Makes "E-Book LIVE sheet" with the
+ *  same tabs and columns as the test sheet, and copies only the real things: the real users (no T- test
+ *  people), the users log and the shared lists (LIST_...). No test records. The test sheet is kept as it
+ *  is. Then the office writes into the new sheet, and records dated before LIVE_FROM are skipped. */
+function setupLiveSheet() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('SHEET_ID')) throw new Error('The live sheet is already set: ' + props.getProperty('SHEET_ID'));
+  var LIVE_FROM = '2026-10-21';
+  var src = SpreadsheetApp.openById(SHEET_ID);
+  var dst = SpreadsheetApp.create('E-Book LIVE sheet');
+  var first = dst.getSheets()[0], copied = {};
+  src.getSheets().forEach(function (sh) {
+    var name = sh.getName(), lastCol = sh.getLastColumn();
+    if (name === 'Sheet1' || lastCol < 1) return;
+    var head = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+    var t = dst.insertSheet(name);
+    t.getRange(1, 1, 1, head.length).setValues([head]);
+    var keep = null;
+    if (name === USERS_TAB) keep = function (r) { return !isTestCode_(r[0]); };
+    else if (name === USERS_LOG_TAB || /^LIST_/.test(name)) keep = function () { return true; };
+    var n = 0;
+    if (keep && sh.getLastRow() > 1) {
+      var rows = sh.getRange(2, 1, sh.getLastRow() - 1, lastCol).getDisplayValues().filter(keep);
+      if (rows.length) {
+        var rg = t.getRange(2, 1, rows.length, lastCol);
+        rg.setNumberFormat('@');                 // kept as text, exactly as shown (dates never turn into dates)
+        rg.setValues(rows); n = rows.length;
+      }
+    }
+    copied[name] = n;
+  });
+  dst.deleteSheet(first);                        // the empty starting tab of the new file
+  props.setProperty('SHEET_ID', dst.getId());
+  props.setProperty('LIVE_FROM', LIVE_FROM);
+  BOOK_ = null;
+  logUser_({ user_code: 'SETUP', name: 'setupLiveSheet' }, 'live_sheet', { user_code: '-', name: '-' },
+    'Clean sheet from ' + LIVE_FROM + '; copied ' + JSON.stringify(copied) + '; test sheet kept: ' + SHEET_ID);
+  Logger.log('E-Book LIVE sheet: ' + dst.getUrl() + ' · copied ' + JSON.stringify(copied));
+  return dst.getUrl();
 }

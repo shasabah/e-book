@@ -27,7 +27,7 @@ var BOOK_ = null;
 function book_() { return BOOK_ || (BOOK_ = SpreadsheetApp.openById(SHEET_ID)); }
 
 var USERS_TAB = 'USERS';
-var USER_COLS = ['user_code', 'name', 'role', 'estates', 'key_hash', 'status', 'added_at'];
+var USER_COLS = ['user_code', 'name', 'role', 'estates', 'key_hash', 'status', 'added_at', 'phones'];
 var ROLES = ['Owner', 'HQ', 'Staff', 'Clerk', 'Mandor', 'Store', 'Worker', 'Manager'];
 var ESTATES = ['SDK', 'MELU', 'SSGT', 'PTAN', 'TKRS', 'KWNN'];
 var STANDARD_COLS = ['id', 'date', 'company', 'estate', 'keyed_by', 'keyed_at', 'phone', 'status', 'replaces'];
@@ -81,6 +81,9 @@ function doPost(e) {
   if (!user) { cache.put(pk, String(bad + 1), 900); cache.put('badkeys', String(badAll + 1), 900); return reply({ ok: false, error: 'wrong_key' }); }
 
   if (req.action === 'login') {
+    // v1.14: a real person may log in only on a phone code that is theirs (made with the PIN).
+    var pc = phoneCheck_(user, req.phone);
+    if (pc) return reply({ ok: false, error: pc, phone: String(req.phone || '') });
     return reply({ ok: true, user: { code: user.user_code, name: user.name, role: user.role, estates: user.estates } });
   }
   if (req.action === 'save') return reply(saveRow(user, req.tab, req.row));
@@ -670,11 +673,65 @@ function realOwner_(list) {
   return list.some(function (u) { return u.role === 'Owner' && u.status === 'active' && !isTestCode_(u.user_code); });
 }
 
+// ---------- phone codes (v1.14) ----------
+// The phone code is the ID of a device. The office makes it with the PIN (or with + PERANTI for a second
+// device), so two devices never share one. P10 upward; P90 to P99 are kept for Claude's tests.
+function phoneOk_(p) { return /^P\d{2,3}$/.test(String(p || '')); }
+function phonesOf_(u) { return String(u.phones || '').split(',').map(function (s) { return s.trim(); }).filter(phoneOk_); }
+function phoneOwner_(list, p) { return list.find(function (u) { return phonesOf_(u).indexOf(p) >= 0; }) || null; }
+function nextPhone_(list) {
+  var used = {};
+  list.forEach(function (u) { phonesOf_(u).forEach(function (p) { used[p] = true; }); });
+  for (var n = 10; n < 1000; n++) {
+    if (n >= 90 && n <= 99) continue;
+    var p = 'P' + (n < 100 ? ('0' + n).slice(-2) : String(n));
+    if (!used[p]) return p;
+  }
+  throw new Error('no_phone_code');
+}
+// The USERS tab made before v1.14 has no phones column: add it at the end of the header.
+function phonesCol_(sh, head) {
+  var i = head.indexOf('phones');
+  if (i >= 0) return i + 1;
+  head.push('phones'); sh.getRange(1, head.length).setValue('phones');
+  return head.length;
+}
+// At login: '' when this phone may be used, or the refusal. Test PINs (T-) are not checked.
+// A person with no codes yet (made before v1.14) keeps the code their phone already has, if nobody else has it.
+function phoneCheck_(user, phone) {
+  if (isTestCode_(user.user_code)) return '';
+  var p = String(phone || '').toUpperCase();
+  if (!phoneOk_(p)) return 'no_phone';
+  var mine = phonesOf_(user);
+  if (mine.indexOf(p) >= 0) return '';
+  var U = readUsers_(), owner = phoneOwner_(U.list, p);
+  if (owner && owner.user_code !== String(user.user_code)) return 'phone_not_yours';
+  var me = U.list.find(function (u) { return u.user_code === String(user.user_code); });
+  if (!me) return 'phone_not_yours';
+  var now = phonesOf_(me);
+  if (now.indexOf(p) >= 0) { forgetCache_(String(me.key_hash)); return ''; }
+  if (now.length) return 'phone_not_yours';
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (e) { return 'busy'; }
+  try {
+    var U2 = readUsers_(), me2 = U2.list.find(function (u) { return u.user_code === String(user.user_code); });
+    var o2 = phoneOwner_(U2.list, p);
+    if (o2 && o2.user_code !== me2.user_code) return 'phone_not_yours';
+    if (phonesOf_(me2).length && phonesOf_(me2).indexOf(p) < 0) return 'phone_not_yours';
+    if (phonesOf_(me2).indexOf(p) < 0) {
+      U2.sh.getRange(me2.row, phonesCol_(U2.sh, U2.head)).setValue(p);
+      logUser_(me2, 'device_kept', me2, p + ' (code in use before v1.14)');
+    }
+    forgetCache_(String(me2.key_hash));
+    return '';
+  } finally { lock.releaseLock(); }
+}
+
 function usersOut_(list) {
   return list.map(function (u) {
     var at = u.added_at instanceof Date ? Utilities.formatDate(u.added_at, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm') : String(u.added_at || '').replace(/^'/, '');
     return { code: u.user_code, name: String(u.name), role: String(u.role), estates: String(u.estates).split(',').map(function (s) { return s.trim(); }).filter(String),
-             status: u.status, added: at, test: isTestCode_(u.user_code) };
+             status: u.status, added: at, test: isTestCode_(u.user_code), phones: phonesOf_(u) };
   });
 }
 
@@ -749,14 +806,15 @@ function usersAction_(user, req) {
       var stem = ROLE_PREFIX[req.role] + '-' + (est.length === ESTATES.length ? 'ALL' : est[0]) + '-';
       var n = 1, code;
       do { code = stem + ('0' + n).slice(-2); n++; } while (list.some(function (u) { return u.user_code === code; }));
-      var pin = newPin_(list);
+      var pin = newPin_(list), phone = nextPhone_(list);
+      phonesCol_(sh, head);
       var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
       var row = head.map(function (c) {
-        return { user_code: code, name: plain(name), role: req.role, estates: est.join(','), key_hash: hashKey(pin), status: 'active', added_at: plain(now) }[c];
+        return { user_code: code, name: plain(name), role: req.role, estates: est.join(','), key_hash: hashKey(pin), status: 'active', added_at: plain(now), phones: phone }[c];
       }).map(function (v) { return v === undefined ? '' : v; });
       sh.appendRow(row);
-      logUser_(user, 'add', { user_code: code, name: name }, req.role + ' · ' + est.join(','));
-      return out({ pin: pin, code: code, name: name });
+      logUser_(user, 'add', { user_code: code, name: name }, req.role + ' · ' + est.join(',') + ' · ' + phone);
+      return out({ pin: pin, code: code, name: name, phone: phone });
     }
 
     var t = list.find(function (u) { return u.user_code === String(req.code || ''); });
@@ -772,7 +830,7 @@ function usersAction_(user, req) {
       sh.getRange(t.row, col('key_hash')).setValue(hashKey(p2));
       forgetCache_(old);
       logUser_(user, 'new_pin', t, self ? 'own PIN' : '');
-      return out({ pin: p2, code: t.user_code, name: String(t.name), self: !!self });
+      return out({ pin: p2, code: t.user_code, name: String(t.name), self: !!self, phones: phonesOf_(t) });
     }
     // The Owner types his own PIN (v1.9.1). Others' PINs stay random.
     if (req.action === 'userMyPin') {
@@ -801,6 +859,15 @@ function usersAction_(user, req) {
       forgetCache_(String(t.key_hash));
       logUser_(user, 'change', t, before + ' → ' + req.role + ' · ' + e2.join(','));
       return out();
+    }
+    // + PERANTI (v1.14): one more phone code for the same person (a laptop, a second phone). The PIN stays.
+    if (req.action === 'userDevice') {
+      if (t.status !== 'active') return { ok: false, error: 'user_off' };
+      var ph = nextPhone_(list), had = phonesOf_(t);
+      sh.getRange(t.row, phonesCol_(sh, head)).setValue(had.concat([ph]).join(','));
+      forgetCache_(String(t.key_hash));
+      logUser_(user, 'device', t, ph);
+      return out({ phone: ph, code: t.user_code, name: String(t.name) });
     }
     if (req.action === 'userOff') {
       if (self) return { ok: false, error: 'not_self' };

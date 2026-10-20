@@ -85,7 +85,7 @@ const { chromium } = require('playwright');
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v25-pin.png' });
   await p.click('#us-done'); await p.click('#dn-ok'); await p.waitForTimeout(300);
   await p.click('[data-user="OWN-ALL-01"]'); await p.waitForSelector('#ps-dev');
-  await p.click('#ps-dev'); await p.waitForSelector('#dv-code');
+  await p.click('#ps-dev'); await p.waitForSelector('#dv-make'); await p.click('#dv-make'); await p.waitForSelector('#dv-code');
   const dv = (await p.textContent('#dv-code')).trim();
   check('phone: + PERANTI shows the new code with COPY and WHATSAPP', /^P\d{2,3}$/.test(dv) && await p.locator('#dv-copy').count() === 1 && await p.locator('#dv-wa').count() === 1, dv);
   await p.click('#dv-wa');

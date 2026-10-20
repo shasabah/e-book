@@ -27,7 +27,9 @@ var BOOK_ = null;
 function book_() { return BOOK_ || (BOOK_ = SpreadsheetApp.openById(SHEET_ID)); }
 
 var USERS_TAB = 'USERS';
-var USER_COLS = ['user_code', 'name', 'role', 'estates', 'key_hash', 'status', 'added_at', 'phones'];
+var USER_COLS = ['user_code', 'name', 'role', 'estates', 'key_hash', 'status', 'added_at', 'phones', 'position', 'move_estates', 'move_date'];
+// v1.15: job titles as on the organisation chart (for reading only; the role is the app access).
+var POSITIONS = ['Trainee Field Staff', 'Field Staff', 'Senior Staff', 'Estate Clerk', 'Assistant Manager', 'Senior Assistant Manager', 'Mandor', 'Storekeeper', 'AGM', 'GM'];
 var ROLES = ['Owner', 'HQ', 'Staff', 'Clerk', 'Mandor', 'Store', 'Worker', 'Manager'];
 var ESTATES = ['SDK', 'MELU', 'SSGT', 'PTAN', 'TKRS', 'KWNN'];
 var STANDARD_COLS = ['id', 'date', 'company', 'estate', 'keyed_by', 'keyed_at', 'phone', 'status', 'replaces'];
@@ -171,7 +173,7 @@ function findUserInSheet_(key) {
     var u = {};
     head.forEach(function (c, j) { u[c] = rows[i][j]; });
     if (u.key_hash === h && u.status === 'active') {
-      u.estates = String(u.estates).split(',').map(function (s) { return s.trim(); }).filter(String);
+      u.estates = estatesNow_(u);
       return u;
     }
   }
@@ -689,12 +691,32 @@ function nextPhone_(list) {
   }
   throw new Error('no_phone_code');
 }
-// The USERS tab made before v1.14 has no phones column: add it at the end of the header.
-function phonesCol_(sh, head) {
-  var i = head.indexOf('phones');
+// The USERS tab made before v1.14/1.15 lacks the newer columns: add one at the end of the header.
+function userCol_(sh, head, name) {
+  var i = head.indexOf(name);
   if (i >= 0) return i + 1;
-  head.push('phones'); sh.getRange(1, head.length).setValue('phones');
+  head.push(name); sh.getRange(1, head.length).setValue(name);
   return head.length;
+}
+function phonesCol_(sh, head) { return userCol_(sh, head, 'phones'); }
+
+// ---------- transfers (v1.15) ----------
+// A transfer with a start date in the future waits in move_estates / move_date; from that day the
+// person's estates are the new ones. Old records keep their own estate.
+function todayKL_() { return Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd'); }
+function dstr_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd');
+  return String(v || '').replace(/^'/, '').slice(0, 10);
+}
+function splitEst_(v) { return String(v || '').split(',').map(function (s) { return s.trim(); }).filter(String); }
+function estatesNow_(u) {
+  var md = dstr_(u.move_date), me = splitEst_(u.move_estates);
+  if (md && me.length && md <= todayKL_()) return me;
+  return splitEst_(u.estates);
+}
+function moveOut_(u) {
+  var md = dstr_(u.move_date), me = splitEst_(u.move_estates);
+  return md && me.length && md > todayKL_() ? { estates: me, date: md } : null;
 }
 // At login: '' when this phone may be used, or the refusal. Test PINs (T-) are not checked.
 // A person with no codes yet (made before v1.14) keeps the code their phone already has, if nobody else has it.
@@ -730,8 +752,9 @@ function phoneCheck_(user, phone) {
 function usersOut_(list) {
   return list.map(function (u) {
     var at = u.added_at instanceof Date ? Utilities.formatDate(u.added_at, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm') : String(u.added_at || '').replace(/^'/, '');
-    return { code: u.user_code, name: String(u.name), role: String(u.role), estates: String(u.estates).split(',').map(function (s) { return s.trim(); }).filter(String),
-             status: u.status, added: at, test: isTestCode_(u.user_code), phones: phonesOf_(u) };
+    return { code: u.user_code, name: String(u.name), role: String(u.role), estates: estatesNow_(u),
+             status: u.status, added: at, test: isTestCode_(u.user_code), phones: phonesOf_(u),
+             position: String(u.position || '').replace(/^'/, ''), move: moveOut_(u) };
   });
 }
 
@@ -803,17 +826,19 @@ function usersAction_(user, req) {
       if (ROLES.indexOf(req.role) < 0) return { ok: false, error: 'bad_role' };
       var est = cleanEstates_(req.estates);
       if (!est) return { ok: false, error: 'bad_estates' };
+      var pos = String(req.position || '');
+      if (pos && POSITIONS.indexOf(pos) < 0) return { ok: false, error: 'bad_position' };
       var stem = ROLE_PREFIX[req.role] + '-' + (est.length === ESTATES.length ? 'ALL' : est[0]) + '-';
       var n = 1, code;
       do { code = stem + ('0' + n).slice(-2); n++; } while (list.some(function (u) { return u.user_code === code; }));
       var pin = newPin_(list), phone = nextPhone_(list);
-      phonesCol_(sh, head);
+      phonesCol_(sh, head); userCol_(sh, head, 'position');
       var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
       var row = head.map(function (c) {
-        return { user_code: code, name: plain(name), role: req.role, estates: est.join(','), key_hash: hashKey(pin), status: 'active', added_at: plain(now), phones: phone }[c];
+        return { user_code: code, name: plain(name), role: req.role, estates: est.join(','), key_hash: hashKey(pin), status: 'active', added_at: plain(now), phones: phone, position: pos }[c];
       }).map(function (v) { return v === undefined ? '' : v; });
       sh.appendRow(row);
-      logUser_(user, 'add', { user_code: code, name: name }, req.role + ' · ' + est.join(',') + ' · ' + phone);
+      logUser_(user, 'add', { user_code: code, name: name }, (pos ? pos + ' · ' : '') + req.role + ' · ' + est.join(',') + ' · ' + phone);
       return out({ pin: pin, code: code, name: name, phone: phone });
     }
 
@@ -853,12 +878,63 @@ function usersAction_(user, req) {
       var e2 = cleanEstates_(req.estates);
       if (!e2) return { ok: false, error: 'bad_estates' };
       if (self && req.role !== 'Owner') return { ok: false, error: 'not_self' };
-      var before = t.role + ' · ' + t.estates;
+      var posOld = String(t.position || '').replace(/^'/, ''), posNew = req.position === undefined ? posOld : String(req.position || '');
+      if (posNew && POSITIONS.indexOf(posNew) < 0) return { ok: false, error: 'bad_position' };
+      var before = (posOld ? posOld + ' · ' : '') + t.role + ' · ' + estatesNow_(t).join(',');
       sh.getRange(t.row, col('role')).setValue(req.role);
       sh.getRange(t.row, col('estates')).setValue(e2.join(','));
+      sh.getRange(t.row, userCol_(sh, head, 'position')).setValue(posNew);
+      // A change of estates here replaces any transfer still waiting for its start date.
+      if (head.indexOf('move_date') >= 0) { sh.getRange(t.row, col('move_date')).setValue(''); sh.getRange(t.row, col('move_estates')).setValue(''); }
       forgetCache_(String(t.key_hash));
-      logUser_(user, 'change', t, before + ' → ' + req.role + ' · ' + e2.join(','));
+      logUser_(user, 'change', t, before + ' → ' + (posNew ? posNew + ' · ' : '') + req.role + ' · ' + e2.join(','));
       return out();
+    }
+    // PINDAH (v1.15): a transfer to other estate(s) from a start date. Same PIN, phone codes and user code.
+    if (req.action === 'userMove') {
+      if (t.status !== 'active') return { ok: false, error: 'user_off' };
+      var e3 = cleanEstates_(req.estates);
+      if (!e3) return { ok: false, error: 'bad_estates' };
+      var day = String(req.date || '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return { ok: false, error: 'bad_date' };
+      var pos3 = req.position ? String(req.position) : '';
+      if (pos3 && POSITIONS.indexOf(pos3) < 0) return { ok: false, error: 'bad_position' };
+      var from = estatesNow_(t).join(',');
+      if (day <= todayKL_()) {
+        sh.getRange(t.row, col('estates')).setValue(e3.join(','));
+        sh.getRange(t.row, userCol_(sh, head, 'move_estates')).setValue('');
+        sh.getRange(t.row, userCol_(sh, head, 'move_date')).setValue('');
+      } else {
+        sh.getRange(t.row, userCol_(sh, head, 'move_estates')).setValue(e3.join(','));
+        sh.getRange(t.row, userCol_(sh, head, 'move_date')).setValue(plain(day));
+      }
+      var posWas = String(t.position || '').replace(/^'/, '');
+      if (pos3 && pos3 !== posWas) sh.getRange(t.row, userCol_(sh, head, 'position')).setValue(pos3);
+      forgetCache_(String(t.key_hash));
+      logUser_(user, 'move', t, from + ' → ' + e3.join(',') + ', mula ' + day + (pos3 && pos3 !== posWas ? ' · ' + (posWas || '-') + ' → ' + pos3 : ''));
+      return out();
+    }
+    // TUKAR NAMA (v1.15): the right spelling. Old records keep the user code, so they stay this person's.
+    if (req.action === 'userName') {
+      var nm = String(req.name || '').replace(/\s+/g, ' ').trim();
+      if (nm.length < 2 || nm.length > 40) return { ok: false, error: 'bad_name' };
+      var was = String(t.name).replace(/^'/, '');
+      if (nm === was) return { ok: false, error: 'same_name' };
+      sh.getRange(t.row, col('name')).setValue(plain(nm));
+      forgetCache_(String(t.key_hash));
+      logUser_(user, 'name', t, was + ' → ' + nm);
+      return out();
+    }
+    // The last changes for one person, newest first, for the person sheet.
+    if (req.action === 'userLog') {
+      var lg = book_().getSheetByName(USERS_LOG_TAB);
+      var lines = [];
+      if (lg && lg.getLastRow() > 1) {
+        lg.getRange(2, 1, lg.getLastRow() - 1, USERS_LOG_COLS.length).getValues().forEach(function (r) {
+          if (String(r[4]) === t.user_code) lines.push({ at: r[0] instanceof Date ? Utilities.formatDate(r[0], 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm') : String(r[0]).replace(/^'/, ''), by: String(r[2]).replace(/^'/, ''), action: String(r[3]), detail: String(r[6]).replace(/^'/, '') });
+        });
+      }
+      return { ok: true, log: lines.reverse().slice(0, 8) };
     }
     // + PERANTI (v1.14): one more phone code for the same person (a laptop, a second phone). The PIN stays.
     if (req.action === 'userDevice') {

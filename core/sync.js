@@ -28,6 +28,13 @@ window.EA = window.EA || {};
   EA.cleanLink = function (l) { return String(l || '').replace(/[\s\u200B-\u200D\u2060\uFEFF]/g, ''); };
   EA.setSendLink = function (l) { set(K.link, EA.cleanLink(l)); };
 
+  // v1.16: the trial switches come from the office (Pentadbir → Suis) with the login and each send,
+  // so going live needs no new copy of the app.
+  EA.switches = function () { return get('ea.switches', { testModeOff: false, live: {} }) || { testModeOff: false, live: {} }; };
+  EA.setSwitches = function (sw) { if (sw && typeof sw === 'object') { set('ea.switches', { testModeOff: !!sw.testModeOff, live: sw.live || {}, at: Date.now() }); } };
+  EA.testMode = function () { return !!EA.config.TEST_MODE && !EA.switches().testModeOff; };
+  EA.roomLive = function (r, estate) { if (!r) return false; if (r.state === 'live') return true; var l = (EA.switches().live || {})[r.id] || []; return l.indexOf(estate) >= 0; };
+
   // ID pattern from the rule book: ROOM-ESTATE-PHONE-000123, plus a short tag made once per
   // install (v1.9). A phone set up again after its data was cleared starts counting from 1, so
   // without the tag its new entries would repeat numbers the office already has and stay stuck.
@@ -123,7 +130,7 @@ window.EA = window.EA || {};
     if (!link) {
       // Pretend-sending is only for the made-up test people (codes T-…). A real person's entries
       // always wait for the sending link, so nothing real is ever dropped (v1.9).
-      if (!EA.config.TEST_MODE || !/^T-/.test(String(user.code))) return { error: 'nolink' };
+      if (!EA.testMode() || !/^T-/.test(String(user.code))) return { error: 'nolink' };
       // Test copy with no link: pretend to send, and keep a copy so it can be checked.
       var ids = {}; q.forEach(function (it) { ids[it.row.id] = true; });
       var done0 = get(K.testSent, []).concat(q).slice(-500);
@@ -136,7 +143,7 @@ window.EA = window.EA || {};
     var sent = 0, err = null, refusedAll = 0;
     function post(body) {
       return EA.fetchWait(link, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(Object.assign({ key: user.key, version: EA.VERSION, phone: EA.phone() }, body)) }).then(function (r) { return r.json(); });
+        body: JSON.stringify(Object.assign({ key: user.key, version: EA.VERSION, phone: EA.phone(), waiting: get(K.queue, []).length }, body)) }).then(function (r) { return r.json(); });
     }
     try {
       // Everything waiting goes in one trip (up to 50 at a time).
@@ -146,6 +153,7 @@ window.EA = window.EA || {};
         var j = await post({ action: 'saveBatch', items: chunk.map(function (it) { return { tab: it.tab, row: it.row }; }) });
         if (j && j.error === 'unknown_action') { oneByOne = true; break; }     // older office script
         if (!j || !j.ok) { err = (j && j.error) || 'refused'; break; }
+        if (j.sw) EA.setSwitches(j.sw);
         var done = {}, firstErr = null;
         var refused = [];
         (j.results || []).forEach(function (r) {
@@ -211,9 +219,10 @@ window.EA = window.EA || {};
     if (!navigator.onLine) return { ok: false, error: 'offline' };
     try {
       var res = await EA.fetchWait(link, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(Object.assign({ action: action, key: user.key, version: EA.VERSION, phone: EA.phone() }, extra || {})) });
+        body: JSON.stringify(Object.assign({ action: action, key: user.key, version: EA.VERSION, phone: EA.phone(), waiting: get(K.queue, []).length }, extra || {})) });
       var j = null;
       try { j = await res.json(); } catch (e2) { j = null; }
+      if (j && j.sw) EA.setSwitches(j.sw);
       return j || { ok: false, error: 'busy' };
     } catch (e) { return { ok: false, error: 'offline' }; }
   };

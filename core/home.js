@@ -147,7 +147,7 @@
     var p = EA.phone();
     $('phone-line').textContent = p ? EA.t('Telefon ', 'Phone ') + p : EA.t('Kod telefon belum ditetapkan', 'Phone code not set');
     document.querySelectorAll('.lang-pick [data-lang]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.lang === EA.lang()); b.onclick = function () { EA.setLang(b.dataset.lang); render(); }; });
-    var showTest = EA.config.TEST_MODE && !EA.sendLink();
+    var showTest = EA.testMode() && !EA.sendLink();
     $('test-keys').hidden = !showTest;
     if (showTest) {
       $('test-table').innerHTML = EA.lists.testUsers.map(function (u) {
@@ -190,8 +190,8 @@
 
   // A room can be entered when it has a screen and is live; on the test copy
   // a room still being built can be tried too.
-  function enterable(r) {
-    return !!(EA.roomViews && EA.roomViews[r.id]) && (r.state === 'live' || EA.config.TEST_MODE);
+  function enterable(r, estate) {
+    return !!(EA.roomViews && EA.roomViews[r.id]) && (EA.roomLive(r, estate) || EA.testMode());
   }
 
   function renderTiles(u, estate) {
@@ -201,15 +201,16 @@
       return;
     }
     $('tiles').innerHTML = rooms.map(function (r) {
-      return '<button class="tile ' + r.state + '" type="button" data-room="' + r.id + '">' +
+      var live = EA.roomLive(r, estate);
+      return '<button class="tile ' + (live ? 'live' : r.state) + '" type="button" data-room="' + r.id + '">' +
         '<span class="mark" aria-hidden="true">' + r.mark + '</span>' +
         '<span class="name"><span class="bm">' + esc(r.bm) + '</span><span class="en">' + esc(r.en) + '</span></span>' +
-        '<span class="when">' + esc(r.when) + (enterable(r) && r.state !== 'live' ? '<br><b>' + EA.t('UJIAN · boleh cuba', 'TEST · try it') + '</b>' : '') + '</span></button>';
+        '<span class="when">' + (live && r.state !== 'live' ? EA.t('Digunakan · ', 'In use · ') + esc(estate) : esc(r.when)) + (enterable(r, estate) && !live ? '<br><b>' + EA.t('UJIAN · boleh cuba', 'TEST · try it') + '</b>' : '') + '</span></button>';
     }).join('');
     $('tiles').querySelectorAll('.tile').forEach(function (t) {
       t.onclick = function () {
         var r = EA.rooms.find(function (x) { return x.id === t.dataset.room; });
-        if (enterable(r)) { location.hash = r.id; return; }
+        if (enterable(r, estate)) { location.hash = r.id; return; }
         openSheet('<h2 id="sheet-title"><span class="bm">' + esc(r.bm) + '</span><span class="en">' + esc(r.en) + '</span></h2>' +
           '<p><span class="bm" style="font-weight:400">' + esc(r.note.bm) + '</span><span class="en">' + esc(r.note.en) + '</span></p>' +
           '<div class="actions"><button class="btn btn-main" type="button" id="sheet-ok">OK<small>Faham</small></button></div>',
@@ -241,7 +242,7 @@
     var pill = $('wait-pill');
     if (tooOld) { pill.className = 'pill bad'; pill.textContent = n + EA.t(' menunggu lebih 24 jam', ' waiting over 24 hours'); }
     else if (n > 0) { pill.className = 'pill wait'; pill.textContent = n + EA.t(' menunggu', ' waiting'); }
-    else if (EA.config.TEST_MODE && !EA.sendLink() && testUser()) { pill.className = 'pill wait'; pill.textContent = EA.t('Ujian · tidak dihantar ke pejabat', 'Test · not sent to the office'); }
+    else if (EA.testMode() && !EA.sendLink() && testUser()) { pill.className = 'pill wait'; pill.textContent = EA.t('Ujian · tidak dihantar ke pejabat', 'Test · not sent to the office'); }
     else { pill.className = 'pill ok'; pill.textContent = EA.t('Semua dihantar', 'All sent'); }
     var others = EA.waitingOthers ? EA.waitingOthers() : [];
     if (others.length) pill.textContent += ' · ' + others.map(function (o) { return o.n + EA.t(' milik ', ' from ') + o.code; }).join(', ') + EA.t(' (dihantar bila dia masuk)', ' (sent when they log in)');
@@ -256,11 +257,12 @@
     $('send-btn').disabled = sending || !EA.waitingMine();
     $('send-btn').textContent = sending ? EA.t('MENGHANTAR…', 'SENDING…') : EA.t('HANTAR', 'SEND');
     var noLink = !EA.sendLink();
-    $('test-mark').hidden = !(EA.config.TEST_MODE && noLink && testUser());
+    $('test-mark').hidden = !(EA.testMode() && noLink && testUser());
     // A real person with no sending link always sees the red bar (v1.9): their entries wait, never "test-sent".
-    $('notice-link').hidden = !(noLink && (!EA.config.TEST_MODE || !testUser()));
+    $('notice-link').hidden = !(noLink && (!EA.testMode() || !testUser()));
   }
 
+  var switchAsk = false;
   function render() {
     var u = EA.currentUser();
     $('login').hidden = !!u;
@@ -271,11 +273,17 @@
     renderGreeting();
     renderTiles(u, estate);
     renderPlan(u);
+    // v1.16: fetch the trial switches from the office now and then (a phone may stay logged in for weeks).
+    var sw = EA.switches();
+    if (EA.sendLink() && navigator.onLine && !switchAsk && (!sw.at || Date.now() - sw.at > 30 * 60000)) {
+      switchAsk = true;
+      EA.ask('switches').then(function (j) { switchAsk = false; if (j && j.sw) { EA.setSwitches(j.sw); if (!location.hash) render(); } });
+    }
     // Room screen, when the address ends in #room-id
     // #room-id or #room-id/screen (a room may have several screens)
     var parts = location.hash.replace('#', '').split('/');
     var rid = parts[0], screen = parts[1] || '';
-    var room = rid && EA.roomsFor(u, estate).find(function (r) { return r.id === rid && enterable(r); });
+    var room = rid && EA.roomsFor(u, estate).find(function (r) { return r.id === rid && enterable(r, estate); });
     $('home-main').hidden = !!room;
     $('room').hidden = !room;
     if (room) {

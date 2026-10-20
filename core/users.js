@@ -306,7 +306,7 @@ EA.roomViews = EA.roomViews || {};
       var nmb = s.querySelector('#ps-name'); if (nmb) nmb.onclick = function () { nameSheet(u); };
       var o = s.querySelector('#ps-off'); if (o) o.onclick = function () { confirmOff(u); };
       var mp = s.querySelector('#ps-mine'); if (mp) mp.onclick = function () { myPinSheet(u); };
-      var dv = s.querySelector('#ps-dev'); if (dv) dv.onclick = function () { addDevice(u, dv); };
+      var dv = s.querySelector('#ps-dev'); if (dv) dv.onclick = function () { deviceNameSheet(u); };
       var n = s.querySelector('#ps-on'); if (n) n.onclick = function () { simple('userOn', { code: u.code }, EA.t('Akses dibuka semula', 'Switched on again')); };
     });
   }
@@ -380,9 +380,22 @@ EA.roomViews = EA.roomViews || {};
   }
 
   // + PERANTI (v1.14): the office makes one more phone code for this person.
-  async function addDevice(u, btn) {
+  // v1.16: + PERANTI asks a name for the device first (for example "Telefon syarikat Sugut").
+  function deviceNameSheet(u) {
+    ui().openSheet('<h2 id="sheet-title">+ ' + EA.t('Peranti untuk ', 'Device for ') + esc(u.name) + '</h2>' +
+      '<div class="field"><label for="dv-label">' + EA.t('Nama peranti (pilihan)', 'Device name (optional)') + '</label><input id="dv-label" class="text-input" maxlength="40" autocomplete="off" placeholder="' + EA.t('cth Telefon syarikat Sugut', 'e.g. Sugut company phone') + '"></div>' +
+      '<p class="hint">' + EA.t('Pejabat buat satu kod telefon baru. PIN tidak berubah.', 'The office makes one new phone code. The PIN stays the same.') + '</p>' +
+      '<div class="actions"><button class="btn btn-ghost" type="button" id="dv-back">BACK<small>Kembali</small></button>' +
+      '<button class="btn btn-main" type="button" id="dv-make">MAKE CODE<small>Buat kod</small></button></div>',
+      function (s) {
+        s.querySelector('#dv-back').onclick = function () { personSheet(u.code); };
+        var mk = s.querySelector('#dv-make');
+        mk.onclick = function () { addDevice(u, mk, s.querySelector('#dv-label').value); };
+      });
+  }
+  async function addDevice(u, btn, label) {
     btn.disabled = true;
-    var j = await call('userDevice', { code: u.code });
+    var j = await call('userDevice', { code: u.code, label: String(label || '').trim() });
     if (!j.ok) { btn.disabled = false; ui().toast(errText(j.error), 'bad'); return; }
     var d = { name: j.name || u.name, phone: j.phone }, text = deviceMessage(d);
     ui().openSheet('<h2 id="sheet-title">' + esc(d.name) + '</h2>' +

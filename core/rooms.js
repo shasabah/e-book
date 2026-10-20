@@ -33,6 +33,11 @@ EA.rooms = [
     note: { bm: 'Kos sehektar, kos setan, bajet berbanding sebenar. Bertambah setiap kali bilik baru dibuka.',
             en: 'Cost per hectare, cost per tonne, budget against actual. Grows as each room goes live.' },
     roles: ['Owner', 'HQ'] },
+  // v1.16: the Owner's admin page (Ringkasan, Telefon, Masalah, Suis). HQ sees Ringkasan only.
+  { id: 'admin', mark: 'ADM', bm: 'Pentadbir', en: 'Admin',
+    state: 'live', when: 'Pemilik & HQ · Owner & HQ',
+    note: { bm: 'Ringkasan ladang, telefon, masalah dan suis percubaan.', en: 'Estate summary, phones, problems and trial switches.' },
+    roles: ['Owner', 'HQ'] },
   // Part of the Foundation (v1.9), not a room: who may log in, and their PINs. Owner only.
   { id: 'users', mark: 'PIN', bm: 'Pengguna & PIN', en: 'Users & PIN',
     state: 'live', when: 'Pemilik sahaja · Owner only',

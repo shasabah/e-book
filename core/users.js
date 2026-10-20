@@ -33,7 +33,8 @@ EA.roomViews = EA.roomViews || {};
     bad_pin: ['PIN mesti 6 nombor.', 'The PIN must be 6 numbers.'],
     pick_another: ['PIN ini tidak boleh dipakai. Pilih PIN lain (jangan nombor mudah seperti 123456 atau 112233).', 'This PIN cannot be used. Pick another (not an easy one like 123456 or 112233).'],
     same_pin: ['Ini PIN anda sekarang. Pilih PIN baru.', 'That is your PIN now. Pick a new one.'],
-    not_same: ['Dua PIN tidak sama. Taip semula.', 'The two PINs are not the same. Type them again.']
+    not_same: ['Dua PIN tidak sama. Taip semula.', 'The two PINs are not the same. Type them again.'],
+    no_phone_code: ['Pejabat kehabisan kod telefon. Hubungi pembina.', 'The office has run out of phone codes. Call the builder.']
   };
   function errText(e) { var m = ERR[e] || [EA.t('Pejabat menolak: ', 'Office refused: ') + e, EA.t('Pejabat menolak: ', 'Office refused: ') + e]; return EA.t(m[0], m[1]); }
 
@@ -125,8 +126,13 @@ EA.roomViews = EA.roomViews || {};
     var on = u.status === 'active';
     return '<button type="button" class="hrow us-row" data-user="' + esc(u.code) + '"><div><b>' + esc(u.name) + (u.code === me ? ' · ' + EA.t('anda', 'you') : '') + '</b>' +
       '<span class="s">' + esc(roleName(u.role)) + ' · ' + esc(u.estates.length === ALL.length ? EA.t('semua ladang', 'all estates') : u.estates.join(', ')) +
-      (u.added ? ' · ' + EA.t('sejak ', 'since ') + esc(shortDate(u.added)) : '') + '</span></div>' +
+      (u.added ? ' · ' + EA.t('sejak ', 'since ') + esc(shortDate(u.added)) : '') + '</span>' + phonesHtml(u) + '</div>' +
       '<span class="us-tag ' + (on ? 'on' : 'off') + '">' + (on ? EA.t('AKTIF', 'ACTIVE') : EA.t('DITUTUP', 'OFF')) + '</span></button>';
+  }
+  // v1.14: the person's phone codes (one per device).
+  function phonesHtml(u) {
+    var p = u.phones || [];
+    return '<span class="s us-phones">' + EA.t('Peranti: ', 'Devices: ') + (p.length ? p.map(function (x) { return '<i class="us-code">' + esc(x) + '</i>'; }).join('') : EA.t('belum ada', 'none yet')) + '</span>';
   }
   function shortDate(s) {
     var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s));
@@ -192,7 +198,7 @@ EA.roomViews = EA.roomViews || {};
     busy(btn, false);
     if (!j.ok) return showErr(j.error);
     form = null;
-    shown = { pin: j.pin, name: j.name, code: j.code, role: f.role, estates: f.estates, first: !!f.firstOwner };
+    shown = { pin: j.pin, name: j.name, code: j.code, role: f.role, estates: f.estates, first: !!f.firstOwner, phones: j.phone ? [j.phone] : [] };
     draw(); window.scrollTo(0, 0);
   }
   async function saveEdit() {
@@ -207,15 +213,22 @@ EA.roomViews = EA.roomViews || {};
 
   // ---------- the PIN, shown once ----------
   function pinMessage(s) {
-    return 'Salam ' + s.name + '.\nPIN E-Book anda: ' + s.pin + '\nBuka: ' + appLink() + '\nJangan kongsi PIN ini dengan sesiapa.\n\n' +
-      'Your E-Book PIN: ' + s.pin + '. Do not share it.';
+    var ph = (s.phones || []).join(', ');
+    return 'Salam ' + s.name + '.\nPIN E-Book anda: ' + s.pin + (ph ? '\nKod telefon: ' + ph + '\n(Tetapan telefon → Kod telefon)' : '') +
+      '\nBuka: ' + appLink() + '\nJangan kongsi PIN ini dengan sesiapa.\n\n' +
+      'Your E-Book PIN: ' + s.pin + '.' + (ph ? ' Phone code: ' + ph + '.' : '') + ' Do not share it.';
+  }
+  function deviceMessage(d) {
+    return 'Salam ' + d.name + '.\nKod telefon E-Book untuk peranti baru: ' + d.phone + '\n(Tetapan telefon → Kod telefon. PIN tidak berubah.)\nBuka: ' + appLink() + '\n\n' +
+      'E-Book phone code for the new device: ' + d.phone + '. Your PIN stays the same.';
   }
   function drawPin() {
     var s = shown, text = pinMessage(s);
     var h = '<div class="room-top"><div class="grow"><h1>' + EA.t('PIN baru', 'New PIN') + '</h1><span class="brand-sub">' + EA.t('Ditunjuk sekali sahaja', 'Shown once only') + '</span></div></div>';
     h += '<div class="card us-pincard"><div class="hint">' + EA.t('PIN untuk', 'PIN for') + '</div><div class="us-who">' + esc(s.name) + '</div>' +
       '<div class="hint">' + esc(roleName(s.role)) + ' · ' + esc(s.estates.length === ALL.length ? EA.t('semua ladang', 'all estates') : s.estates.join(', ')) + ' · ' + esc(s.code) + '</div>' +
-      '<div class="us-pin" id="us-pin">' + esc(s.pin.slice(0, 3)) + ' ' + esc(s.pin.slice(3)) + '</div>' +
+      '<div class="us-big"><div><span>PIN</span><b class="us-pin" id="us-pin">' + esc(s.pin.slice(0, 3)) + ' ' + esc(s.pin.slice(3)) + '</b></div>' +
+      ((s.phones || []).length ? '<div><span>' + EA.t('KOD TELEFON', 'PHONE CODE') + '</span><b class="us-pin" id="us-phone">' + esc(s.phones.join(' ')) + '</b></div>' : '') + '</div>' +
       '<p class="msg">' + EA.t('Hantar atau tulis PIN ini sekarang. Selepas TUTUP ia tidak boleh dilihat lagi.', 'Send or write this PIN now. After CLOSE it cannot be seen again.') + '</p></div>';
     if (s.self) h += '<p class="warn">' + EA.t('Ini PIN baru anda sendiri. Telefon ini sudah guna PIN baru. PIN lama tidak berfungsi lagi.', 'This is your own new PIN. This phone already uses it. The old PIN no longer works.') + '</p>';
     if (s.first) h += '<p class="warn">' + EA.t('Langkah seterusnya: tulis PIN ini, tekan SELESAI, KELUAR, dan masuk dengan PIN baru ini. Selepas itu anda boleh tukar ke PIN pilihan sendiri (tekan nama anda → Tukar PIN saya).', 'Next: write this PIN down, tap DONE, LOG OUT, and log in with it. After that you can change to a PIN of your own choice (tap your name → Change my PIN).') + '</p>';
@@ -245,12 +258,14 @@ EA.roomViews = EA.roomViews || {};
     if (!u) return;
     var self = u.code === data.me, on = u.status === 'active';
     var h = '<h2 id="sheet-title">' + esc(u.name) + '</h2>' +
-      '<p class="hint">' + esc(roleName(u.role)) + ' · ' + esc(u.estates.join(', ')) + ' · ' + EA.t('kod ', 'code ') + esc(u.code) + (u.added ? ' · ' + EA.t('ditambah ', 'added ') + esc(shortDate(u.added)) : '') + '</p>';
+      '<p class="hint">' + esc(roleName(u.role)) + ' · ' + esc(u.estates.join(', ')) + ' · ' + EA.t('kod ', 'code ') + esc(u.code) + (u.added ? ' · ' + EA.t('ditambah ', 'added ') + esc(shortDate(u.added)) : '') + '</p>' + phonesHtml(u);
     if (on) {
       h += '<button class="btn btn-ghost" type="button" id="ps-pin">NEW PIN<small>PIN baru</small></button>' +
         '<p class="hint">' + (self ? EA.t('PIN lama anda berhenti serta-merta. Telefon ini terus guna PIN baru.', 'Your old PIN stops at once. This phone switches to the new one.') : EA.t('PIN lama berhenti serta-merta. Guna bila lupa PIN atau telefon bertukar.', 'The old PIN stops at once. Use it when the PIN is forgotten or the phone changes.')) + '</p>' +
         (self ? '<button class="btn btn-main" type="button" id="ps-mine">CHANGE MY PIN<small>Tukar PIN saya</small></button>' +
           '<p class="hint">' + EA.t('Taip PIN 6 digit pilihan anda sendiri.', 'Type a 6-digit PIN of your own choice.') + '</p>' : '') +
+        '<button class="btn btn-main" type="button" id="ps-dev">+ DEVICE<small>+ Peranti</small></button>' +
+        '<p class="hint">' + EA.t('Satu kod telefon lagi untuk orang yang sama (laptop, telefon kedua). PIN tidak berubah.', 'One more phone code for the same person (a laptop, a second phone). The PIN stays the same.') + '</p>' +
         '<button class="btn btn-ghost" type="button" id="ps-edit">CHANGE ESTATES / ROLE<small>Ubah ladang / tugas</small></button>';
       if (!self) h += '<button class="btn btn-ghost us-bad" type="button" id="ps-off">SWITCH OFF<small>Tutup akses</small></button>' +
         '<p class="hint">' + EA.t('Telefon hilang atau berhenti kerja. Rekod lama kekal. Boleh dibuka semula.', 'Lost phone or left the job. Old records stay. Can be switched on again.') + '</p>';
@@ -265,8 +280,27 @@ EA.roomViews = EA.roomViews || {};
       var e = s.querySelector('#ps-edit'); if (e) e.onclick = function () { ui().closeSheet(); form = { mode: 'edit', code: u.code, name: u.name, role: u.role, estates: u.estates.slice(), self: self }; draw(); window.scrollTo(0, 0); };
       var o = s.querySelector('#ps-off'); if (o) o.onclick = function () { confirmOff(u); };
       var mp = s.querySelector('#ps-mine'); if (mp) mp.onclick = function () { myPinSheet(u); };
+      var dv = s.querySelector('#ps-dev'); if (dv) dv.onclick = function () { addDevice(u, dv); };
       var n = s.querySelector('#ps-on'); if (n) n.onclick = function () { simple('userOn', { code: u.code }, EA.t('Akses dibuka semula', 'Switched on again')); };
     });
+  }
+  // + PERANTI (v1.14): the office makes one more phone code for this person.
+  async function addDevice(u, btn) {
+    btn.disabled = true;
+    var j = await call('userDevice', { code: u.code });
+    if (!j.ok) { btn.disabled = false; ui().toast(errText(j.error), 'bad'); return; }
+    var d = { name: j.name || u.name, phone: j.phone }, text = deviceMessage(d);
+    ui().openSheet('<h2 id="sheet-title">' + esc(d.name) + '</h2>' +
+      '<div class="card us-pincard"><div class="hint">' + EA.t('Kod telefon baru', 'New phone code') + '</div><div class="us-pin" id="dv-code">' + esc(d.phone) + '</div>' +
+      '<p class="hint">' + EA.t('Taip di Tetapan telefon pada peranti baru. PIN tidak berubah.', 'Type it in Phone setup on the new device. The PIN stays the same.') + '</p></div>' +
+      '<div class="actions"><button class="btn btn-ghost" type="button" id="dv-copy">COPY<small>Salin</small></button>' +
+      '<button class="btn btn-ok" type="button" id="dv-wa">SEND TO WHATSAPP<small>Hantar ke WhatsApp</small></button></div>' +
+      '<div class="actions"><button class="btn btn-main" type="button" id="dv-close">CLOSE<small>Tutup</small></button></div>',
+      function (s) {
+        s.querySelector('#dv-copy').onclick = function () { ui().copy(text); };
+        s.querySelector('#dv-wa').onclick = function () { window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener'); };
+        s.querySelector('#dv-close').onclick = function () { ui().closeSheet(); draw(); };
+      });
   }
   function confirmPin(u, self) {
     ui().openSheet('<h2 id="sheet-title">' + EA.t('PIN baru untuk ' + u.name + '?', 'New PIN for ' + u.name + '?') + '</h2>' +
@@ -281,7 +315,7 @@ EA.roomViews = EA.roomViews || {};
           if (!j.ok) { this.disabled = false; var m = s.querySelector('#cp-err'); m.textContent = errText(j.error); m.hidden = false; return; }
           if (j.self) EA.setMyPin(j.pin);
           ui().closeSheet();
-          shown = { pin: j.pin, name: j.name, code: j.code, role: u.role, estates: u.estates, self: !!j.self };
+          shown = { pin: j.pin, name: j.name, code: j.code, role: u.role, estates: u.estates, self: !!j.self, phones: j.phones || u.phones || [] };
           draw(); window.scrollTo(0, 0);
         };
       });

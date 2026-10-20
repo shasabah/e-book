@@ -119,12 +119,12 @@
       '<p class="hint" id="hs-note">' + (cache ? EA.t('Dari pejabat dan telefon ini · dikemas kini ', 'From the office and this phone · updated ') + esc(cache.at) :
         EA.t('Dari telefon ini sahaja (40 hari). Bulan lain dari pejabat bila ada isyarat.', 'From this phone only (40 days). Other months come from the office when there is signal.')) + '</p>';
     $('#hs-back').onclick = function () { location.hash = ''; };
-    function go(m) { month = m; render(el, ctx); refresh(); }
+    function go(m) { month = m; render(el, ctx); }
     $('#hs-prev').onclick = function () { if (month > FIRST_MONTH) go(addMonths(month, -1)); };
     $('#hs-next').onclick = function () { if (month < thisMonth) go(addMonths(month, 1)); };
     $('#hs-pick').onclick = function () { pickMonth(Number(month.slice(0, 4)), go); };
     el.querySelectorAll('[data-day]').forEach(function (b) { b.onclick = function () { openDay = b.dataset.day; pane = 'chit'; render(el, ctx); window.scrollTo(0, 0); }; });
-    refresh();
+    if (!quiet) refresh();
   }
   // v1.12 Operasi: the estate's day at a glance, for the clerk and the manager (view only).
   function todayCard(list) {
@@ -185,13 +185,15 @@
       '<span class="mt">' + (f.mt > 0 ? f.mt.toFixed(2) + ' MT' : '—') + '</span>' +
       '<span class="meta">' + esc(meta.join(' · ')) + (tags ? ' ' + tags : '') + '</span></button>';
   }
+  var quiet = false;
   async function refresh() {
     if (!EA.sendLink() || !navigator.onLine) return;
     var m = month, est = ctx.estate;
     var r = await EA.ask('history', { estate: est, month: m });
     if (!r || !r.days) return;
     EA.local.set(K.cache + est + '.' + m, { at: r.at, days: r.days });
-    if (el && document.body.contains(el) && !el.hidden && month === m && ctx.estate === est && $('#hs-list') && !openDay) render(el, ctx);
+    // v1.19: redraw without asking again (asking on every redraw made a loop of office calls).
+    if (el && document.body.contains(el) && !el.hidden && month === m && ctx.estate === est && $('#hs-list') && !openDay) { quiet = true; try { render(el, ctx); } finally { quiet = false; } }
   }
 
   // ---------- one day ----------

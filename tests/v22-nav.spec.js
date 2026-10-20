@@ -48,7 +48,7 @@ const { chromium } = require('playwright');
   await p.fill('#key', '333333'); await p.waitForSelector('#home:not([hidden])');
   await p.evaluate(() => { location.hash = 'field-harvest/ticket'; }); await p.waitForTimeout(500);
   const cb = await p.$$eval('.botbar a', a => a.map(x => x.innerText.trim()).join('|'));
-  check('clerk bar: Pagi · Kerja · Lori · Tiket · Sejarah', cb === 'Pagi|Kerja|Lori|Tiket|Sejarah', cb);
+  check('clerk bar: Tiket · Operasi only', cb === 'Tiket|Operasi', cb);
   check('no page errors', errs.length === 0, errs.join(' | '));
   await b.close();
 })();

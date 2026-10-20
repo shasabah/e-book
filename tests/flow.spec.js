@@ -75,7 +75,9 @@ const out = process.argv[2] || require('os').tmpdir();
   await p.click('#tk-save'); await p.waitForSelector('#gs-save'); await p.click('#gs-cancel'); await p.waitForSelector('#tk-text');
   console.log('TEXT weight line:', (await p.textContent('#tk-text')).split('\n').find(l => l.includes('Net')));
   await p.click('#tt-close');
-  await p.click('.tabs a[href="#field-harvest"]'); await p.waitForTimeout(500);
+  // v1.12: the clerk no longer opens the chit; the staff sees the month's tonnes on it.
+  await logout(); await login('777777');
+  await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForTimeout(500);
   const card = t(await p.textContent('#fh-backlog'));
   check('chit shows month-to-date 15.70 MT and the ramp', /Tan bulan ini: 15\.70 MT/.test(card) && /Ramp: 450/.test(card), card.slice(0, 400));
   await p.screenshot({ path: out + '/v22-chit.png', fullPage: false });

@@ -12,7 +12,7 @@ EA.rooms = [
     note: { bm: 'Kerja harian setiap pekerja dan tuaian setiap petak. Perintis di Sugut mula 4 Jan 2027.',
             en: 'Daily work per worker and crop per lot. Sugut pilot starts 4 Jan 2027.' },
     // v1.3: only the staff and the clerk key field work for now (the loader's Worker key sees "not open yet").
-    roles: ['Owner', 'HQ', 'Staff', 'Clerk', 'Worker'] },
+    roles: ['Owner', 'HQ', 'Staff', 'Clerk', 'Worker', 'Manager'] },
   { id: 'purchase-store', mark: 'PS', bm: 'Belian & Stor', en: 'Purchase & Store',
     state: 'later', when: 'Dibuka · Opens Jun 2027',
     note: { bm: 'Permintaan, kelulusan, pesanan, terima ke stor, keluar ke blok atau mesin. Perintis 1 Jun 2027.',
@@ -63,7 +63,8 @@ EA.roleNames = {
   Clerk:  { bm: 'Kerani',      en: 'Clerk' },
   Mandor: { bm: 'Mandor',      en: 'Foreman' },
   Store:  { bm: 'Stor',        en: 'Store' },
-  Worker: { bm: 'Pekerja',     en: 'Worker' }
+  Worker: { bm: 'Pekerja',     en: 'Worker' },
+  Manager: { bm: 'Pengurus',   en: 'Manager' }
 };
 
 // Rooms this person may see, for the estate they are looking at.

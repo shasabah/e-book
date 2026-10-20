@@ -30,7 +30,8 @@ const LINK = 'https://script.google.com/macros/s/TEST-LINK/exec';
   tabs.USERS = new Sheet([['user_code', 'name', 'role', 'estates', 'key_hash', 'status', 'added_at']]);
   [['T-OWN', 'Pemilik Ujian', 'Owner', 'SDK,MELU,SSGT,PTAN,TKRS,KWNN', '111111'], ['T-STF', 'Staf Sugut', 'Staff', 'SSGT', '777777'],
    ['T-CLK', 'Kerani Sugut', 'Clerk', 'SSGT,PTAN', '333333']].forEach(p => ctx.addUser(p[0], p[1], p[2], p[3], p[4]));
-  const office = body => ctx.doPost({ postData: { contents: body } });
+  // v1.14: the test's own office logins carry that person's first phone code.
+  const office = body => { const o = JSON.parse(body); if (o.action === 'login' && !o.phone && !o.__app) { const u = ctx.findUser(o.key); if (u && u.phones) o.phone = String(u.phones).split(',')[0]; body = JSON.stringify(o); } return ctx.doPost({ postData: { contents: body } }); };
 
   // ---- phone ----
   const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: 390, height: 844 } });
@@ -59,6 +60,8 @@ const LINK = 'https://script.google.com/macros/s/TEST-LINK/exec';
   check('first Owner form: role Pemilik only, all 6 estates on', (await p.locator('#us-roles [data-role]').count()) === 1 && (await p.locator('#us-ests [aria-pressed="true"]').count()) === 6);
   await p.fill('#us-name', 'Pemilik Contoh'); await p.click('#us-go'); await p.waitForSelector('#us-pin');
   const pinText = (await p.textContent('#us-pin')).replace(/\s/g, '');
+  const phoneText = (await p.textContent('#us-phone')).trim();
+  check('v1.14: the phone code is made with the PIN (P10)', phoneText === 'P10', phoneText);
   check('the new Owner PIN is shown once, 6 digits, with the "log out and log in" step', /^\d{6}$/.test(pinText) && /KELUAR/.test(await p.locator('#room').innerText()), pinText);
   check('the PIN is not kept on the phone (not in local storage)', !(await p.evaluate(pin => JSON.stringify(localStorage).includes(pin), pinText)));
   await p.click('#us-done'); await p.click('#dn-ok'); await p.waitForTimeout(200);
@@ -66,7 +69,8 @@ const LINK = 'https://script.google.com/macros/s/TEST-LINK/exec';
   await p.evaluate(() => { location.hash = ''; });
   await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
 
-  // Real Owner
+  // Real Owner, on the phone code made with the PIN (v1.14)
+  await p.evaluate(ph => localStorage.setItem('ea.phone', JSON.stringify(ph)), phoneText);
   await p.fill('#key', pinText); await p.waitForSelector('#home:not([hidden])');
   check('log in with the new Owner PIN', /Pemilik Contoh/.test(await p.textContent('#who-name')));
   await p.click('[data-room="users"]'); await p.waitForSelector('#us-add');

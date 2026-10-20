@@ -27,7 +27,7 @@ var BOOK_ = null;
 function book_() { return BOOK_ || (BOOK_ = SpreadsheetApp.openById(SHEET_ID)); }
 
 var USERS_TAB = 'USERS';
-var USER_COLS = ['user_code', 'name', 'role', 'estates', 'key_hash', 'status', 'added_at', 'phones', 'position', 'move_estates', 'move_date'];
+var USER_COLS = ['user_code', 'name', 'role', 'estates', 'key_hash', 'status', 'added_at', 'phones', 'position', 'move_estates', 'move_date', 'phone_names'];
 // v1.15: job titles as on the organisation chart (for reading only; the role is the app access).
 var POSITIONS = ['Trainee Field Staff', 'Field Staff', 'Senior Staff', 'Estate Clerk', 'Assistant Manager', 'Senior Assistant Manager', 'Mandor', 'Storekeeper', 'AGM', 'GM'];
 var ROLES = ['Owner', 'HQ', 'Staff', 'Clerk', 'Mandor', 'Store', 'Worker', 'Manager'];
@@ -85,11 +85,25 @@ function doPost(e) {
   if (req.action === 'login') {
     // v1.14: a real person may log in only on a phone code that is theirs (made with the PIN).
     var pc = phoneCheck_(user, req.phone);
-    if (pc) return reply({ ok: false, error: pc, phone: String(req.phone || '') });
-    return reply({ ok: true, user: { code: user.user_code, name: user.name, role: user.role, estates: user.estates } });
+    if (pc) { logRefused_(user, req, 'login', '', pc, ''); return reply({ ok: false, error: pc, phone: String(req.phone || '') }); }
+    noteSeen_(user, req);
+    return reply({ ok: true, user: { code: user.user_code, name: user.name, role: user.role, estates: user.estates }, sw: switches_() });
   }
-  if (req.action === 'save') return reply(saveRow(user, req.tab, req.row));
-  if (req.action === 'saveBatch') return reply(saveBatch(user, req.items));
+  noteSeen_(user, req);
+  if (req.action === 'switches') return reply({ ok: true, sw: switches_() });
+  if (req.action === 'save') {
+    var r1 = saveRow(user, req.tab, req.row);
+    if (!r1.ok && r1.error !== 'busy') logRefused_(user, req, 'save', req.tab, r1.error, req.row && req.row.id);
+    return reply(r1);
+  }
+  if (req.action === 'saveBatch') {
+    var rb = saveBatch(user, req.items);
+    if (rb.ok) (rb.results || []).forEach(function (x, i) { if (!x.ok) logRefused_(user, req, 'save', (req.items[i] || {}).tab, x.error, x.id); });
+    rb.sw = switches_();
+    return reply(rb);
+  }
+  // Pentadbir (v1.16): the Owner's admin page. HQ sees the summary only.
+  if (/^admin/.test(String(req.action))) return reply(adminAction_(user, req));
   if (req.action === 'ungraded') {
     if (user.estates.indexOf(req.estate) < 0) return reply({ ok: false, error: 'not_your_estate' });
     return reply(ungraded_(req.estate));
@@ -358,7 +372,7 @@ function readRows_(tabName, estate) {
   }
   var rows = vals.map(function (v) { var o = {}; head.forEach(function (c, i) { o[c] = txt(v[i], c); }); return o; });
   rows.forEach(function (r) { if (r.replaces) replaced[r.replaces] = true; });
-  var mine = rows.filter(function (r) { return r.estate === estate; });
+  var mine = estate == null ? rows : rows.filter(function (r) { return r.estate === estate; });   // null: every estate (v1.16)
   return { all: mine, standing: mine.filter(function (r) { return r.status === 'active' && !replaced[r.id]; }) };
 }
 
@@ -941,8 +955,10 @@ function usersAction_(user, req) {
       if (t.status !== 'active') return { ok: false, error: 'user_off' };
       var ph = nextPhone_(list), had = phonesOf_(t);
       sh.getRange(t.row, phonesCol_(sh, head)).setValue(had.concat([ph]).join(','));
+      var lab = String(req.label || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+      if (lab) { var nm0 = phoneNames_(t); nm0[ph] = lab; sh.getRange(t.row, userCol_(sh, head, 'phone_names')).setValue(JSON.stringify(nm0)); }
       forgetCache_(String(t.key_hash));
-      logUser_(user, 'device', t, ph);
+      logUser_(user, 'device', t, ph + (lab ? ' (' + lab + ')' : ''));
       return out({ phone: ph, code: t.user_code, name: String(t.name) });
     }
     if (req.action === 'userOff') {
@@ -1034,4 +1050,202 @@ function switchOff(code) {
       CacheService.getScriptCache().remove('u:' + h);
     }
   }
+}
+
+
+// ================= Pentadbir · the Owner's admin page (v1.16) =================
+// Reads what is already in the office sheet; nothing is copied anywhere else (Rule 3).
+
+function getJson_(k, def) { try { var v = PropertiesService.getScriptProperties().getProperty(k); return v ? JSON.parse(v) : def; } catch (e) { return def; } }
+function setJson_(k, v) { PropertiesService.getScriptProperties().setProperty(k, JSON.stringify(v)); }
+function phoneNames_(u) { try { var o = JSON.parse(String(u.phone_names || '{}').replace(/^'/, '')); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } }
+
+// The trial switches, sent to every phone with the login and each send.
+function switches_() { var w = getJson_('SWITCHES', {}); return { testModeOff: !!w.testModeOff, live: w.live || {} }; }
+
+// When each phone last reached the office, with its app version and how many records were waiting.
+// Written at most every 5 minutes per phone (or when the version or waiting count changes).
+function noteSeen_(user, req) {
+  var p = String(req.phone || '').toUpperCase();
+  if (!/^P\d{2,3}$/.test(p)) return;
+  var v = String(req.version || ''), w = req.waiting === undefined ? '' : String(Number(req.waiting) || 0);
+  var c = CacheService.getScriptCache(), k = 'seenq:' + p, mark = user.user_code + '|' + v + '|' + w;
+  if (c.get(k) === mark) return;
+  try {
+    PropertiesService.getScriptProperties().setProperty('seen:' + p, JSON.stringify({ u: String(user.user_code), at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), v: v, w: w }));
+    c.put(k, mark, 300);
+  } catch (e) {}
+}
+
+// A refused save or login is kept for the Owner (tab APP_REFUSED), once per phone, record and error in 6 hours.
+var REFUSED_TAB = 'APP_REFUSED', REFUSED_COLS = ['at', 'user_code', 'name', 'phone', 'version', 'action', 'tab', 'error', 'record'];
+function logRefused_(user, req, action, tab, error, rec) {
+  if (!error || error === 'busy') return;
+  try {
+    var c = CacheService.getScriptCache(), k = 'ref:' + String(req.phone) + '|' + String(rec || action) + '|' + error;
+    if (c.get(k)) return;
+    c.put(k, '1', 21600);
+    var ss = book_(), sh = ss.getSheetByName(REFUSED_TAB);
+    if (!sh) { sh = ss.insertSheet(REFUSED_TAB); sh.appendRow(REFUSED_COLS); }
+    sh.appendRow([plain(Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm')), plain(user.user_code), plain(user.name), plain(req.phone || ''),
+      plain(req.version || ''), action, plain(tab || ''), plain(error), plain(rec || '')]);
+  } catch (e) {}
+}
+
+function adminAction_(user, req) {
+  var owner = user.role === 'Owner', hq = user.role === 'HQ';
+  if (!owner && !hq) return { ok: false, error: 'not_allowed' };
+  if (isTestCode_(user.user_code) && realOwner_(readUsers_().list)) return { ok: false, error: 'test_user' };
+  if (req.action === 'adminSummary') return adminSummary_(user);
+  if (!owner) return { ok: false, error: 'not_allowed' };
+  if (req.action === 'adminPhones') return adminPhones_();
+  if (req.action === 'adminProblems') return adminProblems_();
+  if (req.action === 'adminSeen') {
+    var seen = getJson_('PROBLEMS_SEEN', []);
+    (req.ids || []).forEach(function (id) { id = String(id).slice(0, 80); if (id && seen.indexOf(id) < 0) seen.push(id); });
+    setJson_('PROBLEMS_SEEN', seen.slice(-400));
+    return adminProblems_();
+  }
+  if (req.action === 'adminPhoneName') return adminPhoneName_(user, req);
+  if (req.action === 'adminSwitches') return adminSwitches_();
+  if (req.action === 'adminSwitch') return adminSwitch_(user, req);
+  return { ok: false, error: 'unknown_action' };
+}
+
+// ---- Ringkasan: one card per estate, today and this month ----
+function adminSummary_(user) {
+  var now = new Date(), today = Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd'), month = today.slice(0, 7);
+  var sw = switches_(), live = (sw.live['field-harvest'] || []);
+  var used = {};
+  readRows_('FH_CHIT', null).standing.forEach(function (r) { if (String(r.date).slice(0, 7) === month) used[r.estate] = true; });
+  var cards = user.estates.map(function (e) {
+    if (!used[e] && live.indexOf(e) < 0) return { estate: e, used: false };
+    var h = history_(e, month), days = h.days, td = days.find(function (d) { return d.date === today; }) || null;
+    var c = { estate: e, used: true, live: live.indexOf(e) >= 0, today: today, month: month };
+    var chit = td && td.chits.length ? td.chits[td.chits.length - 1] : null;
+    c.chitAt = chit ? chit.at : ''; c.chitBy = chit ? chit.by : '';
+    c.present = chit ? chit.rows.filter(function (x) { return x.muster === 'H'; }).length : 0;
+    c.total = chit ? chit.rows.length : 0;
+    c.workDone = !!(td && td.work.length);
+    c.bunchesToday = td ? td.harvest : 0;
+    var mt = 0, abwN = 0, abwB = 0, noTicket = [], corr = 0, late = 0, chitDays = 0, below = 0, lastWork = null;
+    days.forEach(function (d) {
+      d.lorries.forEach(function (l) {
+        if (l.ticket) { mt += l.ticket.mt; if (l.ticket.abw) { abwN += l.ticket.abw * (l.ticket.bunches || 1); abwB += (l.ticket.bunches || 1); } }
+        else noTicket.push({ date: d.date, dn: l.dn, lorry: l.lorry });
+      });
+      d.tickets.forEach(function (t) { mt += t.mt; });
+      if (d.chits.length) {
+        chitDays++;
+        d.chits.forEach(function (ch) { corr += Math.max(0, (ch.versions || []).length - 1); if (ch.at && ch.at > '09:00') late++; });
+      }
+      if (d.work.length && (!lastWork || d.date > lastWork.date)) lastWork = d;
+    });
+    if (lastWork) below = lastWork.work.filter(function (w) { return w.status === 'not_done'; }).length;
+    c.mtMonth = Math.round(mt * 100) / 100; c.abw = abwB ? Math.round(abwN / abwB * 10) / 10 : 0;
+    c.noTicket = noTicket; c.corrections = corr; c.late = late; c.chitDays = chitDays;
+    c.below = below; c.belowDate = lastWork ? lastWork.date : '';
+    var b = backlog(e); c.field = b.fieldTotal || 0; c.ramp = (b.ramp && b.ramp.bunches) || 0;
+    var al = readRows_('FH_ALERT', e).standing.filter(function (r) { return String(r.date).slice(0, 7) === month; });
+    c.alerts = al.length; c.alertsOpen = al.filter(function (r) { return !String(r.staff_note || '').trim(); }).length;
+    return c;
+  });
+  return { ok: true, at: Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), cards: cards };
+}
+
+// ---- Telefon: every device of every real person ----
+function adminPhones_() {
+  var props = PropertiesService.getScriptProperties().getProperties(), list = readUsers_().list, out = [];
+  list.forEach(function (u) {
+    if (isTestCode_(u.user_code) || u.status !== 'active') return;
+    var names = phoneNames_(u);
+    phonesOf_(u).forEach(function (p) {
+      var seen = null; try { seen = props['seen:' + p] ? JSON.parse(props['seen:' + p]) : null; } catch (e) {}
+      out.push({ phone: p, label: names[p] || '', code: u.user_code, name: String(u.name).replace(/^'/, ''), role: String(u.role),
+                 seen: seen && seen.u === u.user_code ? seen : (seen ? { at: seen.at, v: seen.v, w: seen.w, other: seen.u } : null) });
+    });
+  });
+  return { ok: true, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), phones: out, appVersion: MIN_APP_VERSION };
+}
+function adminPhoneName_(user, req) {
+  // The device to name is req.device; req.phone is always the phone that is asking.
+  var p = String(req.device || ''), lab = String(req.label || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (e) { return { ok: false, error: 'busy' }; }
+  try {
+    var U = readUsers_(), t = phoneOwner_(U.list, p);
+    if (!t) return { ok: false, error: 'no_phone' };
+    var nm = phoneNames_(t), was = nm[p] || '';
+    if (lab) nm[p] = lab; else delete nm[p];
+    U.sh.getRange(t.row, userCol_(U.sh, U.head, 'phone_names')).setValue(JSON.stringify(nm));
+    logUser_(user, 'device_name', t, p + ': ' + (was || '-') + ' → ' + (lab || '-'));
+  } finally { lock.releaseLock(); }
+  return adminPhones_();
+}
+
+// ---- Masalah: errors from phones and refused saves ----
+function adminProblems_() {
+  var names = {}; readUsers_().list.forEach(function (u) { names[u.user_code] = String(u.name).replace(/^'/, ''); });
+  var seen = getJson_('PROBLEMS_SEEN', []), out = [];
+  function t(v) { return v instanceof Date ? Utilities.formatDate(v, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm') : String(v || '').replace(/^'/, '').slice(0, 16); }
+  readRows_('APP_ERROR', null).all.forEach(function (r) {
+    if (String(r.where) === 'test') return;
+    out.push({ id: String(r.id), kind: 'error', at: t(r.received_at || r.keyed_at), who: names[r.keyed_by] || String(r.keyed_by || ''), phone: String(r.phone || ''),
+      version: String(r.version || ''), where: String(r.where || ''), message: String(r.message || '').slice(0, 200) });
+  });
+  var sh = book_().getSheetByName(REFUSED_TAB);
+  if (sh && sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, REFUSED_COLS.length).getValues().forEach(function (r, i) {
+    out.push({ id: 'R' + (i + 2), kind: 'refused', at: t(r[0]), who: String(r[2] || r[1]), phone: String(r[3]), version: String(r[4]), where: String(r[5]) + (r[6] ? ' ' + r[6] : ''), message: String(r[7]) });
+  });
+  out.forEach(function (x) { x.seen = seen.indexOf(x.id) >= 0; });
+  out.sort(function (a, b) { return a.at < b.at ? 1 : a.at > b.at ? -1 : 0; });
+  return { ok: true, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), problems: out.slice(0, 60), fresh: out.filter(function (x) { return !x.seen; }).length };
+}
+
+// ---- Suis: the trial switches, in order: test PINs off -> test mode off -> room open for an estate ----
+function adminSwitches_() {
+  var list = readUsers_().list, props = PropertiesService.getScriptProperties().getProperties(), sw = switches_();
+  var testOn = list.filter(function (u) { return isTestCode_(u.user_code) && u.status === 'active'; }).length;
+  var people = list.filter(function (u) { return !isTestCode_(u.user_code) && u.status === 'active' && /^(Staff|Clerk|Manager)$/.test(String(u.role)); }).map(function (u) {
+    var inn = phonesOf_(u).some(function (p) { try { return props['seen:' + p] && JSON.parse(props['seen:' + p]).u === u.user_code; } catch (e) { return false; } });
+    return { code: u.user_code, name: String(u.name).replace(/^'/, ''), role: String(u.role), loggedIn: inn };
+  });
+  var log = [], lg = book_().getSheetByName(USERS_LOG_TAB);
+  if (lg && lg.getLastRow() > 1) lg.getRange(2, 1, lg.getLastRow() - 1, USERS_LOG_COLS.length).getValues().forEach(function (r) {
+    if (String(r[3]) === 'switch' || String(r[3]) === 'test_off') log.push({ at: r[0] instanceof Date ? Utilities.formatDate(r[0], 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm') : String(r[0]).replace(/^'/, ''), by: String(r[2]), detail: String(r[6]) });
+  });
+  return { ok: true, testPinsOn: testOn, testModeOff: sw.testModeOff, live: sw.live, people: people, log: log.reverse().slice(0, 10) };
+}
+function adminSwitch_(user, req) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (e) { return { ok: false, error: 'busy' }; }
+  try {
+    var st = adminSwitches_(), w = getJson_('SWITCHES', {}), on = !!req.on, which = String(req.which || ''), detail = '';
+    w.live = w.live || {};
+    if (which === 'testPins') {
+      var U = readUsers_(), col = U.head.indexOf('status') + 1;
+      if (!on) {
+        if (!st.people.length || st.people.some(function (p) { return !p.loggedIn; })) return { ok: false, error: 'not_ready' };
+        U.list.forEach(function (u) { if (isTestCode_(u.user_code) && u.status === 'active') { U.sh.getRange(u.row, col).setValue('off'); forgetCache_(String(u.key_hash)); } });
+        detail = 'PIN ujian ditutup';
+      } else {
+        U.list.forEach(function (u) { if (isTestCode_(u.user_code) && u.status !== 'active') { U.sh.getRange(u.row, col).setValue('active'); forgetCache_(String(u.key_hash)); } });
+        detail = 'PIN ujian dibuka semula';
+      }
+    } else if (which === 'testMode') {
+      if (!on && st.testPinsOn) return { ok: false, error: 'order' };
+      w.testModeOff = !on; detail = on ? 'Mod ujian ON' : 'Mod ujian OFF';
+      if (on) w.live = {};
+    } else if (which === 'live') {
+      var est = String(req.estate || ''), room = String(req.room || 'field-harvest');
+      if (ESTATES.indexOf(est) < 0) return { ok: false, error: 'bad_estates' };
+      if (on && !w.testModeOff) return { ok: false, error: 'order' };
+      var l = (w.live[room] || []).filter(function (x) { return x !== est; });
+      if (on) l.push(est);
+      w.live[room] = l; detail = (on ? 'Dibuka: ' : 'Ditutup: ') + room + ' ' + est;
+    } else return { ok: false, error: 'unknown_switch' };
+    setJson_('SWITCHES', w);
+    logUser_(user, 'switch', { user_code: '-', name: '-' }, detail);
+  } finally { lock.releaseLock(); }
+  return adminSwitches_();
 }

@@ -27,7 +27,7 @@ const fs = require('fs'); const vm = require('vm');
   check('Operasi: people at work and jobs on the card', /2 hadir · 1 tidak/.test(ops));
   await p.click('.today-card'); await p.waitForTimeout(300);
   const day = await p.innerText('#room');
-  check('one day opened: Pagi pane, back says Operasi, still view only', /← Operasi/.test(day) && /LIHAT SAHAJA/.test(day) && /Pagi/.test(day));
+  check('one day opened: Pagi pane, back says Operasi, still view only', /BALIK/.test(day) && /LIHAT SAHAJA/.test(day) && /Pagi/.test(day));
   const keyBtns = await p.$$eval('#room button', a => a.map(x => x.innerText).filter(t => /SIMPAN|SAVE|BETULKAN|CORRECT/i.test(t)));
   check('one day opened: no save or correct buttons', keyBtns.length === 0, keyBtns.join(' | '));
   for (const h of ['field-harvest/work', 'field-harvest/collect']) {

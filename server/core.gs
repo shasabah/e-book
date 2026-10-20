@@ -74,7 +74,15 @@ function doGet() {
   return reply({ ok: true, app: 'E-Book', min_version: MIN_APP_VERSION });
 }
 
+// v1.19: any error inside comes back as a clear answer the phone can read (never Google's error page).
 function doPost(e) {
+  try { return doPost_(e); }
+  catch (err) {
+    try { console.error('doPost: ' + err + ' ' + (err && err.stack)); } catch (e2) {}
+    return reply({ ok: false, error: 'office_error' });
+  }
+}
+function doPost_(e) {
   var req;
   try { req = JSON.parse(e.postData.contents); } catch (err) { return reply({ ok: false, error: 'bad_request' }); }
   if (!req || (Number(req.version) || 0) < MIN_APP_VERSION) return reply({ ok: false, error: 'old_version' });

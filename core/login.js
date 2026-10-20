@@ -26,7 +26,7 @@ window.EA = window.EA || {};
         res = await EA.fetchWait(link, {
           method: 'POST', credentials: 'omit',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'login', key: key, version: EA.VERSION, phone: EA.phone() })
+          body: JSON.stringify({ action: 'login', key: key, version: EA.VERSION, phone: EA.phone(), waiting: (EA.local.get('ea.queue', []) || []).length })
         });
       } catch (e) {
         // No signal: the last person who logged in on this phone may come back in.
@@ -38,6 +38,7 @@ window.EA = window.EA || {};
       }
       // The office answered, but not with its usual reply (an error page): "office busy".
       try { j = await res.json(); } catch (e2) { j = null; }
+      if (j && j.sw && EA.setSwitches) EA.setSwitches(j.sw);
       if (j && j.ok && j.user) return keep(Object.assign({}, j.user, { key: key }));
       // Only a real "wrong key" answer is called a wrong key. A busy or
       // broken office side is "try again", so nobody thinks their key is bad.
@@ -45,7 +46,7 @@ window.EA = window.EA || {};
       if (err === 'phone_not_yours' || err === 'no_phone') return { ok: false, why: err };
       return { ok: false, why: err === 'wrong_key' ? 'wrong' : err === 'old_version' ? 'old' : err === 'locked' ? 'locked' : 'server' };
     }
-    if (EA.config.TEST_MODE) {
+    if (EA.testMode ? EA.testMode() : EA.config.TEST_MODE) {
       var u = (EA.lists.testUsers || []).find(function (x) { return x.key === key; });
       return u ? keep(Object.assign({}, u)) : { ok: false, why: 'wrong' };
     }

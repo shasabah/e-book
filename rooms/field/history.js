@@ -19,6 +19,11 @@
   function jobName(code) { var t = task(code); return t ? EA.t(t.bm, t.en) : (code || ''); }
   function ym(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
   function monthLabel(m) { var x = new Date(m + '-01T00:00:00'); return EA.t(ui().monBm, ui().monEn)[x.getMonth()] + ' ' + x.getFullYear(); }
+  var FULL_BM = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember'];
+  var FULL_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  function monthLong(m) { var x = new Date(m + '-01T00:00:00'); return EA.t(FULL_BM, FULL_EN)[x.getMonth()] + ' ' + x.getFullYear(); }
+  function addMonths(m, n) { var x = new Date(m + '-01T00:00:00'); return ym(new Date(x.getFullYear(), x.getMonth() + n, 1)); }
+  var FIRST_MONTH = '2026-01';   // nothing in E-Book before this
   function dayLabel(iso) { var d = new Date(iso + 'T00:00:00'); return EA.t(ui().dayBm, ui().dayEn)[d.getDay()] + ' ' + d.getDate() + ' ' + EA.t(ui().monBm, ui().monEn)[d.getMonth()]; }
   function gangShort(g) { var p = String(g || '').split(' · '); return EA.lang() === 'en' && p[1] ? p[1] : p[0] || EA.t('Lain-lain', 'Other'); }
 
@@ -94,23 +99,53 @@
     if (!month) month = ym(new Date());
     if (openDay) return renderDay();
     var testing = ctx.room.state !== 'live';
-    var now = new Date(), months = [0, 1, 2].map(function (i) { return ym(new Date(now.getFullYear(), now.getMonth() - i, 1)); });
-    var list = merged(ctx.estate, month);
+    var list = merged(ctx.estate, month), thisMonth = ym(new Date());
+    var sum = list.reduce(function (a, d) { var f = dayFacts(d); a.mt += f.mt; a.lorries += d.lorries.length; return a; }, { mt: 0, lorries: 0 });
     var cache = EA.local.get(K.cache + ctx.estate + '.' + month, null);
     el.innerHTML = '<div class="room-top"><button type="button" class="back-btn" id="hs-back">← <span class="inline"><span class="bm">Bilik</span><span class="en">Rooms</span></span></button>' +
       '<div class="grow"><h1>' + EA.t('Sejarah', 'History') + '</h1><span class="brand-sub">' + esc(ctx.estate) + '</span></div>' +
       (testing ? '<span class="test-badge">' + EA.t('UJIAN', 'TEST') + '</span>' : '') + '</div>' + EA.fh.tabs('history', ctx.user) +
-      '<div class="seg2" role="group" aria-label="' + EA.t('Bulan', 'Month') + '">' + months.map(function (m) {
-        return '<button type="button" data-month="' + m + '" class="' + (m === month ? 'on' : '') + '" aria-pressed="' + (m === month) + '">' + esc(monthLabel(m)) + '</button>';
-      }).join('') + '</div>' +
+      // v1.11: one line for any number of months: ‹ Month › and a year grid behind the month name.
+      '<div class="mstep" role="group" aria-label="' + EA.t('Bulan', 'Month') + '">' +
+        '<button type="button" id="hs-prev" aria-label="' + EA.t('Bulan sebelum', 'Month before') + '"' + (month <= FIRST_MONTH ? ' disabled' : '') + '>‹</button>' +
+        '<button type="button" class="m" id="hs-pick"><b>' + esc(monthLong(month)) + ' ▾</b><small>' + list.length + EA.t(' hari', ' days') + ' · ' + sum.lorries + EA.t(' lori', ' lorries') +
+          (sum.mt > 0 ? ' · ' + sum.mt.toFixed(2) + ' MT' : '') + '</small></button>' +
+        '<button type="button" id="hs-next" aria-label="' + EA.t('Bulan selepas', 'Month after') + '"' + (month >= thisMonth ? ' disabled' : '') + '>›</button></div>' +
       '<div class="hist" id="hs-list">' + (list.length ? list.map(dayLine).join('') :
         '<p class="hint">' + EA.t('Tiada rekod untuk bulan ini di telefon ini.', 'No records for this month on this phone.') + '</p>') + '</div>' +
       '<p class="hint" id="hs-note">' + (cache ? EA.t('Dari pejabat dan telefon ini · dikemas kini ', 'From the office and this phone · updated ') + esc(cache.at) :
         EA.t('Dari telefon ini sahaja (40 hari). Bulan lain dari pejabat bila ada isyarat.', 'From this phone only (40 days). Other months come from the office when there is signal.')) + '</p>';
     $('#hs-back').onclick = function () { location.hash = ''; };
-    el.querySelectorAll('[data-month]').forEach(function (b) { b.onclick = function () { month = b.dataset.month; render(el, ctx); refresh(); }; });
+    function go(m) { month = m; render(el, ctx); refresh(); }
+    $('#hs-prev').onclick = function () { if (month > FIRST_MONTH) go(addMonths(month, -1)); };
+    $('#hs-next').onclick = function () { if (month < thisMonth) go(addMonths(month, 1)); };
+    $('#hs-pick').onclick = function () { pickMonth(Number(month.slice(0, 4)), go); };
     el.querySelectorAll('[data-day]').forEach(function (b) { b.onclick = function () { openDay = b.dataset.day; pane = 'chit'; render(el, ctx); window.scrollTo(0, 0); }; });
     refresh();
+  }
+  // The year grid: 12 months, a dot where this phone has records, months to come greyed out.
+  function hasData(m) { return merged(ctx.estate, m).length > 0; }
+  function pickMonth(year, go) {
+    var thisMonth = ym(new Date()), firstY = Number(FIRST_MONTH.slice(0, 4)), nowY = Number(thisMonth.slice(0, 4));
+    var mons = EA.t(ui().monBm, ui().monEn);
+    ui().openSheet('<h2 id="sheet-title">' + EA.t('Pilih bulan', 'Pick a month') + '</h2>' +
+      '<div class="yr"><button type="button" id="yr-prev"' + (year <= firstY ? ' disabled' : '') + '>‹</button><b>' + year + '</b>' +
+      '<button type="button" id="yr-next"' + (year >= nowY ? ' disabled' : '') + '>›</button></div>' +
+      '<div class="mgrid">' + mons.map(function (name, i) {
+        var m = year + '-' + String(i + 1).padStart(2, '0'), off = m > thisMonth || m < FIRST_MONTH;
+        return '<button type="button" data-m="' + m + '"' + (off ? ' disabled' : '') + (m === month ? ' class="on"' : '') + '>' + esc(name) +
+          (!off && hasData(m) ? '<i class="dot"></i>' : '') + '</button>';
+      }).join('') + '</div>' +
+      '<p class="hint">' + EA.t('Titik = ada rekod di telefon ini. Bulan lain dimuat dari pejabat bila ada isyarat.', 'Dot = records on this phone. Other months load from the office with signal.') + '</p>' +
+      '<div class="actions"><button class="btn btn-ghost" type="button" id="mq-this">THIS MONTH<small>Bulan ini</small></button>' +
+      '<button class="btn btn-ghost" type="button" id="mq-last">LAST MONTH<small>Bulan lepas</small></button></div>',
+      function (s) {
+        s.querySelector('#yr-prev').onclick = function () { pickMonth(year - 1, go); };
+        s.querySelector('#yr-next').onclick = function () { pickMonth(year + 1, go); };
+        s.querySelectorAll('[data-m]').forEach(function (b) { b.onclick = function () { ui().closeSheet(); go(b.dataset.m); }; });
+        s.querySelector('#mq-this').onclick = function () { ui().closeSheet(); go(thisMonth); };
+        s.querySelector('#mq-last').onclick = function () { ui().closeSheet(); go(addMonths(thisMonth, -1)); };
+      });
   }
   function dayLine(d) {
     var f = dayFacts(d), noChit = !d.chits.length;

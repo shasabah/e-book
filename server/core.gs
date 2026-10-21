@@ -59,7 +59,7 @@ var ROOM_TABS = {
   // The lots ticked on a delivery note: one row per harvester line on the lorry (v19).
   FH_DISPATCH_LOT: ['trip', 'dn_no', 'block', 'lot', 'work_id', 'date_cut', 'worker_id', 'bunches'],
   FH_TICKET: ['ticket_no', 'trip', 'mill', 'do_no', 'lorry', 'driver', 'time', 'first_kg', 'second_kg', 'deduct_kg', 'nett_kg', 'nett_mt',
-              'bunches', 'abw_kg', 'note', 'lorry_bunches'],
+              'bunches', 'abw_kg', 'note', 'lorry_bunches', 'mill_bunches', 'rej_ur', 'rej_emp', 'rej_rott', 'rej_mt'],
   // The mill's grading sheet, one row per ticket, keyed by the estate clerk (v16).
   FH_GRADING: ['ticket_no', 'sample', 'mill_bunches', 'g_ur', 'g_udr', 'g_or', 'g_r', 'g_eb', 'g_rt', 'g_ls', 'g_pd', 'g_pf', 'g_ds', 'g_dt', 'g_dr',
                'rej_ur', 'rej_eb', 'rej_rt', 'loose_kg', 'penalty_pct', 'grade_flag'],
@@ -74,6 +74,8 @@ var ROOM_TABS = {
   // (waiting for the Pengurus), approved / not_absconded (the Pengurus's answer), back (a mistake undone).
   // day: start date, last working day or last day seen.
   WORKER_LOG: ['worker_id', 'name', 'kind', 'day', 'note', 'answered_by', 'answered_at'],
+  // v1.26 Rekod: the crop budget per estate and month (month = yyyy-mm). Kept only in the office sheet.
+  LIST_BUDGET: ['month', 'budget_mt', 'abw_kg', 'work_days', 'note'],
   // Errors on phones, so the builder can see what went wrong without asking for screenshots.
   APP_ERROR: ['where', 'message', 'stack', 'version', 'agent']
 };
@@ -127,7 +129,7 @@ function doPost_(e) {
 // ---- v1.19: read answers remembered for 60 s, shared by everyone asking the same thing ----
 // Any call that may write (save, users, switches, ...) makes a new "generation", so a remembered
 // answer is never older than the last change.
-var READS_ = { workers: 1, ungraded: 1, harvest: 1, trips: 1, people: 1, history: 1, backlog: 1, rounds: 1, adminSummary: 1, adminPhones: 1, adminProblems: 1, adminSwitches: 1 };
+var READS_ = { crop: 1, workers: 1, ungraded: 1, harvest: 1, trips: 1, people: 1, history: 1, backlog: 1, rounds: 1, adminSummary: 1, adminPhones: 1, adminProblems: 1, adminSwitches: 1 };
 var READ_SECONDS = 60;
 function gen_() { return CacheService.getScriptCache().get('gen') || '0'; }
 function newGen_() { try { CacheService.getScriptCache().put('gen', String(Date.now()) + Math.floor(Math.random() * 1000), 21600); } catch (e) {} }
@@ -157,6 +159,10 @@ function doRead_(user, req) {
   if (req.action === 'trips') return openTrips(req.estate);
   if (req.action === 'backlog') return backlog(req.estate);
   if (req.action === 'rounds') return rounds_(req.estate);
+  if (req.action === 'crop') {
+    if (!/^\d{4}-\d{2}$/.test(String(req.month || ''))) return { ok: false, error: 'bad_month' };
+    return crop_(req.estate, String(req.month));
+  }
   if (req.action === 'history') {
     if (!/^\d{4}-\d{2}$/.test(String(req.month || ''))) return { ok: false, error: 'bad_month' };
     return history_(req.estate, String(req.month));
@@ -468,10 +474,12 @@ function history_(estate, month) {
   var days = {};
   function day(d) { return days[d] || (days[d] = { date: d, chits: [], work: [], harvest: 0, lorries: [], tickets: [] }); }
   var chitT = readRows_('FH_CHIT', estate), mus = readRows_('FH_MUSTER', estate), byChit = {};
+  var un = {}; try { readUsers_().list.forEach(function (u) { un[u.user_code] = String(u.name).replace(/^'/, ''); }); } catch (e) {}   // v1.26: the keyer's name
   chitT.standing.forEach(function (r) {
     if (!inM(r.date)) return;
-    var c = { id: r.chit, at: hm(r.confirmed_at) || hm(r.keyed_at), by: r.keyed_by, rain: r.rain_mm, rows: [], versions: [] };
+    var c = { id: r.chit, at: hm(r.confirmed_at) || hm(r.keyed_at), by: r.keyed_by, byName: un[r.keyed_by] || '', rain: r.rain_mm, rows: [], versions: [], imp: !live_(r) };
     byChit[r.chit] = c; day(r.date).chits.push(c);
+    if (!live_(r)) day(r.date).imp = true;
   });
   mus.standing.forEach(function (r) {
     if (byChit[r.chit]) byChit[r.chit].rows.push({ worker_id: r.worker_id, muster: r.muster, task_code: r.task_code, block: r.block, lots: r.lots, mandor: r.mandor });
@@ -501,7 +509,7 @@ function history_(estate, month) {
       bunches: r.bunches, status: r.job_status, reason: r.reason, progress: r.progress, target: r.target });
   });
   standingRows_('FH_WORK', estate).forEach(function (r) {
-    if (inM(r.date) && r.task_code === HARVEST_CODE) day(r.date).harvest += Number(r.bunches) || 0;
+    if (inM(r.date) && r.task_code === HARVEST_CODE) { var dd = day(r.date); dd.harvest += Number(r.bunches) || 0; if (!live_(r)) dd.imp = true; }
   });
   var trips = {};
   standingRows_('FH_DISPATCH', estate).forEach(function (r) {
@@ -513,7 +521,7 @@ function history_(estate, month) {
   standingRows_('FH_TICKET', estate).forEach(function (r) {
     var t = { no: r.ticket_no, trip: r.trip, mt: Number(r.nett_mt) || 0, bunches: Number(r.bunches) || 0, abw: Number(r.abw_kg) || 0, date: r.date };
     if (r.trip && trips[r.trip]) trips[r.trip].ticket = t;
-    else if (inM(r.date) && !r.trip) day(r.date).tickets.push(t);
+    else if (inM(r.date) && !r.trip) { day(r.date).tickets.push(t); if (!live_(r)) day(r.date).imp = true; }
   });
   return { ok: true, estate: estate, month: month, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'),
            days: Object.keys(days).sort().reverse().map(function (d) { return days[d]; }) };
@@ -1539,4 +1547,50 @@ function workersAction_(user, req) {
     }
     return { ok: false, error: 'unknown_action' };
   } finally { lock.releaseLock(); }
+}
+
+
+// ---------------- v1.26 Rekod: the month's crop in detail, like the estate's Excel ----------------
+// Bunches per harvester per day (and per block), every mill ticket, the month's budget, and each month
+// of the year (bunches, MT) for the ABW. Names come from the worker list, old harvesters included.
+// Read only. Everyone who sees the room's records may ask (staff, clerk, manager, HQ, Owner).
+function budgetFor_(estate, month) {
+  var b = null;
+  standingRows_('LIST_BUDGET', estate).forEach(function (r) { if (String(r.month).slice(0, 7) === month) b = r; });
+  return b ? { mt: Number(b.budget_mt) || 0, abw: Number(b.abw_kg) || 0, days: Number(b.work_days) || 0, note: String(b.note || '') } : null;
+}
+function crop_(estate, month) {
+  var names = {};
+  readRows_('LIST_PEOPLE', estate).standing.forEach(function (r) { names[r.worker_id] = { name: String(r.name), old: String(r.active).toUpperCase() === 'N' }; });
+  var year = month.slice(0, 4), months = {}, byW = {}, byB = {}, imp = false;
+  function mo(m) { return months[m] || (months[m] = { month: m, bunches: 0, mt: 0, tickets: 0 }); }
+  standingRows_('FH_WORK', estate).forEach(function (r) {
+    if (r.task_code !== HARVEST_CODE) return;
+    var d = String(r.date), b = Number(r.bunches) || 0;
+    if (d.slice(0, 4) === year && d.slice(0, 7) <= month) mo(d.slice(0, 7)).bunches += b;
+    if (d.slice(0, 7) !== month || !b) return;
+    if (!live_(r)) imp = true;
+    var day = Number(d.slice(8, 10)), w = String(r.worker_id);
+    var o = byW[w] || (byW[w] = { id: w, name: (names[w] || {}).name || w, old: !!(names[w] || {}).old, days: {} });
+    o.days[day] = (o.days[day] || 0) + b;
+    var bk = String(r.block || '') || '?';
+    var ob = byB[bk] || (byB[bk] = { block: bk, days: {} });
+    ob.days[day] = (ob.days[day] || 0) + b;
+  });
+  var tickets = [], dn = {};
+  standingRows_('FH_DISPATCH', estate).forEach(function (r) { if (r.trip) dn[r.trip] = { dn: r.dn_no, bunches: (dn[r.trip] ? dn[r.trip].bunches : 0) + (Number(r.bunches) || 0), lorry: r.lorry, date: r.date }; });
+  standingRows_('FH_TICKET', estate).forEach(function (r) {
+    var d = String(r.date), mt = Number(r.nett_mt) || 0;
+    if (d.slice(0, 4) === year && d.slice(0, 7) <= month) { mo(d.slice(0, 7)).mt += mt; mo(d.slice(0, 7)).tickets++; }
+    if (d.slice(0, 7) !== month) return;
+    var t = dn[r.trip] || {}, bun = Number(r.bunches) || t.bunches || 0;
+    tickets.push({ no: String(r.ticket_no), date: d, time: String(r.time || ''), mill: String(r.mill || ''), dn: String(r.do_no || t.dn || ''), lorry: String(r.lorry || t.lorry || ''),
+      w1: Number(r.first_kg) || 0, w2: Number(r.second_kg) || 0, nett: mt, bunches: bun, abw: bun ? Math.round(mt * 1000 / bun * 100) / 100 : 0,
+      rej: (Number(r.rej_ur) || 0) + (Number(r.rej_emp) || 0) + (Number(r.rej_rott) || 0), imp: !live_(r) });
+  });
+  tickets.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.time < b.time ? -1 : 1; });
+  var list = Object.keys(months).sort().map(function (k) { var m = months[k]; m.mt = Math.round(m.mt * 100) / 100; m.abw = m.bunches && m.mt ? Math.round(m.mt * 1000 / m.bunches * 100) / 100 : 0; return m; });
+  return { ok: true, estate: estate, month: month, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'),
+    harvesters: Object.keys(byW).map(function (k) { return byW[k]; }).sort(function (a, b) { return a.old === b.old ? (a.name < b.name ? -1 : 1) : a.old ? 1 : -1; }),
+    blocks: Object.keys(byB).sort().map(function (k) { return byB[k]; }), tickets: tickets, budget: budgetFor_(estate, month), months: list, imp: imp };
 }

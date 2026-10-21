@@ -425,14 +425,24 @@ function readTab_(tabName) {
 // hectares of the lots worked (plan_ha). Old records loaded from the estate's sheets count too.
 function rounds_(estate) {
   var year = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy'), out = {};
+  // v1.23: the last date each lot was worked, per job (job lines, harvesters' lines, the chit's jobs).
+  var lots = {}, since = Utilities.formatDate(new Date(Date.now() - 120 * 864e5), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd');
+  function lotDone(code, list, date) {
+    if (!code || !list || String(date) < since) return;
+    var m = lots[code] || (lots[code] = {});
+    String(list).split(/[\s,]+/).forEach(function (l) { if (/^\d+-\d+$/.test(l) && (!m[l] || String(date) > m[l])) m[l] = String(date); });
+  }
+  standingRows_('FH_WORK', estate).forEach(function (r) { lotDone(r.task_code, r.lot, r.date); });
+  standingRows_('FH_MUSTER', estate).forEach(function (r) { if (r.muster === 'H') lotDone(r.task_code, r.lots, r.date); });
   standingRows_('FH_JOBDAY', estate).forEach(function (r) {
+    lotDone(r.task_code, r.lots, r.date);
     if (String(r.date).slice(0, 4) !== year || !r.block || !r.task_code) return;
     var ha = /^ha$/i.test(String(r.unit)) ? Number(r.qty) || 0 : Number(r.plan_ha) || 0;
     var k = r.task_code + '|' + r.block, o = out[k] || (out[k] = { ha: 0, last: '' });
     o.ha = Math.round((o.ha + ha) * 100) / 100;
     if (ha > 0 && r.date > o.last) o.last = String(r.date);
   });
-  return { ok: true, estate: estate, year: year, rounds: out };
+  return { ok: true, estate: estate, year: year, rounds: out, lots: lots };
 }
 
 // ---------- History (v1.7): one month of an estate's days, read only ----------

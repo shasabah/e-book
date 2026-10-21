@@ -482,10 +482,15 @@ function history_(estate, month) {
 // Field backlog per lot = bunches cut (harvesters, FH_WORK HA) - bunches collected
 // to the ramp (FH_COLLECT), counted after the last time the lot was marked cleared.
 // Ramp backlog = collected - sent on lorries (FH_DISPATCH), after the ramp was last empty.
+// v1.22: records loaded from the estate's old files (keyed_by IMPORT, e.g. 1–19 Oct 2026 at Sugut)
+// count in the month's totals and History, but never in the field / ramp backlog, the lorry's
+// open harvest lines or the clerk's ungraded list: their lorries were not keyed lot by lot.
+var IMPORT_BY = 'IMPORT';
+function live_(r) { return String(r.keyed_by) !== IMPORT_BY; }
 function backlog(estate) {
-  var cut = standingRows_('FH_WORK', estate).filter(function (r) { return r.task_code === HARVEST_CODE; });
-  var col = standingRows_('FH_COLLECT', estate);
-  var dis = standingRows_('FH_DISPATCH', estate);
+  var cut = standingRows_('FH_WORK', estate).filter(function (r) { return r.task_code === HARVEST_CODE && live_(r); });
+  var col = standingRows_('FH_COLLECT', estate).filter(live_);
+  var dis = standingRows_('FH_DISPATCH', estate).filter(live_);
   var now = new Date();
   var b = calcBacklog(cut, col, dis, Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd'));
   return { ok: true, estate: estate, at: Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'),
@@ -538,7 +543,7 @@ function ungraded_(estate) {
   var since = Utilities.formatDate(new Date(Date.now() - 30 * 864e5), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd');
   var graded = {};
   standingRows_('FH_GRADING', estate).forEach(function (r) { graded[r.ticket_no] = true; });
-  return { ok: true, tickets: standingRows_('FH_TICKET', estate).filter(function (r) { return r.date >= since && !graded[r.ticket_no]; })
+  return { ok: true, tickets: standingRows_('FH_TICKET', estate).filter(function (r) { return live_(r) && r.date >= since && !graded[r.ticket_no]; })
     .map(function (r) { return { ticket_no: r.ticket_no, date: r.date, mill: r.mill, nett_mt: Number(r.nett_mt) || 0, do_no: r.do_no }; }) };
 }
 
@@ -643,6 +648,7 @@ function openHarvest(estate) {
   standingRows_('FH_DISPATCH_LOT', estate).forEach(function (r) { var w = newest(r.work_id); onTicket[w] = (onTicket[w] || 0) + (Number(r.bunches) || 0); });
   standingRows_('FH_TICKET_HARV', estate).forEach(function (r) { if (r.source !== 'dn') { var w = newest(r.work_id); onTicket[w] = (onTicket[w] || 0) + (Number(r.bunches) || 0); } });
   var lines = standingRows_('FH_WORK', estate).filter(function (r) {
+    if (!live_(r)) return false;
     return r.task_code === HARVEST_CODE && Number(r.bunches) > 0 && r.date >= cut;
   }).map(function (r) { return { id: r.id, date: r.date, lot: r.lot, block: r.block, worker_id: r.worker_id, bunches: Number(r.bunches) - (onTicket[r.id] || 0) }; })
     .filter(function (r) { return r.bunches > 0; });

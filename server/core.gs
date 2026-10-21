@@ -27,11 +27,16 @@ var BOOK_ = null;
 // v1.18: from the Sugut trial (21 Oct 2026) the office writes into the clean E-Book LIVE sheet, made by
 // setupLiveSheet() and kept in the script settings. SHEET_ID above stays the test sheet, kept as it is.
 function liveSheetId_() { try { return PropertiesService.getScriptProperties().getProperty('SHEET_ID') || SHEET_ID; } catch (e) { return SHEET_ID; } }
-function book_() { return BOOK_ || (BOOK_ = SpreadsheetApp.openById(liveSheetId_())); }
+// v1.24 Mod Latihan: a practice user (code L-) writes and reads only the practice book (the TEST sheet).
+// The people list (USERS, USERS_LOG) always stays in the real book.
+var PRACTICE_ = false, UBOOK_ = null;
+function isPracticeCode_(code) { return /^L-/.test(String(code)); }
+function book_() { return BOOK_ || (BOOK_ = SpreadsheetApp.openById(PRACTICE_ ? SHEET_ID : liveSheetId_())); }
+function usersBook_() { if (!PRACTICE_) return book_(); return UBOOK_ || (UBOOK_ = SpreadsheetApp.openById(liveSheetId_())); }
 // Records dated before the trial began are practice from the phones: they are answered "done" so the
 // phone stops sending them, but never written into the clean sheet.
 function liveFrom_() { try { return PropertiesService.getScriptProperties().getProperty('LIVE_FROM') || ''; } catch (e) { return ''; } }
-function beforeLive_(user, row) { var lf = liveFrom_(); return !!(lf && row && String(row.date) < lf && !isTestCode_(user.user_code)); }
+function beforeLive_(user, row) { var lf = liveFrom_(); return !!(lf && row && String(row.date) < lf && !isTestCode_(user.user_code) && !isPracticeCode_(user.user_code)); }
 
 var USERS_TAB = 'USERS';
 var USER_COLS = ['user_code', 'name', 'role', 'estates', 'key_hash', 'status', 'added_at', 'phones', 'position', 'move_estates', 'move_date', 'phone_names'];
@@ -94,7 +99,9 @@ function doPost_(e) {
   var pk = 'badkeys:' + String(req.phone || 'none').replace(/[^A-Z0-9-]/gi, '').slice(0, 12);
   var bad = Number(cache.get(pk) || 0), badAll = Number(cache.get('badkeys') || 0);
   if (bad >= 20 || badAll >= 300) return reply({ ok: false, error: 'locked' });
+  if (PRACTICE_) { PRACTICE_ = false; BOOK_ = null; }
   var user = findUser(req.key);
+  if (user && isPracticeCode_(user.user_code)) { PRACTICE_ = true; BOOK_ = null; }
   if (!user) { cache.put(pk, String(bad + 1), 900); cache.put('badkeys', String(badAll + 1), 900); return reply({ ok: false, error: 'wrong_key' }); }
 
   if (req.action === 'login') {
@@ -102,7 +109,7 @@ function doPost_(e) {
     var pc = phoneCheck_(user, req.phone);
     if (pc) { logRefused_(user, req, 'login', '', pc, ''); return reply({ ok: false, error: pc, phone: String(req.phone || '') }); }
     noteSeen_(user, req);
-    return reply({ ok: true, user: { code: user.user_code, name: user.name, role: user.role, estates: user.estates }, sw: switches_() });
+    return reply({ ok: true, user: { code: user.user_code, name: user.name, role: user.role, estates: user.estates, practice: PRACTICE_ }, sw: switches_() });
   }
   noteSeen_(user, req);
   if (req.action === 'switches') return reply({ ok: true, sw: switches_() });
@@ -121,7 +128,7 @@ function gen_() { return CacheService.getScriptCache().get('gen') || '0'; }
 function newGen_() { try { CacheService.getScriptCache().put('gen', String(Date.now()) + Math.floor(Math.random() * 1000), 21600); } catch (e) {} }
 function readCached_(user, req) {
   var personal = req.action === 'people' || /^admin/.test(String(req.action));
-  var key = ['rd', req.action, String(req.estate || ''), String(req.month || ''), personal ? user.user_code : '', gen_()].join('|').slice(0, 240);
+  var key = ['rd', PRACTICE_ ? 'L' : '', req.action, String(req.estate || ''), String(req.month || ''), personal ? user.user_code : '', gen_()].join('|').slice(0, 240);
   var c = CacheService.getScriptCache(), hit = null;
   try { hit = c.get(key); } catch (e) {}
   if (hit) return ContentService.createTextOutput(hit).setMimeType(ContentService.MimeType.JSON);
@@ -192,7 +199,7 @@ function hashKey(key) {
 
 // Is there already a user with this code? (used so setupTestCopy can be run again safely)
 function findUser_(code) {
-  var sh = book_().getSheetByName(USERS_TAB);
+  var sh = usersBook_().getSheetByName(USERS_TAB);
   if (!sh || sh.getLastRow() < 2) return false;
   var codes = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
   return codes.some(function (r) { return String(r[0]) === String(code); });
@@ -213,7 +220,7 @@ function findUser(key) {
 }
 
 function findUserInSheet_(key) {
-  var sh = book_().getSheetByName(USERS_TAB);
+  var sh = usersBook_().getSheetByName(USERS_TAB);
   if (!sh || sh.getLastRow() < 2) return null;
   var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
   var rows = sh.getRange(2, 1, sh.getLastRow() - 1, head.length).getValues();
@@ -526,6 +533,7 @@ function backlog(estate) {
 // The people list for the user's estates (active only), for the phones' muster and day's work.
 function people_(user) {
   var out = [];
+  if (isPracticeCode_(user.user_code)) return { ok: true, people: [], practice: true };   // made-up workers on the phone
   user.estates.forEach(function (est) {
     standingRows_('LIST_PEOPLE', est).forEach(function (r) {
       if (String(r.active).toUpperCase() === 'N') return;
@@ -748,7 +756,7 @@ var ROLE_PREFIX = { Owner: 'OWN', HQ: 'HQ', Staff: 'STF', Clerk: 'CLK', Mandor: 
 function isTestCode_(code) { return /^T-/.test(String(code)); }
 
 function readUsers_() {
-  var sh = book_().getSheetByName(USERS_TAB);
+  var sh = usersBook_().getSheetByName(USERS_TAB);
   var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
   var n = sh.getLastRow() - 1;
   var rows = n > 0 ? sh.getRange(2, 1, n, head.length).getValues() : [];
@@ -810,7 +818,7 @@ function moveOut_(u) {
 // At login: '' when this phone may be used, or the refusal. Test PINs (T-) are not checked.
 // A person with no codes yet (made before v1.14) keeps the code their phone already has, if nobody else has it.
 function phoneCheck_(user, phone) {
-  if (isTestCode_(user.user_code)) return '';
+  if (isTestCode_(user.user_code) || isPracticeCode_(user.user_code)) return '';   // practice: any phone
   var p = String(phone || '').toUpperCase();
   if (!phoneOk_(p)) return 'no_phone';
   var mine = phonesOf_(user);
@@ -842,7 +850,7 @@ function usersOut_(list) {
   return list.map(function (u) {
     var at = u.added_at instanceof Date ? Utilities.formatDate(u.added_at, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm') : String(u.added_at || '').replace(/^'/, '');
     return { code: u.user_code, name: String(u.name), role: String(u.role), estates: estatesNow_(u),
-             status: u.status, added: at, test: isTestCode_(u.user_code), phones: phonesOf_(u),
+             status: u.status, added: at, test: isTestCode_(u.user_code), practice: isPracticeCode_(u.user_code), phones: phonesOf_(u),
              position: String(u.position || '').replace(/^'/, ''), move: moveOut_(u) };
   });
 }
@@ -869,7 +877,7 @@ function newPin_(list) {
 }
 
 function logUser_(by, action, u, detail) {
-  var ss = book_();
+  var ss = usersBook_();
   var sh = ss.getSheetByName(USERS_LOG_TAB);
   if (!sh) { sh = ss.insertSheet(USERS_LOG_TAB); sh.appendRow(USERS_LOG_COLS); }
   var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
@@ -917,7 +925,9 @@ function usersAction_(user, req) {
       if (!est) return { ok: false, error: 'bad_estates' };
       var pos = String(req.position || '');
       if (pos && POSITIONS.indexOf(pos) < 0) return { ok: false, error: 'bad_position' };
-      var stem = ROLE_PREFIX[req.role] + '-' + (est.length === ESTATES.length ? 'ALL' : est[0]) + '-';
+      var prac = !!req.practice;
+      if (prac && ['Staff', 'Clerk', 'Manager'].indexOf(req.role) < 0) return { ok: false, error: 'bad_role' };
+      var stem = (prac ? 'L-' : '') + ROLE_PREFIX[req.role] + '-' + (est.length === ESTATES.length ? 'ALL' : est[0]) + '-';
       var n = 1, code;
       do { code = stem + ('0' + n).slice(-2); n++; } while (list.some(function (u) { return u.user_code === code; }));
       var pin = newPin_(list), phone = nextPhone_(list);
@@ -927,7 +937,7 @@ function usersAction_(user, req) {
         return { user_code: code, name: plain(name), role: req.role, estates: est.join(','), key_hash: hashKey(pin), status: 'active', added_at: plain(now), phones: phone, position: pos }[c];
       }).map(function (v) { return v === undefined ? '' : v; });
       sh.appendRow(row);
-      logUser_(user, 'add', { user_code: code, name: name }, (pos ? pos + ' · ' : '') + req.role + ' · ' + est.join(',') + ' · ' + phone);
+      logUser_(user, 'add', { user_code: code, name: name }, (prac ? 'Latihan · ' : '') + (pos ? pos + ' · ' : '') + req.role + ' · ' + est.join(',') + ' · ' + phone);
       return out({ pin: pin, code: code, name: name, phone: phone });
     }
 
@@ -1016,7 +1026,7 @@ function usersAction_(user, req) {
     }
     // The last changes for one person, newest first, for the person sheet.
     if (req.action === 'userLog') {
-      var lg = book_().getSheetByName(USERS_LOG_TAB);
+      var lg = usersBook_().getSheetByName(USERS_LOG_TAB);
       var lines = [];
       if (lg && lg.getLastRow() > 1) {
         lg.getRange(2, 1, lg.getLastRow() - 1, USERS_LOG_COLS.length).getValues().forEach(function (r) {
@@ -1144,6 +1154,12 @@ function noteSeen_(user, req) {
   var p = String(req.phone || '').toUpperCase();
   if (!/^P\d{2,3}$/.test(p)) return;
   var v = String(req.version || ''), w = req.waiting === undefined ? '' : String(Number(req.waiting) || 0);
+  if (isPracticeCode_(user.user_code)) {   // practice logins never change the real phone lines
+    var ck = 'seenLq:' + user.user_code, mk = p + '|' + v, c0 = CacheService.getScriptCache();
+    if (c0.get(ck) === mk) return;
+    try { PropertiesService.getScriptProperties().setProperty('seenL:' + user.user_code, JSON.stringify({ phone: p, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), v: v })); c0.put(ck, mk, 300); } catch (e) {}
+    return;
+  }
   var c = CacheService.getScriptCache(), k = 'seenq:' + p, mark = user.user_code + '|' + v + '|' + w;
   if (c.get(k) === mark) return;
   try {
@@ -1230,9 +1246,14 @@ function adminSummary_(user) {
 
 // ---- Telefon: every device of every real person ----
 function adminPhones_() {
-  var props = PropertiesService.getScriptProperties().getProperties(), list = readUsers_().list, out = [];
+  var props = PropertiesService.getScriptProperties().getProperties(), list = readUsers_().list, out = [], practice = [];
   list.forEach(function (u) {
     if (isTestCode_(u.user_code) || u.status !== 'active') return;
+    if (isPracticeCode_(u.user_code)) {
+      var sl = null; try { sl = props['seenL:' + u.user_code] ? JSON.parse(props['seenL:' + u.user_code]) : null; } catch (e) {}
+      practice.push({ code: u.user_code, name: String(u.name).replace(/^'/, ''), role: String(u.role), estates: estatesNow_(u), seen: sl });
+      return;
+    }
     var names = phoneNames_(u);
     phonesOf_(u).forEach(function (p) {
       var seen = null; try { seen = props['seen:' + p] ? JSON.parse(props['seen:' + p]) : null; } catch (e) {}
@@ -1240,7 +1261,7 @@ function adminPhones_() {
                  seen: seen && seen.u === u.user_code ? seen : (seen ? { at: seen.at, v: seen.v, w: seen.w, other: seen.u } : null) });
     });
   });
-  return { ok: true, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), phones: out, appVersion: MIN_APP_VERSION };
+  return { ok: true, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), phones: out, practice: practice, appVersion: MIN_APP_VERSION };
 }
 function adminPhoneName_(user, req) {
   // The device to name is req.device; req.phone is always the phone that is asking.
@@ -1281,11 +1302,11 @@ function adminProblems_() {
 function adminSwitches_() {
   var list = readUsers_().list, props = PropertiesService.getScriptProperties().getProperties(), sw = switches_();
   var testOn = list.filter(function (u) { return isTestCode_(u.user_code) && u.status === 'active'; }).length;
-  var people = list.filter(function (u) { return !isTestCode_(u.user_code) && u.status === 'active' && /^(Staff|Clerk|Manager)$/.test(String(u.role)); }).map(function (u) {
+  var people = list.filter(function (u) { return !isTestCode_(u.user_code) && !isPracticeCode_(u.user_code) && u.status === 'active' && /^(Staff|Clerk|Manager)$/.test(String(u.role)); }).map(function (u) {
     var inn = phonesOf_(u).some(function (p) { try { return props['seen:' + p] && JSON.parse(props['seen:' + p]).u === u.user_code; } catch (e) { return false; } });
     return { code: u.user_code, name: String(u.name).replace(/^'/, ''), role: String(u.role), loggedIn: inn };
   });
-  var log = [], lg = book_().getSheetByName(USERS_LOG_TAB);
+  var log = [], lg = usersBook_().getSheetByName(USERS_LOG_TAB);
   if (lg && lg.getLastRow() > 1) lg.getRange(2, 1, lg.getLastRow() - 1, USERS_LOG_COLS.length).getValues().forEach(function (r) {
     if (String(r[3]) === 'switch' || String(r[3]) === 'test_off') log.push({ at: r[0] instanceof Date ? Utilities.formatDate(r[0], 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm') : String(r[0]).replace(/^'/, ''), by: String(r[2]), detail: String(r[6]) });
   });

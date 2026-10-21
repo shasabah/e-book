@@ -210,6 +210,7 @@
     if (!EA.sendLink()) { document.dispatchEvent(new CustomEvent('fh:backlog')); return localBacklog(estate); }
     var b = await EA.ask('backlog', { estate: estate });
     if (b) { EA.local.set(backlogKey(estate), b); document.dispatchEvent(new CustomEvent('fh:backlog')); }
+    refreshRounds(estate);   // v1.22: rounds for Tambah kerja, after the backlog (never two at once)
     return b;
   }
   function localBacklog(estate) {
@@ -644,6 +645,26 @@
     keepDraft(); drawJobs(); drawRows(); drawTable();
   }
 
+  // v1.22: this block's rounds this year for a job with a yearly plan (from the office, kept on the phone).
+  var MON = ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ogo', 'Sep', 'Okt', 'Nov', 'Dis'];
+  function roundText(code, block) {
+    var plan = code && block ? EA.lists.roundPlanFor(ctx.estate, code) : 0;
+    if (!plan) return '';
+    var b = EA.lists.blocksFor(ctx.estate).find(function (x) { return x.block === block; });
+    var data = EA.local.get('fh.rounds.' + ctx.estate, null);
+    if (!b || !data || !data.rounds) return '';
+    var r = data.rounds[code + '|' + block] || { ha: 0, last: '' }, done = r.ha / b.ha;
+    var last = r.last ? MON[Number(r.last.slice(5, 7)) - 1] : '—';
+    var cls = done + 0.05 < plan * (new Date().getMonth() + 1) / 12 - 1 ? ' late' : '';
+    return '<b class="' + cls + '">Blk ' + esc(block) + ' · ' + esc(code) + ': ' + (Math.round(done * 10) / 10) + ' / ' + plan + EA.t(' pusingan', ' rounds') + '</b> · ' +
+      EA.t('terakhir ', 'last ') + last + ' · ' + EA.t('tahun ini', 'this year');
+  }
+  async function refreshRounds(estate) {
+    if (!EA.sendLink()) return;
+    var r = await EA.ask('rounds', { estate: estate });
+    if (r && r.rounds) EA.local.set('fh.rounds.' + estate, { at: Date.now(), rounds: r.rounds });
+  }
+
   // Add or change one job.
   function editJob(key) {
     var j0 = key ? job(key) : null;
@@ -651,9 +672,14 @@
     var used = key ? draftRows().filter(function (r) { return r.muster === 'H' && jobFor(r.worker_id) === j0; }).length : 0;
     ui().openSheet(
       '<h2 id="sheet-title"><span class="bm">' + (key ? 'Ubah kerja' : 'Tambah kerja') + '</span><span class="en">' + (key ? 'Change job' : 'Add a job') + '</span></h2>' +
-      '<div class="field"><label for="jb-task"><span class="bm">Kerja</span><span class="en">Job code</span></label><select id="jb-task" class="text-input">' + taskOptions(pick.task) + '</select></div>' +
-      '<div class="field"><label for="jb-block"><span class="bm">Blok</span><span class="en">Block</span></label><select id="jb-block" class="text-input"></select></div>' +
-      '<div class="field"><span class="inline"><span class="bm">Petak</span> · <span class="en">Lots (optional)</span></span><div id="jb-lots"></div></div>' +
+      '<div class="field"><span class="inline"><span class="bm">Kerja biasa</span> · <span class="en">Usual jobs</span></span><div class="picks jb-quick" id="jb-quick">' +
+        EA.lists.quickJobsFor(ctx.estate).map(function (c) { var t = task(c); return '<button type="button" class="pick" data-quick="' + c + '" aria-pressed="' + (c === pick.task) + '"><b>' + c + '</b><small>' + esc(EA.t(t.bm, t.en)) + '</small></button>'; }).join('') + '</div></div>' +
+      '<div class="field"><label for="jb-task"><span class="bm">Kerja (semua kod)</span><span class="en">Job code (all codes)</span></label><select id="jb-task" class="text-input">' + taskOptions(pick.task) + '</select></div>' +
+      '<p class="msg ok-note" id="jb-noblock" hidden><span class="bm">✓ Tidak perlu blok untuk kerja ini</span><span class="en">✓ No block needed for this job</span></p>' +
+      '<div id="jb-where"><div class="field"><label for="jb-block"><span class="bm">Blok</span><span class="en">Block</span></label><select id="jb-block" class="text-input"></select></div>' +
+      '<p class="hint jb-round" id="jb-round" hidden></p>' +
+      '<div class="field"><span class="inline"><span class="bm">Petak · jika tahu</span> · <span class="en">Lots, if known</span></span><div id="jb-lots"></div>' +
+        '<p class="hint"><span class="bm">Belum pasti petak? Boleh isi petang di Kerja.</span><span class="en">Lots not sure yet? Add them in the afternoon in Day\'s work.</span></p></div></div>' +
       '<div class="field"><label for="jb-mdr"><span class="bm">Mandor</span><span class="en">Foreman (optional)</span></label><select id="jb-mdr" class="text-input"><option value="">' + EA.t('— Tiada —', '— None —') + '</option>' +
         EA.lists.mandorsFor(ctx.estate).map(function (m) { return '<option value="' + m.id + '"' + (m.id === pick.mandor ? ' selected' : '') + '>' + esc(m.name) + '</option>'; }).join('') + '</select></div>' +
       '<div class="actions">' + (key ? '<button class="btn btn-ghost" type="button" id="jb-del"' + (used ? ' disabled title="Ada orang dalam kerja ini"' : '') + '>REMOVE<small>Buang</small></button>' : '') +
@@ -663,6 +689,15 @@
       function (s) {
         function fill() {
           var needs = pick.task ? EA.lists.sectionOf(pick.task).block : true;
+          // v1.22: general, transport and repair jobs have no block and no lots.
+          var noBlock = !!pick.task && !needs;
+          if (noBlock) { pick.block = ''; pick.lots = []; }
+          s.querySelector('#jb-where').hidden = noBlock;
+          s.querySelector('#jb-noblock').hidden = !noBlock;
+          s.querySelectorAll('#jb-quick [data-quick]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.quick === pick.task); });
+          s.querySelector('#jb-task').value = pick.task;
+          var rd = s.querySelector('#jb-round'), rt = roundText(pick.task, pick.block);
+          rd.hidden = !rt; rd.innerHTML = rt;
           s.querySelector('#jb-block').innerHTML = blockOptions(pick.block, !needs);
           s.querySelector('#jb-lots').innerHTML = lotPicks(pick.block, pick.lots);
           s.querySelectorAll('#jb-lots .pick').forEach(function (b) {
@@ -675,6 +710,7 @@
         }
         fill();
         s.querySelector('#jb-task').onchange = function () { pick.task = this.value; fill(); };
+        s.querySelectorAll('#jb-quick [data-quick]').forEach(function (b) { b.onclick = function () { pick.task = b.dataset.quick; fill(); }; });
         s.querySelector('#jb-block').onchange = function () { pick.block = this.value; pick.lots = []; fill(); };
         s.querySelector('#jb-mdr').onchange = function () { pick.mandor = this.value; };
         s.querySelector('#jb-cancel').onclick = ui().closeSheet;

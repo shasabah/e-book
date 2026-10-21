@@ -64,14 +64,14 @@
   function jobName(code) { var t = task(code); return t ? EA.t(t.bm, t.en) : code; }
   function jobNameEn(code) { var t = task(code); return t ? t.en : code; }
   function job(key) { return draft.jobs.find(function (j) { return j.key === key; }) || null; }
-  function jobShort(j) { return j.task + (j.block ? ' · Blk ' + j.block : '') + (j.lots.length ? ' · ' + j.lots.join(',') : ''); }
+  function jobShort(j) { return j.task + (j.block ? ' · ' + placeName(j.block) : '') + (j.lots.length ? ' · ' + j.lots.join(',') : ''); }
   function lotsInfo(lots) {
     var ha = 0, palms = 0;
     lots.forEach(function (n) { var l = EA.lists.lot(ctx.estate, n); if (l) { ha += l.ha; palms += l.palms; } });
     return { ha: Math.round(ha * 100) / 100, palms: palms };
   }
   function sortLots(a) {
-    return a.slice().sort(function (x, y) { var p = x.split('-').map(Number), q = y.split('-').map(Number); return p[0] - q[0] || p[1] - q[1]; });
+    return a.slice().sort(function (x, y) { var p = x.split('-').map(Number), q = y.split('-').map(Number); return (isNaN(p[0]) || isNaN(q[0])) ? (x < y ? -1 : x > y ? 1 : 0) : p[0] - q[0] || p[1] - q[1]; });
   }
   function everyone() { return EA.lists.mandorsFor(ctx.estate).concat(EA.lists.workersFor(ctx.estate)); }
   // The job a present person is on: his own pick, or the job he is mandor of.
@@ -85,12 +85,16 @@
     todaysChits().forEach(function (c) { if (c.chit !== draft.replacing) c.rows.forEach(function (r) { if (r.status !== 'removed') taken[r.worker_id] = c.chit; }); });
     return taken;
   }
-  function blockOptions(selected, optional) {
+  function blockOptions(selected, optional, code) {
+    var d = EA.lists.durian[ctx.estate];
     return '<option value="">' + (optional ? EA.t('— Tiada blok —', '— No block —') : EA.t('— Pilih blok —', '— Choose block —')) + '</option>' + EA.lists.blocksFor(ctx.estate).map(function (b) {
       var lots = EA.lists.lotsFor(ctx.estate, b.block);
       return '<option value="' + b.block + '"' + (b.block === selected ? ' selected' : '') + '>Blok ' + b.block + ' · ' + b.ha.toFixed(2) + ' Ha · ' + lots.length + ' petak · tanam ' + (lots[0] ? lots[0].planted : '') + '</option>';
-    }).join('');
+    }).join('') +
+      // v1.27: the durian farm, for maintenance jobs (not oil palm crop jobs).
+      (d && EA.lists.palmOnly.indexOf(code) < 0 ? '<option value="' + d.block + '"' + (d.block === selected ? ' selected' : '') + '>' + esc(EA.t(d.bm, d.en)) + ' · ' + EA.t('petak ', 'lots ') + d.lots.join(', ') + '</option>' : '');
   }
+  function placeName(block) { var d = EA.lists.durian[ctx.estate]; return d && block === d.block ? EA.t(d.bm, d.en) : 'Blk ' + block; }
   function taskOptions(selected) {
     var html = '<option value="">' + EA.t('— Pilih kerja —', '— Choose job —') + '</option>';
     EA.lists.chitSections.forEach(function (s) {
@@ -126,8 +130,8 @@
     var html = EA.lists.lotsFor(ctx.estate, block).map(function (l) {
       var st = lotState(code, l.lot, last);
       if (st && st.cls !== 'lot-done') ready.push(l.lot);
-      return '<button type="button" class="pick' + (st ? ' ' + st.cls : '') + '" data-lot="' + l.lot + '" aria-pressed="' + (chosen.indexOf(l.lot) >= 0) + '"><b>' + l.lot + '</b><small>' +
-        (st ? st.n + EA.t(' hari', st.n === 1 ? ' day' : ' days') : l.ha.toFixed(2) + ' Ha') + '</small></button>';
+      return '<button type="button" class="pick' + (st ? ' ' + st.cls : '') + '" data-lot="' + l.lot + '" aria-pressed="' + (chosen.indexOf(l.lot) >= 0) + '"><b>' + esc(l.label || l.lot) + '</b><small>' +
+        (st ? st.n + EA.t(' hari', st.n === 1 ? ' day' : ' days') : l.durian ? EA.t('durian', 'durian') : l.ha.toFixed(2) + ' Ha') + '</small></button>';
     }).join('');
     var top = '';
     if (EA.lists.lotRound[code]) {
@@ -643,7 +647,7 @@
       if (other) line = '<span class="hint">' + EA.t('Sudah dalam chit lain ', 'Already on chit ') + esc(other) + '</span>';
       else if (m === 'H') {
         line = draft.jobs.length ? '<div class="picks">' + draft.jobs.map(function (x) {
-          return '<button type="button" class="pick" data-w="' + w.id + '" data-job="' + x.key + '" aria-pressed="' + (j === x) + '"><b>' + esc(x.task) + '</b><small>' + esc(x.block ? 'Blk ' + x.block : jobName(x.task)) + '</small></button>';
+          return '<button type="button" class="pick" data-w="' + w.id + '" data-job="' + x.key + '" aria-pressed="' + (j === x) + '"><b>' + esc(x.task) + '</b><small>' + esc(x.block ? placeName(x.block) : jobName(x.task)) + '</small></button>';
         }).join('') + '</div>' + (j ? '' : '<b class="bad-text">' + EA.t('Pilih kerja', 'Choose a job') + '</b>') : '<b class="bad-text">' + EA.t('Tambah kerja dahulu', 'Add a job first') + '</b>';
       } else if (m && m !== 'H') line = '<span class="pill plain">' + esc(EA.t(MARKS[m][0], MARKS[m][1])) + '</span>' + (m === 'T' ? lariFlag(w) : '');
       var more = (m === 'L' || m === 'X') ? m : '⋯';
@@ -760,7 +764,8 @@
           s.querySelector('#jb-task').value = pick.task;
           var rd = s.querySelector('#jb-round'), rt = roundText(pick.task, pick.block);
           rd.hidden = !rt; rd.innerHTML = rt;
-          s.querySelector('#jb-block').innerHTML = blockOptions(pick.block, !needs);
+          if (pick.block && EA.lists.isDurian(ctx.estate, pick.block) && EA.lists.palmOnly.indexOf(pick.task) >= 0) { pick.block = ''; pick.lots = []; }
+          s.querySelector('#jb-block').innerHTML = blockOptions(pick.block, !needs, pick.task);
           s.querySelector('#jb-lots').innerHTML = lotPicks(pick.block, pick.lots, pick.task);
           var sg = s.querySelector('#jb-suggest');
           if (sg) sg.onclick = function () { sg.dataset.lots.split(' ').forEach(function (l) { if (pick.lots.indexOf(l) < 0) pick.lots.push(l); }); fill(); };
@@ -929,7 +934,55 @@
 
   // v1.1: only the staff and the clerk use the app for now, so the staff saves the chit
   // directly (no mandor confirmation on the phone).
-  function confirmSheet() {
+  // ---------- v1.27 A · Semak sebelum simpan: likely keying mistakes, caught on the phone ----------
+  // 1. A durian-farm worker put on an oil palm crop job (harvest, loose fruit, fruit tractor).
+  // 2. Two people with nearly the same name, one working and one not (a wrong tap).
+  // Saving anyway is allowed; each warning then goes to the clerk as an alert line (kind "check").
+  var STOP = ['bin', 'binti', 'bt', 'b', 'al', 'ak', 'a/l', 'a/p', 'mohd', 'muhammad', 'muhamad', 'abdul', 'nur', 'siti'];
+  function nameParts(n) { return String(n || '').toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(function (x) { return x.length >= 4 && STOP.indexOf(x) < 0; }); }
+  function alike(a, b) { return a === b || (a.length >= 5 && b.length >= 5 && (a.indexOf(b) === 0 || b.indexOf(a) === 0)); }
+  function chitChecks() {
+    var out = [], people = everyone(), byId = {};
+    people.forEach(function (w) { byId[w.id] = w; });
+    Object.keys(draft.marks).forEach(function (id) {
+      var w = byId[id], j = draft.marks[id] === 'H' ? jobFor(id) : null;
+      if (!w || !j) return;
+      if (/durian/i.test(String(w.gang || '')) && EA.lists.palmOnly.indexOf(j.task) >= 0) {
+        out.push({ key: 'C:gang:' + id, ref: id, bm: w.name + ' · ' + EA.t('Ladang durian', 'Durian farm') + ' → ' + jobName(j.task) + (j.block ? ' ' + placeName(j.block) : '') + '?',
+          en: EA.t('Biasanya dia di ladang durian. Betul dia buat kerja ini hari ini?', 'Usually at the durian farm. Is this really his job today?') });
+      }
+    });
+    var on = people.filter(function (w) { return draft.marks[w.id] === 'H'; }), off = people.filter(function (w) { return draft.marks[w.id] && draft.marks[w.id] !== 'H'; });
+    // A name part many people share (a family name, "Contoh") is not a sign of a wrong tap.
+    var all = people.map(function (w) { return nameParts(w.name); });
+    function common(x) { return all.filter(function (ps) { return ps.some(function (y) { return alike(x, y); }); }).length > 5; }
+    on.forEach(function (a) {
+      var pa = nameParts(a.name).filter(function (x) { return !common(x); });
+      off.forEach(function (b) {
+        var pb = nameParts(b.name), hit = pa.find(function (x) { return pb.some(function (y) { return alike(x, y); }); });
+        if (hit) out.push({ key: 'C:name:' + a.id + ':' + b.id, ref: a.id + ' ' + b.id, bm: EA.t('Nama hampir sama: ', 'Names nearly the same: ') + a.name + ' (H) · ' + b.name + ' (' + draft.marks[b.id] + ')',
+          en: EA.t('Tidak tersalah tekan?', 'Not a wrong tap?') });
+      });
+    });
+    return out;
+  }
+  function checkSheet(list, go) {
+    ui().openSheet('<h2 id="sheet-title"><span class="bm">Semak dulu · ' + list.length + ' perkara</span><span class="en">Check first · ' + list.length + (list.length === 1 ? ' thing' : ' things') + '</span></h2>' +
+      list.map(function (c) { return '<div class="ck-warn"><b>' + esc(c.bm) + '</b>' + esc(c.en) + '</div>'; }).join('') +
+      '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="ck-back">‹ FIX<small>‹ Betulkan</small></button>' +
+      '<button class="btn btn-ok" type="button" id="ck-go">YES, RIGHT<small>Ya, betul · teruskan</small></button></div>' +
+      '<p class="hint">' + EA.t('Jika teruskan, tanda ini pergi ke kerani untuk semakan.', 'If you go on, these go to the clerk to check.') + '</p>',
+      function (s) {
+        s.querySelector('#ck-back').onclick = ui().closeSheet;
+        s.querySelector('#ck-go').onclick = function () { ui().closeSheet(); go(); };
+      });
+  }
+  function confirmSheet(checked) {
+    if (!checked) {
+      var cks = chitChecks();
+      draft.checks = [];
+      if (cks.length) { checkSheet(cks, function () { draft.checks = cks; keepDraft(); confirmSheet(true); }); return; }
+    }
     var empty = emptyJobs();
     var preview = chitText(buildChit('(' + EA.t('belum disimpan', 'not saved yet') + ')', EA.ui.hhmm(new Date()), ctx.user.code));
     ui().openSheet('<h2 id="sheet-title"><span class="bm">Semak chit ini</span><span class="en">Check this chit, then save</span></h2>' +
@@ -988,6 +1041,12 @@
         EA.save(TAB_ALERT, ROOM, ctx.estate, { chit: c.chit, kind: o.kind, block: o.block, lot: o.lot, detail: o.detail,
           staff_note: o.note, direction: '', direction_by: '', ref: o.ref || '' }, o.id, 'removed');
       });
+      // v1.27: warnings the staff saved anyway go to the clerk (kind "check").
+      (draft.checks || []).forEach(function (k) {
+        if ((old && (old.checks || []).indexOf(k.key) >= 0)) return;
+        EA.save(TAB_ALERT, ROOM, ctx.estate, { chit: c.chit, kind: 'check', block: '', lot: '', detail: k.bm, staff_note: EA.t('Ya, betul (disimpan juga)', 'Yes, right (saved anyway)'), direction: '', direction_by: '', ref: k.ref || '' });
+      });
+      c.checks = (draft.checks || []).map(function (k) { return k.key; }).concat(old && old.checks ? old.checks : []);
       var s = summary(c.rows);
       c.chitRowId = EA.save(TAB_CHIT, ROOM, ctx.estate, { chit: c.chit, rain_mm: c.rain_mm, rain_time: c.rain_time,
         working: s.tot(s.worked), not_working: s.tot(s.notw), grand_total: s.tot(s.grand),
@@ -1056,7 +1115,7 @@
     L.push('```');
     s.sections.forEach(function (x) {
       x.lines.forEach(function (l) {
-        if (l.lots.length) L.push(l.task + ' Blk ' + l.block + ': petak ' + l.lots.join(', ') + ' (' + lotsInfo(l.lots).ha.toFixed(2) + ' Ha)');
+        if (l.lots.length) L.push(EA.lists.isDurian(c.estate, l.block) ? l.task + ' ' + EA.lists.durian[c.estate].bm + ': petak ' + l.lots.map(function (x) { return x.replace(/^\w+-/, ''); }).join(', ') : l.task + ' Blk ' + l.block + ': petak ' + l.lots.join(', ') + ' (' + lotsInfo(l.lots).ha.toFixed(2) + ' Ha)');
       });
     });
     var mdrs = EA.lists.mandorsFor(c.estate).filter(function (m) { return c.rows.some(function (r) { return r.worker_id === m.id && r.muster === 'H'; }); });

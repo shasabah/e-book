@@ -433,8 +433,21 @@
     }
     var red = [];
     jobs.forEach(function (j) { jobTotals(j).flags.forEach(function (f) { if (f.bad) red.push(f.text); }); });
+    // v1.27 A · Semak sebelum simpan: a harvester's bunches far too few or far too many on a lot.
+    var cks = [];
+    jobs.forEach(function (j) {
+      if (kind(j.task) !== 'bunches') return;
+      j.people.forEach(function (w) {
+        (draft.lines[w] || []).forEach(function (l) {
+          var b = num(l.bunches);
+          if (b > 0 && (b < EA.lists.bunchCheck.low || b > EA.lists.bunchCheck.high)) cks.push({ ref: w, bm: person(w) + ': ' + b + EA.t(' tandan', ' bunches') + (l.lot ? EA.t(' di petak ', ' on lot ') + l.lot : '') + ' — ' + (b < EA.lists.bunchCheck.low ? EA.t('terlalu sedikit', 'very few') : EA.t('terlalu banyak', 'very many')) + '?' });
+        });
+      });
+    });
+    draft.checks = cks;
     // v1.1: the staff saves directly (no mandor confirmation on the phone for now).
     ui().openSheet('<h2 id="sheet-title"><span class="bm">Semak kerja hari ini</span><span class="en">Check today\'s work, then save</span></h2>' +
+      (cks.length ? '<h3 class="ck-h">' + EA.t('Semak dulu · betul?', 'Check first · right?') + '</h3>' + cks.map(function (c) { return '<div class="ck-warn"><b>' + esc(c.bm) + '</b>' + EA.t('Jika betul, simpan. Kerani akan semak.', 'If right, save. The clerk will check.') + '</div>'; }).join('') : '') +
       (red.length ? '<div class="msg"><span class="bm">Perhatian: ' + esc(red.join('; ')) + '</span><span class="en">These go into the report for the Assistant Manager and HQ to see. If the map size of a lot is wrong, tell HQ.</span></div>' : '') +
       '<pre class="chit">' + esc(reportText(buildRecord('(belum disimpan)', EA.ui.hhmm(new Date()), ctx.user.code))) + '</pre>' +
       '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="wc-back">‹ CHANGE<small>‹ UBAH</small></button>' +
@@ -500,6 +513,10 @@
         j.id = EA.save(TAB_JOB, ROOM, ctx.estate, { date: rec.date, chit: rec.chit, task_code: j.task_code, block: j.block, lots: j.lots, workers: j.workers,
           qty: j.qty, unit: j.unit, bunches: j.bunches, plan_ha: j.plan_ha, job_status: j.status, reason: j.reason, flags: j.flags, progress: j.progress,
           bags: j.bags, target: j.target, confirmed_by: rec.checker, confirmed_at: stamp }, o ? o.id : '').id;
+      });
+      // v1.27: warnings the staff saved anyway go to the clerk (kind "check").
+      (draft.checks || []).forEach(function (k) {
+        EA.save('FH_ALERT', ROOM, ctx.estate, { date: rec.date, chit: rec.chit, kind: 'check', block: '', lot: '', detail: k.bm, staff_note: 'Ya, betul (disimpan juga)', direction: '', direction_by: '', ref: k.ref || '' });
       });
       EA.batchEnd();
     } catch (e) { EA.batchCancel(); ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad'); return; }

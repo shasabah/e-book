@@ -644,7 +644,7 @@
         line = draft.jobs.length ? '<div class="picks">' + draft.jobs.map(function (x) {
           return '<button type="button" class="pick" data-w="' + w.id + '" data-job="' + x.key + '" aria-pressed="' + (j === x) + '"><b>' + esc(x.task) + '</b><small>' + esc(x.block ? 'Blk ' + x.block : jobName(x.task)) + '</small></button>';
         }).join('') + '</div>' + (j ? '' : '<b class="bad-text">' + EA.t('Pilih kerja', 'Choose a job') + '</b>') : '<b class="bad-text">' + EA.t('Tambah kerja dahulu', 'Add a job first') + '</b>';
-      } else if (m && m !== 'H') line = '<span class="pill plain">' + esc(EA.t(MARKS[m][0], MARKS[m][1])) + '</span>';
+      } else if (m && m !== 'H') line = '<span class="pill plain">' + esc(EA.t(MARKS[m][0], MARKS[m][1])) + '</span>' + (m === 'T' ? lariFlag(w) : '');
       var more = (m === 'L' || m === 'X') ? m : '⋯';
       return '<div class="wrow' + (other ? ' off' : '') + '">' +
         '<div class="who-w"><b>' + esc(w.name) + '</b><span class="en">' + esc(w.id) + ' · ' + (w.mdr ? 'Mandor' : esc(w.gang)) + ' · ' + (w.sex === 'F' ? 'P' : 'L') + '</span></div>' +
@@ -666,9 +666,37 @@
           function (s) { s.querySelectorAll('[data-r]').forEach(function (x) { x.onclick = function () { ui().closeSheet(); setMark(w, x.dataset.r); }; }); });
       };
     });
+    el.querySelectorAll('#fh-rows [data-lari]').forEach(function (b) { b.onclick = function () { tellClerk(b.dataset.lari, b.dataset.days); }; });
     el.querySelectorAll('#fh-rows .pick[data-job]').forEach(function (b) {
       b.onclick = function () { draft.jobOf[b.dataset.w] = b.dataset.job; keepDraft(); drawJobs(); drawRows(); drawTable(); };
     });
+  }
+
+  // v1.25: T (Tak hadir) on the last 2 chit days before today and again today: "Mungkin lari?".
+  // The staff only tells the clerk (an FH_ALERT line, kind absent3); the worker list does not change.
+  function absentDays(id) {
+    var today = EA.today(), days = {};
+    chits().forEach(function (c) {
+      if (c.estate !== ctx.estate || c.date >= today) return;
+      var r = (c.rows || []).find(function (x) { return x.worker_id === id && x.status !== 'removed'; });
+      if (r) days[c.date] = days[c.date] || r.muster; else if (!days[c.date]) days[c.date] = '';
+    });
+    var last = Object.keys(days).sort().reverse().slice(0, 2);
+    return last.length === 2 && last.every(function (d) { return days[d] === 'T'; }) ? last.reverse().concat([today]) : null;
+  }
+  function lariFlag(w) {
+    var d = absentDays(w.id);
+    if (!d) return '';
+    var sent = (EA.local.get('fh.lariSent', {}) || {})[ctx.estate + '|' + w.id];
+    if (sent && sent >= d[0]) return '<div class="flag-lari sent">' + EA.t('Sudah diberitahu kerani', 'The clerk has been told') + '</div>';
+    return '<div class="flag-lari"><span>' + EA.t('T 3 hari berturut · Mungkin lari?', 'Absent 3 days in a row · Maybe absconded?') + '</span>' +
+      '<button type="button" data-lari="' + esc(w.id) + '" data-days="' + esc(d.join(' ')) + '">' + EA.t('BERITAHU KERANI', 'TELL THE CLERK') + '</button></div>';
+  }
+  function tellClerk(id, days) {
+    EA.save(TAB_ALERT, ROOM, ctx.estate, { kind: 'absent3', ref: id, detail: 'T: ' + days, staff_note: 'Diberitahu kerani' });
+    var m = EA.local.get('fh.lariSent', {}) || {}; m[ctx.estate + '|' + id] = EA.today(); EA.local.set('fh.lariSent', m);
+    ui().toast(EA.t('Kerani akan nampak di skrin Pekerja', 'The clerk will see it on the Workers screen'));
+    drawRows();
   }
 
   function setMark(w, k) {

@@ -160,4 +160,6 @@ EA.lists.quickJobsFor = function (estate) { return EA.lists.quickJobs[estate] ||
 // Manuring counts applications done, whatever the fertiliser.
 EA.lists.roundPlans = { SSGT: { CPS: 4, RP: 4, SL: 2, DEC: 2, VOPS: 1, MAN: 5 } };
 EA.lists.roundPlanFor = function (estate, code) { var p = EA.lists.roundPlans[estate]; return p && p[code] || 0; };
+// v1.23: harvest round (2–3 rounds a month): a lot is ready again after 10 days, late after 15.
+EA.lists.lotRound = { HA: { ready: 10, late: 15 }, LF: { ready: 10, late: 15 } };
 

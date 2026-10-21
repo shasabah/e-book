@@ -223,7 +223,7 @@
     if (!loaderOnly) items.push(['work', '#field-harvest/work', 'Kerja', 'Work']);
     items.push(['collect', '#field-harvest/collect', 'Lori', 'Lorry']);
     if (!loaderOnly && clerkish) items.push(['ticket', '#field-harvest/ticket', 'Tiket', 'Ticket']);
-    if (!loaderOnly) items.push(['history', '#field-harvest/history', 'Sejarah', 'History']);
+    if (!loaderOnly) items.push(['history', '#field-harvest/history', 'Rekod', 'Records']);
     return '<nav class="tabs botbar" aria-label="' + EA.t('Skrin', 'Screens') + '">' + items.map(function (it) {
       var dot = (it[0] === 'muster' || it[0] === 'work' || it[0] === 'collect') && doneToday(it[0], estate);
       return '<a href="' + it[1] + '"' + (active === it[0] ? ' aria-current="page"' : '') + ' data-tab="' + it[0] + '">' +

@@ -13,7 +13,7 @@ const { chromium } = require('playwright');
   await p.reload(); await p.fill('#key', '777777'); await p.waitForSelector('#home:not([hidden])');
   await p.evaluate(() => { location.hash = 'field-harvest/work'; }); await p.waitForTimeout(500);
   const bar = await p.$$eval('.botbar a', a => a.map(x => x.innerText.trim()));
-  check('staff bar: Pagi · Kerja · Lori · Sejarah (no Tiket)', bar.join('|') === 'Pagi|Kerja|Lori|Sejarah', bar.join('|'));
+  check('staff bar: Pagi · Kerja · Lori · Rekod (no Tiket)', bar.join('|') === 'Pagi|Kerja|Lori|Rekod', bar.join('|'));
   const pos = await p.evaluate(() => { const r = document.querySelector('.botbar').getBoundingClientRect(); return { bottom: Math.round(r.bottom), h: innerHeight, pos: getComputedStyle(document.querySelector('.botbar')).position }; });
   check('the bar is fixed at the bottom of the screen', pos.pos === 'fixed' && Math.abs(pos.bottom - pos.h) <= 1, JSON.stringify(pos));
   check('Kerja is the current screen', await p.getAttribute('.botbar a[data-tab="work"]', 'aria-current') === 'page');
@@ -26,7 +26,7 @@ const { chromium } = require('playwright');
   check('the last card scrolls clear of the bar', clear);
   // English
   await p.evaluate(() => EA.setLang('en')); await p.evaluate(() => { location.hash = 'field-harvest/history'; }); await p.waitForTimeout(400);
-  check('English bar: Morning · Work · Lorry · History', (await p.$$eval('.botbar a', a => a.map(x => x.innerText.trim()).join('|'))) === 'Morning|Work|Lorry|History');
+  check('English bar: Morning · Work · Lorry · Records', (await p.$$eval('.botbar a', a => a.map(x => x.innerText.trim()).join('|'))) === 'Morning|Work|Lorry|Records');
   await p.evaluate(() => EA.setLang('bm')); await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(100);
   await p.evaluate(() => { location.hash = 'field-harvest/history'; }); await p.waitForSelector('#hs-pick');
   // History: ‹ Month ›

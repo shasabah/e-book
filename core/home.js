@@ -168,7 +168,9 @@
   }
 
   function renderHeader(u, estate) {
-    $('top').className = 'top' + (isHQ(u) ? ' hq' : '');
+    var pr = EA.practice && EA.practice();
+    $('top').className = 'top' + (pr ? ' practice' : isHQ(u) ? ' hq' : '');
+    $('practice-band').hidden = !pr;
     $('who-name').textContent = u.name;
     var r = EA.roleNames[u.role] || { bm: u.role, en: u.role };
     $('who-role').textContent = EA.t(r.bm, r.en);
@@ -191,7 +193,7 @@
   // A room can be entered when it has a screen and is live; on the test copy
   // a room still being built can be tried too.
   function enterable(r, estate) {
-    return !!(EA.roomViews && EA.roomViews[r.id]) && (EA.roomLive(r, estate) || EA.testMode());
+    return !!(EA.roomViews && EA.roomViews[r.id]) && (EA.roomLive(r, estate) || EA.testMode() || !!(EA.practice && EA.practice()));
   }
 
   function renderTiles(u, estate) {
@@ -205,7 +207,7 @@
       return '<button class="tile ' + (live ? 'live' : r.state) + '" type="button" data-room="' + r.id + '">' +
         '<span class="mark" aria-hidden="true">' + r.mark + '</span>' +
         '<span class="name"><span class="bm">' + esc(r.bm) + '</span><span class="en">' + esc(r.en) + '</span></span>' +
-        '<span class="when">' + (live && r.state !== 'live' ? EA.t('Digunakan · ', 'In use · ') + esc(estate) : esc(r.when)) + (enterable(r, estate) && !live ? '<br><b>' + EA.t('UJIAN · boleh cuba', 'TEST · try it') + '</b>' : '') + '</span></button>';
+        '<span class="when">' + (live && r.state !== 'live' ? EA.t('Digunakan · ', 'In use · ') + esc(estate) : esc(r.when)) + (enterable(r, estate) && !live ? '<br><b>' + (EA.practice && EA.practice() ? EA.t('LATIHAN · boleh cuba', 'PRACTICE · try it') : EA.t('UJIAN · boleh cuba', 'TEST · try it')) + '</b>' : '') + '</span></button>';
     }).join('');
     $('tiles').querySelectorAll('.tile').forEach(function (t) {
       t.onclick = function () {

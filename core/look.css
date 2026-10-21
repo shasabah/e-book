@@ -497,3 +497,15 @@ body:has(#room:not([hidden]) .botbar) .foot { padding-bottom: 96px; }
 body:has(#room:not([hidden]) .botbar) .sheet-back:not([hidden]) ~ .toast,
 .sheet-back:not([hidden]) ~ .toast { bottom: auto; top: calc(12px + env(safe-area-inset-top, 0px)); }
 
+
+/* v1.24 Mod Latihan: orange top and a band on every screen, so practice is never mistaken for real work. */
+.top.practice { background: repeating-linear-gradient(135deg, #c77700 0 14px, #d98a12 14px 28px); color: #fff; }
+.top.practice .chip[aria-pressed="true"] { background: rgba(255,255,255,.95); color: #8a5200; }
+.practice-band { background: var(--wait-soft); color: #7a4a00; border-bottom: 3px solid var(--wait); padding-block: 8px; font-size: .95rem; }
+.practice-band b { display: block; font-weight: 800; }
+.tag-practice { display: inline-block; background: var(--wait-soft); color: var(--wait); border-radius: 999px; padding: 1px 9px; font-size: .75rem; font-weight: 700; }
+.us-practice { display: flex; gap: 10px; align-items: flex-start; width: 100%; text-align: left; border: 2px solid var(--line); background: #fff; border-radius: 12px; padding: 10px; margin: 6px 0 10px; font: inherit; color: inherit; cursor: pointer; }
+.us-practice i { flex: none; width: 24px; height: 24px; border-radius: 6px; border: 2px solid var(--wait); font-style: normal; font-weight: 900; display: flex; align-items: center; justify-content: center; color: #fff; }
+.us-practice[aria-pressed="true"] { border-color: var(--wait); background: var(--wait-soft); }
+.us-practice[aria-pressed="true"] i { background: var(--wait); }
+.us-practice b { display: block; color: #7a4a00; }

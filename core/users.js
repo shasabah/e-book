@@ -96,7 +96,8 @@ EA.roomViews = EA.roomViews || {};
 
   function listHtml() {
     var me = data.me, users = data.users || [];
-    var real = users.filter(function (u) { return !u.test; });
+    var real = users.filter(function (u) { return !u.test && !u.practice; });
+    var prac = users.filter(function (u) { return u.practice; });
     var tests = users.filter(function (u) { return u.test; });
     var testsOn = tests.filter(function (u) { return u.status === 'active'; }).length;
     var h = '';
@@ -123,6 +124,10 @@ EA.roomViews = EA.roomViews || {};
     if (!order.length && !data.firstOwner) h += '<div class="empty">' + EA.t('Belum ada pengguna sebenar. Tekan + Tambah pengguna.', 'No real users yet. Tap + Add user.') + '</div>';
     var off = real.filter(function (u) { return u.status !== 'active'; });
     if (off.length) h += '<div class="card"><h2>' + EA.t('Akses ditutup', 'Switched off') + '</h2>' + off.map(function (u) { return rowHtml(u, me); }).join('') + '</div>';
+    // v1.24 Mod Latihan: practice users, apart from the real ones.
+    if (prac.length) h += '<div class="card"><h2>' + EA.t('Pengguna latihan', 'Practice users') + '</h2>' +
+      '<p class="hint">' + EA.t('Rekod mereka pergi ke buku latihan, bukan buku sebenar.', 'Their records go to the practice book, not the real book.') + '</p>' +
+      prac.map(function (u) { return rowHtml(u, me); }).join('') + '</div>';
     if (tests.length) {
       h += '<div class="card"><h2>' + EA.t('PIN ujian', 'Test PINs') + '</h2>' +
         '<div class="hrow"><div><b>' + tests.length + ' ' + EA.t('PIN ujian', 'test PINs') + '</b><span class="s">111111 – 777777 · ' + EA.t('orang rekaan', 'made-up people') + '</span></div>' +
@@ -138,7 +143,8 @@ EA.roomViews = EA.roomViews || {};
       '<span class="s">' + esc(u.position ? posShort(u.position) : roleName(u.role)) + ' · ' + esc(u.estates.length === ALL.length ? EA.t('semua ladang', 'all estates') : u.estates.join(', ')) +
       (u.move ? ' · ' + EA.t('pindah ke ', 'moving to ') + esc(u.move.estates.join(', ')) + ' ' + esc(shortDate(u.move.date)) : '') +
       (u.added ? ' · ' + EA.t('sejak ', 'since ') + esc(shortDate(u.added)) : '') + '</span>' + phonesHtml(u) + '</div>' +
-      '<span class="us-tag ' + (on ? 'on' : 'off') + '">' + (on ? EA.t('AKTIF', 'ACTIVE') : EA.t('DITUTUP', 'OFF')) + '</span></button>';
+      (u.practice && on ? '<span class="tag-practice">' + EA.t('LATIHAN', 'PRACTICE') + '</span>' :
+      '<span class="us-tag ' + (on ? 'on' : 'off') + '">' + (on ? EA.t('AKTIF', 'ACTIVE') : EA.t('DITUTUP', 'OFF')) + '</span>') + '</button>';
   }
   // v1.14: the person's phone codes (one per device).
   function phonesHtml(u) {
@@ -172,13 +178,15 @@ EA.roomViews = EA.roomViews || {};
     if (!f.firstOwner && !f.self) h += '<div class="field"><label>' + EA.t('Jawatan · Position', 'Position · Jawatan') + '</label><div class="us-pills" id="us-pos">' + POSITIONS.map(function (q) {
       return '<button type="button" data-pos="' + esc(q[0]) + '" aria-pressed="' + (f.position === q[0]) + '">' + esc(posShort(q[0])) + '</button>';
     }).join('') + '</div></div>';
-    var roles = f.firstOwner ? ['Owner'] : (f.self ? ['Owner'] : ROLES);
+    var roles = f.firstOwner ? ['Owner'] : (f.self ? ['Owner'] : f.practice ? ['Staff', 'Clerk', 'Manager'] : ROLES);
     h += '<div class="field"><label>' + EA.t('Akses app · App access', 'App access · Akses app') + '</label><div class="us-pills" id="us-roles">' + roles.map(function (r) {
       return '<button type="button" data-role="' + r + '" aria-pressed="' + (f.role === r) + '">' + esc(roleName(r)) + '</button>';
     }).join('') + '</div>' + (f.firstOwner || f.self ? '' : '<p class="hint">' + EA.t('Diisi sendiri dari jawatan. Tukar hanya jika orang ini berbeza.', 'Filled in from the position. Change it only for an exception.') + '</p>') + '</div>';
     h += '<div class="field"><label>' + EA.t('Ladang', 'Estates') + '</label><div class="us-pills" id="us-ests">' + ALL.map(function (e) {
       return '<button type="button" data-est="' + e + '" aria-pressed="' + (f.estates.indexOf(e) >= 0) + '" title="' + esc(EST_NAME[e]) + '">' + e + '</button>';
     }).join('') + '<button type="button" data-est="*" class="us-all">' + EA.t('Semua', 'All') + '</button></div></div>';
+    if (!editing && !f.firstOwner) h += '<button type="button" class="us-practice" id="us-prac" aria-pressed="' + !!f.practice + '"><i>' + (f.practice ? '✓' : '') + '</i><span><b>' +
+      EA.t('Pengguna latihan', 'Practice user') + '</b><span class="s">' + EA.t('Rekod pergi ke buku LATIHAN, bukan buku sebenar.', 'Records go to the PRACTICE book, not the real book.') + '</span></span></button>';
     if (!editing) h += '<p class="note-sun">' + EA.t('Pejabat akan buat PIN 6 digit secara rawak. PIN ditunjuk sekali sahaja.', 'The office makes a random 6-digit PIN. It is shown once only.') + '</p>';
     h += '<p class="msg" id="us-err" hidden></p>';
     h += '<div class="actions"><button class="btn btn-ghost" type="button" id="us-cancel">CANCEL<small>Batal</small></button>' +
@@ -201,6 +209,11 @@ EA.roomViews = EA.roomViews || {};
         drawForm();
       };
     });
+    var pq = el.querySelector('#us-prac'); if (pq) pq.onclick = function () {
+      f.practice = !f.practice;
+      if (f.practice && ['Staff', 'Clerk', 'Manager'].indexOf(f.role) < 0) f.role = 'Staff';
+      if (f.practice && !/^latihan/i.test(f.name)) f.name = ('Latihan ' + f.name).trim();
+      drawForm(); };
     el.querySelector('#us-go').onclick = editing ? saveEdit : makeUser;
   }
   function showErr(e) { var m = el.querySelector('#us-err'); if (m) { m.textContent = errText(e); m.hidden = false; } else ui().toast(errText(e), 'bad'); }
@@ -212,11 +225,11 @@ EA.roomViews = EA.roomViews || {};
     if (f.name.length < 2) return showErr('bad_name');
     if (!f.estates.length) return showErr('bad_estates');
     busy(btn, true);
-    var j = await call('userAdd', { name: f.name, role: f.role, estates: f.estates, position: f.position || '' });
+    var j = await call('userAdd', { name: f.name, role: f.role, estates: f.estates, position: f.position || '', practice: !!f.practice });
     busy(btn, false);
     if (!j.ok) return showErr(j.error);
     form = null;
-    shown = { pin: j.pin, name: j.name, code: j.code, role: f.role, estates: f.estates, first: !!f.firstOwner, phones: j.phone ? [j.phone] : [] };
+    shown = { pin: j.pin, name: j.name, code: j.code, role: f.role, estates: f.estates, first: !!f.firstOwner, phones: j.phone ? [j.phone] : [], practice: !!f.practice };
     draw(); window.scrollTo(0, 0);
   }
   async function saveEdit() {
@@ -232,6 +245,8 @@ EA.roomViews = EA.roomViews || {};
   // ---------- the PIN, shown once ----------
   function pinMessage(s) {
     var ph = (s.phones || []).join(', ');
+    if (s.practice || /^L-/.test(String(s.code))) return 'Salam.\nPIN LATIHAN E-Book: ' + s.pin + '\nUntuk berlatih sahaja — rekod tidak masuk buku sebenar. Boleh guna di mana-mana telefon.' + (ph ? '\nKod telefon (hanya untuk telefon baru): ' + ph : '') +
+      '\nBuka: ' + appLink() + '\n\nE-Book PRACTICE PIN: ' + s.pin + '. For practice only — nothing goes into the real book.';
     return 'Salam ' + s.name + '.\nPIN E-Book anda: ' + s.pin + (ph ? '\nKod telefon: ' + ph + '\n(Tetapan telefon → Kod telefon)' : '') +
       '\nBuka: ' + appLink() + '\nJangan kongsi PIN ini dengan sesiapa.\n\n' +
       'Your E-Book PIN: ' + s.pin + '.' + (ph ? ' Phone code: ' + ph + '.' : '') + ' Do not share it.';

@@ -101,11 +101,44 @@
     });
     return html;
   }
-  function lotPicks(block, chosen) {
+  // v1.23: the last day each lot was worked for this job: from the office (kept on the phone) and
+  // this phone's own chits not yet counted there.
+  function lotLast(code) {
+    var out = {}, data = EA.local.get('fh.rounds.' + ctx.estate, null);
+    Object.assign(out, (data && data.lots && data.lots[code]) || {});
+    chits().forEach(function (c) {
+      if (c.estate !== ctx.estate) return;
+      (c.jobs || []).forEach(function (j) { if (j.task === code) (j.lots || []).forEach(function (l) { if (!out[l] || c.date > out[l]) out[l] = c.date; }); });
+    });
+    return out;
+  }
+  function daysSince(d) { return Math.round((new Date(EA.today() + 'T00:00:00Z') - new Date(String(d).slice(0, 10) + 'T00:00:00Z')) / 864e5); }
+  // For harvest: grey = done lately, green = ready again (10–15 days), red = late (over 15 days).
+  function lotState(code, lot, last) {
+    var r = EA.lists.lotRound[code], d = last[lot];
+    if (!r || !d) return null;
+    var n = daysSince(d);
+    return { n: n, cls: n < r.ready ? 'lot-done' : n <= r.late ? 'lot-due' : 'lot-late' };
+  }
+  function lotPicks(block, chosen, code) {
     if (!block) return '<p class="hint">' + EA.t('Pilih blok dahulu.', 'Choose a block first.') + '</p>';
-    return '<div class="picks">' + EA.lists.lotsFor(ctx.estate, block).map(function (l) {
-      return '<button type="button" class="pick" data-lot="' + l.lot + '" aria-pressed="' + (chosen.indexOf(l.lot) >= 0) + '"><b>' + l.lot + '</b><small>' + l.ha.toFixed(2) + ' Ha</small></button>';
-    }).join('') + '</div>';
+    var last = EA.lists.lotRound[code] ? lotLast(code) : {}, ready = [];
+    var html = EA.lists.lotsFor(ctx.estate, block).map(function (l) {
+      var st = lotState(code, l.lot, last);
+      if (st && st.cls !== 'lot-done') ready.push(l.lot);
+      return '<button type="button" class="pick' + (st ? ' ' + st.cls : '') + '" data-lot="' + l.lot + '" aria-pressed="' + (chosen.indexOf(l.lot) >= 0) + '"><b>' + l.lot + '</b><small>' +
+        (st ? st.n + EA.t(' hari', st.n === 1 ? ' day' : ' days') : l.ha.toFixed(2) + ' Ha') + '</small></button>';
+    }).join('');
+    var top = '';
+    if (EA.lists.lotRound[code]) {
+      var r = EA.lists.lotRound[code];
+      top = (ready.length ? '<button type="button" class="btn btn-ok jb-suggest" id="jb-suggest" data-lots="' + ready.join(' ') + '">' +
+          '✓ PICK READY LOTS (' + ready.length + ')<small>✓ PILIH PETAK SEDIA (' + ready.length + ')</small></button>' +
+          '<p class="hint">' + EA.t('Sedia / lewat: ', 'Ready / late: ') + esc(ready.join(', ')) + '</p>' : '') +
+        '<p class="hint lot-key"><i class="k-done"></i>' + EA.t('Baru siap', 'Done lately') + ' <i class="k-due"></i>' + EA.t('Sedia ' + r.ready + '–' + r.late + ' hari', 'Ready ' + r.ready + '–' + r.late + ' days') +
+        ' <i class="k-late"></i>' + EA.t('Lewat >' + r.late + ' hari', 'Late >' + r.late + ' days') + '</p>';
+    }
+    return top + '<div class="picks">' + html + '</div>';
   }
 
   // ---------- the chit's numbers, laid out like the paper ----------
@@ -662,7 +695,7 @@
   async function refreshRounds(estate) {
     if (!EA.sendLink()) return;
     var r = await EA.ask('rounds', { estate: estate });
-    if (r && r.rounds) EA.local.set('fh.rounds.' + estate, { at: Date.now(), rounds: r.rounds });
+    if (r && r.rounds) EA.local.set('fh.rounds.' + estate, { at: Date.now(), rounds: r.rounds, lots: r.lots || {} });
   }
 
   // Add or change one job.
@@ -699,7 +732,9 @@
           var rd = s.querySelector('#jb-round'), rt = roundText(pick.task, pick.block);
           rd.hidden = !rt; rd.innerHTML = rt;
           s.querySelector('#jb-block').innerHTML = blockOptions(pick.block, !needs);
-          s.querySelector('#jb-lots').innerHTML = lotPicks(pick.block, pick.lots);
+          s.querySelector('#jb-lots').innerHTML = lotPicks(pick.block, pick.lots, pick.task);
+          var sg = s.querySelector('#jb-suggest');
+          if (sg) sg.onclick = function () { sg.dataset.lots.split(' ').forEach(function (l) { if (pick.lots.indexOf(l) < 0) pick.lots.push(l); }); fill(); };
           s.querySelectorAll('#jb-lots .pick').forEach(function (b) {
             b.onclick = function () {
               var i = pick.lots.indexOf(b.dataset.lot);

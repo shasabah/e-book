@@ -131,6 +131,14 @@ const { chromium } = require('playwright');
   await p.pdf({ path: (process.argv[2] || '/tmp') + '/v36-report.pdf', format: 'A4', landscape: true, printBackground: true });
   await p.emulateMedia({ media: 'screen' });
   check('print: on screen the report stays hidden', !(await p.isVisible('#print-area')));
+  // v1.26.1: a saved office answer with no field list must not stop the morning screen (phone P15, 22 Oct).
+  role = 'Staff';
+  await p.evaluate(() => { location.hash = ''; localStorage.setItem('fh.backlog.SSGT', JSON.stringify({ ok: true, estate: 'SSGT', at: '2026-10-22 06:00' })); localStorage.setItem('ea.people.SSGT', JSON.stringify([{ id: 'W9', name: 'Penuai Baru', estate: 'SSGT', gang: 'Tuai · Harvest', sex: 'M' }])); localStorage.setItem('ea.people.at', JSON.stringify(Date.now())); });
+  await p.click('#logout'); await p.waitForTimeout(300); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
+  await p.fill('#key', '333333'); await p.waitForSelector('#home:not([hidden])');
+  await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForTimeout(800);
+  const txt = await p.innerText('#room');
+  check('morning screen opens even with a broken saved backlog', !/could not open|tidak dapat dibuka/i.test(txt) && /Tan & baki buah|Tonnes and crop backlog/.test(txt), txt.slice(0, 200));
   check('no page errors', errs.length === 0, errs.join(' | '));
   await b.close();
 })();

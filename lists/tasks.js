@@ -152,3 +152,12 @@ EA.lists.chitNames = {
   CA: 'Creche Ayah', HKH: 'Housekeep House', HKST: 'Housekeep Store', MC: 'Mess Cook', SGA: 'Shop Goods Arr.', SGC: 'Shop Goods Coll.', WM: 'Watchman',
   CO: 'Census (Other)', CBB: 'Census Black Bch', CPT: 'Census Palm'
 };
+
+// v1.22: the usual jobs of an estate, shown as big buttons at the top of Tambah kerja.
+EA.lists.quickJobs = { SSGT: ['HA', 'LF', 'ITF', 'MAN', 'CPS', 'RP', 'SL', 'WM', 'CA', 'RMH'] };
+EA.lists.quickJobsFor = function (estate) { return EA.lists.quickJobs[estate] || EA.lists.quickJobs.SSGT; };
+// v1.22: rounds a year per job (the estate's yearly budget programme; Sugut 2026 budget).
+// Manuring counts applications done, whatever the fertiliser.
+EA.lists.roundPlans = { SSGT: { CPS: 4, RP: 4, SL: 2, DEC: 2, VOPS: 1, MAN: 5 } };
+EA.lists.roundPlanFor = function (estate, code) { var p = EA.lists.roundPlans[estate]; return p && p[code] || 0; };
+

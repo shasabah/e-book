@@ -128,6 +128,15 @@ EA.roomViews = EA.roomViews || {};
         '<i class="adm-st ' + cls + '">' + esc(txt) + '</i></button>';
     });
     if (!(d.phones || []).length) h += '<p class="hint">' + t('Belum ada peranti.', 'No devices yet.') + '</p>';
+    // v1.24 Mod Latihan: practice users apart; their logins never change the device lines above.
+    if ((d.practice || []).length) {
+      h += '</div><div class="card"><h2>' + t('Latihan', 'Practice') + '<small>' + d.practice.length + '</small></h2>';
+      d.practice.forEach(function (x) {
+        var s = x.seen;
+        h += '<div class="adm-dv"><div><b>' + esc(x.name) + '</b><span>' + esc((x.estates || []).join(', ')) + ' · ' + esc(x.code) + '</span></div>' +
+          '<i class="tag-practice">' + (s ? esc(when(s.at)) + ' · ' + esc(s.phone) : t('belum guna', 'not used yet')) + '</i></div>';
+      });
+    }
     h += '</div><p class="hint">' + t('Masa = kali terakhir sampai ke pejabat · nombor = rekod menunggu di telefon itu. Merah: tiada lebih 1 hari, atau belum pernah masuk. Versi lama: minta tekan LOAD IT. Tekan satu peranti untuk beri nama.',
       'Time = last reached the office · number = records waiting on that phone. Red: nothing for over a day, or never logged in. Old version: ask them to tap LOAD IT. Tap a device to name it.') + '</p>';
     return h;

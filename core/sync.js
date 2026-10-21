@@ -8,9 +8,19 @@ window.EA = window.EA || {};
   };
 
   // Phone storage. Wrapped so a blocked or full store never breaks the page.
-  function get(k, d) { try { var v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }
-  function set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }
-  function del(k) { try { localStorage.removeItem(k); } catch (e) {} }
+  // v1.24 Mod Latihan: a practice login (code L-) keeps its own field records, drafts, office answers and
+  // worker list apart (keys start with "L:"), so practice never mixes with a real person's on a shared phone.
+  // The queue, the login, the phone code and the sending link stay shared.
+  var PRACT = null;
+  function practiceNow() {
+    if (PRACT === null) { try { var u = JSON.parse(localStorage.getItem('ea.user') || 'null'); PRACT = !!(u && /^L-/.test(String(u.code))); } catch (e) { PRACT = false; } }
+    return PRACT;
+  }
+  function nk(k) { return practiceNow() && /^(fh\.|ea\.people|ea\.refused|ea\.errSeen|ea\.admin)/.test(k) ? 'L:' + k : k; }
+  function get(k, d) { try { var v = localStorage.getItem(nk(k)); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }
+  function set(k, v) { try { localStorage.setItem(nk(k), JSON.stringify(v)); if (k === 'ea.user') PRACT = null; return true; } catch (e) { return false; } }
+  function del(k) { try { localStorage.removeItem(nk(k)); if (k === 'ea.user') PRACT = null; } catch (e) {} }
+  EA.practice = practiceNow;
   EA.local = { get: get, set: set, del: del };
 
   function pad(n, w) { return String(n).padStart(w, '0'); }
@@ -34,7 +44,7 @@ window.EA = window.EA || {};
   EA.setSwitches = function (sw) {
     if (!sw || typeof sw !== 'object') return;
     set('ea.switches', { testModeOff: !!sw.testModeOff, live: sw.live || {}, at: Date.now() });
-    if (sw.cleanFrom && get('ea.cleanDone', '') !== sw.cleanFrom) EA.cleanBefore(sw.cleanFrom);
+    if (sw.cleanFrom && !practiceNow() && get('ea.cleanDone', '') !== sw.cleanFrom) EA.cleanBefore(sw.cleanFrom);
   };
 
   // v1.18: the clean start of the Sugut trial. Once per trial date, this phone drops the practice records

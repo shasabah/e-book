@@ -482,4 +482,18 @@ body:has(#room:not([hidden]) .botbar) .foot { padding-bottom: 96px; }
 .ok-note { background: var(--ok-soft); color: var(--ok); border-radius: var(--r); padding: 10px 12px; font-weight: 600; }
 .jb-round { background: var(--ok-soft); border-radius: var(--r); padding: 8px 12px; color: var(--ink); }
 .jb-round b.late { color: var(--bad); }
+/* v1.23 lot colours by days since last harvest */
+.pick.lot-done { background: #f1f1ee; color: #8a908b; border-color: #e4e4df; }
+.pick.lot-due { background: var(--ok-soft); color: var(--ok); border-color: #9fd3b0; }
+.pick.lot-late { background: var(--bad-soft); color: var(--bad); border-color: #f0a9a2; }
+.pick.lot-done small, .pick.lot-due small, .pick.lot-late small { color: inherit; }
+.pick[aria-pressed="true"].lot-done, .pick[aria-pressed="true"].lot-due, .pick[aria-pressed="true"].lot-late { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.jb-suggest { width: 100%; margin-bottom: 6px; }
+.jb-suggest small { white-space: normal; }
+.lot-key i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin: 0 4px 0 8px; vertical-align: -1px; }
+.lot-key i.k-done { background: #f1f1ee; border: 1px solid #ccc; margin-left: 0; } .lot-key i.k-due { background: var(--ok-soft); border: 1px solid #9fd3b0; } .lot-key i.k-late { background: var(--bad-soft); border: 1px solid #f0a9a2; }
+/* v1.23 fix: with a box open the message sits at the top and stays small (the bottom-bar rule
+   above also set its bottom, so it stretched from top to bottom). */
+body:has(#room:not([hidden]) .botbar) .sheet-back:not([hidden]) ~ .toast,
+.sheet-back:not([hidden]) ~ .toast { bottom: auto; top: calc(12px + env(safe-area-inset-top, 0px)); }
 

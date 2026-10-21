@@ -591,3 +591,8 @@ body:has(#room:not([hidden]) .botbar) .sheet-back:not([hidden]) ~ .toast,
   .pr-sig { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 34px; } .pr-sig div { border-top: 1px solid #17301f; padding-top: 3px; }
   #print-area .note { color: #5f6e63; font-size: 8px; }
 }
+
+/* v1.27 Semak sebelum simpan */
+.ck-warn { background: var(--wait-soft); border-radius: 12px; padding: 9px 11px; margin: 6px 0; font-size: .86rem; }
+.ck-warn b { display: block; color: #7a4a00; }
+.ck-h { margin: 8px 0 2px; font-size: .9rem; color: #7a4a00; }

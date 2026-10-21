@@ -207,7 +207,8 @@
       return '<button class="tile ' + (live ? 'live' : r.state) + '" type="button" data-room="' + r.id + '">' +
         '<span class="mark" aria-hidden="true">' + r.mark + '</span>' +
         '<span class="name"><span class="bm">' + esc(r.bm) + '</span><span class="en">' + esc(r.en) + '</span></span>' +
-        '<span class="when">' + (live && r.state !== 'live' ? EA.t('Digunakan · ', 'In use · ') + esc(estate) : esc(r.when)) + (enterable(r, estate) && !live ? '<br><b>' + (EA.practice && EA.practice() ? EA.t('LATIHAN · boleh cuba', 'PRACTICE · try it') : EA.t('UJIAN · boleh cuba', 'TEST · try it')) + '</b>' : '') + '</span></button>';
+        '<span class="when">' + (live && r.state !== 'live' ? EA.t('Digunakan · ', 'In use · ') + esc(estate) : esc(r.when)) + (enterable(r, estate) && !live ? '<br><b>' + (EA.practice && EA.practice() ? EA.t('LATIHAN · boleh cuba', 'PRACTICE · try it') : EA.t('UJIAN · boleh cuba', 'TEST · try it')) + '</b>' : '') + '</span>' +
+        (r.id === 'workers' && EA.workersWaiting && EA.workersWaiting(u, estate) ? '<span class="tile-badge">' + EA.workersWaiting(u, estate) + (u.role === 'Manager' ? EA.t(' perlu lulus', ' to approve') : EA.t(' mungkin lari', ' maybe absconded')) + '</span>' : '') + '</button>';
     }).join('');
     $('tiles').querySelectorAll('.tile').forEach(function (t) {
       t.onclick = function () {
@@ -275,6 +276,7 @@
     renderGreeting();
     renderTiles(u, estate);
     renderPlan(u);
+    if (EA.workersPeek) EA.workersPeek(u, estate);       // v1.25: approvals and flags waiting, for the Pekerja tile
     // v1.16: fetch the trial switches from the office now and then (a phone may stay logged in for weeks).
     var sw = EA.switches();
     if (EA.sendLink() && navigator.onLine && !switchAsk && (!sw.at || Date.now() - sw.at > 30 * 60000)) {
@@ -375,6 +377,7 @@
   document.addEventListener('ea:offline-ready', function () { $('offline-mark').hidden = false; });
   EA.startOffline('sw.js');
 
+  EA.renderHome = render;
   render();
   checkUpdate();
 })();

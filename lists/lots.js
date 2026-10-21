@@ -171,7 +171,19 @@ EA.lists.lots = [
   { estate: 'SSGT', block: '04', lot: '4-41', ha: 0.16, palms: 24, planted: 2010, lat: 6.113889, lon: 117.218653 },
   { estate: 'SSGT', block: '04', lot: '4-42', ha: 0.59, palms: 42, planted: 2010, lat: 6.113672, lon: 117.216876 }
 ];
+// v1.27: the durian farm is a place of its own (block DR) with lots A, B and C (Yu Chen, 22 Oct 2026).
+// Its cost goes to durian, never to an oil palm block. Not used for FFB (harvest, loose fruit, lorries).
+EA.lists.durian = { SSGT: { block: 'DR', bm: 'Ladang Durian', en: 'Durian farm', lots: ['A', 'B', 'C'] } };
+EA.lists.palmOnly = ['HA', 'LF', 'ITF'];
+// v1.27: a harvester's bunches on one lot in a day outside this range asks "betul?" before saving.
+EA.lists.bunchCheck = { low: 10, high: 350 };           // jobs that are oil palm crop only
+EA.lists.durianLots = function (estate) {
+  var d = EA.lists.durian[estate];
+  return d ? d.lots.map(function (x) { return { estate: estate, block: d.block, lot: d.block + '-' + x, label: x, ha: 0, durian: true }; }) : [];
+};
+EA.lists.isDurian = function (estate, block) { var d = EA.lists.durian[estate]; return !!d && block === d.block; };
 EA.lists.lotsFor = function (estate, block) {
+  if (block && EA.lists.isDurian(estate, block)) return EA.lists.durianLots(estate);
   return EA.lists.lots.filter(function (l) { return l.estate === estate && (!block || l.block === block); });
 };
 EA.lists.lot = function (estate, lotNo) {

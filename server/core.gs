@@ -115,7 +115,7 @@ function doPost_(e) {
 // ---- v1.19: read answers remembered for 60 s, shared by everyone asking the same thing ----
 // Any call that may write (save, users, switches, ...) makes a new "generation", so a remembered
 // answer is never older than the last change.
-var READS_ = { ungraded: 1, harvest: 1, trips: 1, people: 1, history: 1, backlog: 1, adminSummary: 1, adminPhones: 1, adminProblems: 1, adminSwitches: 1 };
+var READS_ = { ungraded: 1, harvest: 1, trips: 1, people: 1, history: 1, backlog: 1, rounds: 1, adminSummary: 1, adminPhones: 1, adminProblems: 1, adminSwitches: 1 };
 var READ_SECONDS = 60;
 function gen_() { return CacheService.getScriptCache().get('gen') || '0'; }
 function newGen_() { try { CacheService.getScriptCache().put('gen', String(Date.now()) + Math.floor(Math.random() * 1000), 21600); } catch (e) {} }
@@ -143,6 +143,7 @@ function doRead_(user, req) {
   if (req.action === 'harvest') return openHarvest(req.estate);
   if (req.action === 'trips') return openTrips(req.estate);
   if (req.action === 'backlog') return backlog(req.estate);
+  if (req.action === 'rounds') return rounds_(req.estate);
   if (req.action === 'history') {
     if (!/^\d{4}-\d{2}$/.test(String(req.month || ''))) return { ok: false, error: 'bad_month' };
     return history_(req.estate, String(req.month));
@@ -417,6 +418,21 @@ function readTab_(tabName) {
   var rows = vals.map(function (v) { var o = {}; head.forEach(function (c, i) { o[c] = txt(v[i], c); }); return o; });
   rows.forEach(function (r) { if (r.replaces) replaced[r.replaces] = true; });
   return { rows: rows, replaced: replaced };
+}
+
+// ---------- Rounds (v1.22): hectares done this year per job and block, and the last date ----------
+// From the day's job lines (FH_JOBDAY): the hectares keyed when the unit is Ha, otherwise the
+// hectares of the lots worked (plan_ha). Old records loaded from the estate's sheets count too.
+function rounds_(estate) {
+  var year = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy'), out = {};
+  standingRows_('FH_JOBDAY', estate).forEach(function (r) {
+    if (String(r.date).slice(0, 4) !== year || !r.block || !r.task_code) return;
+    var ha = /^ha$/i.test(String(r.unit)) ? Number(r.qty) || 0 : Number(r.plan_ha) || 0;
+    var k = r.task_code + '|' + r.block, o = out[k] || (out[k] = { ha: 0, last: '' });
+    o.ha = Math.round((o.ha + ha) * 100) / 100;
+    if (ha > 0 && r.date > o.last) o.last = String(r.date);
+  });
+  return { ok: true, estate: estate, year: year, rounds: out };
 }
 
 // ---------- History (v1.7): one month of an estate's days, read only ----------

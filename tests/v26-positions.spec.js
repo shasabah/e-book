@@ -17,7 +17,7 @@ const props = {}; const cache = {};
 const ctx = {
   SpreadsheetApp: { openById: () => ({ getSheetByName: n => tabs[n] || null, insertSheet: n => (tabs[n] = new Sheet([])) }) },
   Utilities: {
-    formatDate: (d) => d.toISOString().slice(0, 16).replace('T', ' '),
+    formatDate: (d, tz, f) => { const s = new Date(d.getTime() + 8 * 3600e3).toISOString(); return f === 'yyyy-MM-dd' ? s.slice(0, 10) : s.slice(0, 16).replace('T', ' '); },
     getUuid: () => crypto.randomUUID(),
     DigestAlgorithm: { SHA_256: 'sha256' },
     computeDigest: (alg, s) => Array.from(crypto.createHash('sha256').update(s).digest()).map(b => b > 127 ? b - 256 : b)

@@ -38,6 +38,12 @@ EA.rooms = [
     state: 'live', when: 'Pemilik & HQ · Owner & HQ',
     note: { bm: 'Ringkasan ladang, telefon, masalah dan suis percubaan.', en: 'Estate summary, phones, problems and trial switches.' },
     roles: ['Owner', 'HQ'] },
+  // v1.25 Foundation, not a room: workers joining and leaving (shared worker list). The clerk keys,
+  // the Pengurus approves an absconded worker, HQ and the Owner look.
+  { id: 'workers', mark: 'PK', bm: 'Pekerja masuk & keluar', en: 'Worker changes',
+    state: 'live', when: 'Kerani · Pengurus · HQ',
+    note: { bm: 'Pekerja baru, berhenti dan lari.', en: 'New hires, resigned and absconded workers.' },
+    roles: ['Owner', 'HQ', 'Clerk', 'Manager'] },
   // Part of the Foundation (v1.9), not a room: who may log in, and their PINs. Owner only.
   { id: 'users', mark: 'PIN', bm: 'Pengguna & PIN', en: 'Users & PIN',
     state: 'live', when: 'Pemilik sahaja · Owner only',

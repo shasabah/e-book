@@ -44,6 +44,7 @@ var USER_COLS = ['user_code', 'name', 'role', 'estates', 'key_hash', 'status', '
 var POSITIONS = ['Trainee Field Staff', 'Field Staff', 'Senior Staff', 'Estate Clerk', 'Assistant Manager', 'Senior Assistant Manager', 'Mandor', 'Storekeeper', 'AGM', 'GM'];
 var ROLES = ['Owner', 'HQ', 'Staff', 'Clerk', 'Mandor', 'Store', 'Worker', 'Manager'];
 var ESTATES = ['SDK', 'MELU', 'SSGT', 'PTAN', 'TKRS', 'KWNN'];
+var ESTATE_COMPANY = { SDK: 'SPLT', MELU: 'SPLT', SSGT: 'SPLT', PTAN: 'SPLT', TKRS: 'SPLT', KWNN: 'PJSB' };
 var STANDARD_COLS = ['id', 'date', 'company', 'estate', 'keyed_by', 'keyed_at', 'phone', 'status', 'replaces'];
 var STATUSES = ['active', 'corrected', 'removed', 'disposed'];
 
@@ -69,6 +70,10 @@ var ROOM_TABS = {
   // Shared list: people (owned by HR). Name, job, worker code, gender and gang only; never IC,
   // passport, date of birth, bank or pay (Rule 8). Written only by the Owner or HQ (v1.1).
   LIST_PEOPLE: ['worker_id', 'name', 'job', 'gang', 'sex', 'mandor', 'active'],
+  // v1.25 Pekerja masuk & keluar: one line per change, never deleted. kind: new, resigned, absconded
+  // (waiting for the Pengurus), approved / not_absconded (the Pengurus's answer), back (a mistake undone).
+  // day: start date, last working day or last day seen.
+  WORKER_LOG: ['worker_id', 'name', 'kind', 'day', 'note', 'answered_by', 'answered_at'],
   // Errors on phones, so the builder can see what went wrong without asking for screenshots.
   APP_ERROR: ['where', 'message', 'stack', 'version', 'agent']
 };
@@ -122,12 +127,12 @@ function doPost_(e) {
 // ---- v1.19: read answers remembered for 60 s, shared by everyone asking the same thing ----
 // Any call that may write (save, users, switches, ...) makes a new "generation", so a remembered
 // answer is never older than the last change.
-var READS_ = { ungraded: 1, harvest: 1, trips: 1, people: 1, history: 1, backlog: 1, rounds: 1, adminSummary: 1, adminPhones: 1, adminProblems: 1, adminSwitches: 1 };
+var READS_ = { workers: 1, ungraded: 1, harvest: 1, trips: 1, people: 1, history: 1, backlog: 1, rounds: 1, adminSummary: 1, adminPhones: 1, adminProblems: 1, adminSwitches: 1 };
 var READ_SECONDS = 60;
 function gen_() { return CacheService.getScriptCache().get('gen') || '0'; }
 function newGen_() { try { CacheService.getScriptCache().put('gen', String(Date.now()) + Math.floor(Math.random() * 1000), 21600); } catch (e) {} }
 function readCached_(user, req) {
-  var personal = req.action === 'people' || /^admin/.test(String(req.action));
+  var personal = req.action === 'people' || req.action === 'workers' || /^admin/.test(String(req.action));
   var key = ['rd', PRACTICE_ ? 'L' : '', req.action, String(req.estate || ''), String(req.month || ''), personal ? user.user_code : '', gen_()].join('|').slice(0, 240);
   var c = CacheService.getScriptCache(), hit = null;
   try { hit = c.get(key); } catch (e) {}
@@ -141,6 +146,7 @@ function readCached_(user, req) {
 }
 function doRead_(user, req) {
   if (/^admin/.test(String(req.action))) return adminAction_(user, req);
+  if (req.action === 'workers') return workersRead_(user, req);
   if (req.action === 'people') {
     if (['Owner', 'HQ', 'Staff', 'Clerk', 'Manager'].indexOf(user.role) < 0) return { ok: false, error: 'not_allowed' };
     return people_(user);
@@ -173,6 +179,7 @@ function doWrite_(user, req) {
   if (/^admin/.test(String(req.action))) return reply(adminAction_(user, req));
   // Users and PIN screen (v1.9): the Owner only.
   if (/^user/.test(String(req.action)) || req.action === 'testOff') return reply(usersAction_(user, req));
+  if (/^worker/.test(String(req.action))) return reply(workersAction_(user, req));
   return reply({ ok: false, error: 'unknown_action' });
 }
 
@@ -534,9 +541,12 @@ function backlog(estate) {
 function people_(user) {
   var out = [];
   if (isPracticeCode_(user.user_code)) return { ok: true, people: [], practice: true };   // made-up workers on the phone
+  var today = todayKL_();
   user.estates.forEach(function (est) {
+    var st = workerStates_(est);
     standingRows_('LIST_PEOPLE', est).forEach(function (r) {
       if (String(r.active).toUpperCase() === 'N') return;
+      if (!onMuster_(st[r.worker_id], today)) return;          // v1.25: resigned after the last day, or absconded (approved)
       out.push({ id: r.worker_id, name: r.name, job: r.job, gang: r.gang, sex: r.sex, mdr: String(r.mandor).toUpperCase() === 'Y', estate: est });
     });
   });
@@ -1237,7 +1247,7 @@ function adminSummary_(user) {
     c.noTicket = noTicket; c.corrections = corr; c.late = late; c.chitDays = chitDays;
     c.below = below; c.belowDate = lastWork ? lastWork.date : '';
     var b = backlog(e); c.field = b.fieldTotal || 0; c.ramp = (b.ramp && b.ramp.bunches) || 0;
-    var al = readRows_('FH_ALERT', e).standing.filter(function (r) { return String(r.date).slice(0, 7) === month; });
+    var al = readRows_('FH_ALERT', e).standing.filter(function (r) { return String(r.date).slice(0, 7) === month && r.kind !== 'absent3'; });
     c.alerts = al.length; c.alertsOpen = al.filter(function (r) { return !String(r.staff_note || '').trim(); }).length;
     return c;
   });
@@ -1387,4 +1397,146 @@ function setupLiveSheet() {
     'Clean sheet from ' + LIVE_FROM + '; copied ' + JSON.stringify(copied) + '; test sheet kept: ' + SHEET_ID);
   Logger.log('E-Book LIVE sheet: ' + dst.getUrl() + ' · copied ' + JSON.stringify(copied));
   return dst.getUrl();
+}
+
+
+// ---------------- v1.25 Pekerja masuk & keluar · worker changes ----------------
+// The clerk keys new hires, resignations and absconded workers; the staff only raises an absconded
+// worker from the muster (an FH_ALERT line, kind absent3); the Pengurus approves an absconded worker
+// before he leaves the muster; HQ sees every change. Only name, job, gang, sex, worker code and dates
+// (Rule 8). Nothing is deleted: each change is a new WORKER_LOG line.
+var WORKER_KINDS = ['new', 'resigned', 'absconded', 'approved', 'not_absconded', 'back'];
+function workerRows_(estate) {
+  return readRows_('WORKER_LOG', estate).standing.slice().sort(function (a, b) { return String(a.keyed_at) < String(b.keyed_at) ? -1 : String(a.keyed_at) > String(b.keyed_at) ? 1 : 0; });
+}
+// Where each worker stands now: { kind: 'resigned'|'absconded'|'gone'|'', day, pending, line }.
+function workerStates_(estate) {
+  var st = {};
+  workerRows_(estate).forEach(function (r) {
+    var w = String(r.worker_id), k = String(r.kind), o = st[w] || (st[w] = { kind: '', day: '', pending: false, start: '' });
+    if (k === 'new') o.start = String(r.day);
+    else if (k === 'resigned') { o.kind = 'resigned'; o.day = String(r.day); o.pending = false; o.line = r.id; }
+    else if (k === 'absconded') { o.kind = 'absconded'; o.day = String(r.day); o.pending = true; o.line = r.id; o.by = r.keyed_by; o.at = r.keyed_at; }
+    else if (k === 'approved' && o.kind === 'absconded') { o.kind = 'gone'; o.pending = false; o.answered = r.keyed_by; }
+    else if (k === 'not_absconded' || k === 'back') { o.kind = ''; o.day = ''; o.pending = false; }
+  });
+  return st;
+}
+function onMuster_(o, today) {
+  if (!o) return true;
+  if (o.kind === 'gone') return false;
+  if (o.kind === 'resigned' && o.day && o.day < today) return false;
+  return true;
+}
+function workerRole_(user, what) {
+  var r = user.role;
+  if (what === 'see') return ['Owner', 'HQ', 'Clerk', 'Manager'].indexOf(r) >= 0;
+  if (what === 'key') return r === 'Clerk' || r === 'Owner';
+  if (what === 'approve') return r === 'Manager' || r === 'Owner';
+  return false;
+}
+function workersRead_(user, req) {
+  if (!workerRole_(user, 'see')) return { ok: false, error: 'not_allowed' };
+  var est = String(req.estate || '');
+  if (user.estates.indexOf(est) < 0) return { ok: false, error: 'not_your_estate' };
+  var today = todayKL_(), st = workerStates_(est), gangs = {}, jobs = {};
+  var people = standingRows_('LIST_PEOPLE', est).filter(function (r) { return String(r.active).toUpperCase() !== 'N'; }).map(function (r) {
+    if (r.gang) gangs[r.gang] = true; if (r.job) jobs[r.job] = true;
+    var o = st[r.worker_id] || {};
+    return { id: String(r.worker_id), name: String(r.name), job: String(r.job), gang: String(r.gang), sex: String(r.sex),
+             state: o.kind || '', day: o.day || '', pending: !!o.pending, start: o.start || '', onMuster: onMuster_(o, today) };
+  });
+  var since = daysAgo_(62), names = {};
+  people.forEach(function (p) { names[p.id] = p.name; });
+  var changes = workerRows_(est).filter(function (r) { return String(r.date) >= since || String(r.keyed_at).slice(0, 10) >= since; }).map(function (r) {
+    return { id: r.id, worker: String(r.worker_id), name: names[r.worker_id] || String(r.name), kind: String(r.kind), day: String(r.day), note: String(r.note || ''), by: String(r.keyed_by), at: String(r.keyed_at).slice(0, 16) };
+  }).reverse().slice(0, 80);
+  // The staff's "Mungkin lari?" flags of the last 14 days for workers still on the muster and not already keyed.
+  var flags = [], seenF = {}, f14 = daysAgo_(14), lastH = {};
+  standingRows_('FH_MUSTER', est).forEach(function (r) { if (r.muster === 'H' && String(r.date) >= f14 && (!lastH[r.worker_id] || r.date > lastH[r.worker_id])) lastH[r.worker_id] = String(r.date); });
+  standingRows_('FH_ALERT', est).forEach(function (r) {
+    if (String(r.kind) !== 'absent3' || String(r.date) < f14) return;
+    var w = String(r.ref), o = st[w];
+    if (lastH[w] && lastH[w] > String(r.date)) { delete seenF[w]; return; }      // he came back to work: the flag goes by itself
+    if (o && (o.kind === 'absconded' || o.kind === 'gone' || o.kind === 'resigned')) return;
+    if (!names[w]) return;
+    seenF[w] = { worker: w, name: names[w], date: String(r.date), detail: String(r.detail || ''), by: String(r.keyed_by) };
+  });
+  Object.keys(seenF).forEach(function (k) { flags.push(seenF[k]); });
+  var pending = people.filter(function (p) { return p.pending; }).map(function (p) { var o = st[p.id]; return { worker: p.id, name: p.name, day: p.day, by: o.by, at: String(o.at || '').slice(0, 16) }; });
+  return { ok: true, estate: est, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), people: people, changes: changes,
+           flags: flags, pending: pending, gangs: Object.keys(gangs).sort(), jobs: Object.keys(jobs).sort(),
+           can: { key: workerRole_(user, 'key'), approve: workerRole_(user, 'approve') } };
+}
+// A new worker code when the clerk has none yet: estate + B (baru) + yymm + 2 digits, e.g. SSGTB261001.
+function newWorkerCode_(est, taken) {
+  var ym = todayKL_().slice(2, 7).replace('-', '');
+  for (var n = 1; n < 100; n++) { var c = est + 'B' + ym + ('0' + n).slice(-2); if (!taken[c]) return c; }
+  throw new Error('no_worker_code');
+}
+function workersAction_(user, req) {
+  var est = String(req.estate || '');
+  if (user.estates.indexOf(est) < 0) return { ok: false, error: 'not_your_estate' };
+  var a = String(req.action);
+  var need = a === 'workerAnswer' ? 'approve' : 'key';
+  if (!workerRole_(user, need)) return { ok: false, error: 'not_allowed' };
+  var day = String(req.day || '');
+  if (a !== 'workerAnswer' && a !== 'workerBack' && !/^\d{4}-\d{2}-\d{2}$/.test(day)) return { ok: false, error: 'bad_date' };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (e) { return { ok: false, error: 'busy' }; }
+  try {
+    ROWS_MEMO_ = null;
+    var ss = book_(), now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), today = todayKL_();
+    var people = readRows_('LIST_PEOPLE', null).all, taken = {};
+    people.forEach(function (r) { taken[String(r.worker_id)] = r; });
+    var mineP = standingRows_('LIST_PEOPLE', est), byId = {};
+    mineP.forEach(function (r) { byId[String(r.worker_id)] = r; });
+    var est0 = ESTATE_COMPANY[est] || '';
+    var seq = 0;
+    function put(tab, fields) {
+      var sh = roomTab_(ss, tab), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+      var row = Object.assign({ id: 'WK-' + est + '-' + now.replace(/\D/g, '') + '-' + Math.random().toString(36).slice(2, 6) + (seq++), date: today, company: est0, estate: est,
+        keyed_by: user.user_code, keyed_at: now, phone: String(req.phone || ''), status: 'active', replaces: '', received_at: now }, fields);
+      sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); }));
+      return row;
+    }
+    var st = workerStates_(est);
+    if (a === 'workerAdd') {
+      var name = String(req.name || '').replace(/\s+/g, ' ').trim();
+      if (name.length < 2 || name.length > 60) return { ok: false, error: 'bad_name' };
+      var sex = String(req.sex || '');
+      if (sex !== 'M' && sex !== 'F') return { ok: false, error: 'bad_sex' };
+      var gang = String(req.gang || '').trim().slice(0, 40);
+      if (!gang) return { ok: false, error: 'bad_gang' };
+      var code = String(req.code || '').toUpperCase().replace(/\s+/g, '');
+      if (code && !/^[A-Z0-9-]{4,20}$/.test(code)) return { ok: false, error: 'bad_code' };
+      if (code && taken[code]) return { ok: false, error: 'code_used' };
+      if (!code) code = newWorkerCode_(est, taken);
+      put('LIST_PEOPLE', { worker_id: code, name: name, job: String(req.job || gang).slice(0, 40), gang: gang, sex: sex, mandor: '', active: 'Y' });
+      put('WORKER_LOG', { worker_id: code, name: name, kind: 'new', day: day, note: String(req.note || '').slice(0, 120) });
+      return Object.assign(workersRead_(user, { estate: est }), { done: 'new', code: code, name: name });
+    }
+    var w = String(req.worker || ''), p = byId[w];
+    if (!p) return { ok: false, error: 'no_worker' };
+    var o = st[w] || {};
+    if (a === 'workerLeave') {
+      var kind = String(req.kind || '');
+      if (kind !== 'resigned' && kind !== 'absconded') return { ok: false, error: 'bad_kind' };
+      if (o.kind === 'gone' || (o.kind === 'absconded' && o.pending)) return { ok: false, error: 'already' };
+      if (kind === 'absconded' && day > today) return { ok: false, error: 'bad_date' };
+      put('WORKER_LOG', { worker_id: w, name: String(p.name), kind: kind, day: day, note: String(req.note || '').slice(0, 120) });
+      return Object.assign(workersRead_(user, { estate: est }), { done: kind });
+    }
+    if (a === 'workerAnswer') {
+      if (!(o.kind === 'absconded' && o.pending)) return { ok: false, error: 'nothing_waiting' };
+      put('WORKER_LOG', { worker_id: w, name: String(p.name), kind: req.ok ? 'approved' : 'not_absconded', day: o.day, note: String(req.note || '').slice(0, 120), answered_by: user.user_code, answered_at: now });
+      return Object.assign(workersRead_(user, { estate: est }), { done: req.ok ? 'approved' : 'not_absconded' });
+    }
+    if (a === 'workerBack') {
+      if (!o.kind) return { ok: false, error: 'nothing_to_undo' };
+      put('WORKER_LOG', { worker_id: w, name: String(p.name), kind: 'back', day: today, note: String(req.note || '').slice(0, 120) });
+      return Object.assign(workersRead_(user, { estate: est }), { done: 'back' });
+    }
+    return { ok: false, error: 'unknown_action' };
+  } finally { lock.releaseLock(); }
 }

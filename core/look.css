@@ -475,3 +475,11 @@ body:has(#room:not([hidden]) .botbar) .foot { padding-bottom: 96px; }
 .adm-chk { font-size: .82rem; line-height: 1.7; margin-top: 4px; }
 .adm-chk .yes { color: #1f7a45; font-style: normal; font-weight: 800; } .adm-chk .no { color: #c0392b; font-style: normal; font-weight: 800; }
 .adm-cnt { position: absolute; top: 2px; left: 50%; margin-left: 6px; background: #c0392b; color: #fff; border-radius: 99px; font-size: .62rem; font-weight: 800; padding: 0 5px; line-height: 1.5; }
+/* v1.22 Tambah kerja: usual jobs, no-block note, round status */
+.jb-quick .pick { min-width: 64px; }
+.jb-quick .pick small { display: block; font-size: .68rem; color: var(--muted); max-width: 90px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jb-quick .pick[aria-pressed="true"] small { color: inherit; }
+.ok-note { background: var(--ok-soft); color: var(--ok); border-radius: var(--r); padding: 10px 12px; font-weight: 600; }
+.jb-round { background: var(--ok-soft); border-radius: var(--r); padding: 8px 12px; color: var(--ink); }
+.jb-round b.late { color: var(--bad); }
+

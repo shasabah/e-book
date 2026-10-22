@@ -36,7 +36,14 @@ function usersBook_() { if (!PRACTICE_) return book_(); return UBOOK_ || (UBOOK_
 // Records dated before the trial began are practice from the phones: they are answered "done" so the
 // phone stops sending them, but never written into the clean sheet.
 function liveFrom_() { try { return PropertiesService.getScriptProperties().getProperty('LIVE_FROM') || ''; } catch (e) { return ''; } }
-function beforeLive_(user, row) { var lf = liveFrom_(); return !!(lf && row && String(row.date) < lf && !isTestCode_(user.user_code) && !isPracticeCode_(user.user_code)); }
+function beforeLive_(user, row, tab) {
+  var lf = liveFrom_();
+  if (!(lf && row && String(row.date) < lf && !isTestCode_(user.user_code) && !isPracticeCode_(user.user_code))) return false;
+  // v1.27.1: mill tickets and grading of the trial's own month are real (the clerk keys a ticket of a lorry
+  // that went before the trial day, e.g. 20 Oct). Only older practice records are skipped.
+  if (TICKET_TABS.indexOf(String(tab)) >= 0 && String(row.date) >= lf.slice(0, 7) + '-01') return false;
+  return true;
+}
 
 var USERS_TAB = 'USERS';
 var USER_COLS = ['user_code', 'name', 'role', 'estates', 'key_hash', 'status', 'added_at', 'phones', 'position', 'move_estates', 'move_date', 'phone_names'];
@@ -277,7 +284,7 @@ function saveRow(user, tab, row) {
   if (!canWrite_(user, String(tab))) return { ok: false, error: 'not_allowed' };
   if (STATUSES.indexOf(row.status) < 0) return { ok: false, error: 'bad_status' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(row.date))) return { ok: false, error: 'bad_date' };
-  if (beforeLive_(user, row)) return { ok: true, skipped: 'before_live' };
+  if (beforeLive_(user, row, tab)) return { ok: true, skipped: 'before_live' };
   row.keyed_by = user.user_code;                 // always the person whose key it is
   row.received_at = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
 
@@ -376,7 +383,7 @@ function saveBatch(user, items) {
       if (user.estates.indexOf(row.estate) < 0) return fail('not_your_estate');
       if (STATUSES.indexOf(row.status) < 0) return fail('bad_status');
       if (!/^\d{4}-\d{2}-\d{2}$/.test(String(row.date))) return fail('bad_date');
-      if (beforeLive_(user, row)) { results.push({ id: id, ok: true, skipped: 'before_live' }); return; }
+      if (beforeLive_(user, row, tab)) { results.push({ id: id, ok: true, skipped: 'before_live' }); return; }
       row.keyed_by = user.user_code;
       row.received_at = now;
       var extra = Object.keys(row).filter(function (k) { return t.head.indexOf(k) < 0; });

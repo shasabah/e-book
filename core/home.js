@@ -281,6 +281,7 @@
     renderPlan(u);
     if (EA.workersPeek) EA.workersPeek(u, estate);       // v1.25: approvals and flags waiting, for the Pekerja tile
     if (EA.millsPeek) EA.millsPeek(u, estate);           // v1.29: the estate's mill list, and requests waiting
+    if (EA.renderTodo) { EA.renderTodo($('todo'), u, estate); EA.todoPeek(u, estate); }   // v1.31: Perlu tindakan
     // v1.16: fetch the trial switches from the office now and then (a phone may stay logged in for weeks).
     var sw = EA.switches();
     if (EA.sendLink() && navigator.onLine && !switchAsk && (!sw.at || Date.now() - sw.at > 30 * 60000)) {

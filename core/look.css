@@ -602,3 +602,15 @@ body:has(#room:not([hidden]) .botbar) .sheet-back:not([hidden]) ~ .toast,
 /* v1.27.2: BALIK at the top of every box (sheet) */
 .sheet-top { position: sticky; top: -20px; z-index: 2; margin: -4px 0 -6px; padding-top: 2px; background: var(--surface); }
 .sheet-top .sheet-x { min-height: 44px; min-width: 96px; font-size: 1rem; }
+
+/* v1.31 Perlu tindakan */
+.td { margin: 12px 0; background: var(--card, #fff); border: 2px solid #e0a43a; border-radius: 14px; padding: 10px 12px; }
+.td h2 { margin: 0 0 4px; font-size: 1.05rem; color: #7a4a00; }
+.td-it { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--line, #eee); padding: 9px 2px; font: inherit; color: inherit; cursor: pointer; }
+.td-it:first-of-type { border-top: 0; }
+div.td-it { cursor: default; }
+.td-ic { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .7rem; color: #fff; flex: none; }
+.td-ic.r { background: #c0392b; } .td-ic.a { background: #d08c1f; } .td-ic.b { background: #1f5aa6; } .td-ic.g { background: #2e7d4f; }
+.td-t { flex: 1; font-size: .92rem; } .td-t small { display: block; color: var(--muted, #888); font-size: .76rem; }
+.td-go { color: #1f5aa6; font-weight: 700; font-size: 1.2rem; }
+.td-done { margin: 12px 0; background: #e8f4ec; color: #2e7d4f; border-radius: 14px; padding: 10px; font-weight: 700; text-align: center; }

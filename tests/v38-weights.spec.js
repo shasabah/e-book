@@ -94,6 +94,7 @@ const { chromium } = require('playwright');
   const q = await p.evaluate(() => JSON.parse(localStorage.getItem('ea.queue') || '[]').filter(x => x.tab === 'FH_TICKET').map(x => x.row));
   check('20 Oct ticket with no DN: no "type the DO no." stop', !/Taip No\. DO/.test(sheet), sheet.slice(0, 200));
   check('20 Oct ticket saved: dated 20 Oct, 1st weight 31500 kg, net 15.4 MT', q.some(r => r.ticket_no === '1357999' && r.date === '2026-10-20' && r.first_kg === '31500' && Number(r.nett_mt) === 15.4), JSON.stringify(q));
+  check('every box has BALIK at the top, and it closes the box (1.27.2)', await p.isVisible('#sheet-x') && (await p.click('#sheet-x'), await p.waitForTimeout(200), await p.isHidden('#sheet-back')));
   check('no page errors', errs.length === 0, errs.join(' | '));
   await b.close();
 })();

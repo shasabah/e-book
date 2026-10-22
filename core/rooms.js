@@ -44,6 +44,12 @@ EA.rooms = [
     state: 'live', when: 'Kerani · Pengurus · HQ',
     note: { bm: 'Pekerja baru, berhenti dan lari.', en: 'New hires, resigned and absconded workers.' },
     roles: ['Owner', 'HQ', 'Clerk', 'Manager'] },
+  // v1.29 Foundation, not a room: a new mill or collecting centre (shared mill list). The clerk asks for
+  // the Pengurus, HQ checks, the Account & Finance Executive approves; the Owner can do either step.
+  { id: 'mills', mark: 'KL', bm: 'Kilang & pusat kumpulan', en: 'Mills & collecting centres',
+    state: 'live', when: 'Kerani · Pengurus · HQ · Kewangan',
+    note: { bm: 'Senarai kilang dan minta kilang baru.', en: 'The mill list, and asking for a new one.' },
+    roles: ['Owner', 'HQ', 'Clerk', 'Manager'] },
   // Part of the Foundation (v1.9), not a room: who may log in, and their PINs. Owner only.
   { id: 'users', mark: 'PIN', bm: 'Pengguna & PIN', en: 'Users & PIN',
     state: 'live', when: 'Pemilik sahaja · Owner only',

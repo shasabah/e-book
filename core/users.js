@@ -10,7 +10,7 @@ EA.roomViews = EA.roomViews || {};
   var EST_NAME = { SDK: 'Sandakan HQ', MELU: 'Melu', SSGT: 'Sugut', PTAN: 'Paitan', TKRS: 'Tekara', KWNN: 'Kawananan' };
   // v1.15: job titles as on the organisation chart, and the app access each one usually has.
   var POSITIONS = [['Trainee Field Staff', 'Staff'], ['Field Staff', 'Staff'], ['Senior Staff', 'Staff'], ['Estate Clerk', 'Clerk'],
-    ['Assistant Manager', 'Manager'], ['Senior Assistant Manager', 'Manager'], ['Mandor', 'Mandor'], ['Storekeeper', 'Store'], ['AGM', 'HQ'], ['GM', 'Owner']];
+    ['Assistant Manager', 'Manager'], ['Senior Assistant Manager', 'Manager'], ['Mandor', 'Mandor'], ['Storekeeper', 'Store'], ['Account & Finance Executive', 'HQ'], ['AGM', 'HQ'], ['GM', 'Owner']];
   function posRole(p) { var x = POSITIONS.find(function (q) { return q[0] === p; }); return x ? x[1] : ''; }
   function posShort(p) { return p === 'Senior Assistant Manager' ? 'Sr Assistant Manager' : p; }
   var data = null, loading = false, failed = '', shown = null, form = null, el = null, ctx = null;

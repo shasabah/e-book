@@ -80,7 +80,7 @@ var ROOM_TABS = {
   // v1.25 Pekerja masuk & keluar: one line per change, never deleted. kind: new, resigned, absconded
   // (waiting for the Pengurus), approved / not_absconded (the Pengurus's answer), back (a mistake undone).
   // day: start date, last working day or last day seen.
-  WORKER_LOG: ['worker_id', 'name', 'kind', 'day', 'note', 'answered_by', 'answered_at'],
+  WORKER_LOG: ['worker_id', 'name', 'kind', 'day', 'note', 'answered_by', 'answered_at', 'old_name', 'old_sex', 'new_sex', 'ref'],
   // v1.26 Rekod: the crop budget per estate and month (month = yyyy-mm). Kept only in the office sheet.
   LIST_BUDGET: ['month', 'budget_mt', 'abw_kg', 'work_days', 'note'],
   // v1.29 shared list: mills and collecting centres per estate (kind: mill or cc). Added only when a request
@@ -1429,7 +1429,9 @@ function setupLiveSheet() {
 // job, gang, sex, worker code and dates (Rule 8). Nothing is deleted: each step is a new WORKER_LOG line.
 // kind: new, resigned, absconded (the change, waiting) · approved, rejected (the Pengurus) · hq_done (HQ)
 // · back (a mistake undone). not_absconded is the 1.25 word for rejected.
-var WORKER_KINDS = ['new', 'resigned', 'absconded', 'approved', 'rejected', 'not_absconded', 'hq_done', 'back'];
+// v1.30 BETULKAN: fix (a name or sex correction waiting for HQ; name = the new name) · fix_ok / fix_no (HQ's answer,
+// ref = the fix line). A fix keyed by HQ or the Owner is fix_ok at once. Worker codes never change.
+var WORKER_KINDS = ['new', 'resigned', 'absconded', 'approved', 'rejected', 'not_absconded', 'hq_done', 'back', 'fix', 'fix_ok', 'fix_no'];
 function workerRows_(estate) {
   return readRows_('WORKER_LOG', estate).standing.slice().sort(function (a, b) { return String(a.keyed_at) < String(b.keyed_at) ? -1 : String(a.keyed_at) > String(b.keyed_at) ? 1 : 0; });
 }
@@ -1462,7 +1464,18 @@ function workerRole_(user, what) {
   if (what === 'key') return r === 'Clerk' || r === 'Owner';
   if (what === 'approve') return r === 'Manager' || r === 'Owner';
   if (what === 'hq') return r === 'HQ' || r === 'Owner';
+  if (what === 'fix') return r === 'Clerk' || r === 'HQ' || r === 'Owner';
   return false;
+}
+// v1.30: name / sex corrections waiting for HQ, newest last.
+function workerFixes_(rows) {
+  var open = {}, order = [];
+  rows.forEach(function (r) {
+    var k = String(r.kind);
+    if (k === 'fix') { open[r.id] = r; order.push(r.id); }
+    else if (k === 'fix_ok' || k === 'fix_no') delete open[String(r.ref)];
+  });
+  return order.filter(function (id) { return open[id]; }).map(function (id) { return open[id]; });
 }
 function workersRead_(user, req) {
   if (!workerRole_(user, 'see')) return { ok: false, error: 'not_allowed' };
@@ -1488,7 +1501,8 @@ function workersRead_(user, req) {
     if (k === 'approved' || k === 'rejected' || k === 'not_absconded') of[r.id] = k === 'not_absconded' ? 'absconded' : (lastK[r.worker_id] || 'absconded');
   });
   var changes = rows.filter(function (r) { return String(r.date) >= since || String(r.keyed_at).slice(0, 10) >= since; }).map(function (r) {
-    return { id: r.id, worker: String(r.worker_id), name: names[r.worker_id] || String(r.name), kind: String(r.kind), of: of[r.id] || '', day: String(r.day), note: String(r.note || ''), by: who(r.keyed_by), at: String(r.keyed_at).slice(0, 16), done: !!done[r.id] };
+    return { id: r.id, worker: String(r.worker_id), name: names[r.worker_id] || String(r.name), kind: String(r.kind), of: of[r.id] || '', day: String(r.day), note: String(r.note || ''), by: who(r.keyed_by), at: String(r.keyed_at).slice(0, 16), done: !!done[r.id],
+             fix: String(r.kind) === 'fix' ? { from: String(r.old_name || ''), to: String(r.name), fromSex: String(r.old_sex || ''), toSex: String(r.new_sex || '') } : null };
   }).reverse().slice(0, 80);
   // The staff's "Mungkin lari?" flags of the last 14 days for workers still on the muster and not already keyed.
   var flags = [], seenF = {}, f14 = daysAgo_(14), lastH = {};
@@ -1519,9 +1533,13 @@ function workersRead_(user, req) {
         keyed: line(c), approved: line(r) });
     }
   });
+  var fixes = workerFixes_(rows).map(function (r) {
+    return { ref: r.id, worker: String(r.worker_id), oldName: String(r.old_name || ''), newName: String(r.name), oldSex: String(r.old_sex || ''), newSex: String(r.new_sex || ''),
+             note: String(r.note || ''), by: who(r.keyed_by), at: String(r.keyed_at).slice(0, 16) };
+  });
   return { ok: true, estate: est, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), people: people, changes: changes,
-           flags: flags, pending: pending, hq: hq, gangs: Object.keys(gangs).sort(), jobs: Object.keys(jobs).sort(),
-           can: { key: workerRole_(user, 'key'), approve: workerRole_(user, 'approve'), hq: workerRole_(user, 'hq') } };
+           flags: flags, pending: pending, hq: hq, fixes: fixes, gangs: Object.keys(gangs).sort(), jobs: Object.keys(jobs).sort(),
+           can: { key: workerRole_(user, 'key'), approve: workerRole_(user, 'approve'), hq: workerRole_(user, 'hq'), fix: workerRole_(user, 'fix') } };
 }
 // A new worker code when the clerk has none yet: estate + B (baru) + yymm + 2 digits, e.g. SSGTB261001.
 function newWorkerCode_(est, taken) {
@@ -1533,12 +1551,14 @@ function workersAction_(user, req) {
   var est = String(req.estate || '');
   if (user.estates.indexOf(est) < 0) return { ok: false, error: 'not_your_estate' };
   var a = String(req.action);
-  var need = a === 'workerAnswer' ? 'approve' : a === 'workerDone' ? 'hq' : 'key';
+  var need = a === 'workerAnswer' ? 'approve' : a === 'workerDone' || a === 'workerFixAnswer' ? 'hq' : a === 'workerFix' ? 'fix' : 'key';
   if (!workerRole_(user, need)) return { ok: false, error: 'not_allowed' };
   var day = String(req.day || ''), note = String(req.note || '').replace(/\s+/g, ' ').trim().slice(0, 200);
   if ((a === 'workerAdd' || a === 'workerLeave') && !/^\d{4}-\d{2}-\d{2}$/.test(day)) return { ok: false, error: 'bad_date' };
   if ((a === 'workerAdd' || a === 'workerLeave') && note.length < 3) return { ok: false, error: 'need_reason' };
   if (a === 'workerAnswer' && !req.ok && note.length < 3) return { ok: false, error: 'need_reason' };
+  if (a === 'workerFix' && note.length < 3) return { ok: false, error: 'need_reason' };
+  if (a === 'workerFixAnswer' && !req.ok && note.length < 3) return { ok: false, error: 'need_reason' };
   var lock = LockService.getScriptLock();
   try { lock.waitLock(15000); } catch (e) { return { ok: false, error: 'busy' }; }
   try {
@@ -1574,6 +1594,35 @@ function workersAction_(user, req) {
       return reply_('new', { code: code, name: name });
     }
     var w = String(req.worker || ''), p = byId[w];
+    // v1.30 BETULKAN: the new worker line replaces the old one (nothing deleted); the code stays the same.
+    function applyFix(row, newName, newSex) {
+      put('LIST_PEOPLE', { worker_id: String(row.worker_id), name: newName, job: String(row.job || ''), gang: String(row.gang || ''), sex: newSex,
+        mandor: String(row.mandor || ''), active: String(row.active || 'Y'), replaces: row.id });
+    }
+    if (a === 'workerFix') {
+      if (!p) return { ok: false, error: 'no_worker' };
+      var nn = String(req.name || '').replace(/\s+/g, ' ').trim(), ns = String(req.sex || '');
+      if (nn.length < 2 || nn.length > 60) return { ok: false, error: 'bad_name' };
+      if (ns !== 'M' && ns !== 'F') return { ok: false, error: 'bad_sex' };
+      if (nn === String(p.name) && ns === String(p.sex)) return { ok: false, error: 'no_change' };
+      if (workerFixes_(workerRows_(est)).some(function (r) { return String(r.worker_id) === w; })) return { ok: false, error: 'already' };
+      var fx = put('WORKER_LOG', { worker_id: w, name: nn, kind: 'fix', day: today, note: note, old_name: String(p.name), old_sex: String(p.sex), new_sex: ns });
+      if (user.role === 'HQ' || user.role === 'Owner') {          // HQ's own fix needs no second check
+        put('WORKER_LOG', { worker_id: w, name: nn, kind: 'fix_ok', day: today, note: '', ref: fx.id, answered_by: user.user_code, answered_at: now });
+        applyFix(p, nn, ns);
+        return reply_('fix_ok');
+      }
+      return reply_('fix');
+    }
+    if (a === 'workerFixAnswer') {
+      var fref = String(req.ref || ''), f0 = workerFixes_(workerRows_(est)).find(function (r) { return r.id === fref; });
+      if (!f0) return { ok: false, error: 'nothing_waiting' };
+      var pw = byId[String(f0.worker_id)];
+      if (!pw) return { ok: false, error: 'no_worker' };
+      put('WORKER_LOG', { worker_id: String(f0.worker_id), name: String(f0.name), kind: req.ok ? 'fix_ok' : 'fix_no', day: today, note: note, ref: fref, answered_by: user.user_code, answered_at: now });
+      if (req.ok) applyFix(pw, String(f0.name), String(f0.new_sex));
+      return reply_(req.ok ? 'fix_ok' : 'fix_no');
+    }
     if (a === 'workerDone') {
       var ref = String(req.ref || '');
       var appr = workerRows_(est).find(function (r) { return r.id === ref && String(r.kind) === 'approved'; });

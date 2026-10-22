@@ -1778,7 +1778,8 @@ function seedMills() {
 // gathered from what is already keyed; nothing new is keyed except the Pengurus's direction on the staff's
 // explanation. Each line: { id, p (1 red, 2 amber, 3 blue, 4 green), ic, bm, en, sub, go (screen) }.
 // Lines the phone knows better by itself (today's chit, records not sent) are added on the phone.
-var ROUND_LATE_DAYS = 15;        // lists/tasks.js: a lot is ready again after 10 days, late after 15
+var ROUND_LATE_DAYS = 15;
+var LORRY_MT = 8;             // v1.33: a full Sugut lorry (Yu Chen, 22 Oct 2026)        // lists/tasks.js: a lot is ready again after 10 days, late after 15
 var EXPLAIN_KINDS = { grading: 1, ramp: 1, field: 1 };
 function dayDiff_(a, b) { return Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 864e5); }
 function shortD_(iso) { return String(iso || '').slice(8, 10) + '/' + String(iso || '').slice(5, 7); }
@@ -1804,10 +1805,38 @@ function todo_(user, req) {
         sub: xs.slice(0, 4).map(function (x) { return 'petak ' + x.lot + ' (' + x.d + ' hari)'; }).join(', ') + (xs.length > 4 ? ' +' + (xs.length - 4) : ''), go: '#field-harvest/work' });
     });
   }
+  // v1.33 Ramp & lorry (agreed 22 Oct 2026): fruit should leave the ramp within 24 hours; a full Sugut lorry
+  // is 8 tonnes. Tonnes on the ramp = bunches × the ABW of the last tickets. The staff calls the lorry when
+  // the ramp is full or the fruit is from yesterday; under 8 tonnes, the Pengurus decides; the clerk expects a
+  // ticket; the Owner sees fruit 2 days old. Bunches cut but not yet carried to the ramp are asked for too.
+  function lastAbw() {
+    var t = standingRows_('FH_TICKET', est).filter(function (r) { return Number(r.abw_kg) > 0 && String(r.date) >= daysAgo_(60); })
+      .sort(function (a, b) { return String(a.date) < String(b.date) ? 1 : -1; }).slice(0, 10);
+    return t.length ? t.reduce(function (a, r) { return a + Number(r.abw_kg); }, 0) / t.length : 0;
+  }
   function rampOld() {
-    var b = backlog(est), rp = b.ramp || {};
-    if (rp.bunches && rp.since && rp.since < yday) add({ id: 'RP:' + rp.since, p: 2, ic: 'LR', bm: rp.bunches + ' tandan di ramp sejak ' + shortD_(rp.since), en: rp.bunches + ' bunches on the ramp since ' + shortD_(rp.since),
-      sub: (rp.blocks || []).map(function (x) { return 'Blk ' + x.block + ' ' + x.bunches; }).join(', ') || 'Buat lori & DN', go: '#field-harvest/collect' });
+    var b = backlog(est), rp = b.ramp || {}, abw = lastAbw();
+    var mt = abw ? Math.round(rp.bunches * abw / 100) / 10 : 0, mtTxt = mt ? ' · ~' + mt.toFixed(1) + ' tan' : '';
+    var full = mt >= LORRY_MT, old = rp.bunches && rp.since && rp.since < today, days = rp.since ? dayDiff_(rp.since, today) : 0;
+    var blk = (rp.blocks || []).map(function (x) { return 'Blk ' + x.block + ' ' + x.bunches; }).join(', ');
+    if (rp.bunches && (full || old)) {
+      if (r === 'Staff') add({ id: 'RP:' + rp.since, p: 1, ic: 'LR', bm: full ? 'Ramp penuh' + mtTxt + ' · panggil lori' : 'Buah di ramp sejak ' + shortD_(rp.since) + ' · panggil lori sekarang',
+        en: full ? 'Ramp full · call the lorry' : 'Fruit on the ramp since ' + shortD_(rp.since) + ' · call the lorry now',
+        sub: rp.bunches + ' tandan' + mtTxt + (blk ? ' (' + blk + ')' : '') + (full ? '' : ' · kurang ' + LORRY_MT + ' tan: tanya Encik Samsir'), go: '#field-harvest/collect' });
+      if (r === 'Manager') add({ id: 'RP:' + rp.since, p: full ? 2 : 1, ic: 'LR', bm: full ? 'Ramp penuh' + mtTxt + ' · Staf panggil lori' : 'Putuskan: hantar lori separuh penuh?',
+        en: full ? 'Ramp full · the staff calls the lorry' : 'Decide: send a half-full lorry?',
+        sub: rp.bunches + ' tandan' + mtTxt + ' di ramp sejak ' + shortD_(rp.since) + (full ? '' : ' · lebih 24 jam · beritahu Staf'), go: '' });
+      if (r === 'Clerk') add({ id: 'RP:' + rp.since, p: 4, ic: 'LR', bm: 'Lori dijangka keluar' + mtTxt, en: 'A lorry is expected', sub: rp.bunches + ' tandan di ramp · jangka tiket kilang', go: '' });
+    }
+    if (r === 'Owner' && rp.bunches && days >= 2) add({ id: 'RO:' + rp.since, p: 1, ic: '!', bm: 'Tersangkut: buah ' + days + ' hari di ramp', en: 'Stuck: fruit ' + days + ' days on the ramp',
+      sub: rp.bunches + ' tandan' + mtTxt + ' sejak ' + shortD_(rp.since) + ' · Encik Samsir', go: '' });
+    // Cut but not carried to the ramp (the loader's collection not keyed): the ramp count is wrong until it is.
+    var fld = (b.field || []).filter(function (x) { return x.since && x.since < today; });
+    if (r === 'Staff' && fld.length) {
+      var nb = fld.reduce(function (a, x) { return a + x.bunches; }, 0), first = fld.map(function (x) { return x.since; }).sort()[0];
+      add({ id: 'FC:' + first, p: 2, ic: 'LR', bm: nb + ' tandan dituai belum dikutip ke ramp', en: nb + ' bunches cut, not yet carried to the ramp',
+        sub: 'Sejak ' + shortD_(first) + ' · kunci "Kutip ke ramp" di Lori', go: '#field-harvest/collect' });
+    }
     return b;
   }
   var un = {};
@@ -1858,6 +1887,7 @@ function todo_(user, req) {
       if (String(t.date) >= today) return;
       add({ id: 'DN:' + t.trip, p: 3, ic: 'DN', bm: 'DN ' + (t.dn || '—') + ' belum ada tiket kilang', en: 'DN ' + (t.dn || '—') + ' has no mill ticket', sub: 'Lori ' + shortD_(t.date) + ' · ' + t.mill + ' · ' + t.bunches + ' tandan', go: '#field-harvest/ticket' });
     });
+    rampOld();
     var ck = alerts.filter(function (a) { return a.kind === 'check' && String(a.date) >= yday; });
     if (ck.length) add({ id: 'CK:' + today, p: 1, ic: '!', bm: ck.length + ' amaran "Semak dulu" disimpan juga', en: ck.length + ' "check first" warnings saved anyway',
       sub: ck.slice(0, 2).map(function (a) { return String(a.detail).slice(0, 60); }).join(' · ') + ' · semak dengan Staf', go: '#field-harvest/history' });
@@ -1889,6 +1919,7 @@ function todo_(user, req) {
       if (dayDiff_(String(q.at).slice(0, 10), today) < 2) return;
       add({ id: 'ST:' + q.worker, p: 1, ic: '!', bm: 'Tersangkut: ' + q.name + ' menunggu Pengurus', en: 'Stuck: waiting for the manager', sub: 'Sejak ' + shortD_(q.at) + ' (' + dayDiff_(String(q.at).slice(0, 10), today) + ' hari)', go: '#workers' });
     });
+    rampOld();
     fixes.forEach(function (x) {
       if (x.done || dayDiff_(String(x.ask.keyed_at).slice(0, 10), today) < 1) return;
       add({ id: 'SF:' + x.ask.id, p: 1, ic: '!', bm: 'Tersangkut: chit ' + shortD_(x.ask.date) + ' belum dibetulkan', en: 'Stuck: a chit fix not done', sub: 'Diminta ' + (un[x.ask.keyed_by] || '') + ' ' + shortD_(x.ask.keyed_at) + ' · "' + String(x.ask.detail).slice(0, 60) + '"', go: '' });

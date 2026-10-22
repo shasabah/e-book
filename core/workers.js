@@ -1,8 +1,10 @@
-// Foundation: Pekerja masuk & keluar · Worker changes (v1.25). Approved by Yu Chen 21 Oct 2026
-// (Field & Harvest Brief, "Pekerja masuk & keluar"). Needs signal, like Pengguna & PIN.
-// - The clerk keys: + BARU (new hire), BERHENTI (resigned, last working day), LARI (absconded, last day seen).
+// Foundation: Pekerja masuk & keluar · Worker changes (v1.25, approvals v1.28). Approved by Yu Chen 21–22 Oct 2026
+// (Field & Harvest Brief, "Pekerja masuk & keluar"; Related_Parties.md). Needs signal, like Pengguna & PIN.
+// - The clerk keys: + BARU (new hire), BERHENTI (resigned, last working day), LARI (absconded, last day seen),
+//   each with a reason (LARI: the staff's explanation).
 // - The staff only raises "Mungkin lari?" from the muster (rooms/field/muster.js); it shows here.
-// - The Pengurus approves LARI (LULUS) or answers BUKAN LARI. Owner can do both; HQ only looks.
+// - The Pengurus answers every change: LULUS, or TOLAK with why (BUKAN LARI for absconded).
+// - After LULUS, HQ (SDK) sees the whole trail and presses SELESAI. Owner can do every step.
 // Only name, job, gang, sex, worker code and dates (Rule 8). Nothing is deleted.
 window.EA = window.EA || {};
 EA.roomViews = EA.roomViews || {};
@@ -28,11 +30,26 @@ EA.roomViews = EA.roomViews || {};
     pick_worker: ['Pilih pekerja.', 'Pick the worker.'],
     already: ['Sudah dikunci dan menunggu lulus.', 'Already keyed and waiting for approval.'],
     nothing_waiting: ['Tiada yang menunggu lulus.', 'Nothing is waiting for approval.'],
-    nothing_to_undo: ['Tiada perubahan untuk dibatalkan.', 'No change to undo.']
+    nothing_to_undo: ['Tiada perubahan untuk dibatalkan.', 'No change to undo.'],
+    need_reason: ['Tulis sebab (sekurang-kurangnya 3 huruf).', 'Write the reason (at least 3 letters).']
   };
   function errText(e) { var m = ERR[e] || ['Pejabat menolak: ' + e, 'Office refused: ' + e]; return EA.t(m[0], m[1]); }
-  var KIND = { new: ['Baru', 'New', 'ok'], resigned: ['Berhenti', 'Resigned', 'w'], absconded: ['Lari · menunggu lulus', 'Absconded · waiting', 'b'],
-    approved: ['Lari · diluluskan', 'Absconded · approved', 'b'], not_absconded: ['Bukan lari', 'Not absconded', 'ok'], back: ['Kembali bekerja', 'Back at work', 'ok'] };
+  var KIND = { new: ['Baru · menunggu lulus', 'New · waiting', 'w'], resigned: ['Berhenti · menunggu lulus', 'Resigned · waiting', 'w'], absconded: ['Lari · menunggu lulus', 'Absconded · waiting', 'b'],
+    back: ['Kembali bekerja', 'Back at work', 'ok'], hq_done: ['SDK selesai', 'SDK done', 'ok'],
+    refused: ['Baru · ditolak', 'New · rejected', 'b'], gone: ['Lari · diluluskan', 'Absconded · approved', 'b'] };
+  var WHAT = { new: ['Baru', 'New'], resigned: ['Berhenti', 'Resigned'], absconded: ['Lari', 'Absconded'] };
+  // A label for a change line: approved / rejected say what they answered.
+  function label(c) {
+    var w = WHAT[c.of || 'absconded'] || WHAT.absconded;
+    if (c.kind === 'approved') return [w[0] + ' · diluluskan', w[1] + ' · approved', c.of === 'new' ? 'ok' : 'b'];
+    if (c.kind === 'rejected' || c.kind === 'not_absconded') return c.of === 'absconded' || c.kind === 'not_absconded' ? ['Bukan lari', 'Not absconded', 'ok'] : [w[0] + ' · ditolak', w[1] + ' · rejected', 'w'];
+    return KIND[c.kind] || [c.kind, c.kind, 'w'];
+  }
+  function stateLabel(p) {
+    if (p.pending) return KIND[p.state] || [p.state, p.state];
+    if (p.state === 'resigned') return ['Berhenti · diluluskan', 'Resigned · approved'];
+    return KIND[p.state] || [p.state, p.state];
+  }
   function day(iso) {
     var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
     if (!m) return '';
@@ -61,11 +78,13 @@ EA.roomViews = EA.roomViews || {};
     if (!c || !u || c.code !== u.code || !c.data) return 0;
     if (u.role === 'Manager') return (c.data.pending || []).length;
     if (u.role === 'Clerk') return (c.data.flags || []).length;
+    if (u.role === 'HQ') return (c.data.hq || []).length;
+    if (u.role === 'Owner') return (c.data.pending || []).length + (c.data.hq || []).length;
     return 0;
   };
   var peeking = false;
   EA.workersPeek = function (u, est) {
-    if (peeking || !u || !/^(Clerk|Manager)$/.test(u.role) || !EA.sendLink() || !navigator.onLine) return;
+    if (peeking || !u || !/^(Clerk|Manager|HQ|Owner)$/.test(u.role) || !EA.sendLink() || !navigator.onLine) return;
     var c = EA.local.get(CACHE + est, null);
     if (c && c.code === u.code && Date.now() - c.at < 30 * 60000) return;
     peeking = true;
@@ -92,23 +111,39 @@ EA.roomViews = EA.roomViews || {};
       if (can.key) h += '<div class="wk-three"><button type="button" class="wk-big g" data-go="new">+ NEW<small>+ Baru</small></button>' +
         '<button type="button" class="wk-big a" data-go="resigned">RESIGNED<small>Berhenti</small></button>' +
         '<button type="button" class="wk-big r" data-go="absconded">ABSCONDED<small>Lari</small></button></div>';
-      if ((d.pending || []).length) h += '<div class="card"><h2>' + EA.t('Perlu lulus · Lari', 'To approve · Absconded') + '</h2>' + d.pending.map(function (p) {
-        return '<div class="wk-pend"><div><b>' + esc(p.name) + '</b><span class="s">' + esc(p.worker) + ' · ' + EA.t('terakhir dilihat ', 'last seen ') + esc(day(p.day)) + ' · ' + EA.t('dikunci ', 'keyed ') + esc(p.by) + ' ' + esc(day(p.at)) + '</span></div>' +
-          (can.approve ? '<div class="actions"><button class="btn btn-ghost" type="button" data-ans="0" data-w="' + esc(p.worker) + '">NOT ABSCONDED<small>Bukan lari</small></button>' +
-            '<button class="btn btn-main wk-red" type="button" data-ans="1" data-w="' + esc(p.worker) + '">APPROVE<small>Lulus</small></button></div>' : '<span class="tag-wait">' + EA.t('Menunggu Pengurus', 'Waiting for the manager') + '</span>') + '</div>';
+      if ((d.pending || []).length) h += '<div class="card"><h2>' + EA.t('Perlu lulus Pengurus', 'For the manager to approve') + '</h2>' + d.pending.map(function (p) {
+        var w = WHAT[p.kind] || WHAT.absconded;
+        var dl = p.kind === 'new' ? EA.t('mula ', 'starts ') : p.kind === 'resigned' ? EA.t('hari akhir ', 'last day ') : EA.t('terakhir dilihat ', 'last seen ');
+        return '<div class="wk-pend"><div><span class="wk-tag ' + (p.kind === 'absconded' ? 'b' : 'w') + '">' + esc(EA.t(w[0], w[1])) + '</span> <b>' + esc(p.name) + '</b>' +
+          '<span class="s">' + esc(p.worker) + ' · ' + dl + esc(day(p.day)) + ' · ' + EA.t('dikunci ', 'keyed ') + esc(p.by) + ' ' + esc(day(p.at)) + '</span>' +
+          (p.note ? '<span class="wk-why">' + (p.kind === 'absconded' ? EA.t('Penjelasan Staf: ', 'Staff\'s explanation: ') : EA.t('Sebab: ', 'Reason: ')) + esc(p.note) + '</span>' : '') + '</div>' +
+          (can.approve ? '<div class="actions"><button class="btn btn-ghost" type="button" data-ans="0" data-k="' + esc(p.kind) + '" data-w="' + esc(p.worker) + '">' +
+            (p.kind === 'absconded' ? 'NOT ABSCONDED<small>Bukan lari</small>' : 'REJECT<small>Tolak</small>') + '</button>' +
+            '<button class="btn btn-main' + (p.kind === 'absconded' ? ' wk-red' : '') + '" type="button" data-ans="1" data-k="' + esc(p.kind) + '" data-w="' + esc(p.worker) + '">APPROVE<small>Lulus</small></button></div>'
+            : '<span class="tag-wait">' + EA.t('Menunggu Pengurus', 'Waiting for the manager') + '</span>') + '</div>';
       }).join('') + '</div>';
+      if ((d.hq || []).length) h += '<div class="card"><h2>' + EA.t('Perlu tindakan SDK', 'For SDK to act on') + '</h2>' + d.hq.map(function (q) {
+        var w = WHAT[q.kind] || WHAT.absconded;
+        var dl = q.kind === 'new' ? EA.t('mula ', 'starts ') : q.kind === 'resigned' ? EA.t('hari akhir ', 'last day ') : EA.t('terakhir dilihat ', 'last seen ');
+        return '<div class="wk-pend"><div><span class="wk-tag ' + (q.kind === 'new' ? 'ok' : 'b') + '">' + esc(EA.t(w[0], w[1])) + '</span> <b>' + esc(q.name) + '</b>' +
+          '<span class="s">' + esc(q.worker) + ' · ' + dl + esc(day(q.day)) + '</span>' +
+          '<span class="wk-trail">1. ' + EA.t('Dikunci ', 'Keyed ') + esc(q.keyed ? q.keyed.by + ' ' + day(q.keyed.at) : '') + (q.reason ? ' · ' + esc(q.reason) : '') + '<br>' +
+          '2. ' + EA.t('Lulus ', 'Approved ') + esc(q.approved ? q.approved.by + ' ' + day(q.approved.at) : '') + (q.approved && q.approved.note ? ' · ' + esc(q.approved.note) : '') + '</span></div>' +
+          (can.hq ? '<div class="actions"><button class="btn btn-main" type="button" data-done="' + esc(q.ref) + '">DONE<small>Selesai</small></button></div>' : '<span class="tag-wait">' + EA.t('Menunggu SDK', 'Waiting for SDK') + '</span>') + '</div>';
+      }).join('') + '<p class="hint">' + EA.t('Tekan SELESAI bila fail pekerja dan gaji di SDK sudah dikemas kini.', 'Press DONE when the worker file and pay at SDK are updated.') + '</p></div>';
       if ((d.flags || []).length) h += '<div class="card"><h2>' + EA.t('Mungkin lari? · dari Staf', 'Maybe absconded? · from the staff') + '</h2>' + d.flags.map(function (f) {
         return '<div class="hrow"><div><b>' + esc(f.name) + '</b><span class="s">' + esc(tDays(f.detail)) + ' · ' + esc(day(f.date)) + '</span></div>' +
           (can.key ? '<button class="btn btn-ghost wk-red-t" type="button" data-flag="' + esc(f.worker) + '">ABSCONDED<small>Kunci lari</small></button>' : '') + '</div>';
       }).join('') + '<p class="hint">' + EA.t('Semak dahulu. Jika dia sudah kembali, biarkan — tanda hilang sendiri.', 'Check first. If he is back, leave it — the flag goes by itself.') + '</p></div>';
       h += '<div class="card"><h2>' + EA.t('Perubahan 2 bulan', 'Changes, last 2 months') + '</h2>' + ((d.changes || []).length ? d.changes.map(function (c) {
-        var k = KIND[c.kind] || [c.kind, c.kind, 'w'];
-        var dl = c.kind === 'new' ? EA.t('mula ', 'starts ') : c.kind === 'resigned' ? EA.t('hari akhir ', 'last day ') : /absconded|approved/.test(c.kind) ? EA.t('terakhir dilihat ', 'last seen ') : '';
-        return '<div class="hrow"><div><b>' + esc(c.name) + '</b><span class="s">' + esc(c.worker) + (dl ? ' · ' + dl + esc(day(c.day)) : '') + ' · ' + esc(c.by) + '</span></div><span class="wk-tag ' + k[2] + '">' + esc(EA.t(k[0], k[1])) + '</span></div>';
+        var k = label(c), of = c.kind === 'approved' || c.kind === 'rejected' ? c.of : c.kind;
+        var dl = c.kind === 'hq_done' || c.kind === 'back' ? '' : of === 'new' ? EA.t('mula ', 'starts ') : of === 'resigned' ? EA.t('hari akhir ', 'last day ') : EA.t('terakhir dilihat ', 'last seen ');
+        var nt = c.kind === 'hq_done' ? c.note.split(' ').slice(1).join(' ') : c.note;
+        return '<div class="hrow"><div><b>' + esc(c.name) + '</b><span class="s">' + esc(c.worker) + (dl ? ' · ' + dl + esc(day(c.day)) : '') + ' · ' + esc(c.by) + (nt ? ' · ' + esc(nt) : '') + '</span></div><span class="wk-tag ' + k[2] + '">' + esc(EA.t(k[0], k[1])) + '</span></div>';
       }).join('') : '<p class="hint">' + EA.t('Belum ada perubahan.', 'No changes yet.') + '</p>') + '</div>';
       var off = (d.people || []).filter(function (p) { return p.state; });
       if (off.length && can.key) h += '<div class="card"><h2>' + EA.t('Betulkan silap', 'Undo a mistake') + '</h2>' + off.map(function (p) {
-        return '<div class="hrow"><div><b>' + esc(p.name) + '</b><span class="s">' + esc(EA.t((KIND[p.state === 'gone' ? 'approved' : p.state] || [p.state])[0], (KIND[p.state === 'gone' ? 'approved' : p.state] || [p.state, p.state])[1])) + '</span></div>' +
+        return '<div class="hrow"><div><b>' + esc(p.name) + '</b><span class="s">' + esc(EA.t(stateLabel(p)[0], stateLabel(p)[1])) + '</span></div>' +
           '<button class="btn btn-ghost" type="button" data-back="' + esc(p.id) + '">BACK AT WORK<small>Kembali bekerja</small></button></div>';
       }).join('') + '</div>';
       h += '<p class="hint">' + EA.t('Tiada IC, pasport, permit, bank atau gaji di sini. Tiada yang dipadam.', 'No IC, passport, permit, bank or pay here. Nothing is deleted.') +
@@ -121,7 +156,8 @@ EA.roomViews = EA.roomViews || {};
     el.querySelectorAll('[data-flag]').forEach(function (b) { b.onclick = function () {
       var f = (data.flags || []).find(function (x) { return x.worker === b.dataset.flag; });
       form = { kind: 'absconded', worker: b.dataset.flag, day: lastSeen(f) }; draw(); window.scrollTo(0, 0); }; });
-    el.querySelectorAll('[data-ans]').forEach(function (b) { b.onclick = function () { answer(b.dataset.w, b.dataset.ans === '1', b); }; });
+    el.querySelectorAll('[data-ans]').forEach(function (b) { b.onclick = function () { if (b.dataset.ans === '1') answer(b.dataset.w, true, '', b); else rejectSheet(b.dataset.w, b.dataset.k); }; });
+    el.querySelectorAll('[data-done]').forEach(function (b) { b.onclick = function () { doneHQ(b.dataset.done, b); }; });
     el.querySelectorAll('[data-back]').forEach(function (b) { b.onclick = function () { backSheet(b.dataset.back); }; });
   }
   function tDays(detail) {
@@ -148,13 +184,14 @@ EA.roomViews = EA.roomViews || {};
         '<div class="field"><label>' + EA.t('Jantina', 'Sex') + '</label><div class="us-pills"><button type="button" data-sex="M" aria-pressed="' + (f.sex === 'M') + '">L · M</button><button type="button" data-sex="F" aria-pressed="' + (f.sex === 'F') + '">P · F</button></div></div>' +
         '<div class="field"><label for="wk-day">' + EA.t('Mula kerja', 'Start date') + '</label><input id="wk-day" type="date" class="text-input" value="' + esc(f.day) + '"></div>' +
         '<div class="field"><label for="wk-code">' + EA.t('Kod pekerja syarikat (jika sudah ada)', 'Company worker code (if there is one)') + '</label><input id="wk-code" class="text-input" maxlength="20" autocomplete="off" value="' + esc(f.code || '') + '" placeholder="' + EA.t('Kosong = pejabat buat kod', 'Empty = the office makes one') + '"></div>' +
-        '<p class="note-sun">' + EA.t('Dia masuk chit muster Staf selepas telefon Staf dapat senarai baru (bila ada isyarat).', 'He is on the staff\'s muster once the staff\'s phone gets the new list (with signal).') + '</p>';
+        reasonField(f) +
+        '<p class="note-sun">' + EA.t('Dia terus masuk chit muster Staf sebagai "menunggu lulus". Jika Pengurus TOLAK, dia keluar dari chit.', 'He is on the staff\'s muster at once as "waiting for approval". If the manager rejects, he leaves the chit.') + '</p>';
     } else {
       h += '<div class="field"><label for="wk-who">' + EA.t('Pekerja', 'Worker') + '</label><select id="wk-who" class="text-input"><option value="">— ' + EA.t('pilih', 'pick') + ' —</option>' +
         people.map(function (p) { return '<option value="' + esc(p.id) + '"' + (f.worker === p.id ? ' selected' : '') + '>' + esc(p.name) + ' · ' + esc(p.id) + '</option>'; }).join('') + '</select></div>' +
         '<div class="field"><label for="wk-day">' + (f.kind === 'resigned' ? EA.t('Hari kerja terakhir', 'Last working day') : EA.t('Hari terakhir dilihat', 'Last day seen')) + '</label><input id="wk-day" type="date" class="text-input" value="' + esc(f.day) + '"' + (f.kind === 'absconded' ? ' max="' + EA.today() + '"' : '') + '></div>' +
-        '<div class="field"><label for="wk-note">' + EA.t('Nota (pilihan)', 'Note (optional)') + '</label><input id="wk-note" class="text-input" maxlength="120" value="' + esc(f.note || '') + '"></div>' +
-        '<p class="note-sun">' + (f.kind === 'resigned' ? EA.t('Dia kekal dalam chit sehingga hari terakhir, kemudian keluar sendiri.', 'He stays on the chit until his last day, then drops off by himself.')
+        reasonField(f) +
+        '<p class="note-sun">' + (f.kind === 'resigned' ? EA.t('Pengurus perlu lulus. Dia kekal dalam chit sehingga lulus, kemudian keluar selepas hari terakhir.', 'The manager must approve. He stays on the chit until approved, then leaves after his last day.')
           : EA.t('Pengurus perlu lulus. Dia keluar dari chit hanya selepas LULUS.', 'The manager must approve. He leaves the chit only after APPROVE.')) + '</p>';
     }
     h += '<p class="msg" id="wk-err" hidden></p><div class="actions"><button class="btn btn-ghost" type="button" id="wk-cancel">CANCEL<small>Batal</small></button>' +
@@ -162,7 +199,7 @@ EA.roomViews = EA.roomViews || {};
     el.innerHTML = '<div class="us wk">' + h + '</div>';
     el.querySelector('#wk-back').onclick = el.querySelector('#wk-cancel').onclick = function () { form = null; draw(); };
     function v(id) { var x = el.querySelector(id); return x ? x.value : ''; }
-    function grab() { if (el.querySelector('#wk-name')) f.name = v('#wk-name'); if (el.querySelector('#wk-code')) f.code = v('#wk-code'); if (el.querySelector('#wk-who')) f.worker = v('#wk-who'); if (el.querySelector('#wk-note')) f.note = v('#wk-note'); f.day = v('#wk-day') || f.day; }
+    function grab() { if (el.querySelector('#wk-name')) f.name = v('#wk-name'); if (el.querySelector('#wk-code')) f.code = v('#wk-code'); if (el.querySelector('#wk-who')) f.worker = v('#wk-who'); if (el.querySelector('#wk-note')) f.note = v('#wk-note').trim(); f.day = v('#wk-day') || f.day; }
     el.querySelectorAll('[data-gang]').forEach(function (b) { b.onclick = function () { grab(); f.gang = b.dataset.gang; drawForm(); }; });
     el.querySelectorAll('[data-sex]').forEach(function (b) { b.onclick = function () { grab(); f.sex = b.dataset.sex; drawForm(); }; });
     el.querySelector('#wk-go').onclick = async function () {
@@ -174,21 +211,57 @@ EA.roomViews = EA.roomViews || {};
         if (!f.gang) return show('bad_gang');
       } else if (!f.worker) return show('pick_worker');
       if (!/^\d{4}-\d{2}-\d{2}$/.test(f.day)) return show('bad_date');
+      if (String(f.note || '').length < 3) return show('need_reason');
       btn.disabled = true;
-      var j = f.kind === 'new' ? await call('workerAdd', { name: f.name, gang: f.gang, sex: f.sex, day: f.day, code: f.code || '' })
+      var j = f.kind === 'new' ? await call('workerAdd', { name: f.name, gang: f.gang, sex: f.sex, day: f.day, code: f.code || '', note: f.note })
         : await call('workerLeave', { worker: f.worker, kind: f.kind, day: f.day, note: f.note || '' });
       btn.disabled = false;
       if (!j.ok) return show(j.error);
       form = null; draw(); window.scrollTo(0, 0);
-      ui().toast(f.kind === 'new' ? EA.t('Disimpan · kod ', 'Saved · code ') + j.code : f.kind === 'absconded' ? EA.t('Disimpan · menunggu Pengurus', 'Saved · waiting for the manager') : EA.t('Disimpan', 'Saved'));
+      ui().toast(f.kind === 'new' ? EA.t('Disimpan · kod ', 'Saved · code ') + j.code + ' · ' + EA.t('menunggu Pengurus', 'waiting for the manager') : EA.t('Disimpan · menunggu Pengurus', 'Saved · waiting for the manager'));
     };
   }
-  async function answer(w, ok, btn) {
+  function reasonField(f) {
+    var lb = f.kind === 'new' ? EA.t('Sebab ambil (cth. ganti pekerja berhenti)', 'Why hired (e.g. replaces a worker who left)')
+      : f.kind === 'resigned' ? EA.t('Sebab berhenti', 'Why he resigned')
+      : EA.t('Penjelasan Staf (apa yang Staf tahu)', 'Staff\'s explanation (what the staff knows)');
+    return '<div class="field"><label for="wk-note">' + lb + ' *</label><textarea id="wk-note" class="text-input" rows="2" maxlength="200">' + esc(f.note || '') + '</textarea></div>';
+  }
+  async function answer(w, ok, note, btn) {
+    if (btn) btn.disabled = true;
+    var j = await call('workerAnswer', { worker: w, ok: ok, note: note || '' });
+    if (btn) btn.disabled = false;
+    if (!j.ok) { ui().toast(errText(j.error), 'bad'); return j; }
+    draw(); ui().toast(ok ? EA.t('Diluluskan · SDK diberitahu', 'Approved · SDK is told') : EA.t('Ditolak · kerani nampak sebabnya', 'Rejected · the clerk sees why'));
+    return j;
+  }
+  function rejectSheet(w, kind) {
+    var p = (data.pending || []).find(function (x) { return x.worker === w; }) || { name: w };
+    var lari = kind === 'absconded';
+    ui().openSheet('<h2 id="sheet-title">' + (lari ? 'NOT ABSCONDED<small>Bukan lari</small>' : 'REJECT<small>Tolak</small>') + '</h2><p><b>' + esc(p.name) + '</b></p>' +
+      '<div class="field"><label for="rj-note">' + (lari ? EA.t('Kenapa bukan lari? (cth. dia sakit, sudah kembali)', 'Why not absconded? (e.g. he was sick, he is back)') : EA.t('Kenapa ditolak?', 'Why rejected?')) + ' *</label>' +
+      '<textarea id="rj-note" class="text-input" rows="2" maxlength="200"></textarea></div>' +
+      '<p class="note-sun">' + (kind === 'new' ? EA.t('Dia keluar dari chit muster.', 'He leaves the muster chit.') : EA.t('Dia kekal dalam chit muster.', 'He stays on the muster chit.')) + '</p>' +
+      '<p class="msg" id="rj-err" hidden></p><div class="actions"><button class="btn btn-ghost btn-back" type="button" id="rj-no">‹ BACK<small>‹ BALIK</small></button>' +
+      '<button class="btn btn-main" type="button" id="rj-ok">SAVE<small>Simpan</small></button></div>',
+      function (s) {
+        s.querySelector('#rj-no').onclick = ui().closeSheet;
+        s.querySelector('#rj-ok').onclick = async function () {
+          var n = s.querySelector('#rj-note').value.trim(), m = s.querySelector('#rj-err');
+          if (n.length < 3) { m.textContent = errText('need_reason'); m.hidden = false; return; }
+          this.disabled = true;
+          var j = await call('workerAnswer', { worker: w, ok: false, note: n });
+          if (!j.ok) { this.disabled = false; m.textContent = errText(j.error); m.hidden = false; return; }
+          ui().closeSheet(); draw(); ui().toast(EA.t('Ditolak · kerani nampak sebabnya', 'Rejected · the clerk sees why'));
+        };
+      });
+  }
+  async function doneHQ(ref, btn) {
     btn.disabled = true;
-    var j = await call('workerAnswer', { worker: w, ok: ok });
+    var j = await call('workerDone', { ref: ref });
     btn.disabled = false;
     if (!j.ok) return ui().toast(errText(j.error), 'bad');
-    draw(); ui().toast(ok ? EA.t('Diluluskan · keluar dari chit', 'Approved · off the chit') : EA.t('Bukan lari · kekal dalam chit', 'Not absconded · stays on the chit'));
+    draw(); ui().toast(EA.t('Selesai · disimpan', 'Done · saved'));
   }
   function backSheet(w) {
     var p = (data.people || []).find(function (x) { return x.id === w; }) || { name: w };

@@ -59,7 +59,7 @@ const ck = post({ key: OWN, action: 'userAdd', name: 'Kerani Contoh', role: 'Cle
 const mg = post({ key: OWN, action: 'userAdd', name: 'Pengurus Contoh', role: 'Manager', estates: ['SSGT'], phone: 'P01' });
 const hq = post({ key: OWN, action: 'userAdd', name: 'HQ Contoh', role: 'HQ', estates: ['SDK', 'MELU', 'SSGT', 'PTAN', 'TKRS', 'KWNN'], phone: 'P01' });
 [f, ck, mg, hq].forEach(u => post({ key: u.pin, action: 'login', phone: u.phone }));
-const as = (u, action, extra) => { clear(); return post(Object.assign({ key: u.pin, action, phone: u.phone, estate: 'SSGT' }, extra || {})); };
+const as = (u, action, extra) => { clear(); return post(Object.assign({ key: u.pin, action, phone: u.phone, estate: 'SSGT' }, /^worker(Add|Leave)$/.test(action) ? { note: 'Sebab contoh' } : {}, extra || {})); };
 
 check('staff cannot open or key worker changes', as(f, 'workers').error === 'not_allowed' && as(f, 'workerAdd', { name: 'X Y', gang: 'Tuai · Harvest', sex: 'M', day: today }).error === 'not_allowed');
 check('the Pengurus cannot add a worker', as(mg, 'workerAdd', { name: 'X Y', gang: 'Tuai · Harvest', sex: 'M', day: today }).error === 'not_allowed');
@@ -73,14 +73,17 @@ const LP = L.getSheetByName('LIST_PEOPLE');
 check('the worker list line has only name, job, gang, sex and code (Rule 8)', LP.rows[0].join() === 'id,date,company,estate,keyed_by,keyed_at,phone,status,replaces,worker_id,name,job,gang,sex,mandor,active,received_at' && LP.rows.some(r => r.includes('SSGTSC261001')));
 const inList = id => { clear(); return post({ key: f.pin, action: 'people', phone: f.phone }).people.some(p => p.id === id); };
 check('the new hires are on the staff\'s people list', inList(a1.code) && inList('SSGTSC261001'));
+as(mg, 'workerAnswer', { worker: a1.code, ok: true }); as(mg, 'workerAnswer', { worker: 'SSGTSC261001', ok: true });
 
 const r1 = as(ck, 'workerLeave', { worker: a1.code, kind: 'resigned', day: ago(-5) });
 check('resigned with a last day still to come: stays on the muster', r1.ok && inList(a1.code));
 as(ck, 'workerBack', { worker: a1.code });
 const r2 = as(ck, 'workerLeave', { worker: a1.code, kind: 'resigned', day: ago(1) });
-check('resigned with the last day passed: off the muster', r2.ok && !inList(a1.code));
+check('resigned, last day passed, not yet approved: still on the muster', r2.ok && inList(a1.code));
+as(mg, 'workerAnswer', { worker: a1.code, ok: true });
+check('resigned, approved, last day passed: off the muster', !inList(a1.code));
 const bk = as(ck, 'workerBack', { worker: a1.code });
-check('KEMBALI BEKERJA undoes it: back on the muster (a new line, nothing deleted)', bk.ok && inList(a1.code) && L.getSheetByName('WORKER_LOG').rows.length === 1 + 6);
+check('KEMBALI BEKERJA undoes it: back on the muster (a new line, nothing deleted)', bk.ok && inList(a1.code) && L.getSheetByName('WORKER_LOG').rows.length === 1 + 9);
 
 // the staff's flag
 post({ key: f.pin, action: 'saveBatch', phone: f.phone, items: [{ tab: 'FH_ALERT', row: { id: 'AL1', date: today, company: 'SPLT', estate: 'SSGT', status: 'active', keyed_at: today + ' 07:00', kind: 'absent3', ref: 'SSGTSC261001', detail: 'T: ' + ago(2) + ' ' + ago(1) + ' ' + today, staff_note: 'Diberitahu kerani' } }] });
@@ -97,8 +100,8 @@ check('LULUS: off the muster, the change shows as approved', ap.ok && !inList('S
 check('HQ sees every change and keys nothing', (h => h.ok && h.changes.length >= 6 && !h.can.key && !h.can.approve)(as(hq, 'workers')) && as(hq, 'workerAdd', { name: 'Abc Def', gang: 'Am', sex: 'M', day: today }).error === 'not_allowed');
 as(ck, 'workerBack', { worker: 'SSGTSC261001' });
 as(ck, 'workerLeave', { worker: 'SSGTSC261001', kind: 'absconded', day: ago(1) });
-const na = as(mg, 'workerAnswer', { worker: 'SSGTSC261001', ok: false });
-check('BUKAN LARI: stays on the muster', na.ok && inList('SSGTSC261001') && na.changes[0].kind === 'not_absconded');
+const na = as(mg, 'workerAnswer', { worker: 'SSGTSC261001', ok: false, note: 'Dia sakit, sudah kembali' });
+check('BUKAN LARI: stays on the muster', na.ok && inList('SSGTSC261001') && na.changes[0].kind === 'rejected' && na.changes[0].of === 'absconded');
 // a flag goes by itself when he works again
 post({ key: f.pin, action: 'saveBatch', phone: f.phone, items: [{ tab: 'FH_ALERT', row: { id: 'AL2', date: today, company: 'SPLT', estate: 'SSGT', status: 'active', keyed_at: today + ' 07:05', kind: 'absent3', ref: a1.code, detail: 'T', staff_note: 'x' } }] });
 check('flag shows while he is away', as(ck, 'workers').flags.some(x => x.worker === a1.code));

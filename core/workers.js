@@ -5,6 +5,8 @@
 // - The staff only raises "Mungkin lari?" from the muster (rooms/field/muster.js); it shows here.
 // - The Pengurus answers every change: LULUS, or TOLAK with why (BUKAN LARI for absconded).
 // - After LULUS, HQ (SDK) sees the whole trail and presses SELESAI. Owner can do every step.
+// - v1.30 BETULKAN: the clerk fixes a wrong name or sex with a reason; HQ checks it against the SDK worker
+//   file (BETUL / TOLAK). HQ's or the Owner's own fix needs no check. The worker code never changes.
 // Only name, job, gang, sex, worker code and dates (Rule 8). Nothing is deleted.
 window.EA = window.EA || {};
 EA.roomViews = EA.roomViews || {};
@@ -31,11 +33,13 @@ EA.roomViews = EA.roomViews || {};
     already: ['Sudah dikunci dan menunggu lulus.', 'Already keyed and waiting for approval.'],
     nothing_waiting: ['Tiada yang menunggu lulus.', 'Nothing is waiting for approval.'],
     nothing_to_undo: ['Tiada perubahan untuk dibatalkan.', 'No change to undo.'],
-    need_reason: ['Tulis sebab (sekurang-kurangnya 3 huruf).', 'Write the reason (at least 3 letters).']
+    need_reason: ['Tulis sebab (sekurang-kurangnya 3 huruf).', 'Write the reason (at least 3 letters).'],
+    no_change: ['Nama dan jantina sama seperti sekarang.', 'The name and sex are the same as now.']
   };
   function errText(e) { var m = ERR[e] || ['Pejabat menolak: ' + e, 'Office refused: ' + e]; return EA.t(m[0], m[1]); }
   var KIND = { new: ['Baru · menunggu lulus', 'New · waiting', 'w'], resigned: ['Berhenti · menunggu lulus', 'Resigned · waiting', 'w'], absconded: ['Lari · menunggu lulus', 'Absconded · waiting', 'b'],
     back: ['Kembali bekerja', 'Back at work', 'ok'], hq_done: ['SDK selesai', 'SDK done', 'ok'],
+    fix: ['Betulkan · menunggu SDK', 'Fix · waiting for SDK', 'w'], fix_ok: ['Betulkan · betul', 'Fix · done', 'ok'], fix_no: ['Betulkan · ditolak', 'Fix · rejected', 'b'],
     refused: ['Baru · ditolak', 'New · rejected', 'b'], gone: ['Lari · diluluskan', 'Absconded · approved', 'b'] };
   var WHAT = { new: ['Baru', 'New'], resigned: ['Berhenti', 'Resigned'], absconded: ['Lari', 'Absconded'] };
   // A label for a change line: approved / rejected say what they answered.
@@ -78,8 +82,8 @@ EA.roomViews = EA.roomViews || {};
     if (!c || !u || c.code !== u.code || !c.data) return 0;
     if (u.role === 'Manager') return (c.data.pending || []).length;
     if (u.role === 'Clerk') return (c.data.flags || []).length;
-    if (u.role === 'HQ') return (c.data.hq || []).length;
-    if (u.role === 'Owner') return (c.data.pending || []).length + (c.data.hq || []).length;
+    if (u.role === 'HQ') return (c.data.hq || []).length + (c.data.fixes || []).length;
+    if (u.role === 'Owner') return (c.data.pending || []).length + (c.data.hq || []).length + (c.data.fixes || []).length;
     return 0;
   };
   var peeking = false;
@@ -111,6 +115,7 @@ EA.roomViews = EA.roomViews || {};
       if (can.key) h += '<div class="wk-three"><button type="button" class="wk-big g" data-go="new">+ NEW<small>+ Baru</small></button>' +
         '<button type="button" class="wk-big a" data-go="resigned">RESIGNED<small>Berhenti</small></button>' +
         '<button type="button" class="wk-big r" data-go="absconded">ABSCONDED<small>Lari</small></button></div>';
+      if (can.fix) h += '<div class="actions wk-fixbar"><button type="button" class="btn btn-ghost" data-go="fix">FIX NAME / SEX<small>Betulkan nama / jantina</small></button></div>';
       if ((d.pending || []).length) h += '<div class="card"><h2>' + EA.t('Perlu lulus Pengurus', 'For the manager to approve') + '</h2>' + d.pending.map(function (p) {
         var w = WHAT[p.kind] || WHAT.absconded;
         var dl = p.kind === 'new' ? EA.t('mula ', 'starts ') : p.kind === 'resigned' ? EA.t('hari akhir ', 'last day ') : EA.t('terakhir dilihat ', 'last seen ');
@@ -131,6 +136,14 @@ EA.roomViews = EA.roomViews || {};
           '2. ' + EA.t('Lulus ', 'Approved ') + esc(q.approved ? q.approved.by + ' ' + day(q.approved.at) : '') + (q.approved && q.approved.note ? ' · ' + esc(q.approved.note) : '') + '</span></div>' +
           (can.hq ? '<div class="actions"><button class="btn btn-main" type="button" data-done="' + esc(q.ref) + '">DONE<small>Selesai</small></button></div>' : '<span class="tag-wait">' + EA.t('Menunggu SDK', 'Waiting for SDK') + '</span>') + '</div>';
       }).join('') + '<p class="hint">' + EA.t('Tekan SELESAI bila fail pekerja dan gaji di SDK sudah dikemas kini.', 'Press DONE when the worker file and pay at SDK are updated.') + '</p></div>';
+      if ((d.fixes || []).length) h += '<div class="card"><h2>' + EA.t('Betulkan nama / jantina · semak SDK', 'Name / sex fixes · SDK checks') + '</h2>' + d.fixes.map(function (x) {
+        return '<div class="wk-pend"><div><span class="wk-tag w">' + EA.t('Betulkan', 'Fix') + '</span> <b>' + esc(x.oldName) + '</b><span class="s">' + esc(x.worker) + '</span>' +
+          '<span class="wk-trail">' + (x.oldName !== x.newName ? EA.t('Nama: ', 'Name: ') + esc(x.oldName) + ' → <b>' + esc(x.newName) + '</b><br>' : '') +
+          (x.oldSex !== x.newSex ? EA.t('Jantina: ', 'Sex: ') + esc(sx(x.oldSex)) + ' → <b>' + esc(sx(x.newSex)) + '</b><br>' : '') +
+          EA.t('Dikunci ', 'Keyed ') + esc(x.by) + ' ' + esc(day(x.at)) + '</span><span class="wk-why">' + EA.t('Sebab: ', 'Reason: ') + esc(x.note) + '</span></div>' +
+          (can.hq ? '<div class="actions"><button class="btn btn-ghost" type="button" data-fixno="' + esc(x.ref) + '">REJECT<small>Tolak</small></button>' +
+            '<button class="btn btn-main" type="button" data-fixok="' + esc(x.ref) + '">CORRECT<small>Betul</small></button></div>' : '<span class="tag-wait">' + EA.t('Menunggu SDK', 'Waiting for SDK') + '</span>') + '</div>';
+      }).join('') + '</div>';
       if ((d.flags || []).length) h += '<div class="card"><h2>' + EA.t('Mungkin lari? · dari Staf', 'Maybe absconded? · from the staff') + '</h2>' + d.flags.map(function (f) {
         return '<div class="hrow"><div><b>' + esc(f.name) + '</b><span class="s">' + esc(tDays(f.detail)) + ' · ' + esc(day(f.date)) + '</span></div>' +
           (can.key ? '<button class="btn btn-ghost wk-red-t" type="button" data-flag="' + esc(f.worker) + '">ABSCONDED<small>Kunci lari</small></button>' : '') + '</div>';
@@ -139,6 +152,8 @@ EA.roomViews = EA.roomViews || {};
         var k = label(c), of = c.kind === 'approved' || c.kind === 'rejected' ? c.of : c.kind;
         var dl = c.kind === 'hq_done' || c.kind === 'back' ? '' : of === 'new' ? EA.t('mula ', 'starts ') : of === 'resigned' ? EA.t('hari akhir ', 'last day ') : EA.t('terakhir dilihat ', 'last seen ');
         var nt = c.kind === 'hq_done' ? c.note.split(' ').slice(1).join(' ') : c.note;
+        if (/^fix/.test(c.kind)) dl = '';
+        if (c.fix) nt = (c.fix.from !== c.fix.to ? c.fix.from + ' → ' + c.fix.to : '') + (c.fix.fromSex !== c.fix.toSex ? (c.fix.from !== c.fix.to ? ', ' : '') + sx(c.fix.fromSex) + ' → ' + sx(c.fix.toSex) : '') + (nt ? ' · ' + nt : '');
         return '<div class="hrow"><div><b>' + esc(c.name) + '</b><span class="s">' + esc(c.worker) + (dl ? ' · ' + dl + esc(day(c.day)) : '') + ' · ' + esc(c.by) + (nt ? ' · ' + esc(nt) : '') + '</span></div><span class="wk-tag ' + k[2] + '">' + esc(EA.t(k[0], k[1])) + '</span></div>';
       }).join('') : '<p class="hint">' + EA.t('Belum ada perubahan.', 'No changes yet.') + '</p>') + '</div>';
       var off = (d.people || []).filter(function (p) { return p.state; });
@@ -158,8 +173,11 @@ EA.roomViews = EA.roomViews || {};
       form = { kind: 'absconded', worker: b.dataset.flag, day: lastSeen(f) }; draw(); window.scrollTo(0, 0); }; });
     el.querySelectorAll('[data-ans]').forEach(function (b) { b.onclick = function () { if (b.dataset.ans === '1') answer(b.dataset.w, true, '', b); else rejectSheet(b.dataset.w, b.dataset.k); }; });
     el.querySelectorAll('[data-done]').forEach(function (b) { b.onclick = function () { doneHQ(b.dataset.done, b); }; });
+    el.querySelectorAll('[data-fixok]').forEach(function (b) { b.onclick = function () { fixAnswer(b.dataset.fixok, true, '', b); }; });
+    el.querySelectorAll('[data-fixno]').forEach(function (b) { b.onclick = function () { fixRejectSheet(b.dataset.fixno); }; });
     el.querySelectorAll('[data-back]').forEach(function (b) { b.onclick = function () { backSheet(b.dataset.back); }; });
   }
+  function sx(v) { return v === 'F' ? EA.t('P', 'F') : v === 'M' ? EA.t('L', 'M') : v; }
   function tDays(detail) {
     var ds = String(detail || '').match(/\d{4}-\d{2}-\d{2}/g) || [];
     return EA.t('Tak hadir ', 'Absent ') + (ds.length ? ds.map(day).join(', ') : '3 ' + EA.t('hari', 'days'));
@@ -174,9 +192,20 @@ EA.roomViews = EA.roomViews || {};
 
   function drawForm() {
     var f = form, d = data || {}, people = (d.people || []).filter(function (p) { return p.onMuster && !p.pending; });
-    var T = { new: EA.t('Pekerja baru', 'New hire'), resigned: EA.t('Berhenti', 'Resigned'), absconded: EA.t('Lari', 'Absconded') }[f.kind];
+    var T = { new: EA.t('Pekerja baru', 'New hire'), resigned: EA.t('Berhenti', 'Resigned'), absconded: EA.t('Lari', 'Absconded'), fix: EA.t('Betulkan nama / jantina', 'Fix name / sex') }[f.kind];
     var h = top(T) + '<div class="card">';
-    if (f.kind === 'new') {
+    if (f.kind === 'fix') {
+      var all = (d.people || []).filter(function (p) { return p.onMuster; }), cur = all.find(function (p) { return p.id === f.worker; });
+      var self = d.can && d.can.hq;
+      h += '<div class="field"><label for="wk-who">' + EA.t('Pekerja', 'Worker') + '</label><select id="wk-who" class="text-input"><option value="">— ' + EA.t('pilih', 'pick') + ' —</option>' +
+        all.map(function (p) { return '<option value="' + esc(p.id) + '"' + (f.worker === p.id ? ' selected' : '') + '>' + esc(p.name) + ' · ' + esc(p.id) + '</option>'; }).join('') + '</select></div>' +
+        (cur ? '<p class="hint">' + EA.t('Sekarang: ', 'Now: ') + esc(cur.name) + ' · ' + esc(sx(cur.sex)) + '</p>' : '') +
+        '<div class="field"><label for="wk-name">' + EA.t('Nama betul', 'Correct name') + '</label><input id="wk-name" class="text-input" maxlength="60" autocomplete="off" value="' + esc(f.name || '') + '"></div>' +
+        '<div class="field"><label>' + EA.t('Jantina', 'Sex') + '</label><div class="us-pills"><button type="button" data-sex="M" aria-pressed="' + (f.sex === 'M') + '">L · M</button><button type="button" data-sex="F" aria-pressed="' + (f.sex === 'F') + '">P · F</button></div></div>' +
+        '<div class="field"><label for="wk-note">' + EA.t('Sebab (cth. ejaan salah dalam senarai)', 'Why (e.g. spelt wrong on the list)') + ' *</label><textarea id="wk-note" class="text-input" rows="2" maxlength="200">' + esc(f.note || '') + '</textarea></div>' +
+        '<p class="note-sun">' + (self ? EA.t('Anda HQ: pembetulan terus masuk. Kod pekerja tidak berubah.', 'You are HQ: the fix goes in at once. The worker code does not change.')
+          : EA.t('SDK akan semak dengan fail pekerja dan tekan BETUL. Sehingga itu chit guna nama lama. Kod pekerja tidak berubah.', 'SDK checks it against the worker file and presses CORRECT. Until then the chit shows the old name. The worker code does not change.')) + '</p>';
+    } else if (f.kind === 'new') {
       var gangs = d.gangs && d.gangs.length ? d.gangs : ['Tuai · Harvest', 'Rawatan · Maintenance', 'Muat · Loading', 'Am · General'];
       h += '<div class="field"><label for="wk-name">' + EA.t('Nama penuh', 'Full name') + '</label><input id="wk-name" class="text-input" maxlength="60" autocomplete="off" value="' + esc(f.name || '') + '"></div>' +
         '<div class="field"><label>' + EA.t('Kerja · Gang', 'Job · Gang') + '</label><div class="us-pills" id="wk-gang">' + gangs.map(function (g) {
@@ -202,10 +231,25 @@ EA.roomViews = EA.roomViews || {};
     function grab() { if (el.querySelector('#wk-name')) f.name = v('#wk-name'); if (el.querySelector('#wk-code')) f.code = v('#wk-code'); if (el.querySelector('#wk-who')) f.worker = v('#wk-who'); if (el.querySelector('#wk-note')) f.note = v('#wk-note').trim(); f.day = v('#wk-day') || f.day; }
     el.querySelectorAll('[data-gang]').forEach(function (b) { b.onclick = function () { grab(); f.gang = b.dataset.gang; drawForm(); }; });
     el.querySelectorAll('[data-sex]').forEach(function (b) { b.onclick = function () { grab(); f.sex = b.dataset.sex; drawForm(); }; });
+    if (f.kind === 'fix') el.querySelector('#wk-who').onchange = function () {
+      grab(); var p = (d.people || []).find(function (x) { return x.id === f.worker; });
+      f.name = p ? p.name : ''; f.sex = p ? p.sex : ''; drawForm(); };
     el.querySelector('#wk-go').onclick = async function () {
       grab();
       var btn = this, err = el.querySelector('#wk-err');
       function show(e) { err.textContent = errText(e); err.hidden = false; }
+      if (f.kind === 'fix') {
+        if (!f.worker) return show('pick_worker');
+        if (String(f.name || '').trim().length < 2) return show('bad_name');
+        if (f.sex !== 'M' && f.sex !== 'F') return show('bad_sex');
+        if (String(f.note || '').length < 3) return show('need_reason');
+        btn.disabled = true;
+        var jf = await call('workerFix', { worker: f.worker, name: f.name, sex: f.sex, note: f.note });
+        btn.disabled = false;
+        if (!jf.ok) return show(jf.error);
+        form = null; draw(); window.scrollTo(0, 0);
+        return ui().toast(jf.done === 'fix_ok' ? EA.t('Dibetulkan', 'Fixed') : EA.t('Dihantar · menunggu SDK', 'Sent · waiting for SDK'));
+      }
       if (f.kind === 'new') {
         if (String(f.name || '').trim().length < 2) return show('bad_name');
         if (!f.gang) return show('bad_gang');
@@ -251,6 +295,31 @@ EA.roomViews = EA.roomViews || {};
           if (n.length < 3) { m.textContent = errText('need_reason'); m.hidden = false; return; }
           this.disabled = true;
           var j = await call('workerAnswer', { worker: w, ok: false, note: n });
+          if (!j.ok) { this.disabled = false; m.textContent = errText(j.error); m.hidden = false; return; }
+          ui().closeSheet(); draw(); ui().toast(EA.t('Ditolak · kerani nampak sebabnya', 'Rejected · the clerk sees why'));
+        };
+      });
+  }
+  async function fixAnswer(ref, ok, note, btn) {
+    if (btn) btn.disabled = true;
+    var j = await call('workerFixAnswer', { ref: ref, ok: ok, note: note || '' });
+    if (btn) btn.disabled = false;
+    if (!j.ok) { ui().toast(errText(j.error), 'bad'); return j; }
+    draw(); ui().toast(ok ? EA.t('Betul · nama baru ke semua telefon', 'Correct · the new name goes to every phone') : EA.t('Ditolak · kerani nampak sebabnya', 'Rejected · the clerk sees why'));
+    return j;
+  }
+  function fixRejectSheet(ref) {
+    ui().openSheet('<h2 id="sheet-title">REJECT<small>Tolak</small></h2>' +
+      '<div class="field"><label for="fx-note">' + EA.t('Kenapa ditolak? (cth. nama dalam fail SDK lain)', 'Why rejected? (e.g. the SDK file has another name)') + ' *</label><textarea id="fx-note" class="text-input" rows="2" maxlength="200"></textarea></div>' +
+      '<p class="msg" id="fx-err" hidden></p><div class="actions"><button class="btn btn-ghost btn-back" type="button" id="fx-no">‹ BACK<small>‹ BALIK</small></button>' +
+      '<button class="btn btn-main" type="button" id="fx-ok">SAVE<small>Simpan</small></button></div>',
+      function (s) {
+        s.querySelector('#fx-no').onclick = ui().closeSheet;
+        s.querySelector('#fx-ok').onclick = async function () {
+          var n = s.querySelector('#fx-note').value.trim(), m = s.querySelector('#fx-err');
+          if (n.length < 3) { m.textContent = errText('need_reason'); m.hidden = false; return; }
+          this.disabled = true;
+          var j = await call('workerFixAnswer', { ref: ref, ok: false, note: n });
           if (!j.ok) { this.disabled = false; m.textContent = errText(j.error); m.hidden = false; return; }
           ui().closeSheet(); draw(); ui().toast(EA.t('Ditolak · kerani nampak sebabnya', 'Rejected · the clerk sees why'));
         };

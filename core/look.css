@@ -596,3 +596,7 @@ body:has(#room:not([hidden]) .botbar) .sheet-back:not([hidden]) ~ .toast,
 .ck-warn { background: var(--wait-soft); border-radius: 12px; padding: 9px 11px; margin: 6px 0; font-size: .86rem; }
 .ck-warn b { display: block; color: #7a4a00; }
 .ck-h { margin: 8px 0 2px; font-size: .9rem; color: #7a4a00; }
+
+/* v1.27.2: BALIK at the top of every box (sheet) */
+.sheet-top { position: sticky; top: -20px; z-index: 2; margin: -4px 0 -6px; padding-top: 2px; background: var(--surface); }
+.sheet-top .sheet-x { min-height: 44px; min-width: 96px; font-size: 1rem; }

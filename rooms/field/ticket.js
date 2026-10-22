@@ -43,7 +43,7 @@
   function r3(n) { return Math.round(n * 1000) / 1000; }
   function r2(n) { return Math.round(n * 100) / 100; }
   function sd(iso) { return EA.fh.shortDate(iso); }
-  function mills() { return EA.lists.mills; }
+  function mills() { return EA.lists.millsFor(ctx.estate); }
   function person(id) { var w = EA.lists.worker(id); return w ? w.name : id; }
   function byLot(a, b) { return String(a).localeCompare(String(b), undefined, { numeric: true }); }
 

@@ -61,6 +61,16 @@ const { chromium } = require('playwright');
   check('durian manuring saved with block DR, lot DR-B', q.some(x => x.tab === 'FH_MUSTER' && x.row.block === 'DR') || jobs.some(j => /MAN:DR/.test(j)), jobs.join(' '));
   const txt = await p.evaluate(() => { const c = EA.fh.allChits().slice(-1)[0]; return EA.fh.chitText ? EA.fh.chitText(c) : ''; });
   check('no warning for maintenance at the durian farm; chit text names "Ladang Durian"', !al.some(x => /MAN/.test(x.row.detail)));
+  // v1.32.1: the same name pair answered "ya, betul" is not asked again for 7 days (the gang check still is)
+  check('the answered name pair is remembered', await p.evaluate(() => !!(JSON.parse(localStorage.getItem('fh.okNames') || '{}'))['D1:H1']));
+  await p.evaluate(() => { if (document.querySelector('#sheet-x')) document.querySelector('#sheet-x').click(); });
+  await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('fh.draft2') || '{}'); d.SSGT = { date: (new Date()).toISOString().slice(0, 10), estate: 'SSGT', jobs: [{ key: 'j1', task: 'HA', block: '01', lots: ['1-13'], mandor: '' }], marks: { D1: 'H', H1: 'T', H2: 'H' }, jobOf: { D1: 'j1', H2: 'j1' }, rain_mm: '', rain_time: '', checker: '', replacing: '', nextJob: 2, alertNotes: {}, newChit: true };
+    d.SSGT.date = (function () { const x = new Date(); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); })(); d.SSGT.replacing = JSON.parse(localStorage.getItem('fh.chits2')).slice(-1)[0].chit; localStorage.setItem('fh.draft2', JSON.stringify(d)); });
+  await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(100); await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForTimeout(500);
+  await p.click('#fh-check'); await p.waitForTimeout(300);
+  const sheet2 = await p.innerText('#sheet-back');
+  check('correcting the chit: only the durian check is asked, not the same names again', /Semak dulu · 1/.test(sheet2) && !/Nama hampir sama/.test(sheet2), sheet2.slice(0, 200));
+  await p.click('#ck-back'); await p.waitForTimeout(200);
   // day's work: 1 bunch for one harvester on 1-13
   await p.evaluate(() => { location.hash = 'field-harvest/work'; }); await p.waitForTimeout(600);
   const wk = await p.evaluate(() => typeof EA.fh !== 'undefined');

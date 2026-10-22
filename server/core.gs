@@ -141,12 +141,12 @@ function doPost_(e) {
 // ---- v1.19: read answers remembered for 60 s, shared by everyone asking the same thing ----
 // Any call that may write (save, users, switches, ...) makes a new "generation", so a remembered
 // answer is never older than the last change.
-var READS_ = { crop: 1, workers: 1, mills: 1, ungraded: 1, harvest: 1, trips: 1, people: 1, history: 1, backlog: 1, rounds: 1, adminSummary: 1, adminPhones: 1, adminProblems: 1, adminSwitches: 1 };
+var READS_ = { crop: 1, workers: 1, mills: 1, todo: 1, ungraded: 1, harvest: 1, trips: 1, people: 1, history: 1, backlog: 1, rounds: 1, adminSummary: 1, adminPhones: 1, adminProblems: 1, adminSwitches: 1 };
 var READ_SECONDS = 60;
 function gen_() { return CacheService.getScriptCache().get('gen') || '0'; }
 function newGen_() { try { CacheService.getScriptCache().put('gen', String(Date.now()) + Math.floor(Math.random() * 1000), 21600); } catch (e) {} }
 function readCached_(user, req) {
-  var personal = req.action === 'people' || req.action === 'workers' || req.action === 'mills' || /^admin/.test(String(req.action));
+  var personal = req.action === 'people' || req.action === 'workers' || req.action === 'mills' || req.action === 'todo' || /^admin/.test(String(req.action));
   var key = ['rd', PRACTICE_ ? 'L' : '', req.action, String(req.estate || ''), String(req.month || ''), personal ? user.user_code : '', gen_()].join('|').slice(0, 240);
   var c = CacheService.getScriptCache(), hit = null;
   try { hit = c.get(key); } catch (e) {}
@@ -162,6 +162,7 @@ function doRead_(user, req) {
   if (/^admin/.test(String(req.action))) return adminAction_(user, req);
   if (req.action === 'workers') return workersRead_(user, req);
   if (req.action === 'mills') return millsRead_(user, req);
+  if (req.action === 'todo') return todo_(user, req);
   if (req.action === 'people') {
     if (['Owner', 'HQ', 'Staff', 'Clerk', 'Manager'].indexOf(user.role) < 0) return { ok: false, error: 'not_allowed' };
     return people_(user);
@@ -200,6 +201,7 @@ function doWrite_(user, req) {
   if (/^user/.test(String(req.action)) || req.action === 'testOff') return reply(usersAction_(user, req));
   if (/^worker/.test(String(req.action))) return reply(workersAction_(user, req));
   if (/^mill/.test(String(req.action))) return reply(millsAction_(user, req));
+  if (req.action === 'todoDirect') return reply(todoDirect_(user, req));
   return reply({ ok: false, error: 'unknown_action' });
 }
 
@@ -1768,6 +1770,141 @@ function seedMills() {
   });
   Logger.log('seedMills: ' + n + ' added');
   return n;
+}
+
+// ---------------- v1.31 Perlu tindakan · the home screen's to-do list ----------------
+// Agreed 22 Oct 2026 (Field & Harvest Brief, "B · Perlu tindakan"; Related_Parties.md). One list per person,
+// gathered from what is already keyed; nothing new is keyed except the Pengurus's direction on the staff's
+// explanation. Each line: { id, p (1 red, 2 amber, 3 blue, 4 green), ic, bm, en, sub, go (screen) }.
+// Lines the phone knows better by itself (today's chit, records not sent) are added on the phone.
+var ROUND_LATE_DAYS = 15;        // lists/tasks.js: a lot is ready again after 10 days, late after 15
+var EXPLAIN_KINDS = { grading: 1, ramp: 1, field: 1 };
+function dayDiff_(a, b) { return Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 864e5); }
+function shortD_(iso) { return String(iso || '').slice(8, 10) + '/' + String(iso || '').slice(5, 7); }
+function todo_(user, req) {
+  var est = String(req.estate || ''), r = user.role;
+  if (['Staff', 'Clerk', 'Manager', 'Owner'].indexOf(r) < 0) return { ok: true, estate: est, items: [] };
+  if (user.estates.indexOf(est) < 0) return { ok: false, error: 'not_your_estate' };
+  var today = todayKL_(), yday = daysAgo_(1), items = [];
+  function add(o) { items.push(o); }
+  var alerts = standingRows_('FH_ALERT', est);
+  // Staff explanations (grading, ramp, field) and the Pengurus's direction on them.
+  var explained = alerts.filter(function (a) { return EXPLAIN_KINDS[a.kind] && a.staff_note && String(a.date) >= daysAgo_(14); });
+  function roundLate() {
+    var rd = rounds_(est), lots = (rd.lots || {})[HARVEST_CODE] || {}, byB = {};
+    Object.keys(lots).forEach(function (l) {
+      var d = dayDiff_(lots[l], today);
+      var bk = ('0' + l.split('-')[0]).slice(-2);
+      if (d > ROUND_LATE_DAYS) (byB[bk] = byB[bk] || []).push({ lot: l, d: d });
+    });
+    Object.keys(byB).sort().forEach(function (b) {
+      var xs = byB[b].sort(function (x, y) { return y.d - x.d; });
+      add({ id: 'RL:' + b, p: 2, ic: 'TU', bm: 'Pusingan tuai lewat · Blok ' + b, en: 'Harvest round late · Block ' + b,
+        sub: xs.slice(0, 4).map(function (x) { return 'petak ' + x.lot + ' (' + x.d + ' hari)'; }).join(', ') + (xs.length > 4 ? ' +' + (xs.length - 4) : ''), go: '#field-harvest/work' });
+    });
+  }
+  function rampOld() {
+    var b = backlog(est), rp = b.ramp || {};
+    if (rp.bunches && rp.since && rp.since < yday) add({ id: 'RP:' + rp.since, p: 2, ic: 'LR', bm: rp.bunches + ' tandan di ramp sejak ' + shortD_(rp.since), en: rp.bunches + ' bunches on the ramp since ' + shortD_(rp.since),
+      sub: (rp.blocks || []).map(function (x) { return 'Blk ' + x.block + ' ' + x.bunches; }).join(', ') || 'Buat lori & DN', go: '#field-harvest/collect' });
+    return b;
+  }
+  if (r === 'Staff') {
+    var bl = rampOld();
+    (bl.grading || []).forEach(function (g) { add({ id: 'GR:' + g.ticket_no, p: 2, ic: 'GR', bm: 'Gred kilang lemah · tiket ' + g.ticket_no, en: 'Poor mill grading · ticket ' + g.ticket_no,
+      sub: g.flag + ' · terangkan dalam chit pagi', go: '#field-harvest' }); });
+    roundLate();
+    alerts.forEach(function (a) {
+      if (!a.direction || String(a.keyed_at).slice(0, 10) < daysAgo_(2)) return;
+      add({ id: 'DR:' + a.id, p: 4, ic: 'AR', bm: 'Arahan ' + (a.direction_by || 'Pengurus') + ': ' + a.direction, en: 'Direction: ' + a.direction, sub: 'Untuk: ' + String(a.detail || '').slice(0, 80), go: '' });
+    });
+  }
+  if (r === 'Clerk') {
+    var wk = workersRead_(user, { estate: est });
+    (wk.flags || []).forEach(function (f) { add({ id: 'FL:' + f.worker, p: 2, ic: 'PK', bm: f.name + ' – mungkin lari?', en: f.name + ' – maybe absconded?', sub: 'Dari ' + f.by + ' · ' + shortD_(f.date), go: '#workers' }); });
+    (wk.pending || []).forEach(function (q) {
+      if (dayDiff_(String(q.at).slice(0, 10), today) < 2) return;
+      add({ id: 'WT:' + q.worker, p: 2, ic: 'PK', bm: 'Menunggu Pengurus lebih 2 hari: ' + q.name, en: 'Waiting for the manager over 2 days: ' + q.name, sub: 'Dikunci ' + shortD_(q.at) + ' · ingatkan Encik Samsir', go: '#workers' });
+    });
+    (wk.changes || []).forEach(function (c) {
+      if ((c.kind !== 'rejected' && c.kind !== 'not_absconded' && c.kind !== 'fix_no') || String(c.at).slice(0, 10) < daysAgo_(3)) return;
+      add({ id: 'RJ:' + c.id, p: 2, ic: 'PK', bm: 'Ditolak: ' + c.name, en: 'Rejected: ' + c.name, sub: 'Sebab: ' + c.note + ' · ' + c.by, go: '#workers' });
+    });
+    try {
+      (millsRead_(user, { estate: est }).requests || []).forEach(function (q) {
+        var last = q.steps[q.steps.length - 1];
+        if (q.state === 'rejected' && last.at.slice(0, 10) >= daysAgo_(3)) add({ id: 'MR:' + q.ref, p: 2, ic: 'KL', bm: 'Kilang ditolak: ' + q.name, en: 'Mill rejected: ' + q.name, sub: 'Sebab: ' + last.note, go: '#mills' });
+      });
+    } catch (e) {}
+    (ungraded_(est).tickets || []).forEach(function (t) { add({ id: 'UG:' + t.ticket_no, p: 3, ic: 'TK', bm: 'Tiket ' + t.ticket_no + ' belum ada gred', en: 'Ticket ' + t.ticket_no + ' has no grading', sub: shortD_(t.date) + ' · ' + t.mill, go: '#field-harvest/ticket' }); });
+    (openTrips(est).trips || []).forEach(function (t) {
+      if (String(t.date) >= today) return;
+      add({ id: 'DN:' + t.trip, p: 3, ic: 'DN', bm: 'DN ' + (t.dn || '—') + ' belum ada tiket kilang', en: 'DN ' + (t.dn || '—') + ' has no mill ticket', sub: 'Lori ' + shortD_(t.date) + ' · ' + t.mill + ' · ' + t.bunches + ' tandan', go: '#field-harvest/ticket' });
+    });
+    var ck = alerts.filter(function (a) { return a.kind === 'check' && String(a.date) >= yday; });
+    if (ck.length) add({ id: 'CK:' + today, p: 1, ic: '!', bm: ck.length + ' amaran "Semak dulu" disimpan juga', en: ck.length + ' "check first" warnings saved anyway',
+      sub: ck.slice(0, 2).map(function (a) { return String(a.detail).slice(0, 60); }).join(' · ') + ' · semak dengan Staf', go: '#field-harvest/history' });
+  }
+  if (r === 'Manager') {
+    (workersRead_(user, { estate: est }).pending || []).forEach(function (q) {
+      var w = { new: 'Pekerja baru', resigned: 'Berhenti', absconded: 'Lari' }[q.kind] || q.kind;
+      add({ id: 'AP:' + q.worker, p: q.kind === 'absconded' ? 1 : 2, ic: 'PK', bm: w + ': ' + q.name, en: 'To approve: ' + q.name, sub: 'Sebab: ' + q.note + ' · LULUS / TOLAK', go: '#workers' });
+    });
+    explained.forEach(function (a) {
+      if (a.direction) return;
+      add({ id: 'DI:' + a.id, p: 2, ic: 'AR', bm: 'Beri arahan: ' + String(a.detail || '').slice(0, 60), en: 'Give direction on the staff\'s explanation', sub: 'Staf: ' + String(a.staff_note).slice(0, 90), go: 'direct', ref: a.id });
+    });
+    rampOld();
+    roundLate();
+  }
+  if (r === 'Owner') {
+    var wo = workersRead_(user, { estate: est });
+    (wo.hq || []).forEach(function (q) { add({ id: 'HQ:' + q.ref, p: 2, ic: 'PK', bm: 'SELESAI: ' + q.name + ' (' + ({ new: 'baru', resigned: 'berhenti', absconded: 'lari' }[q.kind] || q.kind) + ')', en: 'SDK done: ' + q.name,
+      sub: 'Lulus ' + (q.approved ? q.approved.by + ' ' + shortD_(q.approved.at) : '') + ' · tugas SDK', go: '#workers' }); });
+    (wo.fixes || []).forEach(function (x) { add({ id: 'FX:' + x.ref, p: 2, ic: 'PK', bm: 'Betulkan nama: ' + x.oldName, en: 'Name fix: ' + x.oldName, sub: '→ ' + x.newName + ' · dari ' + x.by + ' · BETUL / TOLAK', go: '#workers' }); });
+    try {
+      (millsRead_(user, { estate: est }).requests || []).forEach(function (q) {
+        if (q.state !== 'request' && q.state !== 'checked') return;
+        add({ id: 'ML:' + q.ref, p: 2, ic: 'KL', bm: 'Kilang baru: ' + q.name, en: 'New mill: ' + q.name, sub: 'Sebab: ' + q.note + ' · ' + (q.state === 'request' ? 'SEMAK' : 'LULUS · BUKA'), go: '#mills' });
+      });
+    } catch (e) {}
+    (wo.pending || []).forEach(function (q) {
+      if (dayDiff_(String(q.at).slice(0, 10), today) < 2) return;
+      add({ id: 'ST:' + q.worker, p: 1, ic: '!', bm: 'Tersangkut: ' + q.name + ' menunggu Pengurus', en: 'Stuck: waiting for the manager', sub: 'Sejak ' + shortD_(q.at) + ' (' + dayDiff_(String(q.at).slice(0, 10), today) + ' hari)', go: '#workers' });
+    });
+    var nd = explained.filter(function (a) { return !a.direction && dayDiff_(String(a.keyed_at).slice(0, 10), today) >= 2; });
+    if (nd.length) add({ id: 'SD:' + today, p: 1, ic: '!', bm: 'Tersangkut: ' + nd.length + ' penjelasan Staf belum diberi arahan', en: 'Stuck: staff explanations with no direction', sub: 'Lebih 2 hari · Pengurus', go: '' });
+    try {
+      var ph = adminPhones_(), late = ph.phones.filter(function (x) { return /^(Staff|Clerk|Manager)$/.test(x.role) && (!x.seen || String(x.seen.at).slice(0, 10) < daysAgo_(2)); });
+      if (late.length) add({ id: 'PH:' + today, p: 3, ic: 'TF', bm: late.length + ' telefon tidak hantar lebih 2 hari', en: late.length + ' phones not sent for over 2 days', sub: late.slice(0, 3).map(function (x) { return x.name + ' ' + x.phone; }).join(', '), go: '#admin' });
+      var pr = adminProblems_();
+      if (pr.fresh) add({ id: 'PE:' + today, p: 3, ic: 'TF', bm: pr.fresh + ' masalah telefon baru', en: pr.fresh + ' new phone problems', sub: 'Lihat Pentadbir · Masalah', go: '#admin' });
+    } catch (e) {}
+  }
+  items.sort(function (a, b) { return a.p - b.p; });
+  return { ok: true, estate: est, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), items: items };
+}
+// The Pengurus (or the Owner) gives direction on a staff explanation: a new alert line replaces the old one.
+function todoDirect_(user, req) {
+  if (user.role !== 'Manager' && user.role !== 'Owner') return { ok: false, error: 'not_allowed' };
+  var est = String(req.estate || ''), id = String(req.ref || ''), dir = String(req.direction || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (user.estates.indexOf(est) < 0) return { ok: false, error: 'not_your_estate' };
+  if (dir.length < 3) return { ok: false, error: 'need_reason' };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (e) { return { ok: false, error: 'busy' }; }
+  try {
+    ROWS_MEMO_ = null;
+    var a = standingRows_('FH_ALERT', est).find(function (x) { return x.id === id; });
+    if (!a || !EXPLAIN_KINDS[a.kind]) return { ok: false, error: 'nothing_waiting' };
+    if (a.direction) return { ok: false, error: 'already' };
+    var ss = book_(), sh = roomTab_(ss, 'FH_ALERT'), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), un = '';
+    try { readUsers_().list.forEach(function (u) { if (u.user_code === user.user_code) un = String(u.name).replace(/^'/, ''); }); } catch (e) {}
+    var row = Object.assign({}, a, { id: 'AD-' + est + '-' + now.replace(/\D/g, '') + '-' + Math.random().toString(36).slice(2, 6), keyed_by: user.user_code, keyed_at: now,
+      phone: String(req.phone || ''), status: 'active', replaces: a.id, received_at: now, direction: dir, direction_by: un || user.user_code });
+    sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); }));
+    return Object.assign(todo_(user, { estate: est }), { done: 'direction' });
+  } finally { lock.releaseLock(); }
 }
 
 // ---------------- v1.26 Rekod: the month's crop in detail, like the estate's Excel ----------------

@@ -28,8 +28,9 @@ const fs = require('fs'); const vm = require('vm');
   await p.click('.today-card'); await p.waitForTimeout(300);
   const day = await p.innerText('#room');
   check('one day opened: one page, back button, still view only', /BALIK/.test(day) && /LIHAT SAHAJA/.test(day) && /hadir/.test(day));
-  const keyBtns = await p.$$eval('#room button', a => a.map(x => x.innerText).filter(t => /SIMPAN|SAVE|BETULKAN|CORRECT/i.test(t)));
-  check('one day opened: no save or correct buttons', keyBtns.length === 0, keyBtns.join(' | '));
+  // v1.32: the clerk may only ASK the staff to fix a chit (MINTA BETULKAN CHIT); she cannot save or correct it herself.
+  const keyBtns = await p.$$eval('#room button', a => a.map(x => x.innerText).filter(t => /SIMPAN|SAVE|BETULKAN|CORRECT/i.test(t) && !/MINTA|ASK TO FIX/i.test(t)));
+  check('one day opened: no save or correct buttons (only "ask to fix")', keyBtns.length === 0, keyBtns.join(' | '));
   for (const h of ['field-harvest/work', 'field-harvest/collect']) {
     await p.evaluate(x => { location.hash = x; }, h); await p.waitForTimeout(300);
     check('clerk going to #' + h + ' sees Operasi, not a keying screen', /Operasi/.test(await p.textContent('#room h1')) && !(await p.locator('#wk-check, #cl-save, #fh-check').count()));

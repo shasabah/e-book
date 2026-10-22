@@ -26,7 +26,7 @@
   function saved() { var from = EA.dayAgo(40); return EA.local.get(K.saved, []).filter(function (s) { return s.date >= from; }); }
   function todays() { return saved().filter(function (s) { return s.estate === ctx.estate && s.date === EA.today(); }); }
   function blank() { return { v: 22, date: EA.today(), estate: ctx.estate, lots: {}, dispatch: blankDis() }; }
-  function blankDis() { return { on: false, lot: {}, extra: {}, lorry: '', mill: EA.lists.mills[0], dn: '', driver: '', ramp_cleared: '', replacing: '' }; }
+  function blankDis() { return { on: false, lot: {}, extra: {}, lorry: '', mill: EA.lists.millsFor(ctx.estate)[0], dn: '', driver: '', ramp_cleared: '', replacing: '' }; }
   function sumOf(o) { return Object.keys(o || {}).reduce(function (a, b) { return a + num(o[b]); }, 0); }
   function loadDraft() {
     var all = EA.local.get(K.draft, {}), d = all[ctx.estate];
@@ -134,7 +134,7 @@
         '<div class="field"><label for="cl-lr"><span class="bm">No. lori</span><span class="en">Lorry number</span></label><input id="cl-lr" class="text-input" value="' + esc(d.lorry) + '"></div>' +
         '<div class="field"><label for="cl-dr"><span class="bm">Pemandu</span><span class="en">Driver</span></label><input id="cl-dr" class="text-input" value="' + esc(d.driver) + '"></div>' +
         '<div class="field"><label for="cl-ml"><span class="bm">Kilang</span><span class="en">Mill or collecting centre</span></label><select id="cl-ml" class="text-input">' +
-          EA.lists.mills.concat(['Lain-lain · Other']).map(function (m) { return '<option' + (m === d.mill ? ' selected' : '') + '>' + esc(m) + '</option>'; }).join('') + '</select></div>' +
+          EA.lists.millsFor(ctx.estate).concat(['Lain-lain · Other']).map(function (m) { return '<option' + (m === d.mill ? ' selected' : '') + '>' + esc(m) + '</option>'; }).join('') + '</select></div>' +
       '</div>' +
       '<label class="inline-check"><input type="checkbox" id="cl-rc"' + (d.ramp_cleared === 'Y' ? ' checked' : '') + '> ' + EA.t('Ramp kosong selepas lori ini', 'Ramp empty after this lorry') + '</label>' +
       '</section>' : '') +

@@ -36,7 +36,8 @@
   function loadDraft() {
     var all = EA.local.get(K.draft, {});
     var d = all[ctx.estate];
-    if (!d || d.date !== EA.today()) return blankDraft();
+    // v1.32: a correction of a past chit (asked by the clerk) stays a draft while that chit is within 3 days.
+    if (!d || (d.date !== EA.today() && !(d.fixAsk && d.date >= EA.dayAgo(3)))) return blankDraft();
     // A draft saved by an older version may lack newer parts (e.g. alert notes): fill them in.
     var b = blankDraft(); Object.keys(b).forEach(function (k) { if (d[k] == null) d[k] = b[k]; });
     return d;
@@ -49,6 +50,8 @@
     return EA.local.get(K.chits, []).filter(function (c) { return c.date >= keepFrom; });
   }
   function todaysChits() { return chits().filter(function (c) { return c.estate === ctx.estate && c.date === EA.today(); }); }
+  function chitsOn(d) { return chits().filter(function (c) { return c.estate === ctx.estate && c.date === d; }); }
+  function isPast() { return !!(draft && draft.date && draft.date !== EA.today()); }
   function keepChit(c) { var list = chits().filter(function (x) { return x.chit !== c.chit; }); list.push(c); EA.local.set(K.chits, list); }
   function newChitId() {
     var day = EA.today().replace(/-/g, '');
@@ -82,7 +85,7 @@
   }
   function onOtherChit() {
     var taken = {};
-    todaysChits().forEach(function (c) { if (c.chit !== draft.replacing) c.rows.forEach(function (r) { if (r.status !== 'removed') taken[r.worker_id] = c.chit; }); });
+    chitsOn(draft.date || EA.today()).forEach(function (c) { if (c.chit !== draft.replacing) c.rows.forEach(function (r) { if (r.status !== 'removed') taken[r.worker_id] = c.chit; }); });
     return taken;
   }
   function blockOptions(selected, optional, code) {
@@ -456,6 +459,7 @@
     return { note: def || '', carried: false };
   }
   function alertSection() {
+    if (isPast()) return '';                 // v1.32: a past chit keeps the alerts it had
     var list = alertsFrom(getBacklog(ctx.estate));
     if (!list.length) return '';
     return '<section class="card alert-card" id="fh-alerts" aria-labelledby="fh-s0"><h2 id="fh-s0"><span class="step">!</span><span class="inline"><span class="bm">Amaran</span> · <span class="en">Alerts for the Assistant Manager</span></span></h2>' +
@@ -475,6 +479,7 @@
     keepDraft();
   }
   function chitAlerts() {
+    if (isPast()) { var o = chits().find(function (c) { return c.chit === draft.replacing; }); return o ? (o.alerts || []) : []; }
     return alertsFrom(getBacklog(ctx.estate)).map(function (a) {
       return { key: a.key, kind: a.kind, block: a.block, lot: a.lot, ref: a.ref || '', detail: a.detail, text: a.bm, note: String(alertNote(a.key, a.def).note || '').trim() };
     });
@@ -516,6 +521,15 @@
       };
       return;
     }
+    // v1.32: opened from "Perlu tindakan": the clerk asked to fix a past chit.
+    var go = EA.local.get('fh.fixGo', null);
+    if (go && go.estate === ctx.estate) {
+      EA.local.del('fh.fixGo');
+      var fc = chits().find(function (x) { return x.estate === ctx.estate && x.chit === go.chit; });
+      if (fc && fc.date >= EA.dayAgo(3)) { startFix(fc, { ref: go.ref, note: go.note, by: go.by }); return; }
+      el.innerHTML = head + '<div class="card"><p class="warn">' + EA.t('Chit ini tiada di telefon ini (atau lebih 3 hari). Beritahu kerani.', 'This chit is not on this phone (or is over 3 days old). Tell the clerk.') + '</p></div>' + todayCard();
+      wireCommon(); return;
+    }
     var started = draft.jobs.length || Object.keys(draft.marks).length || draft.replacing || draft.newChit;
     if (todaysChits().length && !started) {
       el.innerHTML = head +
@@ -527,10 +541,11 @@
       wireCommon(); wireBacklog(el, ctx.estate); refreshBacklog(ctx.estate);
       return;
     }
-    var d = new Date();
+    var d = isPast() ? new Date(draft.date + 'T00:00:00') : new Date();
     el.innerHTML = head +
       (d.getDay() === 0 ? '<p class="warn"><span class="bm">Hari Ahad: kerja perlu kelulusan Penolong Pengurus sebelum dikira untuk gaji.</span><span class="en">Sunday: work needs the Assistant Manager\'s approval before it counts for pay.</span></p>' : '') +
-      (draft.replacing ? '<p class="warn"><span class="bm">Membetulkan chit ' + esc(draft.replacing) + '. Chit lama kekal; yang baru menggantikannya.</span><span class="en">Correcting chit ' + esc(draft.replacing) + '. The old one stays on record; this one replaces it.</span></p>' : '') +
+      (draft.fixAsk ? '<p class="warn"><b>' + EA.t('Membetulkan chit ', 'Fixing the chit of ') + esc(niceDate(draft.date)) + EA.t(' atas permintaan ', ' as asked by ') + esc(draft.fixAsk.by) + ':</b> "' + esc(draft.fixAsk.note) + '"</p>' : '') +
+      (draft.replacing && !draft.fixAsk ? '<p class="warn"><span class="bm">Membetulkan chit ' + esc(draft.replacing) + '. Chit lama kekal; yang baru menggantikannya.</span><span class="en">Correcting chit ' + esc(draft.replacing) + '. The old one stays on record; this one replaces it.</span></p>' : '') +
 
       backlogCard(ctx.estate) + '<div id="fh-alert-slot">' + alertSection() + '</div>' +
       '<section class="card" aria-labelledby="fh-s1"><h2 id="fh-s1"><span class="step">1</span><span class="inline"><span class="bm">Kerja hari ini</span> · <span class="en">Today\'s jobs</span></span></h2>' +
@@ -866,7 +881,7 @@
     var twice = rows.filter(function (r) { return taken[r.worker_id]; }).map(function (r) { return r.worker_id; });
     if (twice.length) p.push(['Sudah dalam chit lain: ' + twice.join(', '), 'Already on another chit: ' + twice.join(', ')]);
     if (!draft.alertNotes) draft.alertNotes = {};
-    var noNote = chitAlerts().filter(function (a) { return !a.note; });
+    var noNote = isPast() ? [] : chitAlerts().filter(function (a) { return !a.note; });
     if (noNote.length) p.push(['Tulis apa berlaku untuk setiap amaran (' + noNote.length + ' belum).', 'Say what happened for each alert (' + noNote.length + ' not done).']);
     return p;
   }
@@ -997,7 +1012,7 @@
   }
 
   function buildChit(chitId, confirmedAt, checker) {
-    return { chit: chitId, date: EA.today(), estate: ctx.estate, rows: draftRows(), jobs: JSON.parse(JSON.stringify(draft.jobs)),
+    return { chit: chitId, date: draft.date || EA.today(), estate: ctx.estate, rows: draftRows(), jobs: JSON.parse(JSON.stringify(draft.jobs)),
              rain_mm: draft.rain_mm, rain_time: draft.rain_time, checker: checker, confirmedAt: confirmedAt,
              backlog: getBacklog(ctx.estate), alerts: chitAlerts(),
              keyedBy: ctx.user.code, keyedName: ctx.user.name, rev: 1 };
@@ -1005,9 +1020,11 @@
 
   function save() {
     var confirmedAt = EA.ui.hhmm(new Date());
-    var old = draft.replacing ? todaysChits().find(function (c) { return c.chit === draft.replacing; }) : null;
+    var old = draft.replacing ? chits().find(function (c) { return c.estate === ctx.estate && c.chit === draft.replacing; }) : null;
     var c = buildChit(old ? old.chit : newChitId(), confirmedAt, draft.checker);
     if (old) c.rev = (old.rev || 1) + 1;
+    if (old && isPast()) { c.backlog = old.backlog; c.alerts = old.alerts || []; }
+    var fixAsk = draft.fixAsk || null;
     var stamp = c.date + ' ' + confirmedAt;
     try {
       EA.batchStart();
@@ -1018,13 +1035,13 @@
         if (o && o.muster === r.muster && o.task_code === r.task_code && o.block === r.block && o.lots === r.lots && o.mandor === r.mandor) {
           r.id = o.id; delete oldBy[r.worker_id]; return;           // unchanged: the old row still stands
         }
-        r.id = EA.save(TAB, ROOM, ctx.estate, { chit: c.chit, block: r.block, lots: r.lots, mandor: r.mandor, worker_id: r.worker_id,
+        r.id = EA.save(TAB, ROOM, ctx.estate, { date: c.date, chit: c.chit, block: r.block, lots: r.lots, mandor: r.mandor, worker_id: r.worker_id,
           task_code: r.task_code, muster: r.muster, confirmed_by: c.checker, confirmed_at: stamp, note: '' }, o ? o.id : '').id;
         delete oldBy[r.worker_id];
       });
       Object.keys(oldBy).forEach(function (w) {                       // taken off in a correction: a 'removed' row
         var o = oldBy[w];
-        EA.save(TAB, ROOM, ctx.estate, { chit: c.chit, block: o.block, lots: o.lots, mandor: o.mandor, worker_id: o.worker_id,
+        EA.save(TAB, ROOM, ctx.estate, { date: c.date, chit: c.chit, block: o.block, lots: o.lots, mandor: o.mandor, worker_id: o.worker_id,
           task_code: o.task_code, muster: o.muster, confirmed_by: c.checker, confirmed_at: stamp, note: 'removed in correction' }, o.id, 'removed');
       });
       var oldAl = {};
@@ -1033,24 +1050,29 @@
         var o = oldAl[a.key];
         delete oldAl[a.key];
         if (o && o.note === a.note) { a.id = o.id; return; }
-        a.id = EA.save(TAB_ALERT, ROOM, ctx.estate, { chit: c.chit, kind: a.kind, block: a.block, lot: a.lot, detail: a.detail,
+        a.id = EA.save(TAB_ALERT, ROOM, ctx.estate, { date: c.date, chit: c.chit, kind: a.kind, block: a.block, lot: a.lot, detail: a.detail,
           staff_note: a.note, direction: '', direction_by: '', ref: a.ref || '' }, o ? o.id : '').id;
       });
       Object.keys(oldAl).forEach(function (k) {
         var o = oldAl[k];
-        EA.save(TAB_ALERT, ROOM, ctx.estate, { chit: c.chit, kind: o.kind, block: o.block, lot: o.lot, detail: o.detail,
+        EA.save(TAB_ALERT, ROOM, ctx.estate, { date: c.date, chit: c.chit, kind: o.kind, block: o.block, lot: o.lot, detail: o.detail,
           staff_note: o.note, direction: '', direction_by: '', ref: o.ref || '' }, o.id, 'removed');
       });
       // v1.27: warnings the staff saved anyway go to the clerk (kind "check").
       (draft.checks || []).forEach(function (k) {
         if ((old && (old.checks || []).indexOf(k.key) >= 0)) return;
-        EA.save(TAB_ALERT, ROOM, ctx.estate, { chit: c.chit, kind: 'check', block: '', lot: '', detail: k.bm, staff_note: EA.t('Ya, betul (disimpan juga)', 'Yes, right (saved anyway)'), direction: '', direction_by: '', ref: k.ref || '' });
+        EA.save(TAB_ALERT, ROOM, ctx.estate, { date: c.date, chit: c.chit, kind: 'check', block: '', lot: '', detail: k.bm, staff_note: EA.t('Ya, betul (disimpan juga)', 'Yes, right (saved anyway)'), direction: '', direction_by: '', ref: k.ref || '' });
       });
       c.checks = (draft.checks || []).map(function (k) { return k.key; }).concat(old && old.checks ? old.checks : []);
       var s = summary(c.rows);
-      c.chitRowId = EA.save(TAB_CHIT, ROOM, ctx.estate, { chit: c.chit, rain_mm: c.rain_mm, rain_time: c.rain_time,
+      c.chitRowId = EA.save(TAB_CHIT, ROOM, ctx.estate, { date: c.date, chit: c.chit, rain_mm: c.rain_mm, rain_time: c.rain_time,
         working: s.tot(s.worked), not_working: s.tot(s.notw), grand_total: s.tot(s.grand),
         confirmed_by: c.checker, confirmed_at: stamp, note: '' }, old && old.chitRowId ? old.chitRowId : '').id;
+      // v1.32: the clerk asked for this fix: tell the office it is done, with what changed.
+      if (fixAsk && old) {
+        var ch = diffRows(old.rows, c.rows).map(function (x) { return person(x.w) + (x.kind === 'move' ? ': ' + (x.from.muster || '') + ' → ' + (x.muster || '') : x.kind === 'add' ? ' +' : ' −'); }).join(', ');
+        EA.save(TAB_ALERT, ROOM, ctx.estate, { date: c.date, chit: c.chit, kind: 'fixdone', block: '', lot: '', detail: ch || EA.t('Tiada perubahan pekerja', 'No worker changes'), staff_note: '', direction: '', direction_by: '', ref: fixAsk.ref });
+      }
       EA.batchEnd();
     } catch (e) {
       EA.batchCancel();
@@ -1192,7 +1214,14 @@
       b.onclick = function () {
         var c = todaysChits().find(function (x) { return x.chit === b.dataset.fix; });
         if (!c) return;
+        startFix(c, null);
+      };
+    });
+  }
+  // A correction draft from a saved chit (today's, or v1.32 a past one the clerk asked to fix).
+  function startFix(c, ask) {
         var d = blankDraft();
+        if (ask) { d.date = c.date; d.fixAsk = ask; }
         d.alertNotes = {}; (c.alerts || []).forEach(function (a) { d.alertNotes[a.key] = a.note; });
         d.replacing = c.chit; d.rain_mm = c.rain_mm; d.rain_time = c.rain_time; d.checker = c.checker;
         d.jobs = JSON.parse(JSON.stringify(c.jobs || []));
@@ -1207,8 +1236,6 @@
           d.jobOf[r.worker_id] = j.key;
         });
         draft = d; keepDraft(); render(el, ctx); window.scrollTo(0, 0);
-      };
-    });
   }
 
   EA.roomViews['field-harvest'] = { render: render, chitText: chitText, summary: summary };

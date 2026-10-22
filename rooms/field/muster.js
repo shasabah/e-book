@@ -971,9 +971,13 @@
     // A name part many people share (a family name, "Contoh") is not a sign of a wrong tap.
     var all = people.map(function (w) { return nameParts(w.name); });
     function common(x) { return all.filter(function (ps) { return ps.some(function (y) { return alike(x, y); }); }).length > 5; }
+    // v1.32.1: a pair the staff already answered "ya, betul" in the last 7 days is not asked again
+    // (e.g. the Hendra names at Sugut, asked every day while Hendra B. Muhammad is on leave).
+    var okPairs = EA.local.get('fh.okNames', {}) || {}, since = EA.dayAgo(7);
     on.forEach(function (a) {
       var pa = nameParts(a.name).filter(function (x) { return !common(x); });
       off.forEach(function (b) {
+        if (okPairs[a.id + ':' + b.id] && okPairs[a.id + ':' + b.id] >= since) return;
         var pb = nameParts(b.name), hit = pa.find(function (x) { return pb.some(function (y) { return alike(x, y); }); });
         if (hit) out.push({ key: 'C:name:' + a.id + ':' + b.id, ref: a.id + ' ' + b.id, bm: EA.t('Nama hampir sama: ', 'Names nearly the same: ') + a.name + ' (H) · ' + b.name + ' (' + draft.marks[b.id] + ')',
           en: EA.t('Tidak tersalah tekan?', 'Not a wrong tap?') });
@@ -996,7 +1000,12 @@
     if (!checked) {
       var cks = chitChecks();
       draft.checks = [];
-      if (cks.length) { checkSheet(cks, function () { draft.checks = cks; keepDraft(); confirmSheet(true); }); return; }
+      if (cks.length) { checkSheet(cks, function () {
+        var ok = EA.local.get('fh.okNames', {}) || {}, t = EA.today(), keep = {}, since = EA.dayAgo(7);
+        Object.keys(ok).forEach(function (k) { if (ok[k] >= since) keep[k] = ok[k]; });
+        cks.forEach(function (k) { if (/^C:name:/.test(k.key)) keep[k.key.slice(7)] = t; });
+        EA.local.set('fh.okNames', keep);
+        draft.checks = cks; keepDraft(); confirmSheet(true); }); return; }
     }
     var empty = emptyJobs();
     var preview = chitText(buildChit('(' + EA.t('belum disimpan', 'not saved yet') + ')', EA.ui.hhmm(new Date()), ctx.user.code));

@@ -27,9 +27,11 @@
   }
 
   function openSheet(html, onReady) {
-    $('sheet').innerHTML = html;
+    // v1.27.2: every box that opens over a screen has its own BALIK at the top (the phone app has no browser back).
+    $('sheet').innerHTML = '<div class="sheet-top"><button type="button" class="back-btn sheet-x" id="sheet-x">‹ BACK<small>‹ BALIK</small></button></div>' + html;
     $('sheet-back').hidden = false;
-    var first = $('sheet').querySelector('input, button');
+    $('sheet-x').onclick = closeSheet;
+    var first = $('sheet').querySelector('input, button:not(.sheet-x)');
     if (first) first.focus();
     if (onReady) onReady($('sheet'));
   }

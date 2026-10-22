@@ -1415,32 +1415,38 @@ function setupLiveSheet() {
 }
 
 
-// ---------------- v1.25 Pekerja masuk & keluar · worker changes ----------------
-// The clerk keys new hires, resignations and absconded workers; the staff only raises an absconded
-// worker from the muster (an FH_ALERT line, kind absent3); the Pengurus approves an absconded worker
-// before he leaves the muster; HQ sees every change. Only name, job, gang, sex, worker code and dates
-// (Rule 8). Nothing is deleted: each change is a new WORKER_LOG line.
-var WORKER_KINDS = ['new', 'resigned', 'absconded', 'approved', 'not_absconded', 'back'];
+// ---------------- v1.25 / v1.28 Pekerja masuk & keluar · worker changes ----------------
+// Related parties (Related_Parties.md, 22 Oct 2026): the clerk keys new hire, resigned and absconded, each
+// with a reason (absconded: the staff's explanation); the Pengurus approves (LULUS) or rejects (TOLAK, with
+// why); after approval HQ (SDK) sees the whole trail and presses SELESAI when its part is done. Only name,
+// job, gang, sex, worker code and dates (Rule 8). Nothing is deleted: each step is a new WORKER_LOG line.
+// kind: new, resigned, absconded (the change, waiting) · approved, rejected (the Pengurus) · hq_done (HQ)
+// · back (a mistake undone). not_absconded is the 1.25 word for rejected.
+var WORKER_KINDS = ['new', 'resigned', 'absconded', 'approved', 'rejected', 'not_absconded', 'hq_done', 'back'];
 function workerRows_(estate) {
   return readRows_('WORKER_LOG', estate).standing.slice().sort(function (a, b) { return String(a.keyed_at) < String(b.keyed_at) ? -1 : String(a.keyed_at) > String(b.keyed_at) ? 1 : 0; });
 }
-// Where each worker stands now: { kind: 'resigned'|'absconded'|'gone'|'', day, pending, line }.
+// Where each worker stands now: kind '' (normal), new, resigned, absconded, gone (absconded, approved),
+// refused (new hire rejected); pending = waiting for the Pengurus; line = the waiting change.
 function workerStates_(estate) {
   var st = {};
   workerRows_(estate).forEach(function (r) {
     var w = String(r.worker_id), k = String(r.kind), o = st[w] || (st[w] = { kind: '', day: '', pending: false, start: '' });
-    if (k === 'new') o.start = String(r.day);
-    else if (k === 'resigned') { o.kind = 'resigned'; o.day = String(r.day); o.pending = false; o.line = r.id; }
-    else if (k === 'absconded') { o.kind = 'absconded'; o.day = String(r.day); o.pending = true; o.line = r.id; o.by = r.keyed_by; o.at = r.keyed_at; }
-    else if (k === 'approved' && o.kind === 'absconded') { o.kind = 'gone'; o.pending = false; o.answered = r.keyed_by; }
-    else if (k === 'not_absconded' || k === 'back') { o.kind = ''; o.day = ''; o.pending = false; }
+    if (k === 'new' || k === 'resigned' || k === 'absconded') {
+      o.kind = k; o.day = String(r.day); o.pending = true; o.line = r; if (k === 'new') o.start = String(r.day);
+    } else if (k === 'approved' && o.pending) {
+      o.pending = false; o.approved = r;
+      if (o.kind === 'absconded') o.kind = 'gone'; else if (o.kind === 'new') o.kind = '';
+    } else if ((k === 'rejected' || k === 'not_absconded') && o.pending) {
+      o.pending = false; o.kind = o.kind === 'new' ? 'refused' : ''; o.day = '';
+    } else if (k === 'back') { o.kind = ''; o.day = ''; o.pending = false; }
   });
   return st;
 }
 function onMuster_(o, today) {
   if (!o) return true;
-  if (o.kind === 'gone') return false;
-  if (o.kind === 'resigned' && o.day && o.day < today) return false;
+  if (o.kind === 'gone' || o.kind === 'refused') return false;
+  if (o.kind === 'resigned' && !o.pending && o.day && o.day < today) return false;
   return true;
 }
 function workerRole_(user, what) {
@@ -1448,6 +1454,7 @@ function workerRole_(user, what) {
   if (what === 'see') return ['Owner', 'HQ', 'Clerk', 'Manager'].indexOf(r) >= 0;
   if (what === 'key') return r === 'Clerk' || r === 'Owner';
   if (what === 'approve') return r === 'Manager' || r === 'Owner';
+  if (what === 'hq') return r === 'HQ' || r === 'Owner';
   return false;
 }
 function workersRead_(user, req) {
@@ -1461,10 +1468,20 @@ function workersRead_(user, req) {
     return { id: String(r.worker_id), name: String(r.name), job: String(r.job), gang: String(r.gang), sex: String(r.sex),
              state: o.kind || '', day: o.day || '', pending: !!o.pending, start: o.start || '', onMuster: onMuster_(o, today) };
   });
-  var since = daysAgo_(62), names = {};
+  var names = {}, un = {};
   people.forEach(function (p) { names[p.id] = p.name; });
-  var changes = workerRows_(est).filter(function (r) { return String(r.date) >= since || String(r.keyed_at).slice(0, 10) >= since; }).map(function (r) {
-    return { id: r.id, worker: String(r.worker_id), name: names[r.worker_id] || String(r.name), kind: String(r.kind), day: String(r.day), note: String(r.note || ''), by: String(r.keyed_by), at: String(r.keyed_at).slice(0, 16) };
+  try { readUsers_().list.forEach(function (u) { un[u.user_code] = String(u.name).replace(/^'/, ''); }); } catch (e) {}
+  function who(c) { return un[c] || String(c || ''); }
+  function line(r) { return r ? { id: r.id, kind: String(r.kind), day: String(r.day), note: String(r.note || ''), by: who(r.keyed_by), at: String(r.keyed_at).slice(0, 16) } : null; }
+  var since = daysAgo_(62), rows = workerRows_(est), done = {}, of = {}, lastK = {};
+  rows.forEach(function (r) {
+    var k = String(r.kind);
+    if (k === 'hq_done') done[String(r.note).split(' ')[0]] = r;
+    if (k === 'new' || k === 'resigned' || k === 'absconded') lastK[r.worker_id] = k;
+    if (k === 'approved' || k === 'rejected' || k === 'not_absconded') of[r.id] = k === 'not_absconded' ? 'absconded' : (lastK[r.worker_id] || 'absconded');
+  });
+  var changes = rows.filter(function (r) { return String(r.date) >= since || String(r.keyed_at).slice(0, 10) >= since; }).map(function (r) {
+    return { id: r.id, worker: String(r.worker_id), name: names[r.worker_id] || String(r.name), kind: String(r.kind), of: of[r.id] || '', day: String(r.day), note: String(r.note || ''), by: who(r.keyed_by), at: String(r.keyed_at).slice(0, 16), done: !!done[r.id] };
   }).reverse().slice(0, 80);
   // The staff's "Mungkin lari?" flags of the last 14 days for workers still on the muster and not already keyed.
   var flags = [], seenF = {}, f14 = daysAgo_(14), lastH = {};
@@ -1475,13 +1492,29 @@ function workersRead_(user, req) {
     if (lastH[w] && lastH[w] > String(r.date)) { delete seenF[w]; return; }      // he came back to work: the flag goes by itself
     if (o && (o.kind === 'absconded' || o.kind === 'gone' || o.kind === 'resigned')) return;
     if (!names[w]) return;
-    seenF[w] = { worker: w, name: names[w], date: String(r.date), detail: String(r.detail || ''), by: String(r.keyed_by) };
+    seenF[w] = { worker: w, name: names[w], date: String(r.date), detail: String(r.detail || ''), by: who(r.keyed_by) };
   });
   Object.keys(seenF).forEach(function (k) { flags.push(seenF[k]); });
-  var pending = people.filter(function (p) { return p.pending; }).map(function (p) { var o = st[p.id]; return { worker: p.id, name: p.name, day: p.day, by: o.by, at: String(o.at || '').slice(0, 16) }; });
+  // Waiting for the Pengurus: every kind, with its reason.
+  var pending = Object.keys(st).filter(function (w) { return st[w].pending && st[w].line; }).map(function (w) {
+    var o = st[w], l = o.line;
+    return { worker: w, name: names[w] || String(l.name), kind: o.kind, day: o.day, note: String(l.note || ''), by: who(l.keyed_by), at: String(l.keyed_at).slice(0, 16) };
+  });
+  // HQ (SDK): every approval not yet marked SELESAI, with the whole trail.
+  var hq = [];
+  var lastChange = {};
+  rows.forEach(function (r) {
+    var k = String(r.kind), w = String(r.worker_id);
+    if (k === 'new' || k === 'resigned' || k === 'absconded') lastChange[w] = r;
+    if (k === 'approved' && !done[r.id] && lastChange[w]) {
+      var c = lastChange[w];
+      hq.push({ ref: r.id, worker: w, name: names[w] || String(c.name), kind: String(c.kind), day: String(c.day), reason: String(c.note || ''),
+        keyed: line(c), approved: line(r) });
+    }
+  });
   return { ok: true, estate: est, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), people: people, changes: changes,
-           flags: flags, pending: pending, gangs: Object.keys(gangs).sort(), jobs: Object.keys(jobs).sort(),
-           can: { key: workerRole_(user, 'key'), approve: workerRole_(user, 'approve') } };
+           flags: flags, pending: pending, hq: hq, gangs: Object.keys(gangs).sort(), jobs: Object.keys(jobs).sort(),
+           can: { key: workerRole_(user, 'key'), approve: workerRole_(user, 'approve'), hq: workerRole_(user, 'hq') } };
 }
 // A new worker code when the clerk has none yet: estate + B (baru) + yymm + 2 digits, e.g. SSGTB261001.
 function newWorkerCode_(est, taken) {
@@ -1493,10 +1526,12 @@ function workersAction_(user, req) {
   var est = String(req.estate || '');
   if (user.estates.indexOf(est) < 0) return { ok: false, error: 'not_your_estate' };
   var a = String(req.action);
-  var need = a === 'workerAnswer' ? 'approve' : 'key';
+  var need = a === 'workerAnswer' ? 'approve' : a === 'workerDone' ? 'hq' : 'key';
   if (!workerRole_(user, need)) return { ok: false, error: 'not_allowed' };
-  var day = String(req.day || '');
-  if (a !== 'workerAnswer' && a !== 'workerBack' && !/^\d{4}-\d{2}-\d{2}$/.test(day)) return { ok: false, error: 'bad_date' };
+  var day = String(req.day || ''), note = String(req.note || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  if ((a === 'workerAdd' || a === 'workerLeave') && !/^\d{4}-\d{2}-\d{2}$/.test(day)) return { ok: false, error: 'bad_date' };
+  if ((a === 'workerAdd' || a === 'workerLeave') && note.length < 3) return { ok: false, error: 'need_reason' };
+  if (a === 'workerAnswer' && !req.ok && note.length < 3) return { ok: false, error: 'need_reason' };
   var lock = LockService.getScriptLock();
   try { lock.waitLock(15000); } catch (e) { return { ok: false, error: 'busy' }; }
   try {
@@ -1504,10 +1539,9 @@ function workersAction_(user, req) {
     var ss = book_(), now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), today = todayKL_();
     var people = readRows_('LIST_PEOPLE', null).all, taken = {};
     people.forEach(function (r) { taken[String(r.worker_id)] = r; });
-    var mineP = standingRows_('LIST_PEOPLE', est), byId = {};
-    mineP.forEach(function (r) { byId[String(r.worker_id)] = r; });
-    var est0 = ESTATE_COMPANY[est] || '';
-    var seq = 0;
+    var byId = {};
+    standingRows_('LIST_PEOPLE', est).forEach(function (r) { byId[String(r.worker_id)] = r; });
+    var est0 = ESTATE_COMPANY[est] || '', seq = 0;
     function put(tab, fields) {
       var sh = roomTab_(ss, tab), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
       var row = Object.assign({ id: 'WK-' + est + '-' + now.replace(/\D/g, '') + '-' + Math.random().toString(36).slice(2, 6) + (seq++), date: today, company: est0, estate: est,
@@ -1516,6 +1550,7 @@ function workersAction_(user, req) {
       return row;
     }
     var st = workerStates_(est);
+    function reply_(done, extra) { return Object.assign(workersRead_(user, { estate: est }), { done: done }, extra || {}); }
     if (a === 'workerAdd') {
       var name = String(req.name || '').replace(/\s+/g, ' ').trim();
       if (name.length < 2 || name.length > 60) return { ok: false, error: 'bad_name' };
@@ -1528,34 +1563,41 @@ function workersAction_(user, req) {
       if (code && taken[code]) return { ok: false, error: 'code_used' };
       if (!code) code = newWorkerCode_(est, taken);
       put('LIST_PEOPLE', { worker_id: code, name: name, job: String(req.job || gang).slice(0, 40), gang: gang, sex: sex, mandor: '', active: 'Y' });
-      put('WORKER_LOG', { worker_id: code, name: name, kind: 'new', day: day, note: String(req.note || '').slice(0, 120) });
-      return Object.assign(workersRead_(user, { estate: est }), { done: 'new', code: code, name: name });
+      put('WORKER_LOG', { worker_id: code, name: name, kind: 'new', day: day, note: note });
+      return reply_('new', { code: code, name: name });
     }
     var w = String(req.worker || ''), p = byId[w];
+    if (a === 'workerDone') {
+      var ref = String(req.ref || '');
+      var appr = workerRows_(est).find(function (r) { return r.id === ref && String(r.kind) === 'approved'; });
+      if (!appr) return { ok: false, error: 'nothing_waiting' };
+      if (workerRows_(est).some(function (r) { return String(r.kind) === 'hq_done' && String(r.note).split(' ')[0] === ref; })) return { ok: false, error: 'already' };
+      put('WORKER_LOG', { worker_id: String(appr.worker_id), name: String(appr.name), kind: 'hq_done', day: today, note: (ref + ' ' + note).trim() });
+      return reply_('hq_done');
+    }
     if (!p) return { ok: false, error: 'no_worker' };
     var o = st[w] || {};
     if (a === 'workerLeave') {
       var kind = String(req.kind || '');
       if (kind !== 'resigned' && kind !== 'absconded') return { ok: false, error: 'bad_kind' };
-      if (o.kind === 'gone' || (o.kind === 'absconded' && o.pending)) return { ok: false, error: 'already' };
+      if (o.pending || o.kind === 'gone' || o.kind === 'refused') return { ok: false, error: 'already' };
       if (kind === 'absconded' && day > today) return { ok: false, error: 'bad_date' };
-      put('WORKER_LOG', { worker_id: w, name: String(p.name), kind: kind, day: day, note: String(req.note || '').slice(0, 120) });
-      return Object.assign(workersRead_(user, { estate: est }), { done: kind });
+      put('WORKER_LOG', { worker_id: w, name: String(p.name), kind: kind, day: day, note: note });
+      return reply_(kind);
     }
     if (a === 'workerAnswer') {
-      if (!(o.kind === 'absconded' && o.pending)) return { ok: false, error: 'nothing_waiting' };
-      put('WORKER_LOG', { worker_id: w, name: String(p.name), kind: req.ok ? 'approved' : 'not_absconded', day: o.day, note: String(req.note || '').slice(0, 120), answered_by: user.user_code, answered_at: now });
-      return Object.assign(workersRead_(user, { estate: est }), { done: req.ok ? 'approved' : 'not_absconded' });
+      if (!o.pending) return { ok: false, error: 'nothing_waiting' };
+      put('WORKER_LOG', { worker_id: w, name: String(p.name), kind: req.ok ? 'approved' : 'rejected', day: o.day, note: note, answered_by: user.user_code, answered_at: now });
+      return reply_(req.ok ? 'approved' : 'rejected');
     }
     if (a === 'workerBack') {
-      if (!o.kind) return { ok: false, error: 'nothing_to_undo' };
-      put('WORKER_LOG', { worker_id: w, name: String(p.name), kind: 'back', day: today, note: String(req.note || '').slice(0, 120) });
-      return Object.assign(workersRead_(user, { estate: est }), { done: 'back' });
+      if (!o.kind && !o.pending) return { ok: false, error: 'nothing_to_undo' };
+      put('WORKER_LOG', { worker_id: w, name: String(p.name), kind: 'back', day: today, note: note });
+      return reply_('back');
     }
     return { ok: false, error: 'unknown_action' };
   } finally { lock.releaseLock(); }
 }
-
 
 // ---------------- v1.26 Rekod: the month's crop in detail, like the estate's Excel ----------------
 // Bunches per harvester per day (and per block), every mill ticket, the month's budget, and each month

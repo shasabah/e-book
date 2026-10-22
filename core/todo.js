@@ -58,6 +58,7 @@ window.EA = window.EA || {};
         var x = t.items[Number(b.dataset.i)];
         if (x.go === 'send') { if (EA.send) EA.send(); return; }
         if (x.go === 'direct') return directSheet(u, est, x);
+        if (x.go === 'fix') { EA.local.set('fh.fixGo', Object.assign({ estate: est }, x.fix)); location.hash = 'field-harvest'; return; }
         location.hash = x.go.replace(/^#/, '');
       };
     });

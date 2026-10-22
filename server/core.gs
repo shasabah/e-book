@@ -48,7 +48,7 @@ function beforeLive_(user, row, tab) {
 var USERS_TAB = 'USERS';
 var USER_COLS = ['user_code', 'name', 'role', 'estates', 'key_hash', 'status', 'added_at', 'phones', 'position', 'move_estates', 'move_date', 'phone_names'];
 // v1.15: job titles as on the organisation chart (for reading only; the role is the app access).
-var POSITIONS = ['Trainee Field Staff', 'Field Staff', 'Senior Staff', 'Estate Clerk', 'Assistant Manager', 'Senior Assistant Manager', 'Mandor', 'Storekeeper', 'AGM', 'GM'];
+var POSITIONS = ['Trainee Field Staff', 'Field Staff', 'Senior Staff', 'Estate Clerk', 'Assistant Manager', 'Senior Assistant Manager', 'Mandor', 'Storekeeper', 'Account & Finance Executive', 'AGM', 'GM'];
 var ROLES = ['Owner', 'HQ', 'Staff', 'Clerk', 'Mandor', 'Store', 'Worker', 'Manager'];
 var ESTATES = ['SDK', 'MELU', 'SSGT', 'PTAN', 'TKRS', 'KWNN'];
 var ESTATE_COMPANY = { SDK: 'SPLT', MELU: 'SPLT', SSGT: 'SPLT', PTAN: 'SPLT', TKRS: 'SPLT', KWNN: 'PJSB' };
@@ -83,6 +83,11 @@ var ROOM_TABS = {
   WORKER_LOG: ['worker_id', 'name', 'kind', 'day', 'note', 'answered_by', 'answered_at'],
   // v1.26 Rekod: the crop budget per estate and month (month = yyyy-mm). Kept only in the office sheet.
   LIST_BUDGET: ['month', 'budget_mt', 'abw_kg', 'work_days', 'note'],
+  // v1.29 shared list: mills and collecting centres per estate (kind: mill or cc). Added only when a request
+  // is approved (MILL_LOG), or by seedMills once. active N = no longer used (never deleted).
+  LIST_MILLS: ['name', 'kind', 'location', 'note', 'active'],
+  // v1.29 one line per step of a new mill request. kind: request, checked, approved, rejected; ref = the request line.
+  MILL_LOG: ['ref', 'name', 'mill_kind', 'location', 'kind', 'note'],
   // Errors on phones, so the builder can see what went wrong without asking for screenshots.
   APP_ERROR: ['where', 'message', 'stack', 'version', 'agent']
 };
@@ -136,12 +141,12 @@ function doPost_(e) {
 // ---- v1.19: read answers remembered for 60 s, shared by everyone asking the same thing ----
 // Any call that may write (save, users, switches, ...) makes a new "generation", so a remembered
 // answer is never older than the last change.
-var READS_ = { crop: 1, workers: 1, ungraded: 1, harvest: 1, trips: 1, people: 1, history: 1, backlog: 1, rounds: 1, adminSummary: 1, adminPhones: 1, adminProblems: 1, adminSwitches: 1 };
+var READS_ = { crop: 1, workers: 1, mills: 1, ungraded: 1, harvest: 1, trips: 1, people: 1, history: 1, backlog: 1, rounds: 1, adminSummary: 1, adminPhones: 1, adminProblems: 1, adminSwitches: 1 };
 var READ_SECONDS = 60;
 function gen_() { return CacheService.getScriptCache().get('gen') || '0'; }
 function newGen_() { try { CacheService.getScriptCache().put('gen', String(Date.now()) + Math.floor(Math.random() * 1000), 21600); } catch (e) {} }
 function readCached_(user, req) {
-  var personal = req.action === 'people' || req.action === 'workers' || /^admin/.test(String(req.action));
+  var personal = req.action === 'people' || req.action === 'workers' || req.action === 'mills' || /^admin/.test(String(req.action));
   var key = ['rd', PRACTICE_ ? 'L' : '', req.action, String(req.estate || ''), String(req.month || ''), personal ? user.user_code : '', gen_()].join('|').slice(0, 240);
   var c = CacheService.getScriptCache(), hit = null;
   try { hit = c.get(key); } catch (e) {}
@@ -156,6 +161,7 @@ function readCached_(user, req) {
 function doRead_(user, req) {
   if (/^admin/.test(String(req.action))) return adminAction_(user, req);
   if (req.action === 'workers') return workersRead_(user, req);
+  if (req.action === 'mills') return millsRead_(user, req);
   if (req.action === 'people') {
     if (['Owner', 'HQ', 'Staff', 'Clerk', 'Manager'].indexOf(user.role) < 0) return { ok: false, error: 'not_allowed' };
     return people_(user);
@@ -193,6 +199,7 @@ function doWrite_(user, req) {
   // Users and PIN screen (v1.9): the Owner only.
   if (/^user/.test(String(req.action)) || req.action === 'testOff') return reply(usersAction_(user, req));
   if (/^worker/.test(String(req.action))) return reply(workersAction_(user, req));
+  if (/^mill/.test(String(req.action))) return reply(millsAction_(user, req));
   return reply({ ok: false, error: 'unknown_action' });
 }
 
@@ -1597,6 +1604,121 @@ function workersAction_(user, req) {
     }
     return { ok: false, error: 'unknown_action' };
   } finally { lock.releaseLock(); }
+}
+
+// ---------------- v1.29 Kilang & pusat kumpulan baru · new mill or collecting centre ----------------
+// Related parties (Related_Parties.md, 22 Oct 2026): the clerk asks on behalf of the Pengurus; HQ (SDK)
+// checks (SEMAK); the Account & Finance Executive approves and opens it (LULUS · BUKA); the Owner can do
+// either step. Until it is open, the staff keys the lorry as "Lain-lain". The mills are a shared list in
+// the office sheet (LIST_MILLS), not in the app's code. Nothing is deleted: each step is a new MILL_LOG line.
+// kind: request · checked · approved (opened) · rejected (at either step).
+var FINANCE_POS = 'Account & Finance Executive';
+function millRole_(user, what) {
+  var r = user.role, fin = String(user.position || '').replace(/^'/, '') === FINANCE_POS;
+  if (what === 'see') return ['Owner', 'HQ', 'Clerk', 'Manager', 'Staff'].indexOf(r) >= 0;
+  if (what === 'ask') return r === 'Clerk' || r === 'Manager' || r === 'Owner';
+  if (what === 'check') return r === 'Owner' || (r === 'HQ' && !fin);
+  if (what === 'approve') return r === 'Owner' || (r === 'HQ' && fin);
+  return false;
+}
+function millName_(n) { return String(n || '').replace(/\s+/g, ' ').trim(); }
+function millsRead_(user, req) {
+  if (!millRole_(user, 'see')) return { ok: false, error: 'not_allowed' };
+  var est = String(req.estate || '');
+  if (user.estates.indexOf(est) < 0) return { ok: false, error: 'not_your_estate' };
+  var mills = standingRows_('LIST_MILLS', est).filter(function (r) { return String(r.active).toUpperCase() !== 'N'; })
+    .map(function (r) { return { name: String(r.name), kind: String(r.kind || ''), location: String(r.location || '') }; });
+  var out = { ok: true, estate: est, mills: mills };
+  if (user.role === 'Staff') return out;
+  var un = {};
+  try { readUsers_().list.forEach(function (u) { un[u.user_code] = String(u.name).replace(/^'/, ''); }); } catch (e) {}
+  function who(c) { return un[c] || String(c || ''); }
+  var reqs = {}, order = [];
+  standingRows_('MILL_LOG', est).slice().sort(function (a, b) { return String(a.keyed_at) < String(b.keyed_at) ? -1 : 1; }).forEach(function (r) {
+    var k = String(r.kind), step = { kind: k, by: who(r.keyed_by), at: String(r.keyed_at).slice(0, 16), note: String(r.note || '') };
+    if (k === 'request') { reqs[r.id] = { ref: r.id, name: String(r.name), type: String(r.mill_kind || ''), location: String(r.location || ''), note: String(r.note || ''), state: 'request', steps: [step] }; order.push(r.id); return; }
+    var q = reqs[String(r.ref)]; if (!q) return;
+    q.steps.push(step);
+    q.state = k;
+  });
+  var since = daysAgo_(62);
+  out.requests = order.map(function (k) { return reqs[k]; }).filter(function (q) { return q.state === 'request' || q.state === 'checked' || q.steps[q.steps.length - 1].at.slice(0, 10) >= since; }).reverse();
+  out.can = { ask: millRole_(user, 'ask'), check: millRole_(user, 'check'), approve: millRole_(user, 'approve') };
+  return out;
+}
+function millsAction_(user, req) {
+  var est = String(req.estate || ''), a = String(req.action);
+  if (user.estates.indexOf(est) < 0) return { ok: false, error: 'not_your_estate' };
+  var need = a === 'millAsk' ? 'ask' : a === 'millCheck' ? 'check' : a === 'millApprove' ? 'approve' : '';
+  if (!need) return { ok: false, error: 'unknown_action' };
+  if (!millRole_(user, need)) return { ok: false, error: 'not_allowed' };
+  var note = String(req.note || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (a !== 'millAsk' && !req.ok && note.length < 3) return { ok: false, error: 'need_reason' };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (e) { return { ok: false, error: 'busy' }; }
+  try {
+    ROWS_MEMO_ = null;
+    var ss = book_(), now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), today = todayKL_(), seq = 0;
+    function put(tab, fields) {
+      var sh = roomTab_(ss, tab), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+      var row = Object.assign({ id: 'ML-' + est + '-' + now.replace(/\D/g, '') + '-' + Math.random().toString(36).slice(2, 6) + (seq++), date: today, company: ESTATE_COMPANY[est] || '', estate: est,
+        keyed_by: user.user_code, keyed_at: now, phone: String(req.phone || ''), status: 'active', replaces: '', received_at: now }, fields);
+      sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); }));
+      return row;
+    }
+    function reply_(done) { return Object.assign(millsRead_(user, { estate: est }), { done: done }); }
+    var have = {};
+    standingRows_('LIST_MILLS', est).forEach(function (r) { have[millName_(r.name).toLowerCase()] = true; });
+    var log = standingRows_('MILL_LOG', est);
+    if (a === 'millAsk') {
+      var name = millName_(req.name);
+      if (name.length < 2 || name.length > 50) return { ok: false, error: 'bad_name' };
+      var type = String(req.type || '');
+      if (type !== 'mill' && type !== 'cc') return { ok: false, error: 'bad_type' };
+      if (note.length < 3) return { ok: false, error: 'need_reason' };
+      if (have[name.toLowerCase()]) return { ok: false, error: 'already_open' };
+      var open = log.filter(function (r) { return String(r.kind) === 'request' && millName_(r.name).toLowerCase() === name.toLowerCase(); })
+        .some(function (r) { return !log.some(function (x) { return String(x.ref) === r.id && /^(approved|rejected)$/.test(String(x.kind)); }); });
+      if (open) return { ok: false, error: 'already' };
+      put('MILL_LOG', { ref: '', name: name, mill_kind: type, location: String(req.location || '').trim().slice(0, 80), kind: 'request', note: note });
+      return reply_('request');
+    }
+    var ref = String(req.ref || ''), q = log.find(function (r) { return r.id === ref && String(r.kind) === 'request'; });
+    if (!q) return { ok: false, error: 'nothing_waiting' };
+    var steps = log.filter(function (r) { return String(r.ref) === ref; }).sort(function (x, y) { return String(x.keyed_at) < String(y.keyed_at) ? -1 : 1; });
+    var last = steps.length ? String(steps[steps.length - 1].kind) : 'request';
+    if (a === 'millCheck') {
+      if (last !== 'request') return { ok: false, error: 'nothing_waiting' };
+      put('MILL_LOG', { ref: ref, name: String(q.name), mill_kind: String(q.mill_kind), location: String(q.location || ''), kind: req.ok ? 'checked' : 'rejected', note: note });
+      return reply_(req.ok ? 'checked' : 'rejected');
+    }
+    // millApprove: only after HQ has checked; the same person does not check and approve (except the Owner).
+    if (last !== 'checked') return { ok: false, error: last === 'request' ? 'not_checked' : 'nothing_waiting' };
+    if (user.role !== 'Owner' && String(steps[steps.length - 1].keyed_by) === user.user_code) return { ok: false, error: 'same_person' };
+    put('MILL_LOG', { ref: ref, name: String(q.name), mill_kind: String(q.mill_kind), location: String(q.location || ''), kind: req.ok ? 'approved' : 'rejected', note: note });
+    if (req.ok && !have[millName_(q.name).toLowerCase()]) put('LIST_MILLS', { name: String(q.name), kind: String(q.mill_kind), location: String(q.location || ''), note: 'MILL_LOG ' + ref, active: 'Y' });
+    return reply_(req.ok ? 'approved' : 'rejected');
+  } finally { lock.releaseLock(); }
+}
+// Run once per sheet (Owner, from the script editor): puts the mills the app knew in its code into
+// LIST_MILLS, so the list lives in the office sheet. A mill already on the list is not added again.
+function seedMills() {
+  var start = { SSGT: [['Boustead (BOU)', 'mill'], ['Sri Kamusan CC (SKCC)', 'cc'], ['SKPOM', 'mill'], ['Fortuna', 'mill'], ['Sinar C', 'cc']] };
+  var ss = book_(), now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), n = 0;
+  ROWS_MEMO_ = null;
+  Object.keys(start).forEach(function (est) {
+    var have = {};
+    standingRows_('LIST_MILLS', est).forEach(function (r) { have[millName_(r.name).toLowerCase()] = true; });
+    var sh = roomTab_(ss, 'LIST_MILLS'), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    start[est].forEach(function (m, i) {
+      if (have[m[0].toLowerCase()]) return;
+      var row = { id: 'ML-' + est + '-SEED-' + (i + 1), date: now.slice(0, 10), company: ESTATE_COMPANY[est] || '', estate: est, keyed_by: 'SEED', keyed_at: now, phone: '', status: 'active', replaces: '',
+        received_at: now, name: m[0], kind: m[1], location: '', note: 'From the Sugut FFB tonnage file 2026', active: 'Y' };
+      sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); })); n++;
+    });
+  });
+  Logger.log('seedMills: ' + n + ' added');
+  return n;
 }
 
 // ---------------- v1.26 Rekod: the month's crop in detail, like the estate's Excel ----------------

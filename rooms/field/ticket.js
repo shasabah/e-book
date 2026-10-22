@@ -38,6 +38,8 @@
   function canKey(u) { return u.role === 'Clerk' || u.role === 'Owner'; }     // the clerk keys tickets and grading (the owner can too)
   function canGrade(u) { return canKey(u); }
   function num(v) { var n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isFinite(n) ? n : 0; }
+  // v1.27.1: weights as printed on the ticket, in tonnes (32.30) or kg (32300). Under 200 = tonnes.
+  function kg(v) { var n = num(v); return n > 0 && n < 200 ? Math.round(n * 1000) : Math.round(n); }
   function r3(n) { return Math.round(n * 1000) / 1000; }
   function r2(n) { return Math.round(n * 100) / 100; }
   function sd(iso) { return EA.fh.shortDate(iso); }
@@ -125,8 +127,9 @@
 
   // ---------- sums ----------
   function calc(d) {
-    var w1 = num(d.w1), w2 = num(d.w2);
-    var nettKg = (w1 && w2) ? Math.round(w1 - w2 - num(d.ded)) : num(d.nett);   // the ticket prints kg
+    var w1 = kg(d.w1), w2 = kg(d.w2), ded = num(d.ded);
+    if (ded > 0 && ded < 1 && /[.,]/.test(String(d.ded))) ded = ded * 1000;          // deduction typed in tonnes
+    var nettKg = (w1 && w2) ? Math.round(w1 - w2 - ded) : kg(d.nett);
     var nett = r3(nettKg / 1000);
     var parts = [], open = {}, after = {}, byBlock = {}, dn = fromDn() && d === draft;
     var list = lots();
@@ -195,11 +198,11 @@
         field('tk-lorry', 'No. lori', 'Lorry no.', draft.lorry, 'text', '') +
         field('tk-driver', 'Pemandu', 'Driver', draft.driver, 'text', '') +
       '</div><div class="fields">' +
-        field('tk-w1', 'Berat pertama (kg)', '1st weight, kg', draft.w1, 'numeric', '') +
-        field('tk-w2', 'Berat kedua (kg)', '2nd weight, kg', draft.w2, 'numeric', '') +
-        field('tk-ded', 'Potongan (kg)', 'Deduction, kg', draft.ded, 'numeric', '') +
-        field('tk-nett', 'Berat bersih (kg)', 'Net weight, kg', draft.nett, 'numeric', '') +
-      '</div><p class="hint">' + EA.t('Isi dalam kg seperti di tiket.', 'Key in kg, as printed on the ticket.') + '</p></section>' +
+        field('tk-w1', 'Berat pertama', '1st weight (MT or kg, as printed)', draft.w1, 'decimal', '') +
+        field('tk-w2', 'Berat kedua', '2nd weight (MT or kg)', draft.w2, 'decimal', '') +
+        field('tk-ded', 'Potongan (kg)', 'Deduction, kg', draft.ded, 'decimal', '') +
+        field('tk-nett', 'Berat bersih', 'Net weight (MT or kg)', draft.nett, 'decimal', '') +
+      '</div><p class="hint">' + EA.t('Isi seperti di tiket: MT dengan titik (32.30) atau kg (32300).', 'Key as printed: MT with a dot (32.30) or kg (32300).') + '</p></section>' +
 
       '<section class="card" aria-labelledby="tk-s2"><h2 id="tk-s2"><span class="step">2</span><span class="inline"><span class="bm">Petak dalam lori ini</span> · <span class="en">The lots on this lorry</span></span></h2>' +
       (fromDn() ? '<p class="hint">' + EA.t('Dari nota hantar DN ' + esc(draft.do_no) + ' (ditanda oleh staf). Untuk ubah, staf betulkan DN di Kutip & hantar sebelum tiket disimpan.', 'From the delivery note DN ' + esc(draft.do_no) + ', ticked by the staff. To change them, the staff corrects the delivery note on Collect & dispatch before the ticket is saved.') + '</p>'
@@ -220,9 +223,8 @@
         if (id === 'tk-lorry') v = v.toUpperCase();
         if (id === 'tk-no' || id === 'tk-do') v = v.replace(/\s/g, '');
         if (['tk-w1', 'tk-w2', 'tk-ded', 'tk-nett'].indexOf(id) >= 0) {
-          // Weights are kg as printed. A dot or comma usually means tonnes were typed (12.34): say so.
-          if (/[.,]/.test(v)) ui().toast(EA.t('Berat dalam kg seperti dicetak, tanpa titik', 'Weights in kg as printed, no dot'), 'bad');
-          v = v.replace(/[.,].*$/, '').replace(/[^\d]/g, ''); this.value = v;
+          // v1.27.1: tonnes with a dot (32.30) or kg (32300), as the mill prints it.
+          v = v.replace(',', '.').replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'); this.value = v;
         }
         draft[bind[id]] = v; keepDraft(); drawSums();
         if (id === 'tk-do' && !draft.trip) matchDn();
@@ -296,7 +298,7 @@
   }
   function drawSums() {
     var c = calc(draft);
-    if (num(draft.w1) && num(draft.w2) && $('#tk-nett') && document.activeElement !== $('#tk-nett')) { $('#tk-nett').value = String(c.nettKg); draft.nett = String(c.nettKg); }
+    if (num(draft.w1) && num(draft.w2) && $('#tk-nett') && document.activeElement !== $('#tk-nett')) { var nv = /[.,]/.test(String(draft.w1)) ? (c.nettKg / 1000).toFixed(2) : String(c.nettKg); $('#tk-nett').value = nv; draft.nett = nv; }
     var f = flags(draft, c);
     $('#tk-sum').innerHTML = EA.t('Tiket ini: <b>', 'This ticket: <b>') + c.bunches + '</b> ' + EA.t('tandan', 'bunches') + ' · <b>' + c.nett.toFixed(2) + '</b> MT · ABW <b>' + (c.abw || 0) + '</b> ' + EA.t('kg/tandan', 'kg/bunch') +
       (c.blocks.length ? '<br>' + c.blocks.map(function (b) { return 'Blk ' + esc(b) + ': ' + c.split[b].bunches + EA.t(' tandan, ', ' bunches, ') + c.split[b].mt.toFixed(2) + ' MT'; }).join(' · ') : '') +
@@ -316,10 +318,13 @@
     var p = [];
     if (!draft.ticket_no) p.push(['Isi no. tiket.', 'Fill in the ticket number.']);
     if (!(c.nett > 0)) p.push(['Isi berat (berat pertama dan kedua, atau berat bersih).', 'Fill in the weights (1st and 2nd weight, or net weight).']);
-    if (num(draft.w1) && num(draft.w2) && num(draft.w2) >= num(draft.w1)) p.push(['Berat kedua mesti kurang dari berat pertama.', 'The 2nd weight must be less than the 1st weight.']);
-    if (c.nett > 0 && c.nett < 0.5) p.push(['Berat bersih ' + c.nettKg + ' kg terlalu kecil: isi dalam kg, bukan MT.', 'Net weight ' + c.nettKg + ' kg is too small: key kg, not MT.']);
-    if (!draft.trip) p.push(['Taip No. DO untuk cari nota hantar staf.', 'Type the DO no. to find the staff\'s delivery note.']);
-    else if (!c.bunches) p.push(['Pilih petak dalam lori ini.', 'Choose the lots on this lorry.']);
+    if (num(draft.w1) && num(draft.w2) && kg(draft.w2) >= kg(draft.w1)) p.push(['Berat kedua mesti kurang dari berat pertama.', 'The 2nd weight must be less than the 1st weight.']);
+    if (c.nett > 0 && c.nett < 0.5) p.push(['Berat bersih ' + c.nettKg + ' kg terlalu kecil. Semak berat di tiket.', 'Net weight ' + c.nettKg + ' kg is too small. Check the weights on the ticket.']);
+    // v1.27.1: a lorry that went before the trial day has no delivery note in the app: the ticket is saved
+    // without lots (its bunches stay in the estate's old files).
+    var cf = EA.local.get('ea.cleanDone', '') || '', early = !!cf && draft.date < cf;
+    if (!draft.trip && !early) p.push(['Taip No. DO untuk cari nota hantar staf.', 'Type the DO no. to find the staff\'s delivery note.']);
+    else if (draft.trip && !c.bunches) p.push(['Pilih petak dalam lori ini.', 'Choose the lots on this lorry.']);
     var twice = saved().find(function (t) { return t.estate === ctx.estate && t.ticket_no === draft.ticket_no && t.key !== draft.replacing; });
     if (draft.ticket_no && twice) p.push(['Tiket ' + draft.ticket_no + ' sudah disimpan (' + sd(twice.date) + ').', 'Ticket ' + draft.ticket_no + ' is already saved. Use CORRECT on it instead.']);
     return p;
@@ -344,7 +349,7 @@
     try {
       EA.batchStart();
       t.ids.ticket = EA.save(TAB, ROOM, ctx.estate, { date: t.date, ticket_no: t.ticket_no, trip: t.trip, mill: t.mill, do_no: t.do_no, lorry: t.lorry, driver: t.driver, time: t.time,
-        first_kg: String(num(t.w1) || ''), second_kg: String(num(t.w2) || ''), deduct_kg: String(num(t.ded)), nett_kg: String(t.nettKg), nett_mt: String(t.nett),
+        first_kg: String(kg(t.w1) || ''), second_kg: String(kg(t.w2) || ''), deduct_kg: String(num(t.ded)), nett_kg: String(t.nettKg), nett_mt: String(t.nett),
         bunches: String(t.bunches), lorry_bunches: String(t.lorryBunches || ''), abw_kg: String(t.abw), note: t.note }, old ? old.ids.ticket : '').id;
       var oldB = old ? Object.assign({}, old.ids.blocks) : {};
       c.blocks.forEach(function (b) {
@@ -522,7 +527,7 @@
     L.push('*TIKET KILANG ' + (est ? est.company + ' ' : '') + t.estate + '*' + (t.rev > 1 ? ' _(dibetulkan · corrected)_' : ''));
     L.push('Tiket ' + t.ticket_no + ' · ' + t.mill + ' · ' + sd(t.date) + (t.time ? ' ' + t.time : ''));
     L.push('Lori ' + (t.lorry || '-') + (t.do_no ? ' · DO ' + t.do_no : ''));
-    L.push('Berat bersih · Net weight: ' + t.nett.toFixed(2) + ' MT' + (num(t.w1) && num(t.w2) ? ' (' + num(t.w1) + ' − ' + num(t.w2) + (num(t.ded) ? ' − ' + num(t.ded) : '') + ' kg)' : ''));
+    L.push('Berat bersih · Net weight: ' + t.nett.toFixed(2) + ' MT' + (num(t.w1) && num(t.w2) ? ' (' + kg(t.w1) + ' − ' + kg(t.w2) + (num(t.ded) ? ' − ' + num(t.ded) : '') + ' kg)' : ''));
     Object.keys(t.split).sort().forEach(function (b) { L.push('Blk ' + b + ': ' + t.split[b].bunches + ' tandan, ' + t.split[b].mt.toFixed(2) + ' MT'); });
     L.push('ABW: ' + t.abw + ' kg/tandan' + (t.lorryBunches && t.lorryBunches !== t.bunches ? ' · lori ' + t.lorryBunches + ' tandan' : ''));
     if ((t.harv || []).length) {

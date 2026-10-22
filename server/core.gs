@@ -202,6 +202,7 @@ function doWrite_(user, req) {
   if (/^worker/.test(String(req.action))) return reply(workersAction_(user, req));
   if (/^mill/.test(String(req.action))) return reply(millsAction_(user, req));
   if (req.action === 'todoDirect') return reply(todoDirect_(user, req));
+  if (req.action === 'chitAsk') return reply(chitAsk_(user, req));
   return reply({ ok: false, error: 'unknown_action' });
 }
 
@@ -1271,7 +1272,7 @@ function adminSummary_(user) {
     c.noTicket = noTicket; c.corrections = corr; c.late = late; c.chitDays = chitDays;
     c.below = below; c.belowDate = lastWork ? lastWork.date : '';
     var b = backlog(e); c.field = b.fieldTotal || 0; c.ramp = (b.ramp && b.ramp.bunches) || 0;
-    var al = readRows_('FH_ALERT', e).standing.filter(function (r) { return String(r.date).slice(0, 7) === month && r.kind !== 'absent3'; });
+    var al = readRows_('FH_ALERT', e).standing.filter(function (r) { return String(r.date).slice(0, 7) === month && r.kind !== 'absent3' && r.kind !== 'fixask' && r.kind !== 'fixdone'; });
     c.alerts = al.length; c.alertsOpen = al.filter(function (r) { return !String(r.staff_note || '').trim(); }).length;
     return c;
   });
@@ -1809,7 +1810,16 @@ function todo_(user, req) {
       sub: (rp.blocks || []).map(function (x) { return 'Blk ' + x.block + ' ' + x.bunches; }).join(', ') || 'Buat lori & DN', go: '#field-harvest/collect' });
     return b;
   }
+  var un = {};
+  try { readUsers_().list.forEach(function (x) { un[x.user_code] = String(x.name).replace(/^'/, ''); }); } catch (e) {}
+  var fixes = chitFixes_(est);
   if (r === 'Staff') {
+    fixes.forEach(function (x) {
+      if (x.done || String(x.ask.date) < daysAgo_(FIX_DAYS)) return;
+      var by = un[x.ask.keyed_by] || 'Kerani';
+      add({ id: 'FA:' + x.ask.id, p: 1, ic: '!', bm: by + ' minta betulkan chit ' + shortD_(x.ask.date), en: by + ' asks you to fix the chit of ' + shortD_(x.ask.date),
+        sub: '"' + x.ask.detail + '"', go: 'fix', fix: { chit: String(x.ask.chit), ref: x.ask.id, note: String(x.ask.detail), by: by, date: String(x.ask.date) } });
+    });
     var bl = rampOld();
     (bl.grading || []).forEach(function (g) { add({ id: 'GR:' + g.ticket_no, p: 2, ic: 'GR', bm: 'Gred kilang lemah · tiket ' + g.ticket_no, en: 'Poor mill grading · ticket ' + g.ticket_no,
       sub: g.flag + ' · terangkan dalam chit pagi', go: '#field-harvest' }); });
@@ -1817,6 +1827,13 @@ function todo_(user, req) {
     alerts.forEach(function (a) {
       if (!a.direction || String(a.keyed_at).slice(0, 10) < daysAgo_(2)) return;
       add({ id: 'DR:' + a.id, p: 4, ic: 'AR', bm: 'Arahan ' + (a.direction_by || 'Pengurus') + ': ' + a.direction, en: 'Direction: ' + a.direction, sub: 'Untuk: ' + String(a.detail || '').slice(0, 80), go: '' });
+    });
+  }
+  if (r === 'Clerk' || r === 'Manager') {
+    fixes.forEach(function (x) {
+      if (!x.done || String(x.done.keyed_at).slice(0, 10) < daysAgo_(2)) return;
+      add({ id: 'FD:' + x.ask.id, p: 4, ic: 'CH', bm: (r === 'Manager' ? 'Makluman: chit ' : 'Chit ') + shortD_(x.ask.date) + ' sudah dibetulkan', en: 'The chit of ' + shortD_(x.ask.date) + ' was fixed',
+        sub: 'Diminta ' + (un[x.ask.keyed_by] || '') + ' · oleh ' + (un[x.done.keyed_by] || '') + ' ' + String(x.done.keyed_at).slice(11, 16) + (x.done.detail ? ' · ' + String(x.done.detail).slice(0, 100) : ''), go: '' });
     });
   }
   if (r === 'Clerk') {
@@ -1872,6 +1889,10 @@ function todo_(user, req) {
       if (dayDiff_(String(q.at).slice(0, 10), today) < 2) return;
       add({ id: 'ST:' + q.worker, p: 1, ic: '!', bm: 'Tersangkut: ' + q.name + ' menunggu Pengurus', en: 'Stuck: waiting for the manager', sub: 'Sejak ' + shortD_(q.at) + ' (' + dayDiff_(String(q.at).slice(0, 10), today) + ' hari)', go: '#workers' });
     });
+    fixes.forEach(function (x) {
+      if (x.done || dayDiff_(String(x.ask.keyed_at).slice(0, 10), today) < 1) return;
+      add({ id: 'SF:' + x.ask.id, p: 1, ic: '!', bm: 'Tersangkut: chit ' + shortD_(x.ask.date) + ' belum dibetulkan', en: 'Stuck: a chit fix not done', sub: 'Diminta ' + (un[x.ask.keyed_by] || '') + ' ' + shortD_(x.ask.keyed_at) + ' · "' + String(x.ask.detail).slice(0, 60) + '"', go: '' });
+    });
     var nd = explained.filter(function (a) { return !a.direction && dayDiff_(String(a.keyed_at).slice(0, 10), today) >= 2; });
     if (nd.length) add({ id: 'SD:' + today, p: 1, ic: '!', bm: 'Tersangkut: ' + nd.length + ' penjelasan Staf belum diberi arahan', en: 'Stuck: staff explanations with no direction', sub: 'Lebih 2 hari · Pengurus', go: '' });
     try {
@@ -1905,6 +1926,42 @@ function todoDirect_(user, req) {
     sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); }));
     return Object.assign(todo_(user, { estate: est }), { done: 'direction' });
   } finally { lock.releaseLock(); }
+}
+
+// v1.32 C · Betulkan chit semalam: the clerk (or the Owner) asks the staff to fix a chit of the last 3 days.
+// The ask is an alert line kind "fixask" (ref = the chit, detail = what is wrong); the staff's phone writes
+// "fixdone" (ref = the ask) when the corrected chit is saved. The Pengurus is told; nobody approves.
+var FIX_DAYS = 3;
+function chitAsk_(user, req) {
+  if (user.role !== 'Clerk' && user.role !== 'Owner') return { ok: false, error: 'not_allowed' };
+  var est = String(req.estate || ''), chit = String(req.chit || ''), note = String(req.note || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (user.estates.indexOf(est) < 0) return { ok: false, error: 'not_your_estate' };
+  if (note.length < 3) return { ok: false, error: 'need_reason' };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (e) { return { ok: false, error: 'busy' }; }
+  try {
+    ROWS_MEMO_ = null;
+    var c = standingRows_('FH_CHIT', est).find(function (r) { return String(r.chit) === chit; });
+    if (!c) return { ok: false, error: 'no_chit' };
+    if (String(c.date) < daysAgo_(FIX_DAYS)) return { ok: false, error: 'too_old' };
+    var al = standingRows_('FH_ALERT', est), done = {};
+    al.forEach(function (a) { if (a.kind === 'fixdone') done[String(a.ref)] = true; });
+    if (al.some(function (a) { return a.kind === 'fixask' && String(a.ref) === chit && !done[a.id]; })) return { ok: false, error: 'already' };
+    var ss = book_(), sh = roomTab_(ss, 'FH_ALERT'), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
+    var row = { id: 'FX-' + est + '-' + now.replace(/\D/g, '') + '-' + Math.random().toString(36).slice(2, 6), date: String(c.date), company: ESTATE_COMPANY[est] || '', estate: est,
+      keyed_by: user.user_code, keyed_at: now, phone: String(req.phone || ''), status: 'active', replaces: '', received_at: now,
+      chit: chit, kind: 'fixask', block: '', lot: '', detail: note, staff_note: '', direction: '', direction_by: '', ref: chit };
+    sh.appendRow(head.map(function (k) { return plain(row[k] === undefined ? '' : row[k]); }));
+    return { ok: true, done: 'fixask', id: row.id };
+  } finally { lock.releaseLock(); }
+}
+function chitFixes_(est) {
+  var al = standingRows_('FH_ALERT', est), asks = {}, out = [];
+  al.forEach(function (a) { if (a.kind === 'fixask') asks[a.id] = { ask: a, done: null }; });
+  al.forEach(function (a) { if (a.kind === 'fixdone' && asks[String(a.ref)]) asks[String(a.ref)].done = a; });
+  Object.keys(asks).forEach(function (k) { out.push(asks[k]); });
+  return out;
 }
 
 // ---------------- v1.26 Rekod: the month's crop in detail, like the estate's Excel ----------------

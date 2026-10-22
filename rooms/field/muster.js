@@ -442,7 +442,7 @@
       out.push({ key: 'G:' + g.ticket_no, kind: 'grading', block: '', lot: '', ref: g.ticket_no, detail: 'Tiket ' + g.ticket_no + ': ' + g.flag,
                  bm: 'Gred kilang tiket ' + g.ticket_no + ' (' + shortDate(g.date) + '): ' + g.flag, en: 'Poor mill grading: what is going on in the estate?' });
     });
-    if (b.ramp && b.ramp.bunches && b.ramp.since && b.ramp.since < yday) {
+    if (b.ramp && b.ramp.bunches && b.ramp.since && b.ramp.since < EA.today()) {      // v1.33: fruit should leave within 24 hours
       out.push({ key: 'R:' + b.ramp.since, kind: 'ramp', block: '', lot: '', detail: b.ramp.bunches + ' tandan, ' + rampText(b.ramp),
                  bm: 'Buah lama di ramp: ' + b.ramp.bunches + ' tandan (' + rampText(b.ramp) + ')', en: 'Bunches waiting at the ramp for more than a day' });
     }

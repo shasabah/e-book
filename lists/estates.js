@@ -19,7 +19,14 @@ EA.lists.blocks = [
   { estate: 'SSGT', block: '04', name: 'Block 4', ha: 32.34 }
 ];
 // Mills and collecting centres Sugut sends to (from the Sugut FFB tonnage file 2026).
+// v1.29: the real list is the office sheet's LIST_MILLS (core/mills.js keeps the phone's copy); this list is
+// only used until the phone has fetched it once.
 EA.lists.mills = ['Boustead (BOU)', 'Sri Kamusan CC (SKCC)', 'SKPOM', 'Fortuna', 'Sinar C'];
+EA.lists.millsFor = function (estate) {
+  var c = null;
+  try { c = EA.local && EA.local.get('ea.mills.' + estate, null); } catch (e) {}
+  return c && c.names && c.names.length ? c.names.slice() : EA.lists.mills.slice();
+};
 // Mill grading limits: above these the staff must say what is going on (DRAFT, to confirm
 // with Yu Chen / the Assistant Manager). Percent of the bunches graded. Any rejected
 // bunch or any penalty also needs an explanation.

@@ -283,9 +283,13 @@
       '<div><b>' + (f.mt ? f2(f.mt) : '—') + '</b><small>' + (d.lorries.length + d.tickets.length) + EA.t(' lori · MT', ' lorry · MT') + '</small></div></div>' +
       jobsCard(d, chit) + (harv.length ? harvCard(harv) : '') + lorryCard(d, f);
     if (f.corrected) h += '<button type="button" class="card rk-fix" id="rk-fix"><span>' + EA.t('Chit dibetulkan ', 'Chit corrected ') + f.corrected + '×</span><b>' + EA.t('LIHAT ›', 'SEE ›') + '</b></button>';
+    // v1.32 C: the clerk (or the Owner) asks the staff to fix a chit of the last 3 days.
+    var canAsk = chit && !chit.imp && /^(Clerk|Owner)$/.test(ctx.user.role) && d.date >= EA.dayAgo(3);
+    if (canAsk) h += '<button type="button" class="btn btn-ghost rk-ask" id="rk-ask">ASK TO FIX THIS CHIT<small>Minta betulkan chit</small></button>';
     if (chit && chit.raw) h += '<button type="button" class="btn btn-ghost rk-wa" data-wa="' + esc(chit.id) + '">WHATSAPP TEXT<small>Lihat teks WhatsApp</small></button>';
     el.innerHTML = h;
     $('#hs-up').onclick = function () { openDay = ''; render(el, ctx); };
+    var ak = $('#rk-ask'); if (ak) ak.onclick = function () { askFix(d, chit); };
     var fx = $('#rk-fix'); if (fx) fx.onclick = function () {
       ui().openSheet('<h2 id="sheet-title">' + EA.t('Pembetulan', 'Corrections') + '</h2>' + fixPane(d) + '<div class="actions"><button class="btn btn-ghost" type="button" id="fx-close">CLOSE<small>Tutup</small></button></div>',
         function (s) { s.querySelector('#fx-close').onclick = ui().closeSheet; });
@@ -349,6 +353,32 @@
     if (ch.kind === 'add') return '+ ' + person(ch.w) + ' → ' + what(ch);
     if (ch.kind === 'off') return '− ' + person(ch.w) + EA.t(' (dikeluarkan dari ', ' (taken off ') + what(ch) + ')';
     return person(ch.w) + ': ' + what(ch.from || {}) + ' → ' + what(ch);
+  }
+  function askFix(d, chit) {
+    var s0 = chit.rows ? chit.rows.filter(function (r) { return r.status !== 'removed'; }).length : 0;
+    ui().openSheet('<h2 id="sheet-title">ASK TO FIX THIS CHIT<small>Minta betulkan chit</small></h2>' +
+      '<p class="hint">' + esc(dayLabel(d.date)) + ' · ' + esc(chit.byName || chit.by || '') + (s0 ? ' · ' + s0 + EA.t(' pekerja', ' workers') : '') + '</p>' +
+      '<div class="field"><label for="ak-note">' + EA.t('Apa yang salah? (cth. Pekerja Contoh 3 tanda H, sepatutnya T)', 'What is wrong? (e.g. Pekerja Contoh 3 marked H, should be T)') + ' *</label><textarea id="ak-note" class="text-input" rows="3" maxlength="200"></textarea></div>' +
+      '<p class="note-sun">' + EA.t('Hanya chit 3 hari terakhir. Staf nampak di "Perlu tindakan". Pengurus diberitahu bila dibetulkan.', 'Only chits of the last 3 days. The staff sees it in "Needs action". The manager is told when it is fixed.') + '</p>' +
+      '<p class="msg" id="ak-err" hidden></p><div class="actions"><button class="btn btn-ghost btn-back" type="button" id="ak-no">‹ BACK<small>‹ BALIK</small></button>' +
+      '<button class="btn btn-main" type="button" id="ak-ok">SEND<small>Hantar</small></button></div>',
+      function (s) {
+        s.querySelector('#ak-no').onclick = ui().closeSheet;
+        s.querySelector('#ak-ok').onclick = async function () {
+          var n = s.querySelector('#ak-note').value.trim(), m = s.querySelector('#ak-err');
+          function show(t) { m.textContent = t; m.hidden = false; }
+          if (n.length < 3) return show(EA.t('Tulis apa yang salah.', 'Write what is wrong.'));
+          if (!EA.sendLink() || !navigator.onLine) return show(EA.t('Perlu isyarat.', 'Needs signal.'));
+          this.disabled = true;
+          var j = await EA.askFull('chitAsk', { estate: ctx.estate, chit: chit.id, note: n });
+          if (!j || !j.ok) {
+            this.disabled = false;
+            var E = { already: ['Sudah diminta dan menunggu Staf.', 'Already asked and waiting for the staff.'], too_old: ['Chit lebih 3 hari. Beritahu Pengurus.', 'The chit is over 3 days old. Tell the manager.'], no_chit: ['Chit belum sampai di pejabat.', 'The chit has not reached the office yet.'] }[(j && j.error) || ''];
+            return show(E ? EA.t(E[0], E[1]) : EA.t('Tidak dihantar: ', 'Not sent: ') + ((j && j.error) || 'busy'));
+          }
+          ui().closeSheet(); ui().toast(EA.t('Dihantar · Staf akan nampak', 'Sent · the staff will see it'));
+        };
+      });
   }
   function fixPane(d) {
     return d.chits.map(function (c) {

@@ -77,11 +77,16 @@ const { chromium } = require('playwright');
   check('Kerja: one lot can be taken off (several lots stay)', some === '1-24 1-29 1-30', some);
   await p.click('[data-alllots]'); await p.waitForTimeout(300);
   check('Kerja: SEMUA chooses all again', (await p.$$eval('[data-onelot][aria-pressed="true"]', a => a.length)) === 4);
-  await p.click('[data-st="j1"][data-v="Y"]').catch(() => {});
+  await p.click('[data-st="j1"][data-v="Y"]');
   await p.click('#wk-check'); await p.waitForTimeout(400);
   for (let k = 0; k < 3; k++) { const ok = p.locator('#sheet-back .btn-ok, #sheet-back .btn-main').last(); if (await p.isVisible('#sheet-back') && await ok.count()) { await ok.click(); await p.waitForTimeout(400); } }
   const wq = await p.evaluate(() => JSON.parse(localStorage.getItem('ea.queue') || '[]').filter(x => x.tab === 'FH_WORK' && x.row.task_code === 'ITF').map(x => x.row.lot + '|' + x.row.qty));
   check('saved: one line, 1 day, with all the lots', wq.length === 1 && wq[0] === '1-24 1-26 1-29 1-30|1', JSON.stringify(wq));
+  // v1.34.2: ITF marked SIAP = the crop on its lots went to the ramp (no second keying on the Ramp screen)
+  const cq = await p.evaluate(() => JSON.parse(localStorage.getItem('ea.queue') || '[]').filter(x => x.tab === 'FH_COLLECT').map(x => x.row.lot + ':' + x.row.bunches + ':' + x.row.cleared + ':' + x.row.tractor).sort());
+  check('ITF SIAP: its lots with crop in the field are collected to the ramp and cleared (tractor named)', cq.join(' ') === '1-24:102:Y:T1 1-26:160:Y:T1', JSON.stringify(cq));
+  const left = await p.evaluate(() => EA.fh.harvest.fieldLeft('SSGT'));
+  check('the field shows nothing left on those lots', !(left['1-24'] > 0) && !(left['1-26'] > 0), JSON.stringify(left));
   check('no page errors', errs.length === 0, errs.join(' | '));
   await b.close();
 })();

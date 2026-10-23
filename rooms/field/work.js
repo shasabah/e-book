@@ -110,7 +110,8 @@
         var k = kind(j.task);
         // A harvester keeps his own lot: the one he cut last time, when it is on today's job.
         var own = k === 'bunches' && mine[w] && j.lots.indexOf(mine[w]) >= 0 ? mine[w] : '';
-        d.lines[w] = [{ lot: j.lots.length === 1 ? j.lots[0] : own, qty: k === 'day' ? '1' : '', bunches: '' }];
+        // v1.34.1: a day-paid job (e.g. the farm tractor ITF) covers all its lots in the day: they all start chosen.
+        d.lines[w] = [{ lot: j.lots.length === 1 ? j.lots[0] : k === 'day' ? j.lots.join(' ') : own, qty: k === 'day' ? '1' : '', bunches: '' }];
       });
       d.status[j.key] = { done: '', reason: '' };
       // Ha jobs (CPS, manuring, slashing): the morning's lots start as done (100%);
@@ -265,6 +266,14 @@
       }
       var rows = k === 'ticket' ? '<span class="hint">' + EA.t('Ikut tiket kilang', 'From the mill ticket') + '</span>' :
         wl.map(function (l, i) {
+          // v1.34.1 (Yu Chen, 23 Oct): a day-paid job picks several lots, or all (one tractor and loader cover a
+          // harvester team's lots in a day); the chosen lots are kept together on one line.
+          if (k === 'day' && j.lots.length > 1) {
+            var on = String(l.lot || '').split(' ').filter(Boolean);
+            var chips = '<div class="picks wk-lots"><button type="button" class="pick" data-w="' + w + '" data-i="' + i + '" data-alllots="1" aria-pressed="' + (on.length === j.lots.length) + '"><b>' + EA.t('SEMUA', 'ALL') + '</b><small>' + j.lots.length + EA.t(' petak', ' lots') + '</small></button>' +
+              j.lots.map(function (n) { return '<button type="button" class="pick" data-w="' + w + '" data-i="' + i + '" data-onelot="' + esc(n) + '" aria-pressed="' + (on.indexOf(n) >= 0) + '"><b>' + esc(n) + '</b></button>'; }).join('') + '</div>';
+            return '<div class="wline">' + chips + '</div><div class="wline"><div class="seg"><button type="button" data-w="' + w + '" data-i="' + i + '" data-day="1" aria-pressed="' + (l.qty === '1') + '">1</button><button type="button" data-w="' + w + '" data-i="' + i + '" data-day="0.5" aria-pressed="' + (l.qty === '0.5') + '">½</button></div> hari</div>';
+          }
           var lotSel = j.lots.length > 1 ? '<select class="text-input" data-w="' + w + '" data-i="' + i + '" data-f="lot"><option value="">' + EA.t('Petak?', 'Lot?') + '</option>' +
             j.lots.map(function (n) { return '<option' + (n === l.lot ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select>' : (j.lots[0] ? '<span class="mono">' + esc(j.lots[0]) + '</span>' : '');
           var input = k === 'day'
@@ -326,6 +335,16 @@
         draft.lines[b.dataset.w][Number(b.dataset.i)].qty = b.dataset.day;
         b.parentNode.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', x === b); });
         keepDraft(); refresh(jobs);
+      };
+    });
+    el.querySelectorAll('[data-alllots],[data-onelot]').forEach(function (b) {
+      b.onclick = function () {
+        var j = jobs.find(function (x) { return x.people.indexOf(b.dataset.w) >= 0 && kind(x.task) === 'day'; });
+        var l = draft.lines[b.dataset.w][Number(b.dataset.i)], on = String(l.lot || '').split(' ').filter(Boolean);
+        if (b.dataset.alllots) on = on.length === j.lots.length ? [] : j.lots.slice();
+        else { var at = on.indexOf(b.dataset.onelot); if (at >= 0) on.splice(at, 1); else on.push(b.dataset.onelot); }
+        l.lot = j.lots.filter(function (n) { return on.indexOf(n) >= 0; }).join(' ');
+        keepDraft(); render(el, ctx);
       };
     });
     el.querySelectorAll('[data-add]').forEach(function (b) {

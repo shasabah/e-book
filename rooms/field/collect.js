@@ -99,7 +99,7 @@
     var testing = !EA.roomLive(ctx.room, ctx.estate);
     var head = '<div class="room-top">' +
       '<button type="button" class="back-btn" id="cl-back">‹ BACK<small>‹ BALIK</small></button>' +
-      '<div class="grow"><h1>' + EA.t('Kutip & hantar', 'Collect & dispatch') + '</h1><span class="brand-sub">' + esc(ctx.estate) + '</span></div>' +
+      '<div class="grow"><h1>' + EA.t('Ke ramp & lori', 'To the ramp & lorry') + '</h1><span class="brand-sub">' + esc(ctx.estate) + '</span></div>' +
       (testing ? '<span class="test-badge">' + EA.t('UJIAN', 'TEST') + '</span>' : '') + '</div>';
     if (ctx.user.role === 'Worker') {
       // Parked for the pilot (v22): the tractor driver and loader keep the paper; the staff keys it.
@@ -114,13 +114,17 @@
       EA.fh.backlogCard(ctx.estate) +
       (fixing() ? '<p class="warn"><span class="bm">Membetulkan nota hantar DN ' + esc(d.dn) + '. Yang lama kekal; yang baru menggantikannya.</span><span class="en">Correcting a delivery note. The old one stays on record; this one replaces it.</span> <button type="button" class="btn btn-ghost" id="cl-fixstop">STOP<small>Batal betulkan</small></button></p>' : '') +
 
-      '<section class="card" aria-labelledby="cl-s1"><h2 id="cl-s1"><span class="step">1</span><span class="inline"><span class="bm">Petak · tandan</span> · <span class="en">Lots and bunches</span></span></h2>' +
-      (fixing() ? '' : '<p class="hint">' + EA.t('Nombor dari Kerja harian (tandan menuai). Ubah hanya jika kertas pemuat berbeza.', 'Numbers from Day\'s work (bunches harvested). Change them only where the loader\'s paper differs.') + '</p>' +
+      // v1.33.1 (Yu Chen, 23 Oct): step 1 is the tractor and loader bringing the FFB to the ramp, with its own
+      // button; whether a lorry went is asked after the lots.
+      '<section class="card" aria-labelledby="cl-s1"><h2 id="cl-s1"><span class="step">1</span><span class="inline"><span class="bm">Traktor & pemuat → ramp</span> · <span class="en">Tractor & loader to the ramp</span></span></h2>' +
+      (fixing() ? '' : '<p class="hint">' + EA.t('Tandan yang dibawa ke ramp. Nombor dari Kerja harian; ubah hanya jika kertas pemuat berbeza.', 'Bunches brought to the ramp. Numbers from Day\'s work; change them only where the loader\'s paper differs.') + '</p>' +
+'') +
+      '<div id="cl-rows"></div>' +
+      (fixing() ? '' : '<h3 class="cl-q">' + EA.t('Lori keluar hari ini?', 'Did a lorry go today?') + '</h3>' +
         '<div class="choice" role="group" aria-label="' + EA.t('Lori hari ini', 'Lorry today') + '">' +
           '<button type="button" class="btn ' + (d.on ? 'btn-main' : 'btn-ghost') + '" id="cl-lorry-yes" aria-pressed="' + (d.on ? 'true' : 'false') + '">A LORRY WENT<small>Ada lori</small></button>' +
           '<button type="button" class="btn ' + (d.on ? 'btn-ghost' : 'btn-main') + '" id="cl-lorry-no" aria-pressed="' + (d.on ? 'false' : 'true') + '">NO LORRY<small>Tiada lori</small></button>' +
         '</div>') +
-      '<div id="cl-rows"></div>' +
       (lorryOn() ? '<details class="card-sub" id="cl-extra"' + (sumOf(d.extra) ? ' open' : '') + '><summary><span class="bm">Tandan tanpa rekod tuai, ikut blok</span> · <span class="en">Bunches with no harvest record, by block</span></summary>' +
         '<div class="blk-in">' + EA.lists.blocksFor(ctx.estate).map(function (b) {
           return '<div class="field"><label for="cl-db-' + esc(b.block) + '"><span class="bm">Blok ' + esc(b.block) + '</span><span class="en">' + EA.t('tandan', 'bunches') + '</span></label>' +
@@ -139,7 +143,7 @@
       '<label class="inline-check"><input type="checkbox" id="cl-rc"' + (d.ramp_cleared === 'Y' ? ' checked' : '') + '> ' + EA.t('Ramp kosong selepas lori ini', 'Ramp empty after this lorry') + '</label>' +
       '</section>' : '') +
 
-      '<div class="bottom-bar"><button type="button" class="btn btn-main" id="cl-save">SAVE<small>Simpan</small></button></div>' +
+      '<div class="bottom-bar"><button type="button" class="btn btn-main" id="cl-save">' + (lorryOn() ? 'SAVE<small>Simpan</small>' : 'SAVE TO THE RAMP<small>Simpan ke ramp</small>') + '</button></div>' +
       todayCard();
 
     $('#cl-back').onclick = function () { location.hash = ''; };
@@ -159,6 +163,7 @@
       $('#cl-rc').onchange = function () { draft.dispatch.ramp_cleared = this.checked ? 'Y' : ''; keepDraft(); };
     }
     $('#cl-save').onclick = save;
+
     drawRows();
     wireToday();
     EA.fh.wireBacklog(el, ctx.estate);
@@ -169,7 +174,9 @@
 
   function drawRows() {
     var list = rows(), on = lorryOn();
-    $('#cl-rows').innerHTML = list.length ? '<div class="rows">' + list.map(function (r) {
+    // v1.33.1: one button for "the tractor took everything to the ramp" (each lot collected and cleared).
+    var allBtn = !fixing() && list.some(function (r) { return r.field > 0; }) ? '<button type="button" class="btn btn-ok" id="cl-all">ALL TO THE RAMP<small>Semua ke ramp · habis semua petak</small></button>' : '';
+    $('#cl-rows').innerHTML = list.length ? allBtn + '<div class="rows">' + list.map(function (r) {
       var x = lorryOf(r), h = habis(r);
       return '<div class="list-line lot-row" data-row="' + esc(r.lot) + '"><div class="grow">' +
         '<b>' + esc(EA.fh.lotLabel(r.lot, r.block)) + '</b>' +
@@ -183,6 +190,10 @@
     }).join('') + '</div>'
       : '<p class="hint">' + EA.t('Tiada buah belum dihantar. Isi tandan penuai di Kerja harian dahulu.', 'No crop waiting. Key the harvesters\' bunches on Day\'s work first.') + '</p>';
     function rowOf(lot) { return list.find(function (r) { return r.lot === lot; }); }
+    var ab = el.querySelector('#cl-all'); if (ab) ab.onclick = function () {
+      list.forEach(function (r) { if (r.field > 0) draft.lots[r.lot] = { bunches: String(r.field), cleared: 'Y', block: r.block }; });
+      keepDraft(); drawRows(); ui().toast(EA.t('Semua petak: dikutip & habis. Semak, kemudian SIMPAN.', 'All lots: collected & cleared. Check, then SAVE.'));
+    };
     function refreshRow(r) {
       var hb = el.querySelector('input[data-hab="' + r.lot + '"]'); if (hb) hb.checked = habis(r) === 'Y';
       var x = lorryOf(r), lc = el.querySelector('input[data-lon="' + r.lot + '"]'), ln = el.querySelector('input[data-ln="' + r.lot + '"]');

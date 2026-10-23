@@ -228,7 +228,7 @@
     var items = [];
     if (!loaderOnly) items.push(['muster', '#field-harvest', 'Pagi', 'Morning']);
     if (!loaderOnly) items.push(['work', '#field-harvest/work', 'Kerja', 'Work']);
-    items.push(['collect', '#field-harvest/collect', 'Lori', 'Lorry']);
+    items.push(['collect', '#field-harvest/collect', 'Ramp', 'Ramp']);       // v1.33.1: tractor to the ramp, then the lorry
     if (!loaderOnly && clerkish) items.push(['ticket', '#field-harvest/ticket', 'Tiket', 'Ticket']);
     if (!loaderOnly) items.push(['history', '#field-harvest/history', 'Rekod', 'Records']);
     return '<nav class="tabs botbar" aria-label="' + EA.t('Skrin', 'Screens') + '">' + items.map(function (it) {

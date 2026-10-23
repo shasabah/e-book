@@ -1835,7 +1835,7 @@ function todo_(user, req) {
     if (r === 'Staff' && fld.length) {
       var nb = fld.reduce(function (a, x) { return a + x.bunches; }, 0), first = fld.map(function (x) { return x.since; }).sort()[0];
       add({ id: 'FC:' + first, p: 2, ic: 'LR', bm: nb + ' tandan dituai belum dikutip ke ramp', en: nb + ' bunches cut, not yet carried to the ramp',
-        sub: 'Sejak ' + shortD_(first) + ' · kunci kutipan di skrin Lori (Kutip & hantar)', go: '#field-harvest/collect' });
+        sub: 'Sejak ' + shortD_(first) + ' · tekan di sini → Semua ke ramp', go: '#field-harvest/collect' });
     }
     return b;
   }

@@ -127,16 +127,37 @@
     var n = daysSince(d);
     return { n: n, cls: n < r.ready ? 'lot-done' : n <= r.late ? 'lot-due' : 'lot-late' };
   }
+  // v1.34 (Yu Chen, 23 Oct): the farm tractor (ITF) and its loader (LFF) go where the crop is: the
+  // lots of today's harvest on this chit, and lots with bunches still in the field from earlier days.
+  var COLLECT_JOBS = ['ITF', 'LFF'];
+  function collectLots(block) {
+    var out = {};
+    draft.jobs.forEach(function (j) { if (j.task === EA.lists.HARVEST && j.block === block) j.lots.forEach(function (l) { out[l] = EA.t('tuai hari ini', 'harvest today'); }); });
+    var b = getBacklog(ctx.estate);
+    ((b && b.field) || []).forEach(function (x) { if (x.block === block && x.bunches > 0 && !/^Blk /.test(x.lot)) out[x.lot] = EA.t('baki ', 'left ') + x.bunches + EA.t(' tandan sejak ', ' bunches since ') + shortDate(x.since); });
+    return out;
+  }
+  function collectBlock() {
+    var n = {};
+    draft.jobs.forEach(function (j) { if (j.task === EA.lists.HARVEST && j.block) n[j.block] = (n[j.block] || 0) + 100; });
+    var b = getBacklog(ctx.estate);
+    ((b && b.field) || []).forEach(function (x) { if (x.block) n[x.block] = (n[x.block] || 0) + x.bunches; });
+    return Object.keys(n).sort(function (a, c) { return n[c] - n[a]; })[0] || '';
+  }
   function lotPicks(block, chosen, code) {
     if (!block) return '<p class="hint">' + EA.t('Pilih blok dahulu.', 'Choose a block first.') + '</p>';
     var last = EA.lists.lotRound[code] ? lotLast(code) : {}, ready = [];
+    var crop = COLLECT_JOBS.indexOf(code) >= 0 ? collectLots(block) : null;
     var html = EA.lists.lotsFor(ctx.estate, block).map(function (l) {
+      if (crop && crop[l.lot]) return '<button type="button" class="pick lot-due" data-lot="' + l.lot + '" aria-pressed="' + (chosen.indexOf(l.lot) >= 0) + '"><b>' + esc(l.label || l.lot) + '</b><small>' + esc(crop[l.lot]) + '</small></button>';
       var st = lotState(code, l.lot, last);
       if (st && st.cls !== 'lot-done') ready.push(l.lot);
       return '<button type="button" class="pick' + (st ? ' ' + st.cls : '') + '" data-lot="' + l.lot + '" aria-pressed="' + (chosen.indexOf(l.lot) >= 0) + '"><b>' + esc(l.label || l.lot) + '</b><small>' +
         (st ? st.n + EA.t(' hari', st.n === 1 ? ' day' : ' days') : l.durian ? EA.t('durian', 'durian') : l.ha.toFixed(2) + ' Ha') + '</small></button>';
     }).join('');
     var top = '';
+    if (crop) top = Object.keys(crop).length ? '<p class="hint">' + EA.t('Ditanda sendiri: petak tuai hari ini dan petak belum dikutip. Buang tanda jika traktor tidak pergi.', 'Ticked for you: today\'s harvest lots and lots not yet collected. Untick a lot the tractor will not go to.') + '</p>'
+      : '<p class="hint">' + EA.t('Tiada tuaian atau baki dalam blok ini. Tambah kerja tuai dahulu, atau pilih petak sendiri.', 'No harvest or crop left in this block. Add the harvest job first, or pick lots yourself.') + '</p>';
     if (EA.lists.lotRound[code]) {
       var r = EA.lists.lotRound[code];
       top = (ready.length ? '<button type="button" class="btn btn-ok jb-suggest" id="jb-suggest" data-lots="' + ready.join(' ') + '">' +
@@ -761,6 +782,10 @@
       '<p class="hint jb-round" id="jb-round" hidden></p>' +
       '<div class="field"><span class="inline"><span class="bm">Petak · jika tahu</span> · <span class="en">Lots, if known</span></span><div id="jb-lots"></div>' +
         '<p class="hint"><span class="bm">Belum pasti petak? Boleh isi petang di Kerja.</span><span class="en">Lots not sure yet? Add them in the afternoon in Day\'s work.</span></p></div></div>' +
+      // v1.34: the tractor's loader partner goes on the same lots (as LFF).
+      (key ? '' : '<div class="field" id="jb-pair" hidden><label for="jb-ld"><span class="bm">Pasangan pemuat (LFF)</span><span class="en">Loader partner (LFF)</span></label><select id="jb-ld" class="text-input"><option value="">' + EA.t('— Tiada / pilih nanti —', '— None / later —') + '</option>' +
+        EA.lists.workersFor(ctx.estate).filter(function (w) { return !onOtherChit()[w.id]; }).sort(function (a, b) { return /Muat|Load/i.test(b.gang || '') - /Muat|Load/i.test(a.gang || '') || (a.name < b.name ? -1 : 1); })
+          .map(function (w) { return '<option value="' + esc(w.id) + '">' + esc(w.name) + (w.gang ? ' · ' + esc(w.gang) : '') + '</option>'; }).join('') + '</select></div>') +
       '<div class="field"><label for="jb-mdr"><span class="bm">Mandor</span><span class="en">Foreman (optional)</span></label><select id="jb-mdr" class="text-input"><option value="">' + EA.t('— Tiada —', '— None —') + '</option>' +
         EA.lists.mandorsFor(ctx.estate).map(function (m) { return '<option value="' + m.id + '"' + (m.id === pick.mandor ? ' selected' : '') + '>' + esc(m.name) + '</option>'; }).join('') + '</select></div>' +
       '<div class="actions">' + (key ? '<button class="btn btn-ghost" type="button" id="jb-del"' + (used ? ' disabled title="Ada orang dalam kerja ini"' : '') + '>REMOVE<small>Buang</small></button>' : '') +
@@ -780,6 +805,11 @@
           var rd = s.querySelector('#jb-round'), rt = roundText(pick.task, pick.block);
           rd.hidden = !rt; rd.innerHTML = rt;
           if (pick.block && EA.lists.isDurian(ctx.estate, pick.block) && EA.lists.palmOnly.indexOf(pick.task) >= 0) { pick.block = ''; pick.lots = []; }
+          if (COLLECT_JOBS.indexOf(pick.task) >= 0 && !key) {
+            if (!pick.block) pick.block = collectBlock();
+            if (pick.block && !pick.lots.length && pick.autoFor !== pick.task + pick.block) { pick.lots = Object.keys(collectLots(pick.block)); pick.autoFor = pick.task + pick.block; }
+          }
+          var pr = s.querySelector('#jb-pair'); if (pr) pr.hidden = !(pick.task === 'ITF' && !key);
           s.querySelector('#jb-block').innerHTML = blockOptions(pick.block, !needs, pick.task);
           s.querySelector('#jb-lots').innerHTML = lotPicks(pick.block, pick.lots, pick.task);
           var sg = s.querySelector('#jb-suggest');
@@ -811,7 +841,13 @@
           if (same) { ui().toast(EA.t('Kerja ini sudah ada', 'This job is already on the chit'), 'bad'); return; }
           if (j0) { j0.task = pick.task; j0.block = pick.block; j0.lots = pick.lots; j0.mandor = pick.mandor; }
           else { var nj = { key: 'j' + (draft.nextJob++), task: pick.task, block: pick.block, lots: pick.lots, mandor: pick.mandor }; draft.jobs.push(nj);
-                 if (pick.mandor && !draft.marks[pick.mandor]) draft.marks[pick.mandor] = 'H'; }
+                 if (pick.mandor && !draft.marks[pick.mandor]) draft.marks[pick.mandor] = 'H';
+                 var ld = s.querySelector('#jb-ld') && pick.task === 'ITF' ? s.querySelector('#jb-ld').value : '';
+                 if (ld) {        // the loader partner: an LFF job on the same lots
+                   var lj = draft.jobs.find(function (x) { return x.task === 'LFF' && x.block === pick.block && x.lots.join(' ') === pick.lots.join(' '); });
+                   if (!lj) { lj = { key: 'j' + (draft.nextJob++), task: 'LFF', block: pick.block, lots: pick.lots.slice(), mandor: '' }; draft.jobs.push(lj); }
+                   draft.marks[ld] = 'H'; draft.jobOf[ld] = lj.key;
+                 } }
           keepDraft(); ui().closeSheet(); drawAll();
         };
       });
@@ -967,6 +1003,11 @@
           en: EA.t('Biasanya dia di ladang durian. Betul dia buat kerja ini hari ini?', 'Usually at the durian farm. Is this really his job today?') });
       }
     });
+    // v1.34: the farm tractor (ITF) normally has a loader (LFF) with it.
+    var jobPeople = function (task) { return Object.keys(draft.marks).filter(function (id) { var j = draft.marks[id] === 'H' ? jobFor(id) : null; return j && j.task === task; }); };
+    var itf = jobPeople('ITF');
+    if (itf.length && !jobPeople('LFF').length) out.push({ key: 'C:pair:' + itf.join(','), ref: itf.join(' '), bm: EA.t('Traktor tanpa pemuat: ', 'Tractor with no loader: ') + itf.map(function (id) { return (byId[id] || {}).name || id; }).join(', ') + ' (ITF)',
+      en: EA.t('Pemuat tak hadir atau buah sedikit? Jika pekerja lain ganti, BETULKAN dan tambah dia sebagai LFF.', 'Loader absent or little crop? If another worker replaces him, FIX and add him as LFF.') });
     var on = people.filter(function (w) { return draft.marks[w.id] === 'H'; }), off = people.filter(function (w) { return draft.marks[w.id] && draft.marks[w.id] !== 'H'; });
     // A name part many people share (a family name, "Contoh") is not a sign of a wrong tap.
     var all = people.map(function (w) { return nameParts(w.name); });

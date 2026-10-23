@@ -60,6 +60,28 @@ const { chromium } = require('playwright');
   await p.waitForTimeout(200); await p.click('#fh-addjob'); await p.waitForSelector('#jb-task');
   await p.click('#jb-quick [data-quick="MAN"]'); await p.waitForTimeout(200);
   check('other jobs (MAN) do not fill lots by themselves', (await p.$$eval('#jb-lots .pick[aria-pressed="true"]', a => a.length)) === 0 && await p.isHidden('#jb-pair'));
+  // v1.34.1: on Kerja (day's work), the tractor's day covers several lots, or all
+  if (await p.isVisible('#jb-cancel')) { await p.click('#jb-cancel'); await p.waitForTimeout(200); }
+  await p.evaluate(() => {
+    const t = (() => { const x = new Date(); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); })();
+    const rows = [{ id: 'R1', worker_id: 'T1', muster: 'H', task_code: 'ITF', block: '01', lots: '1-24 1-26 1-29 1-30', mandor: '' }];
+    localStorage.setItem('fh.chits2', JSON.stringify([{ chit: 'MC-T', date: t, estate: 'SSGT', rows, jobs: [{ key: 'j1', task: 'ITF', block: '01', lots: ['1-24', '1-26', '1-29', '1-30'], mandor: '' }], alerts: [], confirmedAt: '06:30', rev: 1, chitRowId: 'C1' }]));
+    localStorage.removeItem('fh.workdraft'); localStorage.removeItem('fh.draft2');
+  });
+  await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(100); await p.evaluate(() => { location.hash = 'field-harvest/work'; }); await p.waitForTimeout(700);
+  const allOn = await p.$$eval('[data-onelot][aria-pressed="true"]', a => a.map(x => x.dataset.onelot).join(' '));
+  check('Kerja: the tractor\'s lots all start chosen (SEMUA)', allOn === '1-24 1-26 1-29 1-30' && await p.locator('[data-alllots][aria-pressed="true"]').count() === 1, allOn);
+  await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v45-work.png' });
+  await p.click('[data-onelot="1-26"]'); await p.waitForTimeout(300);
+  const some = await p.$$eval('[data-onelot][aria-pressed="true"]', a => a.map(x => x.dataset.onelot).join(' '));
+  check('Kerja: one lot can be taken off (several lots stay)', some === '1-24 1-29 1-30', some);
+  await p.click('[data-alllots]'); await p.waitForTimeout(300);
+  check('Kerja: SEMUA chooses all again', (await p.$$eval('[data-onelot][aria-pressed="true"]', a => a.length)) === 4);
+  await p.click('[data-st="j1"][data-v="Y"]').catch(() => {});
+  await p.click('#wk-check'); await p.waitForTimeout(400);
+  for (let k = 0; k < 3; k++) { const ok = p.locator('#sheet-back .btn-ok, #sheet-back .btn-main').last(); if (await p.isVisible('#sheet-back') && await ok.count()) { await ok.click(); await p.waitForTimeout(400); } }
+  const wq = await p.evaluate(() => JSON.parse(localStorage.getItem('ea.queue') || '[]').filter(x => x.tab === 'FH_WORK' && x.row.task_code === 'ITF').map(x => x.row.lot + '|' + x.row.qty));
+  check('saved: one line, 1 day, with all the lots', wq.length === 1 && wq[0] === '1-24 1-26 1-29 1-30|1', JSON.stringify(wq));
   check('no page errors', errs.length === 0, errs.join(' | '));
   await b.close();
 })();

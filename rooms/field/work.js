@@ -541,10 +541,40 @@
     } catch (e) { EA.batchCancel(); ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad'); return; }
     keepSaved({ chit: rec.chit, date: rec.date, estate: rec.estate, rec: rec, lines: draft.lines, status: draft.status, prog: draft.prog, manual: draft.manual, bags: draft.bags || {}, checker: draft.checker, rev: old ? (old.rev || 1) + 1 : 1, chitRev: chit.rev || 1 });
     dropDraft();
-    ui().toast(EA.t('Kerja harian disimpan', 'Day\'s work saved'));
+    var moved = autoCollect(rec, at);
+    ui().toast(EA.t('Kerja harian disimpan', 'Day\'s work saved') + (moved ? ' · ' + moved + EA.t(' tandan ke ramp', ' bunches to the ramp') : ''));
     if (navigator.onLine && EA.sendLink()) EA.send();
     render(el, ctx);
     showReport(savedFor(rec.chit));
+  }
+
+  // v1.34.2 (Yu Chen, 23 Oct): the farm tractor's job (ITF) marked SIAP means the crop on its lots went to the
+  // ramp, so the staff keys it once: each of its lots with bunches still in the field is collected and cleared
+  // ("Habis"), as if SEMUA KE RAMP was pressed. A correction of the same day's work does not collect again.
+  function autoCollect(rec, at) {
+    var done = (rec.jobs || []).some(function (j) { return j.task_code === 'ITF' && j.status === 'done'; });
+    if (!done || !EA.fh.harvest) return 0;
+    var all = EA.local.get('fh.collect', []);
+    if (all.some(function (s) { return s.fromWork === rec.chit && s.estate === rec.estate; })) return 0;
+    var lots = {}, drivers = [], loaders = [];
+    rec.lines.forEach(function (l) {
+      if (l.task_code === 'ITF') { if (drivers.indexOf(l.worker_id) < 0) drivers.push(l.worker_id); String(l.lot || '').split(' ').filter(Boolean).forEach(function (n) { lots[n] = l.block; }); }
+      if (l.task_code === 'LFF' && loaders.indexOf(l.worker_id) < 0) loaders.push(l.worker_id);
+    });
+    var fl = EA.fh.harvest.fieldLeft(rec.estate), lines = [];
+    Object.keys(lots).forEach(function (n) { if ((fl[n] || 0) > 0) lines.push({ lot: n, block: lots[n] || ((EA.lists.lot(rec.estate, n) || {}).block || ''), bunches: String(fl[n]), cleared: 'Y' }); });
+    if (!lines.length) return 0;
+    var cr = { date: rec.date, estate: rec.estate, at: at, tractor: drivers.join(' '), loader: loaders.join(' '), lines: lines, dispatch: null, ids: [], disIds: {}, lotIds: {}, fromWork: rec.chit };
+    try {
+      EA.batchStart();
+      lines.forEach(function (l) {
+        l.id = EA.save('FH_COLLECT', ROOM, rec.estate, { date: rec.date, block: l.block, lot: l.lot, bunches: l.bunches, cleared: 'Y', tractor: cr.tractor, loader: cr.loader, note: 'Kerja ITF siap' }).id;
+        cr.ids.push(l.id);
+      });
+      EA.batchEnd();
+    } catch (e) { EA.batchCancel(); return 0; }
+    all.push(cr); EA.local.set('fh.collect', all);
+    return lines.reduce(function (a, l) { return a + Number(l.bunches); }, 0);
   }
 
   // ---------- the evening report ----------

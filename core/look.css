@@ -614,3 +614,7 @@ div.td-it { cursor: default; }
 .td-t { flex: 1; font-size: .92rem; } .td-t small { display: block; color: var(--muted, #888); font-size: .76rem; }
 .td-go { color: #1f5aa6; font-weight: 700; font-size: 1.2rem; }
 .td-done { margin: 12px 0; background: #e8f4ec; color: #2e7d4f; border-radius: 14px; padding: 10px; font-weight: 700; text-align: center; }
+
+/* v1.33.1 Ke ramp & lori */
+.cl-q { margin: 14px 0 4px; font-size: 1rem; }
+#cl-all { width: 100%; margin: 4px 0 10px; }

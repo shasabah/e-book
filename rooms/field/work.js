@@ -58,8 +58,18 @@
   // ---------- which chit ----------
   function chitsFor(estate) {
     var t = EA.today(), yd = daysAgo(1);     // the phone's own day (Malaysia), not UTC
-    return EA.fh.allChits().filter(function (c) { return c.estate === estate && (c.date === t || c.date === yd); })
+    return EA.fh.allChits().filter(function (c) { return c.estate === estate && (c.date === t || c.date === yd || fixOpen(c)); })
       .sort(function (a, b) { return (a.date + a.confirmedAt) < (b.date + b.confirmedAt) ? 1 : -1; });
+  }
+  // v1.35 C2 · Betulkan kerja hari (Yu Chen, 24 Oct): an older day's work opens again only when its chit was
+  // fixed at the clerk's request (MINTA BETULKAN CHIT), only for 3 days, and only on the phone that saved it
+  // (so the fix replaces the old lines, never adds a second copy). The staff cannot open an old day herself:
+  // a past chit can only change through the clerk's request (v1.32).
+  function past(c) { return !!c && c.date < daysAgo(1); }
+  function fixOpen(c) {
+    if (!c || c.date >= daysAgo(1) || c.date < daysAgo(3)) return false;
+    var s = savedFor(c.chit);
+    return !!(c.fixAsk || (c.rev || 1) > 1) && !!s && (s.chitRev || 1) < (c.rev || 1);
   }
   // The jobs on a chit, each with the people present on it.
   function jobsOf(c) {
@@ -91,9 +101,12 @@
       // The morning chit was corrected after this draft began (v1.3): people added get their
       // lines, people taken off lose theirs; what was already keyed for the others stays.
       if ((d.chitRev || 1) !== (c.rev || 1)) {
-        var fresh = freshDraft(c), keep = d.lines;
+        var fresh = freshDraft(c), keep = d.lines, was = {}, now = {}, sv = savedFor(c.chit);
+        // v1.35: a person whose job changed on the fixed chit (e.g. MT → ITF) starts from the new job, not the old line.
+        ((sv && sv.rec && sv.rec.lines) || []).forEach(function (l) { if (!was[l.worker_id]) was[l.worker_id] = l.task_code + '|' + (l.block || ''); });
+        jobsOf(c).forEach(function (j) { j.people.forEach(function (w) { now[w] = j.task + '|' + (j.block || ''); }); });
         d.lines = {};
-        Object.keys(fresh.lines).forEach(function (w) { d.lines[w] = keep[w] || fresh.lines[w]; });
+        Object.keys(fresh.lines).forEach(function (w) { d.lines[w] = keep[w] && (!was[w] || was[w] === now[w]) ? keep[w] : fresh.lines[w]; });
         Object.keys(fresh.status).forEach(function (k) { if (!d.status[k]) d.status[k] = fresh.status[k]; });
         Object.keys(fresh.prog).forEach(function (k) { if (!d.prog[k]) d.prog[k] = fresh.prog[k]; });
         d.chitRev = c.rev || 1;
@@ -213,11 +226,11 @@
     var done = savedFor(chit.chit);
     draft = loadDraft(chit);
     var chooser = list.length > 1 ? '<div class="field"><label for="wk-chit"><span class="bm">Chit</span><span class="en">Which morning chit</span></label><select id="wk-chit" class="text-input">' +
-      list.map(function (x) { return '<option value="' + esc(x.chit) + '"' + (x.chit === chit.chit ? ' selected' : '') + '>' + esc(niceDate(x.date) + ' · Chit ' + x.chit.split('-').pop() + ' · ' + x.confirmedAt) + '</option>'; }).join('') + '</select></div>' : '';
+      list.map(function (x) { return '<option value="' + esc(x.chit) + '"' + (x.chit === chit.chit ? ' selected' : '') + '>' + esc(niceDate(x.date) + ' · Chit ' + x.chit.split('-').pop() + ' · ' + x.confirmedAt + (past(x) ? EA.t(' · BETULKAN', ' · TO FIX') : '')) + '</option>'; }).join('') + '</select></div>' : '';
 
     if (done && !draft.replacing) {
       el.innerHTML = head + chooser +
-        '<p class="msg ok-msg"><span class="bm">Kerja harian untuk chit ini sudah disimpan.</span><span class="en">The day\'s work for this chit is saved.</span></p>' +
+        fixBand() + '<p class="msg ok-msg"><span class="bm">Kerja harian untuk chit ini sudah disimpan.</span><span class="en">The day\'s work for this chit is saved.</span></p>' +
         savedCard(done);
       wireTop();
       return;
@@ -227,6 +240,7 @@
     var jobs = jobsOf(chit);
     el.innerHTML = head + chooser +
       '<p class="hint">' + EA.t('Dari chit pagi ', 'From the morning chit of ') + esc(niceDate(chit.date)) + ' · ' + jobs.reduce(function (a, j) { return a + j.people.length; }, 0) + EA.t(' orang bekerja, ', ' people working, ') + jobs.length + EA.t(' kerja.', ' jobs.') + '</p>' +
+      fixBand() +
       (draft.replacing ? '<p class="warn"><span class="bm">Membetulkan kerja harian. Rekod lama kekal; yang baru menggantikannya.</span><span class="en">Correcting the day\'s work. The old record stays; this one replaces it.</span></p>' : '') +
       jobs.map(jobCard).join('') +
       '<section class="card"><h2><span class="inline"><span class="bm">Laporan petang</span> · <span class="en">Evening report</span></span></h2><pre class="chit" id="wk-preview"></pre></section>' +
@@ -235,6 +249,12 @@
     wireJobs(jobs);
     $('#wk-check').onclick = function () { check(jobs); };
     refresh(jobs);
+  }
+
+  function fixBand() {
+    if (!past(chit)) return '';
+    return '<p class="warn fix-band" id="wk-fixband"><b>' + EA.t('Betulkan · ', 'Fixing · ') + esc(niceDate(chit.date)) + '</b> <span class="bm">Chit hari itu sudah dibetulkan atas permintaan kerani. Kemas kini kerja supaya sama dengan chit. Boleh dibuat dalam 3 hari sahaja.</span>' +
+      '<span class="en">That day\'s chit was fixed at the clerk\'s request. Bring the work up to date so it matches the chit. Open for 3 days only.</span></p>';
   }
 
   function progBlock(j) {
@@ -554,6 +574,8 @@
   function autoCollect(rec, at) {
     var done = (rec.jobs || []).some(function (j) { return j.task_code === 'ITF' && j.status === 'done'; });
     if (!done || !EA.fh.harvest) return 0;
+    // v1.35: a fix of an older day never moves fruit: what is in the field now may be from later days.
+    if (rec.date < daysAgo(1)) return 0;
     var all = EA.local.get('fh.collect', []);
     if (all.some(function (s) { return s.fromWork === rec.chit && s.estate === rec.estate; })) return 0;
     var lots = {}, drivers = [], loaders = [];

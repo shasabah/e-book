@@ -133,15 +133,16 @@
   function collectLots(block) {
     var out = {};
     draft.jobs.forEach(function (j) { if (j.task === EA.lists.HARVEST && j.block === block) j.lots.forEach(function (l) { out[l] = EA.t('tuai hari ini', 'harvest today'); }); });
-    var b = getBacklog(ctx.estate);
-    ((b && b.field) || []).forEach(function (x) { if (x.block === block && x.bunches > 0 && !/^Blk /.test(x.lot)) out[x.lot] = EA.t('baki ', 'left ') + x.bunches + EA.t(' tandan sejak ', ' bunches since ') + shortDate(x.since); });
+    var b = getBacklog(ctx.estate), upTo = isPast() ? draft.date : '';
+    // v1.35: a past chit only offers lots cut on or before its own day (22 Oct offered 1-27/1-28, cut 23 Oct).
+    ((b && b.field) || []).forEach(function (x) { if (upTo && !(x.since && String(x.since).slice(0, 10) <= upTo)) return; if (x.block === block && x.bunches > 0 && !/^Blk /.test(x.lot)) out[x.lot] = EA.t('baki ', 'left ') + x.bunches + EA.t(' tandan sejak ', ' bunches since ') + shortDate(x.since); });
     return out;
   }
   function collectBlock() {
     var n = {};
     draft.jobs.forEach(function (j) { if (j.task === EA.lists.HARVEST && j.block) n[j.block] = (n[j.block] || 0) + 100; });
-    var b = getBacklog(ctx.estate);
-    ((b && b.field) || []).forEach(function (x) { if (x.block) n[x.block] = (n[x.block] || 0) + x.bunches; });
+    var b = getBacklog(ctx.estate), upTo = isPast() ? draft.date : '';
+    ((b && b.field) || []).forEach(function (x) { if (upTo && !(x.since && String(x.since).slice(0, 10) <= upTo)) return; if (x.block) n[x.block] = (n[x.block] || 0) + x.bunches; });
     return Object.keys(n).sort(function (a, c) { return n[c] - n[a]; })[0] || '';
   }
   function lotPicks(block, chosen, code) {
@@ -1132,9 +1133,17 @@
     // v1.7 History: every version of the chit, with who saved it, when, and what changed.
     var prevV = old ? (old.versions || [{ at: old.confirmedAt, by: old.keyedName || old.keyedBy, changes: [] }]) : [];
     c.versions = prevV.concat([{ at: confirmedAt, by: ctx.user.name, changes: old ? diffRows(old.rows, c.rows) : [] }]);
+    // v1.35: a past chit fixed at the clerk's request opens that day's work again (Kerja), for 3 days.
+    var workToo = false;
+    if (fixAsk && old && c.date !== EA.today()) {
+      c.fixAsk = fixAsk.ref || 'ask';
+      workToo = EA.local.get('fh.work', []).some(function (s) { return s.chit === c.chit; });
+      if (workToo) EA.local.set('fh.workchit', c.chit);
+    }
     keepChit(c);
     dropDraft();
-    ui().toast(EA.t('Chit disimpan', 'Chit saved') + (old ? ' (' + EA.t('dibetulkan', 'corrected') + ')' : ''));
+    ui().toast(EA.t('Chit disimpan', 'Chit saved') + (old ? ' (' + EA.t('dibetulkan', 'corrected') + ')' : '') +
+      (workToo ? EA.t(' · Sekarang betulkan Kerja hari itu', ' · Now fix that day\'s work') : ''));
     if (navigator.onLine && EA.sendLink()) EA.send();
     render(el, ctx);
     showChit(c.chit);

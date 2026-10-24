@@ -305,6 +305,7 @@ pre.chit { margin: 0; white-space: pre-wrap; word-break: break-word; font-family
 .inline-check input { width: 22px; height: 22px; }
 .flag-line { background: var(--wait-soft); border-radius: var(--r); padding: 8px 10px; }
 .warn-t { color: var(--wait); }
+.fix-band { border-left: 6px solid var(--wait); margin: 0 0 10px; }
 /* The one amber button: adds a job (sunrise, like the step numbers) */
 #fh-addjob { background: var(--wait-soft); border-color: transparent; color: #9a5b00; }
 .blk-in { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }

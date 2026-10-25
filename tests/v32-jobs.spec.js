@@ -82,10 +82,10 @@ const { chromium } = require('playwright');
   await p.click('#fh-addjob'); await p.waitForSelector('#jb-quick');
   const chips = await p.$$eval('#jb-quick [data-quick]', a => a.map(x => x.dataset.quick).join(','));
   check('Tambah kerja: the usual Sugut jobs are buttons at the top', chips === 'HA,ITF,LFF,LF,DF,MDR,CA,WM', chips);   // v1.36: the daily shortcuts
-  await p.evaluate(() => { const d = document.querySelector('#jb-more'); if (d) d.open = true; }); await p.click('.jb-quick [data-quick="RMH"]');
-  check('general/repair job: no block and no lots, says "no block needed"', await p.isHidden('#jb-where') && await p.isVisible('#jb-noblock') && (await p.getAttribute('.jb-quick [data-quick="RMH"]', 'aria-pressed')) === 'true');
+  await p.click('.jb-quick [data-quick="WM"]');
+  check('general/repair job: no block and no lots, says "no block needed"', await p.isHidden('#jb-where') && await p.isVisible('#jb-noblock') && (await p.getAttribute('.jb-quick [data-quick="WM"]', 'aria-pressed')) === 'true');
   await p.click('#jb-save'); await p.waitForTimeout(300);
-  check('general job saves with no block', /RMH/.test(await p.innerText('#fh-jobs')));
+  check('general job saves with no block', /WM/.test(await p.innerText('#fh-jobs')));
   await p.click('#fh-addjob'); await p.waitForSelector('#jb-quick');
   await p.evaluate(() => { const d = document.querySelector('#jb-more'); if (d) d.open = true; }); await p.click('.jb-quick [data-quick="CPS"]');
   check('field job: block and lots are shown again', await p.isVisible('#jb-where') && await p.isHidden('#jb-noblock'));

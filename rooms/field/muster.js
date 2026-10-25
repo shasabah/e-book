@@ -694,7 +694,11 @@
     var taken = onOtherChit();
     var left = unmarked();
     $('#fh-rows').innerHTML = (left.length ? '<p class="warn"><span class="bm">' + left.length + ' orang belum ditanda.</span><span class="en">' + left.length + ' people not marked yet.</span></p>' : '<p class="hint">' + EA.t('Semua orang sudah ditanda.', 'Everyone is marked.') + '</p>') +
-      everyone().map(function (w) {
+      // v1.38 (Yu Chen, 25 Oct): people still to mark come first; a person done (mark, and a job if H) shrinks to a
+      // short line, so the list gets shorter as the staff goes and a wrong mark stands out.
+      everyone().map(function (w, i) { var m0 = draft.marks[w.id], dn = !!m0 && (m0 !== 'H' || !!jobFor(w.id)); return { w: w, i: i, rank: taken[w.id] ? 2 : dn ? 1 : 0 }; })
+        .sort(function (a, b) { return a.rank - b.rank || a.i - b.i; }).map(function (o, n, arr) {
+      var w = o.w, head = (n === 0 || arr[n - 1].rank !== o.rank) && o.rank === 1 ? '<p class="hint rows-done"><b>' + EA.t('Sudah ditanda', 'Marked') + ' (' + arr.filter(function (x) { return x.rank === 1; }).length + ')</b></p>' : '';
       var other = taken[w.id];
       var m = draft.marks[w.id] || '';
       var j = m === 'H' ? jobFor(w.id) : null;
@@ -708,7 +712,7 @@
         }).join('') + (!showAll && draft.jobs.length > 1 ? '<button type="button" class="link-btn" data-chg="' + w.id + '">' + EA.t('TUKAR', 'CHANGE') + '</button>' : '') + '</div>' + (j ? '' : '<b class="bad-text">' + EA.t('Pilih kerja', 'Choose a job') + '</b>') : '<b class="bad-text">' + EA.t('Tambah kerja dahulu', 'Add a job first') + '</b>';
       } else if (m && m !== 'H') line = '<span class="pill plain">' + esc(EA.t(MARKS[m][0], MARKS[m][1])) + '</span>' + (m === 'T' ? lariFlag(w) : '');
       var more = (m === 'L' || m === 'X') ? m : '⋯';
-      return '<div class="wrow' + (other ? ' off' : '') + '">' +
+      return head + '<div class="wrow' + (other ? ' off' : '') + (o.rank === 1 && !openPick[w.id] ? ' wrow-done' : '') + '">' +
         '<div class="who-w"><b>' + esc(w.name) + '</b><span class="en">' + esc(w.id) + ' · ' + (w.mdr ? 'Mandor' : esc(w.gang)) + ' · ' + (w.sex === 'F' ? 'P' : 'L') + '</span></div>' +
         '<div class="seg" role="group" aria-label="' + esc(w.id) + '">' + ['H', 'S', 'C', 'T'].map(function (k) {
           return '<button type="button" data-w="' + w.id + '" data-k="' + k + '" aria-pressed="' + (m === k) + '" title="' + EA.t(MARKS[k][0], MARKS[k][1]) + '"' + (other ? ' disabled' : '') + '>' + k + '</button>';
@@ -920,37 +924,75 @@
   function pickPeople(key) {
     var j = job(key), taken = onOtherChit();
     var list = EA.lists.workersFor(ctx.estate).filter(function (w) { return !taken[w.id]; });
+    var byId = {}; list.forEach(function (w) { byId[w.id] = w; });
     var chosen = {};
     list.forEach(function (w) { if (draft.marks[w.id] === 'H' && jobFor(w.id) === j) chosen[w.id] = true; });
+    // v1.38 (Yu Chen, 25 Oct): people already on another job, or marked S / C / T, are kept apart (folded) and
+    // moving one asks first, so nobody is moved by a wrong tap.
+    function busyAs(id) {
+      var m = draft.marks[id];
+      if (m && m !== 'H') return EA.t(MARKS[m][0], MARKS[m][1]);
+      var o = m === 'H' ? jobFor(id) : null;
+      return o && o !== j ? o.task + (o.block ? ' Blk ' + o.block : '') : '';
+    }
+    var free = list.filter(function (w) { return !busyAs(w.id); }), busy = list.filter(function (w) { return !!busyAs(w.id); });
     var first = gangFirst(j.task);
     var groups = {}, other = EA.t('Lain-lain', 'Other');
-    list.forEach(function (w) { (groups[w.gang || other] = groups[w.gang || other] || []).push(w); });
+    free.forEach(function (w) { (groups[w.gang || other] = groups[w.gang || other] || []).push(w); });
     var order = Object.keys(groups).sort(function (a, b) { var fa = first.test(a), fb = first.test(b); return fa === fb ? (a < b ? -1 : 1) : (fa ? -1 : 1); });
     var last = lastChit(), before = [];
-    if (last) last.rows.forEach(function (r) { if (r.muster === 'H' && r.task_code === j.task && (!j.block || r.block === j.block) && list.some(function (w) { return w.id === r.worker_id; })) before.push(r.worker_id); });
-    function card(w) {
-      var elsewhere = draft.marks[w.id] && draft.marks[w.id] !== 'H' ? MARKS[draft.marks[w.id]][0] : (draft.marks[w.id] === 'H' && jobFor(w.id) && jobFor(w.id) !== j ? jobFor(w.id).task : '');
-      return '<button type="button" class="pick pick-name" data-w="' + w.id + '" data-n="' + esc(String(w.name).toLowerCase()) + '" aria-pressed="' + !!chosen[w.id] + '"><b>' + esc(w.name) + '</b><small>' + esc(w.id + ' · ' + (w.sex === 'F' ? 'P' : 'L') + (elsewhere ? ' · ' + elsewhere : '')) + '</small></button>';
+    if (last) last.rows.forEach(function (r) { if (r.muster === 'H' && r.task_code === j.task && (!j.block || r.block === j.block) && free.some(function (w) { return w.id === r.worker_id; })) before.push(r.worker_id); });
+    var byName = function (a, b) { return a.name < b.name ? -1 : 1; };
+    function card(w, note) {
+      return '<button type="button" class="pick pick-name" data-w="' + w.id + '" data-n="' + esc(String(w.name).toLowerCase()) + '" aria-pressed="' + !!chosen[w.id] + '"' + (note ? ' data-busy="1"' : '') + '><b>' + esc(w.name) + '</b><small>' + esc(w.id + ' · ' + (w.sex === 'F' ? 'P' : 'L') + (note ? ' · ' + note : '')) + '</small></button>';
     }
     ui().openSheet('<h2 id="sheet-title"><span class="bm">' + esc(j.task + ' ' + jobName(j.task)) + (j.block ? ' · Blok ' + esc(j.block) : '') + '</span><span class="en">Tick the people on this job</span></h2>' +
+      // v1.38: the names already ticked, at the top, each with × to take off (a wrong pick is easy to see and fix).
+      '<div class="pp-chosen" id="pp-chosen"></div>' +
+      '<div class="msg pp-ask" id="pp-ask" hidden></div>' +
       (before.length ? '<div class="actions"><button class="btn btn-ghost" type="button" id="pp-last">SAME AS LAST TIME<small>Sama seperti ' + esc(niceDate(last.date)) + ' · ' + before.length + ' orang</small></button></div>' : '') +
       '<input class="text-input" id="pp-find" placeholder="' + EA.t('Cari nama', 'Search a name') + '" autocomplete="off">' +
       '<div id="pp-list">' + order.map(function (g) {
-        return '<p class="hint pick-group"><b>' + esc(g) + '</b></p><div class="picks">' + groups[g].slice().sort(function (a, b) { return a.name < b.name ? -1 : 1; }).map(card).join('') + '</div>';
-      }).join('') + '</div>' +
+        return '<p class="hint pick-group"><b>' + esc(g) + '</b></p><div class="picks">' + groups[g].slice().sort(byName).map(function (w) { return card(w, ''); }).join('') + '</div>';
+      }).join('') +
+      (busy.length ? '<details class="pp-busy" id="pp-busy"><summary><span class="bm">Sudah dalam kerja lain / tidak hadir · ' + busy.length + '</span> <span class="en">On another job or away</span></summary><div class="picks">' +
+        busy.slice().sort(byName).map(function (w) { return card(w, busyAs(w.id)); }).join('') + '</div></details>' : '') + '</div>' +
       '<p class="hint">' + EA.t('Yang ditanda menjadi Hadir dalam kerja ini.', 'Ticked people become present on this job.') + '</p>' +
       '<div class="actions"><button class="btn btn-ghost" type="button" id="pp-cancel">CANCEL<small>Batal</small></button>' +
       '<button class="btn btn-ok" type="button" id="pp-ok">DONE<small>Siap</small></button></div>',
       function (s) {
+        function drawChosen() {
+          var ids = Object.keys(chosen).filter(function (k) { return chosen[k] && byId[k]; }).sort(function (a, b) { return byName(byId[a], byId[b]); });
+          s.querySelector('#pp-chosen').innerHTML = '<p class="hint"><b>' + EA.t('Dipilih', 'Chosen') + ' (' + ids.length + ')</b></p>' +
+            (ids.length ? '<div class="picks">' + ids.map(function (id) { return '<button type="button" class="pick pp-x" data-x="' + id + '" aria-label="' + EA.t('Buang ', 'Remove ') + esc(byId[id].name) + '"><b>' + esc(byId[id].name) + ' ×</b></button>'; }).join('') + '</div>' : '<p class="hint">' + EA.t('Belum ada. Tekan nama di bawah.', 'None yet. Tap names below.') + '</p>');
+          s.querySelectorAll('#pp-chosen [data-x]').forEach(function (b) { b.onclick = function () { set(b.dataset.x, false); }; });
+        }
+        function set(id, on) {
+          chosen[id] = on;
+          s.querySelectorAll('#pp-list .pick[data-w="' + id + '"]').forEach(function (b) { b.setAttribute('aria-pressed', on); });
+          drawChosen();
+        }
+        function ask(id) {
+          var box = s.querySelector('#pp-ask'), w = byId[id];
+          box.innerHTML = '<b>' + esc(EA.t('Pindah ' + w.name + ' dari ' + busyAs(id) + ' ke ' + j.task + '?', 'Move ' + w.name + ' from ' + busyAs(id) + ' to ' + j.task + '?')) + '</b>' +
+            '<div class="actions"><button type="button" class="btn btn-ghost" id="pp-no">NO<small>Tidak</small></button><button type="button" class="btn btn-ok" id="pp-yes">YES<small>Ya, pindah</small></button></div>';
+          box.hidden = false; box.scrollIntoView({ block: 'nearest' });
+          box.querySelector('#pp-no').onclick = function () { box.hidden = true; };
+          box.querySelector('#pp-yes').onclick = function () { box.hidden = true; set(id, true); };
+        }
         s.querySelectorAll('#pp-list .pick').forEach(function (b) {
-          b.onclick = function () { var w = b.dataset.w; chosen[w] = !chosen[w]; b.setAttribute('aria-pressed', chosen[w]); };
+          b.onclick = function () {
+            var w = b.dataset.w;
+            if (!chosen[w] && b.dataset.busy) return ask(w);
+            set(w, !chosen[w]);
+          };
         });
-        if (s.querySelector('#pp-last')) s.querySelector('#pp-last').onclick = function () {
-          before.forEach(function (w) { chosen[w] = true; var b = s.querySelector('.pick[data-w="' + w + '"]'); if (b) b.setAttribute('aria-pressed', 'true'); });
-        };
+        drawChosen();
+        if (s.querySelector('#pp-last')) s.querySelector('#pp-last').onclick = function () { before.forEach(function (w) { set(w, true); }); };
         s.querySelector('#pp-find').oninput = function () {
           var q = this.value.trim().toLowerCase();
           s.querySelectorAll('#pp-list .pick').forEach(function (b) { b.hidden = !!q && b.dataset.n.indexOf(q) < 0 && b.dataset.w.toLowerCase().indexOf(q) < 0; });
+          var bz = s.querySelector('#pp-busy'); if (bz && q) bz.open = true;
         };
         s.querySelector('#pp-cancel').onclick = ui().closeSheet;
         s.querySelector('#pp-ok').onclick = function () {

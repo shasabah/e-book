@@ -277,7 +277,8 @@
     var k = kind(j.task), sec = EA.lists.sectionOf(j.task), st = draft.status[j.key] || { done: '', reason: '' };
     if (auto(j)) shareOut(j);
     var mach = EA.lists.MACHINE_JOBS.indexOf(j.task) >= 0;
-    var lotsText = mach ? EA.t('Jentera ', 'Machine ') + j.lots.map(function (m) { var x = EA.lists.machinesFor(ctx.estate).find(function (y) { return y.id === m; }); return x ? EA.t(x.bm, x.en) : m; }).join(', ')
+    var spm = EA.lists.splitMach(ctx.estate, j.lots);
+    var lotsText = mach ? EA.t('Jentera ', 'Machine ') + spm.mach.map(function (m) { var x = EA.lists.machinesFor(ctx.estate).find(function (y) { return y.id === m; }); return x ? EA.t(x.bm, x.en) : m; }).join(', ') + (spm.lots.length ? ' · ' + EA.t('Petak ', 'Lots ') + spm.lots.join(', ') : '')
       : j.lots.length ? EA.t('Petak ', 'Lot ') + j.lots.join(', ') + ' · ' + jobTotals(j).planHa.toFixed(2) + ' Ha' : '';
     var lines = j.people.map(function (w) {
       var wl = draft.lines[w] || [];
@@ -290,13 +291,13 @@
         wl.map(function (l, i) {
           // v1.34.1 (Yu Chen, 23 Oct): a day-paid job picks several lots, or all (one tractor and loader cover a
           // harvester team's lots in a day); the chosen lots are kept together on one line.
-          if (k === 'day' && j.lots.length > 1) {
+          if (k === 'day' && j.lots.length > 1 && EA.lists.MACHINE_JOBS.indexOf(j.task) < 0) {
             var on = String(l.lot || '').split(' ').filter(Boolean);
             var chips = '<div class="picks wk-lots"><button type="button" class="pick" data-w="' + w + '" data-i="' + i + '" data-alllots="1" aria-pressed="' + (on.length === j.lots.length) + '"><b>' + EA.t('SEMUA', 'ALL') + '</b><small>' + j.lots.length + EA.t(' petak', ' lots') + '</small></button>' +
               j.lots.map(function (n) { return '<button type="button" class="pick" data-w="' + w + '" data-i="' + i + '" data-onelot="' + esc(n) + '" aria-pressed="' + (on.indexOf(n) >= 0) + '"><b>' + esc(n) + '</b></button>'; }).join('') + '</div>';
             return '<div class="wline">' + chips + '</div><div class="wline"><div class="seg"><button type="button" data-w="' + w + '" data-i="' + i + '" data-day="1" aria-pressed="' + (l.qty === '1') + '">1</button><button type="button" data-w="' + w + '" data-i="' + i + '" data-day="0.5" aria-pressed="' + (l.qty === '0.5') + '">½</button></div> hari</div>';
           }
-          var lotSel = j.lots.length > 1 ? '<select class="text-input" data-w="' + w + '" data-i="' + i + '" data-f="lot"><option value="">' + EA.t('Petak?', 'Lot?') + '</option>' +
+          var lotSel = EA.lists.MACHINE_JOBS.indexOf(j.task) >= 0 ? '' : j.lots.length > 1 ? '<select class="text-input" data-w="' + w + '" data-i="' + i + '" data-f="lot"><option value="">' + EA.t('Petak?', 'Lot?') + '</option>' +
             j.lots.map(function (n) { return '<option' + (n === l.lot ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select>' : (j.lots[0] ? '<span class="mono">' + esc(j.lots[0]) + '</span>' : '');
           var input = k === 'day'
             ? '<div class="seg"><button type="button" data-w="' + w + '" data-i="' + i + '" data-day="1" aria-pressed="' + (l.qty === '1') + '">1</button><button type="button" data-w="' + w + '" data-i="' + i + '" data-day="0.5" aria-pressed="' + (l.qty === '0.5') + '">½</button></div> hari'

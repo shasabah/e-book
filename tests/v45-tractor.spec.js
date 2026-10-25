@@ -58,7 +58,7 @@ const { chromium } = require('playwright');
   // a non-collection job is unchanged: no auto lots
   if (await p.isVisible('#ck-back')) await p.click('#ck-back');
   await p.waitForTimeout(200); await p.click('#fh-addjob'); await p.waitForSelector('#jb-task');
-  await p.click('#jb-quick [data-quick="MAN"]'); await p.waitForTimeout(200);
+  await p.evaluate(() => { const d = document.querySelector('#jb-more'); if (d) d.open = true; }); await p.click('.jb-quick [data-quick="MAN"]'); await p.waitForTimeout(200);
   check('other jobs (MAN) do not fill lots by themselves', (await p.$$eval('#jb-lots .pick[aria-pressed="true"]', a => a.length)) === 0 && await p.isHidden('#jb-pair'));
   // v1.34.1: on Kerja (day's work), the tractor's day covers several lots, or all
   if (await p.isVisible('#jb-cancel')) { await p.click('#jb-cancel'); await p.waitForTimeout(200); }

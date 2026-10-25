@@ -95,7 +95,7 @@ const { chromium } = require('playwright');
   await p.click('#jb-suggest'); await p.waitForTimeout(200);
   const on = await p.$$eval('#jb-lots .pick[aria-pressed="true"]', a => a.map(x => x.dataset.lot).join(' '));
   check('PILIH PETAK SEDIA ticks the ready and late lots (1-2 1-3 1-4)', on === '1-2 1-3 1-4', on);
-  await p.click('#jb-quick [data-quick="CPS"]'); await p.selectOption('#jb-block', '01'); await p.waitForTimeout(200);
+  await p.evaluate(() => { const d = document.querySelector('#jb-more'); if (d) d.open = true; }); await p.click('.jb-quick [data-quick="CPS"]'); await p.selectOption('#jb-block', '01'); await p.waitForTimeout(200);
   check('a job with no lot round (CPS) shows plain lots and no suggestion', await p.locator('#jb-lots .lot-due, #jb-lots .lot-done, #jb-suggest').count() === 0);
   check('no page errors', errs.length === 0, errs.join(' | '));
   await b.close();

@@ -73,7 +73,7 @@
   }
   // The jobs on a chit, each with the people present on it.
   function jobsOf(c) {
-    var jobs = (c.jobs || []).map(function (j) { return { key: j.key, task: j.task, block: j.block, lots: j.lots || [], mandor: j.mandor, people: [], mandors: [] }; });
+    var jobs = (c.jobs || []).map(function (j) { return { key: j.key, task: j.task, block: j.block, lots: j.lots || [], mandor: j.mandor, ask: j.ask || '', people: [], mandors: [] }; });
     c.rows.forEach(function (r) {
       if (r.status === 'removed' || r.muster !== 'H') return;
       var j = jobs.find(function (x) { return x.task === r.task_code && x.block === r.block && x.lots.join(' ') === r.lots; });
@@ -276,7 +276,9 @@
   function jobCard(j) {
     var k = kind(j.task), sec = EA.lists.sectionOf(j.task), st = draft.status[j.key] || { done: '', reason: '' };
     if (auto(j)) shareOut(j);
-    var lotsText = j.lots.length ? EA.t('Petak ', 'Lot ') + j.lots.join(', ') + ' · ' + jobTotals(j).planHa.toFixed(2) + ' Ha' : '';
+    var mach = EA.lists.MACHINE_JOBS.indexOf(j.task) >= 0;
+    var lotsText = mach ? EA.t('Jentera ', 'Machine ') + j.lots.map(function (m) { var x = EA.lists.machinesFor(ctx.estate).find(function (y) { return y.id === m; }); return x ? EA.t(x.bm, x.en) : m; }).join(', ')
+      : j.lots.length ? EA.t('Petak ', 'Lot ') + j.lots.join(', ') + ' · ' + jobTotals(j).planHa.toFixed(2) + ' Ha' : '';
     var lines = j.people.map(function (w) {
       var wl = draft.lines[w] || [];
       if (auto(j)) {
@@ -308,6 +310,7 @@
     }).join('') + lines;
     return '<section class="card" data-job="' + j.key + '"><h2>' + esc(sec.code + '. ' + jobName(j.task)) + (j.block ? ' · Blok ' + esc(j.block) : '') + '</h2>' +
       '<p class="hint">' + esc(j.task) + (lotsText ? ' · ' + esc(lotsText) : '') + (j.mandor ? ' · Mandor ' + esc(person(j.mandor)) : '') + '</p>' +
+      (j.ask ? '<p class="hint warn-t"><b>' + EA.t('Kerja lain · minta lulus Pengurus', 'Other work · Assistant Manager to approve') + '</b> · ' + esc(j.ask) + '</p>' : '') +
       (isBagTarget(j) ? '<div class="wline"><label class="inline-label">' + EA.t('Beg baja digunakan (kumpulan) ', 'Bags used by the gang ') + '<input class="qty" inputmode="numeric" data-bags="' + j.key + '" value="' + esc((draft.bags || {})[j.key] || '') + '"></label>' +
         '<span class="hint">' + EA.t('sasaran ', 'target ') + targetOf(j).total + EA.t(' beg', ' bags') + '</span></div>' : '') +
       (isHa(j) ? progBlock(j) +
@@ -547,11 +550,20 @@
       var oldJobs = {};
       if (old) old.rec.jobs.forEach(function (j) { oldJobs[j.task_code + '|' + j.block + '|' + j.lots] = j; });
       rec.jobs.forEach(function (j) {
-        var o = oldJobs[j.task_code + '|' + j.block + '|' + j.lots];
+        var jk = j.task_code + '|' + j.block + '|' + j.lots, o = oldJobs[jk];
+        delete oldJobs[jk];
         if (o && o.qty === j.qty && o.bunches === j.bunches && o.status === j.status && o.reason === j.reason && o.workers === j.workers && o.bags === j.bags) { j.id = o.id; return; }
         j.id = EA.save(TAB_JOB, ROOM, ctx.estate, { date: rec.date, chit: rec.chit, task_code: j.task_code, block: j.block, lots: j.lots, workers: j.workers,
           qty: j.qty, unit: j.unit, bunches: j.bunches, plan_ha: j.plan_ha, job_status: j.status, reason: j.reason, flags: j.flags, progress: j.progress,
           bags: j.bags, target: j.target, confirmed_by: rec.checker, confirmed_at: stamp }, o ? o.id : '').id;
+      });
+      // v1.36: a job taken off in a correction is closed too (on 22 Oct an old ITF job line stayed standing).
+      Object.keys(oldJobs).forEach(function (k) {
+        var o = oldJobs[k];
+        if (!o.id) return;
+        EA.save(TAB_JOB, ROOM, ctx.estate, { date: rec.date, chit: rec.chit, task_code: o.task_code, block: o.block, lots: o.lots, workers: o.workers,
+          qty: o.qty, unit: o.unit, bunches: o.bunches, plan_ha: o.plan_ha, job_status: o.status, reason: o.reason, flags: 'removed in correction', progress: o.progress,
+          bags: o.bags, target: o.target, confirmed_by: rec.checker, confirmed_at: stamp }, o.id, 'removed');
       });
       // v1.27: warnings the staff saved anyway go to the clerk (kind "check").
       (draft.checks || []).forEach(function (k) {

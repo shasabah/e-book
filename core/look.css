@@ -282,6 +282,7 @@ pre.chit { margin: 0; white-space: pre-wrap; word-break: break-word; font-family
 .chit-t th:nth-child(2), .chit-t td:nth-child(2), .chit-t td[colspan] { text-align: left; }
 .chit-t th { font-size: .75rem; color: var(--muted); font-weight: 700; }
 .chit-t .sec td { background: var(--paper); font-weight: 700; padding-top: 8px; }
+.chit-t .part td { color: var(--muted); font-size: .8em; font-weight: 700; padding: 4px 8px 0; border-bottom: none; }
 .chit-t .tot td { font-weight: 700; border-top: 1.5px solid var(--ink); }
 .chit-t .grand td { font-weight: 800; border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink); }
 .chit-t .en { font-size: .75rem; }
@@ -619,3 +620,10 @@ div.td-it { cursor: default; }
 /* v1.33.1 Ke ramp & lori */
 .cl-q { margin: 14px 0 4px; font-size: 1rem; }
 #cl-all { width: 100%; margin: 4px 0 10px; }
+/* v1.36: the other main jobs, folded under the daily shortcuts */
+.jb-more { margin-top: 8px; }
+.jb-more > summary span { display: inline; }
+.jb-more > summary { cursor: pointer; font-weight: 700; padding: 8px 0; color: var(--ok); }
+.jb-more > summary .en { font-weight: 500; opacity: .8; }
+.jb-small .pick { padding: 6px 8px; }
+.jb-small .pick small { font-size: .72rem; }

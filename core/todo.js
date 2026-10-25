@@ -58,11 +58,39 @@ window.EA = window.EA || {};
         var x = t.items[Number(b.dataset.i)];
         if (x.go === 'send') { if (EA.send) EA.send(); return; }
         if (x.go === 'direct') return directSheet(u, est, x);
+        if (x.go === 'jobok') return jobSheet(u, est, x);
         if (x.go === 'fix') { EA.local.set('fh.fixGo', Object.assign({ estate: est }, x.fix)); location.hash = 'field-harvest'; return; }
         location.hash = x.go.replace(/^#/, '');
       };
     });
   };
+  // v1.36 D · Kerja lain: the Pengurus answers LULUS, or TOLAK with why. The staff sees the answer for 2 days;
+  // a TOLAK also goes to the clerk (pay settled at month end). Nothing is deleted.
+  function jobSheet(u, est, x) {
+    EA.ui.openSheet('<h2 id="sheet-title">' + EA.t('Kerja lain · lulus?', 'Other work · approve?') + '</h2><p><b>' + esc(x.bm) + '</b></p><p class="hint">' + esc(x.sub) + '</p>' +
+      '<div class="field" id="td-whybox" hidden><label for="td-why">' + EA.t('Sebab ditolak', 'Why rejected') + ' *</label><textarea id="td-why" class="text-input" rows="2" maxlength="180"></textarea></div>' +
+      '<p class="msg" id="td-err" hidden></p><div class="actions"><button class="btn btn-ghost btn-back" type="button" id="td-no">‹ BACK<small>‹ BALIK</small></button>' +
+      '<button class="btn btn-ghost" type="button" id="td-rej">REJECT<small>Tolak</small></button>' +
+      '<button class="btn btn-ok" type="button" id="td-ok">APPROVE<small>Lulus</small></button></div>',
+      function (s) {
+        var m = s.querySelector('#td-err');
+        async function send(dir, btn) {
+          btn.disabled = true;
+          var j = await EA.askFull('todoDirect', { estate: est, ref: x.ref, direction: dir });
+          if (!j || !j.ok) { btn.disabled = false; m.textContent = EA.t('Tidak dihantar: ', 'Not sent: ') + ((j && j.error) || 'busy'); m.hidden = false; return; }
+          keep(u, j); EA.ui.closeSheet(); if (EA.renderHome) EA.renderHome(); EA.ui.toast(/^LULUS/.test(dir) ? EA.t('Diluluskan', 'Approved') : EA.t('Ditolak · Staf dan Kerani akan nampak', 'Rejected · the staff and clerk will see it'));
+        }
+        s.querySelector('#td-no').onclick = EA.ui.closeSheet;
+        s.querySelector('#td-ok').onclick = function () { send('LULUS', this); };
+        s.querySelector('#td-rej').onclick = function () {
+          var box = s.querySelector('#td-whybox');
+          if (box.hidden) { box.hidden = false; s.querySelector('#td-why').focus(); return; }
+          var w = s.querySelector('#td-why').value.replace(/\s+/g, ' ').trim();
+          if (w.length < 3) { m.textContent = EA.t('Tulis sebab ditolak.', 'Write why it is rejected.'); m.hidden = false; return; }
+          send('TOLAK: ' + w, this);
+        };
+      });
+  }
   // The Pengurus writes what to do about the staff's explanation; the staff sees it for 2 days.
   function directSheet(u, est, x) {
     EA.ui.openSheet('<h2 id="sheet-title">' + EA.t('Beri arahan', 'Give direction') + '</h2><p><b>' + esc(x.bm.replace(/^Beri arahan: /, '')) + '</b></p><p class="hint">' + esc(x.sub) + '</p>' +

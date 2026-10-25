@@ -146,7 +146,8 @@ EA.lists.chitSections = [
             { bm: 'Kimia', en: 'Chemical', tasks: ['CPS', 'SS', 'BS', 'LS', 'OS', 'VOPS', 'PCBC', 'PCB', 'PCR', 'PCT', 'PCTB', 'PCO', 'DTL', 'DCR', 'DCO'] },
             { bm: 'Baja', en: 'Manuring', tasks: ['MAN', 'PF', 'LG/UL', 'OPF'] },
             { bm: 'Pemulihan', en: 'Rehabilitation', tasks: ['AP', 'SP'] }] },
-  { code: '3', bm: 'Jalan & parit', en: 'Road upkeep', block: false, noBlock: [],
+  // v1.37: road repair by an operator (OPR) records where (block and lots), to trace repairs and their cost by area.
+  { code: '3', bm: 'Jalan & parit', en: 'Road upkeep', block: false, noBlock: [], needBlock: ['OPR'],
     parts: [{ bm: 'Jalan & parit', en: 'Roads & drains', tasks: ['OPR', 'RMF', 'RMM', 'GFR', 'GMR', 'RPC', 'CSR', 'CSC', 'CSB', 'RS', 'RMR', 'CRP', 'RMPS', 'CPSP'] }] },
   { code: '4', bm: 'Ladang durian', en: 'Durian farm', block: true, noBlock: [],
     parts: [{ bm: 'Ladang durian', en: 'Durian farm', tasks: ['DF'] }] },
@@ -187,7 +188,9 @@ EA.lists.chitNames = {
 // v1.36 D · Kerja utama (Yu Chen, 24 Oct): an estate's main jobs, shown as big buttons on Tambah kerja.
 // Any other code is "Kerja lain · minta lulus": the staff writes why and the Assistant Manager answers
 // LULUS / TOLAK. An estate with no list of its own shows every code as main (no approval asked).
-EA.lists.mainJobs = { SSGT: ['HA', 'ITF', 'LFF', 'LF', 'RP', 'MDR', 'CPS', 'MAN', 'SL', 'DEC', 'VOPS', 'AP', 'SP', 'DF', 'OPH', 'OPF', 'OPR', 'ETF', 'CA', 'WM', 'RMH'] };
+// v1.37 (Yu Chen, 25 Oct): main jobs follow Sugut's 2026 budget; DEC (budget says GM approval), SP, OPF and
+// RMH need approval. OPR (road & drain repair) and ETF (lorry to mill) stay main.
+EA.lists.mainJobs = { SSGT: ['HA', 'ITF', 'LFF', 'LF', 'DF', 'MDR', 'CA', 'WM', 'CPS', 'VOPS', 'MAN', 'SL', 'RP', 'AP', 'OPH', 'OPR', 'ETF'] };
 EA.lists.isMainJob = function (estate, code) { var m = EA.lists.mainJobs[estate]; return !m || m.indexOf(code) >= 0; };
 // v1.36 (Yu Chen, 25 Oct): the shortcut buttons show only the jobs keyed every day; the other main jobs
 // (rounds and occasional work) fold under one button, so the list stays short.
@@ -207,6 +210,13 @@ EA.lists.moreJobsFor = function (estate) {
 EA.lists.machines = { SSGT: [{ id: 'FARMTRACTOR', bm: 'Traktor ladang', en: 'Farm tractor', op: true }, { id: 'BACKHOE', bm: 'Backhoe', en: 'Backhoe', op: true },
   { id: 'EXCAVATOR', bm: 'Excavator', en: 'Excavator', op: true }, { id: 'LORRY', bm: 'Lori', en: 'Lorry' }, { id: 'GENSET', bm: 'Genset', en: 'Genset' }] };
 EA.lists.MACHINE_JOBS = ['OPH', 'OPR', 'OPF', 'MH', 'VMC', 'MT'];
+// A machine job keeps its machine with the place: lots = [machine, …lots] (OPR also has the block and lots).
+EA.lists.isMachineId = function (estate, id) { return (EA.lists.machines[estate] || EA.lists.machines.SSGT).some(function (m) { return m.id === id; }); };
+EA.lists.splitMach = function (estate, lots) {
+  var out = { mach: [], lots: [] };
+  (lots || []).forEach(function (l) { (EA.lists.isMachineId(estate, l) ? out.mach : out.lots).push(l); });
+  return out;
+};
 EA.lists.machinesFor = function (estate, code) {
   var all = EA.lists.machines[estate] || EA.lists.machines.SSGT;
   return code && EA.lists.OP_JOBS.indexOf(code) >= 0 ? all.filter(function (m) { return m.op; }) : all;

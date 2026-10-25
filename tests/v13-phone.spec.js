@@ -38,7 +38,7 @@ const { chromium } = require('playwright');
   await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForTimeout(400);
   await p.click('[data-fix="C-T"]'); await p.waitForTimeout(300);
   await p.click('#fh-addjob'); await p.waitForSelector('#jb-task');
-  await p.selectOption('#jb-task', 'SL'); await p.selectOption('#jb-block', '02'); await p.waitForTimeout(150);
+  await p.evaluate(() => { const d = document.querySelector('#jb-more'); if (d) d.open = true; }); await p.click('.jb-quick [data-quick="SL"]'); await p.selectOption('#jb-block', '02'); await p.waitForTimeout(150);
   await p.click('#jb-save'); await p.waitForTimeout(200);
   const keys = await p.evaluate(() => JSON.parse(localStorage.getItem('fh.draft2')).SSGT.jobs.map(j => j.key).join(','));
   check('a job added on a correction gets a new number (no clash with j3)', keys === 'j1,j3,j4', keys);

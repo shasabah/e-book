@@ -62,6 +62,8 @@ const ago = n => { const x = new Date(Date.now() - n * 864e5); return x.getFullY
   const itf = wk.filter(r => r.task_code === 'ITF'), mtGone = wk.find(r => r.replaces === 'W1');
   check('saved: one ITF line for the driver with the lots, on the chit\'s own day', itf.length === 1 && itf[0].lot === '1-24 1-26' && itf[0].date === ago(2), JSON.stringify(itf));
   check('the old MT line is replaced (kept on record, not added twice)', !!mtGone && wk.filter(r => r.worker_id === 'T1').length === 1 + (itf[0].replaces === 'W1' ? 0 : 1), JSON.stringify(wk.map(r => r.worker_id + ':' + r.task_code + ':' + r.status + ':' + r.replaces)));
+  const jr = q.filter(x => x.tab === 'FH_JOBDAY').map(x => x.row);
+  check('the old MT job line is closed (removed), not left standing', jr.some(r => r.replaces === 'J1' && r.status === 'removed' && r.task_code === 'MT'), JSON.stringify(jr.map(r => r.task_code + ':' + r.status + ':' + r.replaces)));
   check('a fix of an older day never moves fruit to the ramp', q.filter(x => x.tab === 'FH_COLLECT').length === 0, String(q.filter(x => x.tab === 'FH_COLLECT').length));
   const sv = await p.evaluate(() => JSON.parse(localStorage.getItem('fh.work')).find(s => s.chit === 'MC-FIX'));
   check('the saved work now matches the chit (no "chit changed" warning)', sv.chitRev === 3 && sv.rev === 2, sv.chitRev + '/' + sv.rev);

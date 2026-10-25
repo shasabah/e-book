@@ -627,3 +627,14 @@ div.td-it { cursor: default; }
 .jb-more > summary .en { font-weight: 500; opacity: .8; }
 .jb-small .pick { padding: 6px 8px; }
 .jb-small .pick small { font-size: .72rem; }
+/* v1.38: a person already marked shrinks to a short line; chosen names sit at the top of PILIH ORANG */
+.wrow-done { padding-top: 4px; padding-bottom: 4px; }
+.wrow-done .who-w .en { display: none; }
+.wrow-done .who-w b { font-size: .95em; }
+.rows-done { margin-top: 12px; }
+.pp-chosen { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; background: var(--surface); }
+.pp-chosen .picks { gap: 6px; }
+.pp-x { padding: 4px 8px; }
+.pp-busy > summary { cursor: pointer; font-weight: 700; padding: 8px 0; color: var(--wait); }
+.pp-busy > summary span { display: inline; }
+.pp-ask { margin-bottom: 8px; }

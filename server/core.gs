@@ -1272,7 +1272,7 @@ function adminSummary_(user) {
     c.noTicket = noTicket; c.corrections = corr; c.late = late; c.chitDays = chitDays;
     c.below = below; c.belowDate = lastWork ? lastWork.date : '';
     var b = backlog(e); c.field = b.fieldTotal || 0; c.ramp = (b.ramp && b.ramp.bunches) || 0;
-    var al = readRows_('FH_ALERT', e).standing.filter(function (r) { return String(r.date).slice(0, 7) === month && r.kind !== 'absent3' && r.kind !== 'fixask' && r.kind !== 'fixdone'; });
+    var al = readRows_('FH_ALERT', e).standing.filter(function (r) { return String(r.date).slice(0, 7) === month && r.kind !== 'absent3' && r.kind !== 'fixask' && r.kind !== 'fixdone' && r.kind !== 'jobask'; });
     c.alerts = al.length; c.alertsOpen = al.filter(function (r) { return !String(r.staff_note || '').trim(); }).length;
     return c;
   });
@@ -1780,7 +1780,7 @@ function seedMills() {
 // Lines the phone knows better by itself (today's chit, records not sent) are added on the phone.
 var ROUND_LATE_DAYS = 15;
 var LORRY_MT = 8;             // v1.33: a full Sugut lorry (Yu Chen, 22 Oct 2026)        // lists/tasks.js: a lot is ready again after 10 days, late after 15
-var EXPLAIN_KINDS = { grading: 1, ramp: 1, field: 1 };
+var EXPLAIN_KINDS = { grading: 1, ramp: 1, field: 1, jobask: 1 };   // v1.36 jobask: other work outside the main jobs (LULUS / TOLAK)
 function dayDiff_(a, b) { return Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 864e5); }
 function shortD_(iso) { return String(iso || '').slice(8, 10) + '/' + String(iso || '').slice(5, 7); }
 function todo_(user, req) {
@@ -1855,6 +1855,7 @@ function todo_(user, req) {
     roundLate();
     alerts.forEach(function (a) {
       if (!a.direction || String(a.keyed_at).slice(0, 10) < daysAgo_(2)) return;
+      if (a.kind === 'jobask') { add({ id: 'DR:' + a.id, p: /^TOLAK/.test(a.direction) ? 2 : 4, ic: 'KJ', bm: String(a.detail || '').replace(/^Kerja lain: /, '') + ' · ' + a.direction + ' (' + (a.direction_by || 'Pengurus') + ')', en: 'Other work: ' + a.direction, sub: shortD_(a.date) + ' · sebab: ' + String(a.staff_note || '').slice(0, 80), go: '' }); return; }
       add({ id: 'DR:' + a.id, p: 4, ic: 'AR', bm: 'Arahan ' + (a.direction_by || 'Pengurus') + ': ' + a.direction, en: 'Direction: ' + a.direction, sub: 'Untuk: ' + String(a.detail || '').slice(0, 80), go: '' });
     });
   }
@@ -1882,6 +1883,11 @@ function todo_(user, req) {
         if (q.state === 'rejected' && last.at.slice(0, 10) >= daysAgo_(3)) add({ id: 'MR:' + q.ref, p: 2, ic: 'KL', bm: 'Kilang ditolak: ' + q.name, en: 'Mill rejected: ' + q.name, sub: 'Sebab: ' + last.note, go: '#mills' });
       });
     } catch (e) {}
+    // v1.36: other work the Pengurus rejected: the clerk settles pay at month end.
+    alerts.forEach(function (a) {
+      if (a.kind !== 'jobask' || !/^TOLAK/.test(String(a.direction || '')) || String(a.keyed_at).slice(0, 10) < daysAgo_(3)) return;
+      add({ id: 'JR:' + a.id, p: 2, ic: 'KJ', bm: 'Kerja lain ditolak: ' + String(a.detail || '').replace(/^Kerja lain: /, ''), en: 'Other work rejected', sub: shortD_(a.date) + ' · ' + a.direction + ' · ' + (a.direction_by || '') + ' · selesaikan gaji hujung bulan', go: '' });
+    });
     (ungraded_(est).tickets || []).forEach(function (t) { add({ id: 'UG:' + t.ticket_no, p: 3, ic: 'TK', bm: 'Tiket ' + t.ticket_no + ' belum ada gred', en: 'Ticket ' + t.ticket_no + ' has no grading', sub: shortD_(t.date) + ' · ' + t.mill, go: '#field-harvest/ticket' }); });
     (openTrips(est).trips || []).forEach(function (t) {
       if (String(t.date) >= today) return;
@@ -1899,6 +1905,7 @@ function todo_(user, req) {
     });
     explained.forEach(function (a) {
       if (a.direction) return;
+      if (a.kind === 'jobask') { add({ id: 'JA:' + a.id, p: 2, ic: 'KJ', bm: a.detail, en: 'Other work to approve', sub: shortD_(a.date) + ' · ' + (un[a.keyed_by] || '') + ' · sebab: ' + String(a.staff_note).slice(0, 90) + ' · LULUS / TOLAK', go: 'jobok', ref: a.id }); return; }
       add({ id: 'DI:' + a.id, p: 2, ic: 'AR', bm: 'Beri arahan: ' + String(a.detail || '').slice(0, 60), en: 'Give direction on the staff\'s explanation', sub: 'Staf: ' + String(a.staff_note).slice(0, 90), go: 'direct', ref: a.id });
     });
     rampOld();
@@ -1924,7 +1931,9 @@ function todo_(user, req) {
       if (x.done || dayDiff_(String(x.ask.keyed_at).slice(0, 10), today) < 1) return;
       add({ id: 'SF:' + x.ask.id, p: 1, ic: '!', bm: 'Tersangkut: chit ' + shortD_(x.ask.date) + ' belum dibetulkan', en: 'Stuck: a chit fix not done', sub: 'Diminta ' + (un[x.ask.keyed_by] || '') + ' ' + shortD_(x.ask.keyed_at) + ' · "' + String(x.ask.detail).slice(0, 60) + '"', go: '' });
     });
-    var nd = explained.filter(function (a) { return !a.direction && dayDiff_(String(a.keyed_at).slice(0, 10), today) >= 2; });
+    var nd = explained.filter(function (a) { return a.kind !== 'jobask' && !a.direction && dayDiff_(String(a.keyed_at).slice(0, 10), today) >= 2; });
+    var nj = explained.filter(function (a) { return a.kind === 'jobask' && !a.direction && dayDiff_(String(a.keyed_at).slice(0, 10), today) >= 2; });
+    if (nj.length) add({ id: 'SJ:' + today, p: 1, ic: '!', bm: 'Tersangkut: ' + nj.length + ' kerja lain belum dilulus Pengurus', en: 'Stuck: other work not approved', sub: nj.slice(0, 2).map(function (a) { return String(a.detail).replace(/^Kerja lain: /, '') + ' ' + shortD_(a.date); }).join(' · ') + ' · lebih 2 hari', go: '' });
     if (nd.length) add({ id: 'SD:' + today, p: 1, ic: '!', bm: 'Tersangkut: ' + nd.length + ' penjelasan Staf belum diberi arahan', en: 'Stuck: staff explanations with no direction', sub: 'Lebih 2 hari · Pengurus', go: '' });
     try {
       var ph = adminPhones_(), late = ph.phones.filter(function (x) { return /^(Staff|Clerk|Manager)$/.test(x.role) && (!x.seen || String(x.seen.at).slice(0, 10) < daysAgo_(2)); });

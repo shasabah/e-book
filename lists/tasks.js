@@ -22,7 +22,8 @@ EA.lists.taskGroups = [
   { code: 'WS', bm: 'Bengkel',                     en: 'Workshop' },
   { code: 'IN', bm: 'Infrastruktur',               en: 'Infrastructure' },
   { code: 'GN', bm: 'Am',                          en: 'General' },
-  { code: 'CS', bm: 'Banci pokok & pemeriksaan',   en: 'Palm census & field inspection' }
+  { code: 'CS', bm: 'Banci pokok & pemeriksaan',   en: 'Palm census & field inspection' },
+  { code: 'DU', bm: 'Ladang durian',               en: 'Durian farm' }
 ];
 EA.lists.tasks = [
   // Harvesting
@@ -33,6 +34,16 @@ EA.lists.tasks = [
   { code: 'LFF',  group: 'HV', bm: 'Muat BTS (ladang)',           en: 'Loading FFB (field)',              unit: 'MT',   pay: 'unit' },
   { code: 'LFR',  group: 'HV', bm: 'Muat BTS (ramp)',             en: 'Loading FFB (ramp)',               unit: 'MT',   pay: 'unit' },
   { code: 'RP',   group: 'HV', bm: 'Cantas biasa',                en: 'Routine pruning',                  unit: 'palm', pay: 'unit' },
+  // v1.36 (Yu Chen, 24 Oct): new codes, used now and replaceable by HQ later.
+  // MDR: a worker who helps the staff arrange the day while there is no proper mandor (no mandor incentive);
+  // he goes back to his own work when a mandor is found. Real mandors stay in the job's Mandor box.
+  { code: 'MDR',  group: 'GN', bm: 'Pembantu sementara (bantu staf)', en: 'Temporary helper (assists staff)', unit: 'day', pay: 'day' },
+  { code: 'DF',   group: 'DU', bm: 'Ladang durian',               en: 'Durian farm work',                 unit: 'day',  pay: 'day' },
+  // Machine operators: one choice on the phone (machine + what the work is for) sets the code, so the cost
+  // goes to the work done (Yu Chen, 25 Oct). A farm tractor carrying FFB to the ramp is ITF.
+  { code: 'OPH',  group: 'HV', bm: 'Operator · muat BTS ramp → lori', en: 'Operator · FFB loading ramp to lorry', unit: 'day', pay: 'day' },
+  { code: 'OPF',  group: 'UP', bm: 'Operator · kerja ladang',     en: 'Operator · field work',            unit: 'day',  pay: 'day' },
+  { code: 'OPR',  group: 'IN', bm: 'Operator · jalan & parit',    en: 'Operator · roads & drains',        unit: 'day',  pay: 'day' },
   // Upkeep, slashing & weeding
   { code: 'AP',   group: 'UP', bm: 'Cantas pokok terbiar',        en: 'Abandoned palm pruning',           unit: 'palm', pay: 'unit' },
   { code: 'AS',   group: 'UP', bm: 'Kastrasi / sanitasi',         en: 'Ablation / sanitation',            unit: 'palm', pay: 'unit' },
@@ -121,22 +132,41 @@ EA.lists.workRules = [
   { when: 'holiday', bm: 'Kerja cuti umum: lulus Pengurus Besar',      en: 'Public holiday work: approved by the General Manager' }
 ];
 
-// The sections of the muster chit, in the paper's order.
-// block: true = the job needs a block (field work); false = no block (office, guard, drivers).
+// v1.36 E · Pusat kos (Yu Chen, 25 Oct 2026): the chit groups jobs by the 5 cost centres, the same for every
+// estate (from the Paitan cost report and Sugut's 2026 budget), replacing the old paper sections A–E.
+// parts: the sub-lines inside a cost centre, in report order. block: true = the job needs a block by default;
+// noBlock lists the jobs in that centre that do not (machines, lorry, packing, transport).
 EA.lists.chitSections = [
-  { code: 'A', bm: 'Penyelenggaraan', en: 'Maintenance', block: true,
-    tasks: ['CPS', 'DEC', 'SS', 'BS', 'MAN', 'SL', 'BUS', 'RS', 'LS', 'OS', 'VOPS', 'CR', 'SF', 'AP', 'SP', 'AS', 'BU', 'PF', 'LG/UL',
-            'PCBC', 'PCB', 'PCR', 'PCT', 'PCTB', 'PCO', 'DTL', 'DCR', 'DCO', 'CPT', 'CBB', 'CO'] },
-  { code: 'B', bm: 'Tuaian', en: 'Harvesting', block: true,
-    tasks: ['HA', 'RP', 'LF', 'FC', 'LFF', 'LFR', 'ITF'] },
-  { code: 'C', bm: 'Am', en: 'General', block: false,
-    tasks: ['CA', 'HKH', 'HKST', 'MC', 'SGA', 'SGC', 'WM', 'MH', 'VMC', 'MT'] },
-  { code: 'D', bm: 'Pengangkutan', en: 'Transport', block: false,
-    tasks: ['ETF', 'ETLM', 'ITLM'] },
-  { code: 'E', bm: 'Infrastruktur', en: 'Infrastructure', block: false,
-    tasks: ['RMF', 'RMM', 'GFR', 'GMR', 'RPC', 'RMH', 'RMO', 'RMPS', 'RMR', 'RMS', 'RMT', 'RMW',
-            'CSR', 'CSC', 'CSB', 'CSH', 'CSO', 'CPSP', 'CRP', 'CSS', 'CSW'] }
+  { code: '1', bm: 'Tuaian', en: 'Harvesting', block: true, noBlock: ['OPH', 'LFR', 'ETF'],
+    parts: [{ bm: 'a) Tuai', en: 'a) Cutting', tasks: ['HA', 'LF', 'FC'] },
+            { bm: 'b) Ladang → ramp', en: 'b) Field to ramp', tasks: ['ITF', 'LFF'] },
+            { bm: 'c) Ramp → kilang', en: 'c) Ramp to mill', tasks: ['OPH', 'LFR', 'ETF'] }] },
+  { code: '2', bm: 'Rawatan ladang', en: 'Field maintenance', block: true, noBlock: ['PF', 'LG/UL', 'OPF'],
+    parts: [{ bm: 'Manual', en: 'Manual', tasks: ['SL', 'BUS', 'DEC', 'RP', 'SF', 'CR', 'BU', 'AS'] },
+            { bm: 'Kimia', en: 'Chemical', tasks: ['CPS', 'SS', 'BS', 'LS', 'OS', 'VOPS', 'PCBC', 'PCB', 'PCR', 'PCT', 'PCTB', 'PCO', 'DTL', 'DCR', 'DCO'] },
+            { bm: 'Baja', en: 'Manuring', tasks: ['MAN', 'PF', 'LG/UL', 'OPF'] },
+            { bm: 'Pemulihan', en: 'Rehabilitation', tasks: ['AP', 'SP'] }] },
+  { code: '3', bm: 'Jalan & parit', en: 'Road upkeep', block: false, noBlock: [],
+    parts: [{ bm: 'Jalan & parit', en: 'Roads & drains', tasks: ['OPR', 'RMF', 'RMM', 'GFR', 'GMR', 'RPC', 'CSR', 'CSC', 'CSB', 'RS', 'RMR', 'CRP', 'RMPS', 'CPSP'] }] },
+  { code: '4', bm: 'Ladang durian', en: 'Durian farm', block: true, noBlock: [],
+    parts: [{ bm: 'Ladang durian', en: 'Durian farm', tasks: ['DF'] }] },
+  { code: '5', bm: 'Am', en: 'General', block: false, needBlock: ['CO', 'CPT', 'CBB'],
+    parts: [{ bm: 'Am', en: 'General', tasks: ['MDR', 'CA', 'WM', 'MC', 'HKH', 'HKST', 'SGA', 'SGC', 'RMH', 'RMO', 'RMS', 'RMT', 'RMW', 'CSH', 'CSO', 'CSS', 'CSW', 'ETLM', 'ITLM'] },
+            { bm: 'Banci', en: 'Census', tasks: ['CO', 'CPT', 'CBB'] },
+            { bm: 'Bengkel', en: 'Workshop', tasks: ['MH', 'VMC', 'MT'] }] }
 ];
+EA.lists.chitSections.forEach(function (s) { s.tasks = []; s.parts.forEach(function (p) { s.tasks = s.tasks.concat(p.tasks); }); });
+EA.lists.partOf = function (code) {
+  var sec = EA.lists.sectionOf(code);
+  return sec.parts.find(function (p) { return p.tasks.indexOf(code) >= 0; }) || sec.parts[0];
+};
+// Does this job need a block? Field work does; machines, lorry, general and road work do not.
+EA.lists.needsBlock = function (code) {
+  var s = EA.lists.sectionOf(code);
+  if (s.needBlock && s.needBlock.indexOf(code) >= 0) return true;
+  if (s.noBlock && s.noBlock.indexOf(code) >= 0) return false;
+  return !!s.block;
+};
 EA.lists.sectionOf = function (code) {
   return EA.lists.chitSections.find(function (s) { return s.tasks.indexOf(code) >= 0; }) || EA.lists.chitSections[0];
 };
@@ -150,12 +180,37 @@ EA.lists.chitNames = {
   PCR: 'Rat Control', PCT: 'Termite Control', PCTB: 'Tirathaba',
   ETLM: 'Ext. Transport', ETF: 'Ext. Transp. FFB', ITLM: 'Int. Transport', MT: 'Machinery Towing', MH: 'Mechanic Helper', VMC: 'Vehicle Cleaning',
   CA: 'Creche Ayah', HKH: 'Housekeep House', HKST: 'Housekeep Store', MC: 'Mess Cook', SGA: 'Shop Goods Arr.', SGC: 'Shop Goods Coll.', WM: 'Watchman',
-  CO: 'Census (Other)', CBB: 'Census Black Bch', CPT: 'Census Palm'
+  CO: 'Census (Other)', CBB: 'Census Black Bch', CPT: 'Census Palm',
+  MDR: 'Temp. Helper', DF: 'Durian Farm', OPH: 'Op. FFB Loading', OPF: 'Op. Field Work', OPR: 'Op. Road/Drain'
 };
 
-// v1.22: the usual jobs of an estate, shown as big buttons at the top of Tambah kerja.
-EA.lists.quickJobs = { SSGT: ['HA', 'LF', 'ITF', 'MAN', 'CPS', 'RP', 'SL', 'WM', 'CA', 'RMH'] };
-EA.lists.quickJobsFor = function (estate) { return EA.lists.quickJobs[estate] || EA.lists.quickJobs.SSGT; };
+// v1.36 D · Kerja utama (Yu Chen, 24 Oct): an estate's main jobs, shown as big buttons on Tambah kerja.
+// Any other code is "Kerja lain · minta lulus": the staff writes why and the Assistant Manager answers
+// LULUS / TOLAK. An estate with no list of its own shows every code as main (no approval asked).
+EA.lists.mainJobs = { SSGT: ['HA', 'ITF', 'LFF', 'LF', 'RP', 'MDR', 'CPS', 'MAN', 'SL', 'DEC', 'VOPS', 'AP', 'SP', 'DF', 'OPH', 'OPF', 'OPR', 'ETF', 'CA', 'WM', 'RMH'] };
+EA.lists.isMainJob = function (estate, code) { var m = EA.lists.mainJobs[estate]; return !m || m.indexOf(code) >= 0; };
+// v1.36 (Yu Chen, 25 Oct): the shortcut buttons show only the jobs keyed every day; the other main jobs
+// (rounds and occasional work) fold under one button, so the list stays short.
+EA.lists.dailyJobs = { SSGT: ['HA', 'ITF', 'LFF', 'LF', 'DF', 'MDR', 'CA', 'WM'] };
+EA.lists.quickJobs = EA.lists.dailyJobs;
+EA.lists.quickJobsFor = function (estate) { return EA.lists.dailyJobs[estate] || EA.lists.mainJobs[estate] || ['HA', 'LF', 'ITF', 'MAN', 'CPS', 'RP', 'SL', 'WM', 'CA', 'RMH']; };
+// The three operator codes show as one button "OP · Operator jentera"; the phone then asks what the work is for.
+EA.lists.OP_JOBS = ['OPH', 'OPR', 'OPF'];
+EA.lists.moreJobsFor = function (estate) {
+  var q = EA.lists.quickJobsFor(estate), out = [];
+  (EA.lists.mainJobs[estate] || []).forEach(function (c) { var k = EA.lists.OP_JOBS.indexOf(c) >= 0 ? 'OP' : c; if (q.indexOf(c) < 0 && out.indexOf(k) < 0) out.push(k); });
+  return out;
+};
+// v1.36: machines an operator (OPR) can run, a fixed list so the day links to the Fleet room later.
+// Kept on the job's "lots" place (no block): the machine is where the work was done.
+// v1.36: operators run the first three; workshop days (MH, VMC, MT) can be for any of them (Fleet later).
+EA.lists.machines = { SSGT: [{ id: 'FARMTRACTOR', bm: 'Traktor ladang', en: 'Farm tractor', op: true }, { id: 'BACKHOE', bm: 'Backhoe', en: 'Backhoe', op: true },
+  { id: 'EXCAVATOR', bm: 'Excavator', en: 'Excavator', op: true }, { id: 'LORRY', bm: 'Lori', en: 'Lorry' }, { id: 'GENSET', bm: 'Genset', en: 'Genset' }] };
+EA.lists.MACHINE_JOBS = ['OPH', 'OPR', 'OPF', 'MH', 'VMC', 'MT'];
+EA.lists.machinesFor = function (estate, code) {
+  var all = EA.lists.machines[estate] || EA.lists.machines.SSGT;
+  return code && EA.lists.OP_JOBS.indexOf(code) >= 0 ? all.filter(function (m) { return m.op; }) : all;
+};
 // v1.22: rounds a year per job (the estate's yearly budget programme; Sugut 2026 budget).
 // Manuring counts applications done, whatever the fertiliser.
 EA.lists.roundPlans = { SSGT: { CPS: 4, RP: 4, SL: 2, DEC: 2, VOPS: 1, MAN: 5 } };

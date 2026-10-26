@@ -62,8 +62,10 @@ var ROOM_TABS = {
   // v1.40 E · Rancang & sahkan: the plan of a leave day, one row per person, like FH_MUSTER. Kept apart so a plan
   // never counts for pay, attendance, rounds or "lari"; the confirmed chit (FH_MUSTER / FH_CHIT) is the record.
   FH_PLAN:   ['chit', 'block', 'lots', 'mandor', 'worker_id', 'task_code', 'muster', 'confirmed_by', 'confirmed_at', 'note'],
-  FH_WORK:   ['chit', 'worker_id', 'task_code', 'block', 'lot', 'qty', 'unit', 'bunches', 'confirmed_by', 'confirmed_at', 'note'],
-  FH_JOBDAY: ['chit', 'task_code', 'block', 'lots', 'workers', 'qty', 'unit', 'bunches', 'plan_ha', 'job_status', 'reason', 'flags', 'confirmed_by', 'confirmed_at', 'progress', 'bags', 'target'],
+  // v1.41 F · Kerja seorang-seorang: a person's own manuring bags (on his first lot line), and for operators the machine
+  // and its hour meter at start and end of the day.
+  FH_WORK:   ['chit', 'worker_id', 'task_code', 'block', 'lot', 'qty', 'unit', 'bunches', 'confirmed_by', 'confirmed_at', 'note', 'bags', 'machine', 'meter_start', 'meter_end', 'hours'],
+  FH_JOBDAY: ['chit', 'task_code', 'block', 'lots', 'workers', 'qty', 'unit', 'bunches', 'plan_ha', 'job_status', 'reason', 'flags', 'confirmed_by', 'confirmed_at', 'progress', 'bags', 'target', 'dose'],
   FH_COLLECT: ['block', 'lot', 'bunches', 'cleared', 'tractor', 'loader', 'note'],
   FH_DISPATCH: ['bunches', 'lorry', 'mill', 'ramp_cleared', 'note', 'block', 'trip', 'dn_no', 'driver'],
   // The lots ticked on a delivery note: one row per harvester line on the lorry (v19).
@@ -86,6 +88,10 @@ var ROOM_TABS = {
   WORKER_LOG: ['worker_id', 'name', 'kind', 'day', 'note', 'answered_by', 'answered_at', 'old_name', 'old_sex', 'new_sex', 'ref'],
   // v1.26 Rekod: the crop budget per estate and month (month = yyyy-mm). Kept only in the office sheet.
   LIST_BUDGET: ['month', 'budget_mt', 'abw_kg', 'work_days', 'note'],
+  // v1.41 the piece-rate list, keyed by HQ in the office sheet only (never in the app's code or on GitHub).
+  // One line per job code, pay unit and band (e.g. manuring under / over 2 kg per palm), from a date; a new rate
+  // is a new line with a later from_date (nothing deleted). target_day = the day's target per person.
+  LIST_RATES: ['task_code', 'pay_unit', 'band', 'rate_rm', 'target_day', 'from_date', 'approved_by', 'note'],
   // v1.29 shared list: mills and collecting centres per estate (kind: mill or cc). Added only when a request
   // is approved (MILL_LOG), or by seedMills once. active N = no longer used (never deleted).
   LIST_MILLS: ['name', 'kind', 'location', 'note', 'active'],
@@ -1281,7 +1287,7 @@ function adminSummary_(user) {
     c.noTicket = noTicket; c.corrections = corr; c.late = late; c.chitDays = chitDays;
     c.below = below; c.belowDate = lastWork ? lastWork.date : '';
     var b = backlog(e); c.field = b.fieldTotal || 0; c.ramp = (b.ramp && b.ramp.bunches) || 0;
-    var al = readRows_('FH_ALERT', e).standing.filter(function (r) { return String(r.date).slice(0, 7) === month && r.kind !== 'absent3' && r.kind !== 'fixask' && r.kind !== 'fixdone' && r.kind !== 'jobask'; });
+    var al = readRows_('FH_ALERT', e).standing.filter(function (r) { return String(r.date).slice(0, 7) === month && r.kind !== 'absent3' && r.kind !== 'fixask' && r.kind !== 'fixdone' && r.kind !== 'jobask' && r.kind !== 'sunask'; });
     c.alerts = al.length; c.alertsOpen = al.filter(function (r) { return !String(r.staff_note || '').trim(); }).length;
     return c;
   });
@@ -1789,7 +1795,7 @@ function seedMills() {
 // Lines the phone knows better by itself (today's chit, records not sent) are added on the phone.
 var ROUND_LATE_DAYS = 15;
 var LORRY_MT = 8;             // v1.33: a full Sugut lorry (Yu Chen, 22 Oct 2026)        // lists/tasks.js: a lot is ready again after 10 days, late after 15
-var EXPLAIN_KINDS = { grading: 1, ramp: 1, field: 1, jobask: 1 };   // v1.36 jobask: other work outside the main jobs (LULUS / TOLAK)
+var EXPLAIN_KINDS = { grading: 1, ramp: 1, field: 1, jobask: 1, sunask: 1 };   // v1.41 sunask: Sunday work outside crop / manuring / CPS, approved by SDK (HQ)   // v1.36 jobask: other work outside the main jobs (LULUS / TOLAK)
 function dayDiff_(a, b) { return Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 864e5); }
 function shortD_(iso) { return String(iso || '').slice(8, 10) + '/' + String(iso || '').slice(5, 7); }
 // v1.40 E · Rancang & sahkan: the leave-day plans of an estate (standing FH_PLAN rows by plan), each with
@@ -1835,7 +1841,7 @@ function planAsks_(alerts, est) {
 }
 function todo_(user, req) {
   var est = String(req.estate || ''), r = user.role;
-  if (['Staff', 'Clerk', 'Manager', 'Owner'].indexOf(r) < 0) return { ok: true, estate: est, items: [] };
+  if (['Staff', 'Clerk', 'Manager', 'Owner', 'HQ'].indexOf(r) < 0) return { ok: true, estate: est, items: [] };
   if (user.estates.indexOf(est) < 0) return { ok: false, error: 'not_your_estate' };
   var today = todayKL_(), yday = daysAgo_(1), items = [];
   function add(o) { items.push(o); }
@@ -1909,7 +1915,7 @@ function todo_(user, req) {
     roundLate();
     alerts.forEach(function (a) {
       if (!a.direction || String(a.keyed_at).slice(0, 10) < daysAgo_(2)) return;
-      if (a.kind === 'jobask') { add({ id: 'DR:' + a.id, p: /^TOLAK/.test(a.direction) ? 2 : 4, ic: 'KJ', bm: String(a.detail || '').replace(/^Kerja lain: /, '') + ' · ' + a.direction + ' (' + (a.direction_by || 'Pengurus') + ')', en: 'Other work: ' + a.direction, sub: shortD_(a.date) + ' · sebab: ' + String(a.staff_note || '').slice(0, 80), go: '' }); return; }
+      if (a.kind === 'jobask' || a.kind === 'sunask') { add({ id: 'DR:' + a.id, p: /^TOLAK/.test(a.direction) ? 2 : 4, ic: 'KJ', bm: String(a.detail || '').replace(/^Kerja lain: /, '') + ' · ' + a.direction + ' (' + (a.direction_by || 'Pengurus') + ')', en: 'Other work: ' + a.direction, sub: shortD_(a.date) + ' · sebab: ' + String(a.staff_note || '').slice(0, 80), go: '' }); return; }
       add({ id: 'DR:' + a.id, p: 4, ic: 'AR', bm: 'Arahan ' + (a.direction_by || 'Pengurus') + ': ' + a.direction, en: 'Direction: ' + a.direction, sub: 'Untuk: ' + String(a.detail || '').slice(0, 80), go: '' });
     });
   }
@@ -1951,7 +1957,7 @@ function todo_(user, req) {
     } catch (e) {}
     // v1.36: other work the Pengurus rejected: the clerk settles pay at month end.
     alerts.forEach(function (a) {
-      if (a.kind !== 'jobask' || !/^TOLAK/.test(String(a.direction || '')) || String(a.keyed_at).slice(0, 10) < daysAgo_(3)) return;
+      if ((a.kind !== 'jobask' && a.kind !== 'sunask') || !/^TOLAK/.test(String(a.direction || '')) || String(a.keyed_at).slice(0, 10) < daysAgo_(3)) return;
       add({ id: 'JR:' + a.id, p: 2, ic: 'KJ', bm: 'Kerja lain ditolak: ' + String(a.detail || '').replace(/^Kerja lain: /, ''), en: 'Other work rejected', sub: shortD_(a.date) + ' · ' + a.direction + ' · ' + (a.direction_by || '') + ' · selesaikan gaji hujung bulan', go: '' });
     });
     (ungraded_(est).tickets || []).forEach(function (t) { add({ id: 'UG:' + t.ticket_no, p: 3, ic: 'TK', bm: 'Tiket ' + t.ticket_no + ' belum ada gred', en: 'Ticket ' + t.ticket_no + ' has no grading', sub: shortD_(t.date) + ' · ' + t.mill, go: '#field-harvest/ticket' }); });
@@ -1970,12 +1976,20 @@ function todo_(user, req) {
       add({ id: 'AP:' + q.worker, p: q.kind === 'absconded' ? 1 : 2, ic: 'PK', bm: w + ': ' + q.name, en: 'To approve: ' + q.name, sub: 'Sebab: ' + q.note + ' · LULUS / TOLAK', go: '#workers' });
     });
     explained.forEach(function (a) {
-      if (a.direction) return;
+      if (a.direction || a.kind === 'sunask') return;   // v1.41: Sunday work is approved by SDK, not the Pengurus
       if (a.kind === 'jobask') { add({ id: 'JA:' + a.id, p: 2, ic: 'KJ', bm: a.detail, en: 'Other work to approve', sub: shortD_(a.date) + ' · ' + (un[a.keyed_by] || '') + ' · sebab: ' + String(a.staff_note).slice(0, 90) + ' · LULUS / TOLAK', go: 'jobok', ref: a.id }); return; }
       add({ id: 'DI:' + a.id, p: 2, ic: 'AR', bm: 'Beri arahan: ' + String(a.detail || '').slice(0, 60), en: 'Give direction on the staff\'s explanation', sub: 'Staf: ' + String(a.staff_note).slice(0, 90), go: 'direct', ref: a.id });
     });
     rampOld();
     roundLate();
+  }
+  // v1.41 (Yu Chen, 26 Oct): Sunday work other than crop, manuring and CPS is approved by SDK (Christy or Wawa,
+  // to be named); until they have logins the Owner sees and answers it too.
+  if (r === 'HQ' || r === 'Owner') {
+    explained.forEach(function (a) {
+      if (a.kind !== 'sunask' || a.direction) return;
+      add({ id: 'SA:' + a.id, p: 2, ic: 'AH', bm: a.detail, en: 'Sunday work to approve', sub: shortD_(a.date) + ' · ' + (un[a.keyed_by] || '') + ' · ' + String(a.staff_note).slice(0, 90) + ' · LULUS / TOLAK', go: 'jobok', ref: a.id });
+    });
   }
   if (r === 'Owner') {
     var wo = workersRead_(user, { estate: est });
@@ -2003,7 +2017,7 @@ function todo_(user, req) {
       add({ id: 'SP:' + p.plan, p: 1, ic: '!', bm: 'Tersangkut: rancangan ' + shortD_(p.date) + ' belum disahkan', en: 'Stuck: a leave-day plan not confirmed',
         sub: (un[p.by] || 'Staf') + ' · ' + p.n + ' orang dirancang · ' + dayDiff_(p.date, today) + ' hari', go: '' });
     });
-    var nd = explained.filter(function (a) { return a.kind !== 'jobask' && !a.direction && dayDiff_(String(a.keyed_at).slice(0, 10), today) >= 2; });
+    var nd = explained.filter(function (a) { return a.kind !== 'jobask' && a.kind !== 'sunask' && !a.direction && dayDiff_(String(a.keyed_at).slice(0, 10), today) >= 2; });
     var nj = explained.filter(function (a) { return a.kind === 'jobask' && !a.direction && dayDiff_(String(a.keyed_at).slice(0, 10), today) >= 2; });
     if (nj.length) add({ id: 'SJ:' + today, p: 1, ic: '!', bm: 'Tersangkut: ' + nj.length + ' kerja lain belum dilulus Pengurus', en: 'Stuck: other work not approved', sub: nj.slice(0, 2).map(function (a) { return String(a.detail).replace(/^Kerja lain: /, '') + ' ' + shortD_(a.date); }).join(' · ') + ' · lebih 2 hari', go: '' });
     if (nd.length) add({ id: 'SD:' + today, p: 1, ic: '!', bm: 'Tersangkut: ' + nd.length + ' penjelasan Staf belum diberi arahan', en: 'Stuck: staff explanations with no direction', sub: 'Lebih 2 hari · Pengurus', go: '' });
@@ -2019,7 +2033,7 @@ function todo_(user, req) {
 }
 // The Pengurus (or the Owner) gives direction on a staff explanation: a new alert line replaces the old one.
 function todoDirect_(user, req) {
-  if (user.role !== 'Manager' && user.role !== 'Owner') return { ok: false, error: 'not_allowed' };
+  if (user.role !== 'Manager' && user.role !== 'Owner' && user.role !== 'HQ') return { ok: false, error: 'not_allowed' };
   var est = String(req.estate || ''), id = String(req.ref || ''), dir = String(req.direction || '').replace(/\s+/g, ' ').trim().slice(0, 200);
   if (user.estates.indexOf(est) < 0) return { ok: false, error: 'not_your_estate' };
   if (dir.length < 3) return { ok: false, error: 'need_reason' };
@@ -2029,6 +2043,8 @@ function todoDirect_(user, req) {
     ROWS_MEMO_ = null;
     var a = standingRows_('FH_ALERT', est).find(function (x) { return x.id === id; });
     if (!a || !EXPLAIN_KINDS[a.kind]) return { ok: false, error: 'nothing_waiting' };
+    // v1.41: SDK (HQ) answers only Sunday work; the Pengurus answers everything else but not Sunday work.
+    if ((user.role === 'HQ') !== (a.kind === 'sunask') && user.role !== 'Owner') return { ok: false, error: 'not_allowed' };
     if (a.direction) return { ok: false, error: 'already' };
     var ss = book_(), sh = roomTab_(ss, 'FH_ALERT'), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
     var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), un = '';

@@ -6,7 +6,7 @@
 // the phone adds what it knows better itself: today's chit not made, and records not sent.
 window.EA = window.EA || {};
 (function () {
-  var CACHE = 'ea.todo.', ROLES = /^(Staff|Clerk|Manager|Owner)$/, asking = false;
+  var CACHE = 'ea.todo.', ROLES = /^(Staff|Clerk|Manager|Owner|HQ)$/, asking = false;
   function esc(s) { return EA.ui.esc(s); }
   function cached(u, est) { var c = EA.local.get(CACHE + est, null); return c && c.code === u.code ? c : null; }
   function keep(u, j) { try { EA.local.set(CACHE + j.estate, { at: Date.now(), code: u.code, items: j.items || [] }); } catch (e) {} }
@@ -74,7 +74,8 @@ window.EA = window.EA || {};
   // v1.36 D · Kerja lain: the Pengurus answers LULUS, or TOLAK with why. The staff sees the answer for 2 days;
   // a TOLAK also goes to the clerk (pay settled at month end). Nothing is deleted.
   function jobSheet(u, est, x) {
-    EA.ui.openSheet('<h2 id="sheet-title">' + EA.t('Kerja lain · lulus?', 'Other work · approve?') + '</h2><p><b>' + esc(x.bm) + '</b></p><p class="hint">' + esc(x.sub) + '</p>' +
+    var sun = /hari Ahad/.test(x.bm);   // v1.41: Sunday work, approved by SDK
+    EA.ui.openSheet('<h2 id="sheet-title">' + (sun ? EA.t('Kerja hari Ahad · lulus?', 'Sunday work · approve?') : EA.t('Kerja lain · lulus?', 'Other work · approve?')) + '</h2><p><b>' + esc(x.bm) + '</b></p><p class="hint">' + esc(x.sub) + '</p>' +
       '<div class="field" id="td-whybox" hidden><label for="td-why">' + EA.t('Sebab ditolak', 'Why rejected') + ' *</label><textarea id="td-why" class="text-input" rows="2" maxlength="180"></textarea></div>' +
       '<p class="msg" id="td-err" hidden></p><div class="actions"><button class="btn btn-ghost btn-back" type="button" id="td-no">‹ BACK<small>‹ BALIK</small></button>' +
       '<button class="btn btn-ghost" type="button" id="td-rej">REJECT<small>Tolak</small></button>' +

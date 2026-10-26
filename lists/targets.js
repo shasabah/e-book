@@ -28,3 +28,10 @@ EA.lists.target = function (task, estate) {
   var v = t.by[estate] != null ? t.by[estate] : t.mgmt;
   return { per: v, unit: t.unit };
 };
+// v1.41: manuring by dose (kg per palm), from the same signed table: > 2 kg 20 bags; < 1.5 kg 15 bags
+// (MELU 17 for > 2 kg); Borate 0.1–0.2 kg 2 bags. 1.5–2 kg is not in the table: 15 until HQ says.
+EA.lists.manTargets = { mgmt: { big: 20, small: 15, borate: 2 }, MELU: { big: 17, small: 15, borate: 2 } };
+EA.lists.manTarget = function (estate, dose) {
+  var t = EA.lists.manTargets[estate] || EA.lists.manTargets.mgmt;
+  return dose <= 0.25 ? t.borate : dose >= 2 ? t.big : t.small;
+};

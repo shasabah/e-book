@@ -472,19 +472,21 @@
     return saved().filter(function (t) { return t.estate === ctx.estate && t.date.slice(0, 7) === m; });
   }
   function monthTotals() {
-    var list = monthTickets(), byBlock = {}, byMill = {}, mt = 0, bunches = 0;
+    var list = monthTickets(), byBlock = {}, byMill = {}, mt = 0, bunches = 0, abwMt = 0, abwN = 0;
     list.forEach(function (t) {
-      mt += t.nett; bunches += t.bunches;
+      mt += t.nett;
+      // v1.39: ABW only from tickets that have a bunch count; a ticket with no bunches counts in tonnes only.
+      if (Number(t.bunches) > 0 && Number(t.nett) > 0) { bunches += Number(t.bunches); abwMt += Number(t.nett); abwN++; }
       Object.keys(t.split).forEach(function (b) { byBlock[b] = r3((byBlock[b] || 0) + t.split[b].mt); });
       byMill[t.mill] = r3((byMill[t.mill] || 0) + t.nett);
     });
-    return { n: list.length, mt: r3(mt), bunches: bunches, abw: bunches ? r2(mt * 1000 / bunches) : 0, byBlock: byBlock, byMill: byMill };
+    return { n: list.length, mt: r3(mt), bunches: bunches, abwN: abwN, abw: bunches ? r2(abwMt * 1000 / bunches) : 0, byBlock: byBlock, byMill: byMill };
   }
   function monthCard() {
     var s = monthTotals();
     var d = new Date(EA.today() + 'T00:00:00');
     return '<section class="card" id="tk-month"><h2><span class="inline"><span class="bm">Bulan ini · ' + esc(ui().monBm[d.getMonth()]) + '</span> · <span class="en">Month to date (tickets on this phone)</span></span></h2>' +
-      (s.n ? '<div class="list-line"><div><b>' + s.mt.toFixed(2) + ' MT · ' + s.n + ' tiket · ABW ' + s.abw + ' kg</b><span class="en">' +
+      (s.n ? '<div class="list-line"><div><b>' + s.mt.toFixed(2) + ' MT · ' + s.n + ' tiket' + (s.abw ? ' · ABW ' + s.abw + ' kg' + (s.abwN < s.n ? ' (' + s.abwN + ' tiket)' : '') : '') + '</b><span class="en">' +
         Object.keys(s.byBlock).sort().map(function (b) { return 'Blk ' + esc(b) + ' ' + s.byBlock[b].toFixed(2); }).join(' · ') + '</span><span class="en">' +
         Object.keys(s.byMill).map(function (m) { return esc(m) + ' ' + s.byMill[m].toFixed(2); }).join(' · ') + '</span></div></div>'
         : '<p class="hint">' + EA.t('Belum ada tiket bulan ini.', 'No tickets this month yet.') + '</p>') + '</section>';

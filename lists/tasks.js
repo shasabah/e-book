@@ -33,7 +33,7 @@ EA.lists.tasks = [
   { code: 'ITF',  group: 'HV', bm: 'Angkut BTS dalam ladang',     en: 'Internal transport FFB',           unit: 'day',  pay: 'day' },
   { code: 'LFF',  group: 'HV', bm: 'Muat BTS (ladang)',           en: 'Loading FFB (field)',              unit: 'MT',   pay: 'unit' },
   { code: 'LFR',  group: 'HV', bm: 'Muat BTS (ramp)',             en: 'Loading FFB (ramp)',               unit: 'MT',   pay: 'unit' },
-  { code: 'RP',   group: 'HV', bm: 'Cantas biasa',                en: 'Routine pruning',                  unit: 'palm', pay: 'unit' },
+  { code: 'RP',   group: 'HV', bm: 'Cantas biasa',                en: 'Routine pruning',                  unit: 'Ha',   pay: 'unit' },   // v1.41: Sugut pays pruning per Ha (was palms)
   // v1.36 (Yu Chen, 24 Oct): new codes, used now and replaceable by HQ later.
   // MDR: a worker who helps the staff arrange the day while there is no proper mandor (no mandor incentive);
   // he goes back to his own work when a mandor is found. Real mandors stay in the job's Mandor box.
@@ -227,4 +227,8 @@ EA.lists.roundPlans = { SSGT: { CPS: 4, RP: 4, SL: 2, DEC: 2, VOPS: 1, MAN: 5 } 
 EA.lists.roundPlanFor = function (estate, code) { var p = EA.lists.roundPlans[estate]; return p && p[code] || 0; };
 // v1.23: harvest round (2–3 rounds a month): a lot is ready again after 10 days, late after 15.
 EA.lists.lotRound = { HA: { ready: 10, late: 15 }, LF: { ready: 10, late: 15 } };
-
+// v1.41 (Yu Chen, 26 Oct): work allowed on a Sunday without asking: harvesting and the crop chain (FFB), and the
+// important piece-rated jobs manuring and CPS. Everything else on a Sunday needs SDK's approval (Christy or Wawa, to be named).
+EA.lists.sundayOk = ['HA', 'LF', 'FC', 'ITF', 'LFF', 'LFR', 'OPH', 'ETF', 'MAN', 'CPS'];
+// The request sent from a Sunday chit (after the work) is off: Sunday work is to be approved before it starts.
+EA.lists.sundayAskOnChit = false;

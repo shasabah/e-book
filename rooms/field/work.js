@@ -58,7 +58,7 @@
   // ---------- which chit ----------
   function chitsFor(estate) {
     var t = EA.today(), yd = daysAgo(1);     // the phone's own day (Malaysia), not UTC
-    return EA.fh.allChits().filter(function (c) { return c.estate === estate && (c.date === t || c.date === yd || fixOpen(c)); })
+    return EA.fh.allChits().filter(function (c) { return c.estate === estate && (c.date === t || c.date === yd || fixOpen(c) || planOpen(c)); })
       .sort(function (a, b) { return (a.date + a.confirmedAt) < (b.date + b.confirmedAt) ? 1 : -1; });
   }
   // v1.35 C2 · Betulkan kerja hari (Yu Chen, 24 Oct): an older day's work opens again only when its chit was
@@ -71,6 +71,9 @@
     var s = savedFor(c.chit);
     return !!(c.fixAsk || (c.rev || 1) > 1) && !!s && (s.chitRev || 1) < (c.rev || 1);
   }
+  // v1.40 E · Rancang & sahkan: a planned leave day confirmed on return opens for its work (up to 3 days back),
+  // until that work is saved; after that it changes only through the clerk's request, like any other day.
+  function planOpen(c) { return !!c && !!c.fromPlan && c.date >= daysAgo(3) && !savedFor(c.chit); }
   // The jobs on a chit, each with the people present on it.
   function jobsOf(c) {
     var jobs = (c.jobs || []).map(function (j) { return { key: j.key, task: j.task, block: j.block, lots: j.lots || [], mandor: j.mandor, ask: j.ask || '', people: [], mandors: [] }; });
@@ -226,7 +229,7 @@
     var done = savedFor(chit.chit);
     draft = loadDraft(chit);
     var chooser = list.length > 1 ? '<div class="field"><label for="wk-chit"><span class="bm">Chit</span><span class="en">Which morning chit</span></label><select id="wk-chit" class="text-input">' +
-      list.map(function (x) { return '<option value="' + esc(x.chit) + '"' + (x.chit === chit.chit ? ' selected' : '') + '>' + esc(niceDate(x.date) + ' · Chit ' + x.chit.split('-').pop() + ' · ' + x.confirmedAt + (past(x) ? EA.t(' · BETULKAN', ' · TO FIX') : '')) + '</option>'; }).join('') + '</select></div>' : '';
+      list.map(function (x) { return '<option value="' + esc(x.chit) + '"' + (x.chit === chit.chit ? ' selected' : '') + '>' + esc(niceDate(x.date) + ' · Chit ' + x.chit.split('-').pop() + ' · ' + x.confirmedAt + (x.fromPlan && !savedFor(x.chit) ? EA.t(' · HARI DIRANCANG', ' · PLANNED DAY') : past(x) ? EA.t(' · BETULKAN', ' · TO FIX') : '')) + '</option>'; }).join('') + '</select></div>' : '';
 
     if (done && !draft.replacing) {
       el.innerHTML = head + chooser +
@@ -252,6 +255,8 @@
   }
 
   function fixBand() {
+    if (chit && chit.fromPlan && !savedFor(chit.chit)) return '<p class="plan-band due" id="wk-planband"><b>' + EA.t('KERJA SEBENAR · ', 'ACTUAL WORK · ') + esc(niceDate(chit.date)) + '</b>' +
+      '<span>' + EA.t('Hari dirancang, chit sudah disahkan. Kunci kerja sebenar hari itu dari kertas; selepas itu chit hari ini dibuka.', 'A planned day, its chit confirmed. Key that day\'s actual work from the paper; then today\'s chit opens.') + '</span></p>';
     if (!past(chit)) return '';
     return '<p class="warn fix-band" id="wk-fixband"><b>' + EA.t('Betulkan · ', 'Fixing · ') + esc(niceDate(chit.date)) + '</b> <span class="bm">Chit hari itu sudah dibetulkan atas permintaan kerani. Kemas kini kerja supaya sama dengan chit. Boleh dibuat dalam 3 hari sahaja.</span>' +
       '<span class="en">That day\'s chit was fixed at the clerk\'s request. Bring the work up to date so it matches the chit. Open for 3 days only.</span></p>';
@@ -574,21 +579,23 @@
     } catch (e) { EA.batchCancel(); ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad'); return; }
     keepSaved({ chit: rec.chit, date: rec.date, estate: rec.estate, rec: rec, lines: draft.lines, status: draft.status, prog: draft.prog, manual: draft.manual, bags: draft.bags || {}, checker: draft.checker, rev: old ? (old.rev || 1) + 1 : 1, chitRev: chit.rev || 1 });
     dropDraft();
-    var moved = autoCollect(rec, at);
+    var moved = autoCollect(rec, at, !!(chit && chit.fromPlan && !old));   // v1.40: only the first save of a planned day
     ui().toast(EA.t('Kerja harian disimpan', 'Day\'s work saved') + (moved ? ' · ' + moved + EA.t(' tandan ke ramp', ' bunches to the ramp') : ''));
     if (navigator.onLine && EA.sendLink()) EA.send();
     render(el, ctx);
     showReport(savedFor(rec.chit));
+    if (chit && chit.fromPlan) ui().toast(EA.t('Kerja ' + niceDate(chit.date) + ' disimpan · seterusnya chit hari ini (Chit pagi)', 'Work of ' + niceDate(chit.date) + ' saved · next: today\'s chit (Morning chit)'));
   }
 
   // v1.34.2 (Yu Chen, 23 Oct): the farm tractor's job (ITF) marked SIAP means the crop on its lots went to the
   // ramp, so the staff keys it once: each of its lots with bunches still in the field is collected and cleared
   // ("Habis"), as if SEMUA KE RAMP was pressed. A correction of the same day's work does not collect again.
-  function autoCollect(rec, at) {
+  function autoCollect(rec, at, firstPlanSave) {
     var done = (rec.jobs || []).some(function (j) { return j.task_code === 'ITF' && j.status === 'done'; });
     if (!done || !EA.fh.harvest) return 0;
     // v1.35: a fix of an older day never moves fruit: what is in the field now may be from later days.
-    if (rec.date < daysAgo(1)) return 0;
+    // v1.40: a planned day is keyed before today's chit (oldest first), so the field holds only fruit up to that day.
+    if (rec.date < daysAgo(1) && !firstPlanSave) return 0;
     var all = EA.local.get('fh.collect', []);
     if (all.some(function (s) { return s.fromWork === rec.chit && s.estate === rec.estate; })) return 0;
     var lots = {}, drivers = [], loaders = [];

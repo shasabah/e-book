@@ -392,19 +392,34 @@
   function shortDate(iso) { return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : ''; }
   // Test copy (no office link): month-to-date tonnes from this phone's tickets, by delivery note date.
   function localTonnage(estate) {
-    var m = EA.today().slice(0, 7), mt = 0, bunches = 0, n = 0, blocks = {};
+    var m = EA.today().slice(0, 7), mt = 0, bunches = 0, n = 0, blocks = {}, abwMt = 0, abwTickets = 0;
     EA.local.get('fh.tickets', []).forEach(function (t) {
       var d = (t.dnRef && t.dnRef.date) || t.date;
       if (t.estate !== estate || String(d).slice(0, 7) !== m) return;
-      mt += Number(t.nett) || 0; bunches += Number(t.bunches) || 0; n++;
+      var tm = Number(t.nett) || 0, tb = Number(t.bunches) || 0;
+      mt += tm; n++;
+      if (tb > 0 && tm > 0) { bunches += tb; abwMt += tm; abwTickets++; }     // v1.39: ABW only from tickets with bunches
       Object.keys(t.split || {}).forEach(function (b) { blocks[b] = Math.round(((blocks[b] || 0) + t.split[b].mt) * 1000) / 1000; });
     });
-    mt = Math.round(mt * 1000) / 1000;
-    return { month: m, mt: mt, bunches: bunches, tickets: n, abw: bunches ? Math.round(mt * 100000 / bunches) / 100 : 0, blocks: blocks };
+    mt = Math.round(mt * 1000) / 1000; abwMt = Math.round(abwMt * 1000) / 1000;
+    return { month: m, mt: mt, bunches: bunches, tickets: n, abwMt: abwMt, abwTickets: abwTickets,
+             abw: bunches ? Math.round(abwMt * 100000 / bunches) / 100 : 0, blocks: blocks };
+  }
+  // v1.39: the month's ABW, only when it is worked out from tickets that have bunches. An office answer
+  // from before v1.39 (no abwTickets) divided all tonnes by some bunches, so its ABW is not used.
+  function abwOf(t) { return t && t.abwTickets !== undefined && t.abw > 0 && t.bunches > 0 ? Number(t.abw) : 0; }
+  function num0(v) { return Number(v || 0).toLocaleString('en-US'); }
+  // "117.72 MT · 8 tiket · ABW 19.39 kg (1 tiket, 801 tandan)" when some tickets have no bunches;
+  // "32.30 MT · 2 tiket · 1,550 tandan · ABW 20.84 kg" when every ticket has them; no ABW and no "0 tandan" when none has.
+  function tonnageDetail(t) {
+    if (!t || !t.tickets) return '';
+    var a = abwOf(t), all = a && t.abwTickets === t.tickets;
+    return t.tickets + ' tiket' + (!a ? '' : all ? ' · ' + num0(t.bunches) + ' tandan · ABW ' + a.toFixed(2) + ' kg'
+      : ' · ABW ' + a.toFixed(2) + ' kg (' + t.abwTickets + ' tiket, ' + num0(t.bunches) + ' tandan)');
   }
   function tonnageText(t) {
     if (!t) return '';
-    return Number(t.mt || 0).toFixed(2) + ' MT · ' + (t.tickets || 0) + ' tiket · ' + (t.bunches || 0) + ' tandan' + (t.abw ? ' · ABW ' + t.abw + ' kg' : '');
+    return Number(t.mt || 0).toFixed(2) + ' MT' + (t.tickets ? ' · ' + tonnageDetail(t) : ' · 0 tiket');
   }
   function rampText(r) {
     if (!r || !r.bunches) return '';
@@ -424,7 +439,7 @@
     var t = b && b.tonnage;
     var body = !b ? '<p class="hint">' + EA.t('Belum ada. Perlu isyarat sekali untuk ambil dari pejabat.', 'Not yet: needs signal once to get it from the office.') + '</p>' :
       (t ? '<div class="list-line"><div><b>' + EA.t('Tan bulan ini: ', 'Month to date: ') + Number(t.mt || 0).toFixed(2) + ' MT</b><span class="en">' +
-        (t.tickets ? esc(t.tickets + ' tiket · ' + t.bunches + ' tandan' + (t.abw ? ' · ABW ' + t.abw + ' kg' : '')) : EA.t('Belum ada tiket bulan ini', 'No tickets this month yet')) + '</span>' +
+        (t.tickets ? esc(tonnageDetail(t)) : EA.t('Belum ada tiket bulan ini', 'No tickets this month yet')) + '</span>' +
         (Object.keys(t.blocks || {}).length ? '<span class="en">' + Object.keys(t.blocks).sort().map(function (k) { return 'Blk ' + esc(k) + ' ' + Number(t.blocks[k]).toFixed(2); }).join(' · ') + '</span>' : '') +
         '<span class="en">' + EA.t('Bajet akan datang bila bajet 2027 dimuatkan', 'Budget to date comes when the 2027 budget is loaded') + '</span></div></div>' : '') +
       '<div class="list-line"><div><b>' + EA.t('Ladang: ', 'Field: ') + (b.fieldTotal || 0) + EA.t(' tandan', ' bunches') + '</b><span class="en">' +
@@ -1432,6 +1447,9 @@
   EA.fh.getBacklog = getBacklog;
   EA.fh.refreshBacklog = refreshBacklog;
   EA.fh.backlogCard = backlogCard;
+  EA.fh.abwOf = abwOf;
+  EA.fh.tonnageText = tonnageText;
+  EA.fh.localTonnage = localTonnage;
   EA.fh.wireBacklog = wireBacklog;
   EA.fh.shortDate = shortDate;
   EA.fh.chitText = chitText;

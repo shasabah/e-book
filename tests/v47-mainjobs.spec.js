@@ -175,7 +175,7 @@ const { chromium } = require('playwright');
   if (await p.isVisible('#ck-go')) { await p.click('#ck-go'); await p.waitForTimeout(300); }
   if (await p.isVisible('#cf-ok')) { await p.click('#cf-ok'); await p.waitForTimeout(500); }
   const q = await p.evaluate(() => JSON.parse(localStorage.getItem('ea.queue') || '[]'));
-  const ask = q.filter(x => x.tab === 'FH_ALERT' && x.row.kind === 'jobask').map(x => x.row);
+  const ask = q.filter(x => x.tab === 'FH_ALERT' && x.row.kind === 'jobask' && !/hari Ahad/.test(x.row.detail)).map(x => x.row);   // v1.39: a Sunday request is tested in v50
   check('phone: saving the chit sends one request for the other work, with the reason', ask.length === 1 && /RMF Baiki jalan ladang/.test(ask[0].detail) && /1 orang/.test(ask[0].detail) && /rosak/.test(ask[0].staff_note), JSON.stringify(ask));
   const opRow = q.find(x => x.tab === 'FH_MUSTER' && x.row.worker_id === 'W2');
   check('phone: the operator\'s muster line carries the machine and the location', opRow && opRow.row.task_code === 'OPR' && opRow.row.block === '02' && opRow.row.lots === '2-14 2-15 EXCAVATOR', JSON.stringify(opRow && opRow.row));

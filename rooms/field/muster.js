@@ -17,7 +17,8 @@
   EA.roomViews = EA.roomViews || {};
 
   var TAB = 'FH_MUSTER', TAB_CHIT = 'FH_CHIT', TAB_ALERT = 'FH_ALERT', ROOM = 'FH';
-  var K = { draft: 'fh.draft2', chits: 'fh.chits2', chitNo: 'fh.chitNo' };
+  var K = { draft: 'fh.draft2', chits: 'fh.chits2', chitNo: 'fh.chitNo', plans: 'fh.plans' };
+  var TAB_PLAN = 'FH_PLAN', PLAN_AHEAD = 3, PLAN_BACK = 3;
   var MARKS = { H: ['Hadir', 'Present'], S: ['Sakit', 'Sick'], C: ['Cuti', 'On leave'], T: ['Tak hadir', 'Absent'],
                 L: ['Hari Buruh', 'Labour day'], X: ['Pindah', 'Transfer'] };
   var AWAY = ['T', 'S', 'C', 'L', 'X'];           // paper order: Absent, Sick, On Leave, Labour Day, Transfer
@@ -37,7 +38,10 @@
     var all = EA.local.get(K.draft, {});
     var d = all[ctx.estate];
     // v1.32: a correction of a past chit (asked by the clerk) stays a draft while that chit is within 3 days.
-    if (!d || (d.date !== EA.today() && !(d.fixAsk && d.date >= EA.dayAgo(3)))) return blankDraft();
+    // v1.40: a plan for a leave day (date ahead) or the confirmation of one (date back, up to 3 days) stays a draft too.
+    var keep = d && ((d.date === EA.today() && !d.mode) || (d.fixAsk && d.date >= EA.dayAgo(3)) ||
+      (d.mode === 'plan' && d.date > EA.today()) || (d.mode === 'confirm' && d.date < EA.today() && d.date >= EA.dayAgo(PLAN_BACK)));
+    if (!keep) return blankDraft();
     // A draft saved by an older version may lack newer parts (e.g. alert notes): fill them in.
     var b = blankDraft(); Object.keys(b).forEach(function (k) { if (d[k] == null) d[k] = b[k]; });
     return d;
@@ -53,10 +57,64 @@
   function chitsOn(d) { return chits().filter(function (c) { return c.estate === ctx.estate && c.date === d; }); }
   function isPast() { return !!(draft && draft.date && draft.date !== EA.today()); }
   function keepChit(c) { var list = chits().filter(function (x) { return x.chit !== c.chit; }); list.push(c); EA.local.set(K.chits, list); }
-  function newChitId() {
-    var day = EA.today().replace(/-/g, '');
+  // ---------- v1.40 E · Rancang & sahkan (Yu Chen, 26 Oct; sample approved) ----------
+  // Before his leave the staff plans each leave day's chit (up to 3 days ahead). A plan is kept apart from the
+  // real chits (phone: fh.plans; office: tab FH_PLAN), so it never counts for pay, attendance, rounds or "lari".
+  // On his return he confirms each planned day from the paper muster (SAHKAN), then keys that day's work;
+  // today's chit opens only after that, oldest day first. Nobody below staff level keys.
+  function plans() {
+    var from = EA.dayAgo(40);
+    return (EA.local.get(K.plans, []) || []).filter(function (p) { return p.date >= from; });
+  }
+  function keepPlan(p) { var list = plans().filter(function (x) { return x.plan !== p.plan; }); list.push(p); EA.local.set(K.plans, list); }
+  function planOn(date, estate) { return plans().find(function (p) { return p.estate === (estate || ctx.estate) && p.date === date && !p.cancelled; }) || null; }
+  function isSunday(date) { return new Date(date + 'T00:00:00').getDay() === 0; }
+  function dm(date) { var d = new Date(date + 'T00:00:00'); return d.getDate() + '/' + (d.getMonth() + 1); }
+  function dayDm(date) { var d = new Date(date + 'T00:00:00'); return ui().dayBm[d.getDay()] + ' ' + dm(date); }
+  function addDays(date, n) { var d = new Date(date + 'T00:00:00'); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function workSavedOn(date) {
+    var ids = chitsOn(date).map(function (c) { return c.chit; });
+    return (EA.local.get('fh.work', []) || []).some(function (w) { return w.estate === ctx.estate && ids.indexOf(w.chit) >= 0; });
+  }
+  // Planned days already gone (up to 3 days back) still waiting: the chit not confirmed, or its work not keyed.
+  // A real chit made on that day (the staff came to work after all) counts as confirmed.
+  function pendingPlans() {
+    var t = EA.today(), from = EA.dayAgo(PLAN_BACK);
+    function done(p) {
+      var cs = chitsOn(p.date);
+      if (!cs.length) return false;
+      if (!cs.some(function (c) { return c.fromPlan; })) return true;      // the staff came to work: a normal chit stands
+      return workSavedOn(p.date);
+    }
+    return plans().filter(function (p) { return p.estate === ctx.estate && !p.cancelled && p.date < t && p.date >= from && !done(p); })
+      .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+  }
+  function futurePlans() {
+    var t = EA.today();
+    return plans().filter(function (p) { return p.estate === ctx.estate && !p.cancelled && p.date >= t && !chitsOn(p.date).length; })
+      .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+  }
+  function isPlan() { return !!(draft && draft.mode === 'plan'); }
+  function isConfirm() { return !!(draft && draft.mode === 'confirm'); }
+  // A plan shown like a chit (the screen table and the WhatsApp text).
+  function planAsChit(p) {
+    return { chit: p.plan, date: p.date, estate: p.estate, rows: p.rows, jobs: p.jobs, isPlan: true, planAt: p.at, confirmedAt: String(p.at || '').slice(11),
+             keyedBy: p.keyedBy, keyedName: p.keyedName, reason: p.reason || '', backlog: null, alerts: [], rev: p.rev || 1 };
+  }
+  // What changed from the plan to the confirmed chit, one line per person, for WhatsApp and the Pengurus.
+  function markText(m, task, block) {
+    if (m === 'H') return (task || '?') + (block ? ' Blk ' + block : '');
+    return m && MARKS[m] ? MARKS[m][0] : EA.t('tiada', 'none');
+  }
+  function planDiffText(d) {
+    var from = d.kind === 'add' ? EA.t('tidak dirancang', 'not planned') : markText(d.from ? d.from.muster : d.muster, d.from ? d.from.task : d.task, d.from ? d.from.block : d.block);
+    var to = d.kind === 'off' ? EA.t('tidak bekerja', 'did not work') : markText(d.muster, d.task, d.block);
+    return person(d.w) + ': ' + EA.t('dirancang ', 'planned ') + from + ' → ' + to;
+  }
+  function newChitId(date, pre) {
+    var day = (date || EA.today()).replace(/-/g, '');
     var n = EA.local.get(K.chitNo, {});
-    var base = 'MC-' + ctx.estate + '-' + (EA.phone() || 'P00') + '-' + day;
+    var base = (pre || 'MC') + '-' + ctx.estate + '-' + (EA.phone() || 'P00') + '-' + day;
     n[base] = (n[base] || 0) + 1;
     EA.local.set(K.chitNo, n);
     return base + '-' + n[base];
@@ -582,25 +640,37 @@
       el.innerHTML = head + '<div class="card"><p class="warn">' + EA.t('Chit ini tiada di telefon ini (atau lebih 3 hari). Beritahu kerani.', 'This chit is not on this phone (or is over 3 days old). Tell the clerk.') + '</p></div>' + todayCard();
       wireCommon(); return;
     }
-    var started = draft.jobs.length || Object.keys(draft.marks).length || draft.replacing || draft.newChit;
+    // v1.40: a planned leave day gone by comes first: confirm it and key its work, then today's chit opens.
+    if (!draft.mode && !draft.fixAsk) {
+      var pend = pendingPlans();
+      if (pend.length) { renderPending(head, pend); return; }
+    }
+    var started = draft.jobs.length || Object.keys(draft.marks).length || draft.replacing || draft.newChit || draft.mode;
     if (todaysChits().length && !started) {
       el.innerHTML = head +
         '<p class="msg ok-msg"><span class="bm">Chit hari ini sudah disimpan. Tekan VIEW untuk lihat, atau CORRECT untuk betulkan.</span>' +
         '<span class="en">Today\'s chit is saved. Tap VIEW to see it, or CORRECT to fix it.</span></p>' +
-        todayCard() + backlogCard(ctx.estate) +
+        todayCard() + plansCard(true) + backlogCard(ctx.estate) +
         '<button type="button" class="btn btn-ghost" id="fh-new">+ NEW CHIT<small>Chit baru (' + EA.t('jarang perlu', 'rarely needed') + ')</small></button>';
       $('#fh-new').onclick = function () { draft.newChit = true; keepDraft(); render(el, ctx); };
-      wireCommon(); wireBacklog(el, ctx.estate); refreshBacklog(ctx.estate);
+      wireCommon(); wirePlans(); wireBacklog(el, ctx.estate); refreshBacklog(ctx.estate);
       return;
     }
     var d = isPast() ? new Date(draft.date + 'T00:00:00') : new Date();
+    var mode = draft.mode || '';
     el.innerHTML = head +
+      (mode === 'plan' ? '<p class="plan-band"><b>' + EA.t('RANCANGAN · ', 'PLAN · ') + esc(dayDm(draft.date)) + '</b>' +
+        '<span>' + EA.t('Untuk hari staf cuti. Belum muster sebenar: tidak dikira untuk gaji sehingga disahkan bila balik.', 'For a day the staff is on leave. Not the real muster: nothing counts for pay until it is confirmed on return.') + '</span></p>' : '') +
+      (mode === 'confirm' ? '<p class="plan-band due"><b>' + EA.t('SAHKAN · ', 'CONFIRM · ') + esc(dayDm(draft.date)) + '</b>' +
+        '<span>' + EA.t('Dari rancangan. Ikut kertas muster hari itu: ubah hanya yang berbeza, kemudian SAHKAN.', 'From the plan. Follow that day\'s paper muster: change only what was different, then CONFIRM.') + '</span></p>' : '') +
       (d.getDay() === 0 ? '<p class="warn"><span class="bm">Hari Ahad: kerja perlu kelulusan Penolong Pengurus sebelum dikira untuk gaji.</span><span class="en">Sunday: work needs the Assistant Manager\'s approval before it counts for pay.</span></p>' : '') +
       (draft.fixAsk ? '<p class="warn"><b>' + EA.t('Membetulkan chit ', 'Fixing the chit of ') + esc(niceDate(draft.date)) + EA.t(' atas permintaan ', ' as asked by ') + esc(draft.fixAsk.by) + ':</b> "' + esc(draft.fixAsk.note) + '"</p>' : '') +
       (draft.replacing && !draft.fixAsk ? '<p class="warn"><span class="bm">Membetulkan chit ' + esc(draft.replacing) + '. Chit lama kekal; yang baru menggantikannya.</span><span class="en">Correcting chit ' + esc(draft.replacing) + '. The old one stays on record; this one replaces it.</span></p>' : '') +
 
-      backlogCard(ctx.estate) + '<div id="fh-alert-slot">' + alertSection() + '</div>' +
-      '<section class="card" aria-labelledby="fh-s1"><h2 id="fh-s1"><span class="step">1</span><span class="inline"><span class="bm">Kerja hari ini</span> · <span class="en">Today\'s jobs</span></span></h2>' +
+      (mode ? '' : backlogCard(ctx.estate) + '<div id="fh-alert-slot">' + alertSection() + '</div>') +
+      '<section class="card" aria-labelledby="fh-s1"><h2 id="fh-s1"><span class="step">1</span><span class="inline">' +
+        (mode === 'plan' ? '<span class="bm">Kerja dirancang</span> · <span class="en">Planned jobs</span>' : mode === 'confirm' ? '<span class="bm">Kerja hari itu</span> · <span class="en">That day\'s jobs</span>'
+          : '<span class="bm">Kerja hari ini</span> · <span class="en">Today\'s jobs</span>') + '</span></h2>' +
       '<p class="hint">' + esc(ui().dayBm[d.getDay()] + ', ' + d.getDate() + ' ' + ui().monBm[d.getMonth()] + ' ' + d.getFullYear()) + ' · ' + esc(ctx.estate) + '</p>' +
       (lastChit() && !draft.jobs.length ? '<div class="list-line copy-last"><div><b>Sama seperti chit ' + esc(niceDate(lastChit().date)) + '?</b>' +
         '<span class="en">Copy its jobs and who was on each, then change only what is different. Sick, leave and absent are not copied.</span></div>' +
@@ -618,23 +688,153 @@
       '<section class="card" aria-labelledby="fh-s4"><h2 id="fh-s4"><span class="step">3</span><span class="inline"><span class="bm">Chit</span> · <span class="en">The chit</span></span></h2>' +
       '<div id="fh-table"></div></section>' +
 
-      '<div class="bottom-bar"><button type="button" class="btn btn-main" id="fh-check">SAVE CHIT<small>Simpan chit</small></button></div>' +
-      todayCard();
+      (mode ? '<div class="actions"><button type="button" class="btn btn-ghost" id="fh-quit">' + (mode === 'plan' ? 'EXIT<small>Keluar tanpa simpan' : 'LATER<small>Nanti · keluar') + '</small></button></div>' : '') +
+      '<div class="bottom-bar"><button type="button" class="btn btn-main" id="fh-check">' +
+        (mode === 'plan' ? 'SAVE PLAN<small>Simpan rancangan</small>' : mode === 'confirm' ? 'CONFIRM<small>Sahkan chit ' + esc(dm(draft.date)) + '</small>' : 'SAVE CHIT<small>Simpan chit</small>') + '</button></div>' +
+      (mode ? '' : (draft.fixAsk || draft.replacing ? '' : plansCard(false)) + todayCard());
 
     $('#fh-addjob').onclick = function () { editJob(null); };
     if ($('#fh-copy')) $('#fh-copy').onclick = copyLast;
     // A comma is a decimal point too (many phone keyboards show only a comma): 2,5 = 2.5 mm.
     $('#fh-check').onclick = check;
-    wireAlerts();
+    if ($('#fh-quit')) $('#fh-quit').onclick = function () { dropDraft(); draft = blankDraft(); render(el, ctx); window.scrollTo(0, 0); };
+    if (!mode) wireAlerts();
     drawAll();
-    wireCommon(); wireBacklog(el, ctx.estate); refreshBacklog(ctx.estate);
+    wireCommon(); wirePlans();
+    if (!mode) { wireBacklog(el, ctx.estate); refreshBacklog(ctx.estate); }
+  }
+
+  // ---------- v1.40 plan & confirm: the screens ----------
+  // Monday morning: each planned day gone by, oldest first: 1 confirm the chit, 2 key that day's work.
+  function renderPending(head, pend) {
+    var p = pend[0], c = chitsOn(p.date)[0] || null, conf = !!c;
+    el.innerHTML = head +
+      '<section class="card plan-due-card" aria-labelledby="fh-pd"><h2 id="fh-pd"><span class="bm">' + esc(dayDm(p.date)) + ': sahkan kehadiran &amp; kerja</span>' +
+        '<span class="en">' + esc(dayDm(p.date)) + ': confirm attendance &amp; work</span></h2>' +
+      '<p class="hint">' + EA.t('Rancangan dibuat ', 'Planned on ') + esc(dayDm(String(p.at).slice(0, 10)) + ' ' + String(p.at).slice(11)) + ' · ' + esc(p.keyedName || p.keyedBy || '') + '. ' +
+        EA.t('Buat ini dulu, kemudian chit hari ini.', 'Do this first, then today\'s chit.') + '</p>' +
+      '<div class="plan-steps">' +
+        (conf ? '<div class="list-line"><div><b>1 · ' + EA.t('Chit disahkan', 'Chit confirmed') + ' ✓</b><span class="en">' + esc(c.confirmedAt) + '</span></div>' +
+            '<div class="acts"><button type="button" class="btn btn-ghost" data-view="' + esc(c.chit) + '">VIEW<small>Lihat</small></button></div></div>'
+          : '<button type="button" class="btn btn-main" id="pd-conf">1 · CONFIRM CHIT<small>Sahkan chit ' + esc(dm(p.date)) + '</small></button>') +
+        '<button type="button" class="btn ' + (conf ? 'btn-main' : 'btn-ghost') + '" id="pd-work"' + (conf ? '' : ' disabled') + '>2 · DAY\'S WORK<small>Kunci kerja ' + esc(dm(p.date)) + ' (sebenar)</small></button>' +
+      '</div>' +
+      (conf ? '' : '<div class="actions"><button type="button" class="btn btn-ghost" id="pd-none">NOBODY WORKED<small>Tiada kerja hari itu</small></button>' +
+        '<button type="button" class="btn btn-ghost" id="pd-view">PLAN<small>Lihat rancangan</small></button></div>') +
+      (pend.length > 1 ? '<p class="hint">' + EA.t('Selepas ini: ', 'After this: ') + esc(pend.slice(1).map(function (x) { return dayDm(x.date); }).join(', ')) + '</p>' : '') +
+      '</section>' +
+      '<section class="card"><h2><span class="inline"><span class="bm">Chit muster hari ini</span> · <span class="en">Today\'s muster chit</span></span></h2>' +
+      '<p class="hint">' + EA.t('Dibuka selepas hari dirancang disahkan dan kerjanya dikunci.', 'Opens once the planned day is confirmed and its work keyed.') + '</p>' +
+      '<button type="button" class="btn btn-ghost" disabled>MAKE TODAY\'S CHIT<small>Terkunci · locked</small></button></section>';
+    wireCommon();
+    if ($('#pd-conf')) $('#pd-conf').onclick = function () { startConfirm(p); };
+    if ($('#pd-view')) $('#pd-view').onclick = function () { showChitObj(planAsChit(p)); };
+    if ($('#pd-work') && conf) $('#pd-work').onclick = function () { EA.local.set('fh.workchit', c.chit); location.hash = 'field-harvest/work'; };
+    if ($('#pd-none')) $('#pd-none').onclick = function () { cancelSheet(p, true); };
+  }
+  function cancelSheet(p, gone) {
+      ui().openSheet('<h2 id="sheet-title"><span class="bm">' + (gone ? 'Tiada sesiapa bekerja pada ' : 'Batal rancangan ') + esc(dayDm(p.date)) + '?</span><span class="en">' + (gone ? 'Nobody worked on ' : 'Cancel the plan for ') + esc(dayDm(p.date)) + '?</span></h2>' +
+        '<p class="hint">' + (gone ? EA.t('Rancangan dibatalkan (tidak dipadam). Hari itu tiada chit.', 'The plan is cancelled (not deleted). That day has no chit.')
+          : EA.t('Contoh: cuti dibatalkan, staf bekerja. Rancangan dibatalkan (tidak dipadam); buat chit biasa pada hari itu.', 'E.g. the leave was called off. The plan is cancelled (not deleted); make the normal chit that day.')) + '</p>' +
+        '<div class="field"><label for="pn-why"><span class="bm">Sebab</span><span class="en">Why (e.g. heavy rain)</span></label><input id="pn-why" class="text-input" maxlength="120"></div>' +
+        '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="pn-back">‹ BACK<small>‹ BALIK</small></button>' +
+        '<button class="btn btn-ok" type="button" id="pn-ok">YES<small>' + (gone ? 'Ya, tiada kerja' : 'Ya, batal') + '</small></button></div>',
+        function (s) {
+          s.querySelector('#pn-back').onclick = ui().closeSheet;
+          s.querySelector('#pn-ok').onclick = function () {
+            var why = s.querySelector('#pn-why').value.replace(/\s+/g, ' ').trim();
+            if (why.length < 3) { ui().toast(EA.t('Tulis sebab', 'Write why'), 'bad'); return; }
+            ui().closeSheet(); cancelPlan(p, (gone ? 'Tiada kerja: ' : 'Batal: ') + why);
+          };
+        });
+  }
+  // Plans waiting for their day, with VIEW and CHANGE; and the button to plan another day.
+  function plansCard(withButton) {
+    if (!canKey(ctx.user) || viewOnly(ctx.user)) return '';
+    var list = futurePlans();
+    return '<section class="card" id="fh-plans" aria-labelledby="fh-pl"><h2 id="fh-pl"><span class="inline"><span class="bm">Rancangan hari cuti</span> · <span class="en">Plans for leave days</span></span></h2>' +
+      (list.length ? list.map(function (p) {
+        var s = summary(p.rows), waiting = p.rows.some(function (r) { return EA.isWaiting(r.id); });
+        return '<div class="list-line"><div><b>' + esc(dayDm(p.date)) + '</b> · ' + s.tot(s.worked) + EA.t(' orang dirancang', ' people planned') +
+          '<span class="en">' + EA.t('Dirancang ', 'Planned ') + esc(String(p.at).slice(11)) + (isSunday(p.date) ? ' · ' + EA.t('Ahad: perlu lulus Pengurus', 'Sunday: needs the manager\'s approval') : '') + '</span></div>' +
+          '<div class="acts"><span class="pill ' + (waiting ? 'wait">' + EA.t('Menunggu', 'Waiting') : 'ok">' + EA.t('Dihantar', 'Sent')) + '</span>' +
+          '<button type="button" class="btn btn-ghost" data-pview="' + esc(p.plan) + '">VIEW<small>Lihat</small></button>' +
+          (p.date > EA.today() ? '<button type="button" class="btn btn-ghost" data-pedit="' + esc(p.plan) + '">CHANGE<small>Ubah</small></button>' : '') +
+          '<button type="button" class="btn btn-ghost" data-pdel="' + esc(p.plan) + '">CANCEL<small>Batal</small></button></div></div>';
+      }).join('') : '<p class="hint">' + EA.t('Staf akan cuti? Rancang kerja hari itu sebelum cuti; sahkan bila balik.', 'Going on leave? Plan that day\'s work before; confirm it on return.') + '</p>') +
+      '<button type="button" class="btn btn-ghost" id="fh-plan">PLAN ANOTHER DAY<small>Rancang hari lain (staf cuti)</small></button></section>';
+  }
+  function wirePlans() {
+    if ($('#fh-plan')) $('#fh-plan').onclick = planPicker;
+    el.querySelectorAll('[data-pview]').forEach(function (b) { b.onclick = function () { var p = plans().find(function (x) { return x.plan === b.dataset.pview; }); if (p) showChitObj(planAsChit(p)); }; });
+    el.querySelectorAll('[data-pedit]').forEach(function (b) { b.onclick = function () { var p = plans().find(function (x) { return x.plan === b.dataset.pedit; }); if (p) startPlan(p.date, p); }; });
+    el.querySelectorAll('[data-pdel]').forEach(function (b) { b.onclick = function () { var p = plans().find(function (x) { return x.plan === b.dataset.pdel; }); if (p) cancelSheet(p, false); }; });
+  }
+  function planPicker() {
+    var t = EA.today(), days = [];
+    for (var i = 1; i <= PLAN_AHEAD; i++) days.push(addDays(t, i));
+    ui().openSheet('<h2 id="sheet-title"><span class="bm">Rancang hari mana?</span><span class="en">Plan which day?</span></h2>' +
+      '<p class="hint">' + EA.t('Untuk hari staf cuti, paling jauh ' + PLAN_AHEAD + ' hari. Rancangan tidak dikira untuk gaji sehingga disahkan.', 'For a day the staff is on leave, up to ' + PLAN_AHEAD + ' days ahead. A plan never counts for pay until it is confirmed.') + '</p>' +
+      days.map(function (d) {
+        var have = planOn(d), done = chitsOn(d).length;
+        return '<button type="button" class="btn btn-ghost plan-day" data-pday="' + d + '"' + (done ? ' disabled' : '') + '><b>' + esc(dayDm(d)) + '</b>' +
+          '<small>' + (done ? EA.t('Sudah ada chit', 'Already has a chit') : have ? EA.t('Sudah dirancang · UBAH', 'Already planned · CHANGE') : isSunday(d) ? EA.t('Hari Ahad: kerja perlu lulus Penolong Pengurus', 'Sunday: work needs the Assistant Manager\'s approval') : EA.t('Rancang', 'Plan')) + '</small></button>';
+      }).join('') +
+      '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="pp-back">‹ BACK<small>‹ BALIK</small></button></div>',
+      function (s) {
+        s.querySelector('#pp-back').onclick = ui().closeSheet;
+        s.querySelectorAll('[data-pday]').forEach(function (b) { b.onclick = function () { ui().closeSheet(); startPlan(b.dataset.pday, planOn(b.dataset.pday)); }; });
+      });
+  }
+  // A draft for a plan (new, or a change of one saved) or for confirming one.
+  function draftFrom(src, date) {
+    var d = blankDraft(); d.date = date;
+    d.jobs = JSON.parse(JSON.stringify(src.jobs || []));
+    d.nextJob = d.jobs.reduce(function (m, j) { return Math.max(m, Number(String(j.key).replace(/\D/g, '')) || 0); }, 0) + 1;
+    (src.rows || []).forEach(function (r) {
+      if (r.status === 'removed' || !EA.lists.worker(r.worker_id)) return;
+      d.marks[r.worker_id] = r.muster;
+      if (r.muster !== 'H') return;
+      var j = d.jobs.find(function (x) { return x.task === r.task_code && x.block === r.block && x.lots.join(' ') === r.lots; });
+      if (!j) { j = { key: 'j' + (d.nextJob++), task: r.task_code, block: r.block, lots: r.lots ? r.lots.split(' ') : [], mandor: r.mandor }; d.jobs.push(j); }
+      d.jobOf[r.worker_id] = j.key;
+    });
+    return d;
+  }
+  function startPlan(date, existing) {
+    var busy = draft.fixAsk || draft.replacing || (!draft.mode && (draft.jobs.length || Object.keys(draft.marks).length));
+    if (busy) { ui().toast(EA.t('Siapkan atau simpan chit yang sedang dibuat dulu', 'Finish or save the chit you are on first'), 'wait'); return; }
+    var d = existing ? draftFrom(existing, date) : blankDraft();
+    d.date = date; d.mode = 'plan'; d.planId = existing ? existing.plan : ''; d.reason = existing ? existing.reason || '' : '';
+    draft = d; keepDraft(); render(el, ctx); window.scrollTo(0, 0);
+  }
+  function startConfirm(p) {
+    var d = draftFrom(p, p.date);
+    d.mode = 'confirm'; d.fromPlan = p.plan;
+    draft = d; keepDraft(); render(el, ctx); window.scrollTo(0, 0);
+  }
+  function cancelPlan(p, why) {
+    var stamp = EA.today() + ' ' + EA.ui.hhmm(new Date());
+    try {
+      EA.batchStart();
+      p.rows.forEach(function (r) {
+        EA.save(TAB_PLAN, ROOM, ctx.estate, { date: p.date, chit: p.plan, block: r.block, lots: r.lots, mandor: r.mandor, worker_id: r.worker_id,
+          task_code: r.task_code, muster: r.muster, confirmed_by: ctx.user.code, confirmed_at: stamp, note: why }, r.id, 'removed');
+      });
+      if (p.askId) EA.save(TAB_ALERT, ROOM, ctx.estate, { date: p.date, chit: p.plan, kind: 'jobask', block: '', lot: '', detail: p.detail || '', staff_note: why, direction: '', direction_by: '', ref: p.plan }, p.askId, 'removed');
+      EA.batchEnd();
+    } catch (e) { EA.batchCancel(); ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad'); return; }
+    p.cancelled = stamp; p.cancelWhy = why; keepPlan(p);
+    ui().toast(EA.t('Rancangan ' + dm(p.date) + ' dibatalkan', 'Plan of ' + dm(p.date) + ' cancelled'));
+    if (navigator.onLine && EA.sendLink()) EA.send();
+    render(el, ctx);
   }
 
   function drawAll() { drawJobs(); drawRows(); drawTable(); }
   function niceDate(iso) { var d = new Date(iso + 'T00:00:00'); return ui().dayBm[d.getDay()] + ' ' + d.getDate() + ' ' + ui().monBm[d.getMonth()]; }
   // The latest chit of an earlier day on this phone.
   function lastChit() {
-    var t = EA.today();
+    var t = isPlan() || isConfirm() ? draft.date : EA.today();
     return chits().filter(function (c) { return c.estate === ctx.estate && c.date < t; })
       .sort(function (a, b) { return (a.date + a.confirmedAt) < (b.date + b.confirmedAt) ? 1 : -1; })[0] || null;
   }
@@ -708,7 +908,9 @@
   function drawRows() {
     var taken = onOtherChit();
     var left = unmarked();
-    $('#fh-rows').innerHTML = (left.length ? '<p class="warn"><span class="bm">' + left.length + ' orang belum ditanda.</span><span class="en">' + left.length + ' people not marked yet.</span></p>' : '<p class="hint">' + EA.t('Semua orang sudah ditanda.', 'Everyone is marked.') + '</p>') +
+    var sun = isSunday(draft.date || EA.today());
+    $('#fh-rows').innerHTML = (left.length && sun ? '<p class="hint">' + EA.t('Hari Ahad: yang tidak ditanda = rehat (' + left.length + ' orang). Tanda hanya yang bekerja, sakit atau cuti.', 'Sunday: anyone not marked is resting (' + left.length + '). Mark only those working, sick or on leave.') + '</p>' : '') +
+      (left.length && !sun ? '<p class="warn"><span class="bm">' + left.length + ' orang belum ditanda.</span><span class="en">' + left.length + ' people not marked yet.</span></p>' : left.length ? '' : '<p class="hint">' + EA.t('Semua orang sudah ditanda.', 'Everyone is marked.') + '</p>') +
       // v1.38 (Yu Chen, 25 Oct): people still to mark come first; a person done (mark, and a job if H) shrinks to a
       // short line, so the list gets shorter as the staff goes and a wrong mark stands out.
       everyone().map(function (w, i) { var m0 = draft.marks[w.id], dn = !!m0 && (m0 !== 'H' || !!jobFor(w.id)); return { w: w, i: i, rank: taken[w.id] ? 2 : dn ? 1 : 0 }; })
@@ -725,7 +927,7 @@
         line = draft.jobs.length ? '<div class="picks">' + draft.jobs.filter(function (x) { return showAll || x === j; }).map(function (x) {
           return '<button type="button" class="pick" data-w="' + w.id + '" data-job="' + x.key + '" aria-pressed="' + (j === x) + '"><b>' + esc(x.task) + '</b><small>' + esc(x.block ? placeName(x.block) : jobName(x.task)) + '</small></button>';
         }).join('') + (!showAll && draft.jobs.length > 1 ? '<button type="button" class="link-btn" data-chg="' + w.id + '">' + EA.t('TUKAR', 'CHANGE') + '</button>' : '') + '</div>' + (j ? '' : '<b class="bad-text">' + EA.t('Pilih kerja', 'Choose a job') + '</b>') : '<b class="bad-text">' + EA.t('Tambah kerja dahulu', 'Add a job first') + '</b>';
-      } else if (m && m !== 'H') line = '<span class="pill plain">' + esc(EA.t(MARKS[m][0], MARKS[m][1])) + '</span>' + (m === 'T' ? lariFlag(w) : '');
+      } else if (m && m !== 'H') line = '<span class="pill plain">' + esc(EA.t(MARKS[m][0], MARKS[m][1])) + '</span>' + (m === 'T' && !draft.mode ? lariFlag(w) : '');
       var more = (m === 'L' || m === 'X') ? m : '⋯';
       return head + '<div class="wrow' + (other ? ' off' : '') + (o.rank === 1 && !openPick[w.id] ? ' wrow-done' : '') + '">' +
         '<div class="who-w"><b>' + esc(w.name) + '</b><span class="en">' + esc(w.id) + ' · ' + (w.mdr ? 'Mandor' : esc(w.gang)) + ' · ' + (w.sex === 'F' ? 'P' : 'L') + '</span></div>' +
@@ -1049,7 +1251,8 @@
         function (s) { s.querySelector('#pb-ok').onclick = ui().closeSheet; });
       return;
     }
-    var left = unmarked();
+    // v1.40: on a Sunday the people not marked are resting: they stay off the chit (never T, so never "lari").
+    var left = isSunday(draft.date || EA.today()) ? [] : unmarked();
     if (left.length) {
       leftoverSheet(left);
       return;
@@ -1163,29 +1366,113 @@
         draft.checks = cks; keepDraft(); confirmSheet(true); }); return; }
     }
     var empty = emptyJobs();
-    var preview = chitText(buildChit('(' + EA.t('belum disimpan', 'not saved yet') + ')', EA.ui.hhmm(new Date()), ctx.user.code));
-    ui().openSheet('<h2 id="sheet-title"><span class="bm">Semak chit ini</span><span class="en">Check this chit, then save</span></h2>' +
+    var notSaved = '(' + EA.t('belum disimpan', 'not saved yet') + ')';
+    // v1.40: a plan asks why the Sunday work (for the Pengurus); a confirmation asks why it differs from the plan.
+    var why = null, c0 = null;
+    if (isPlan()) {
+      c0 = planAsChit(planObj(draft.planId || notSaved, EA.today() + ' ' + EA.ui.hhmm(new Date())));
+      if (isSunday(draft.date)) why = { label: ['Kenapa kerja hari Ahad?', 'Why work on Sunday? (for the Assistant Manager)'], val: draft.reason || '' };
+    } else {
+      c0 = buildChit(notSaved, EA.ui.hhmm(new Date()), ctx.user.code);
+      if (isConfirm() && c0.planDiff.length) why = { label: ['Kenapa berbeza dari rancangan? (' + c0.planDiff.length + ')', 'Why different from the plan?'], val: draft.planNote || '' };
+    }
+    var preview = chitText(c0);
+    ui().openSheet('<h2 id="sheet-title"><span class="bm">' + (isPlan() ? 'Semak rancangan ini' : isConfirm() ? 'Sahkan chit ' + esc(dayDm(draft.date)) : 'Semak chit ini') + '</span>' +
+        '<span class="en">' + (isPlan() ? 'Check this plan, then save' : isConfirm() ? 'Confirm this chit' : 'Check this chit, then save') + '</span></h2>' +
       (empty.length ? '<p class="warn"><span class="bm">Kerja tanpa orang tidak masuk chit: ' + esc(empty.map(function (j) { return j.task; }).join(', ')) + '</span><span class="en">Jobs with nobody are left off the chit.</span></p>' : '') +
+      (isConfirm() && c0.planDiff.length ? '<div class="plan-diff"><b>' + EA.t('Beza dari rancangan', 'Different from the plan') + ' (' + c0.planDiff.length + ')</b>' +
+        c0.planDiff.map(function (x) { return '<span>' + esc(planDiffText(x)) + '</span>'; }).join('') + '</div>' : '') +
+      (why ? '<div class="field"><label for="cf-why"><span class="bm">' + esc(why.label[0]) + '</span><span class="en">' + esc(why.label[1]) + '</span></label>' +
+        '<input id="cf-why" class="text-input" maxlength="160" value="' + esc(why.val) + '"></div>' : '') +
       '<pre class="chit">' + esc(preview) + '</pre>' +
       '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="cf-back">‹ CHANGE<small>‹ UBAH</small></button>' +
-      '<button class="btn btn-ok" type="button" id="cf-ok">SAVE<small>Simpan</small></button></div>',
+      '<button class="btn btn-ok" type="button" id="cf-ok">' + (isPlan() ? 'SAVE PLAN<small>Simpan rancangan' : isConfirm() ? 'CONFIRM<small>Sahkan' : 'SAVE<small>Simpan') + '</small></button></div>',
       function (s) {
         s.querySelector('#cf-back').onclick = ui().closeSheet;
-        s.querySelector('#cf-ok').onclick = function () { draft.checker = ctx.user.code; keepDraft(); ui().closeSheet(); save(); };
+        s.querySelector('#cf-ok').onclick = function () {
+          if (why) {
+            var v = s.querySelector('#cf-why').value.replace(/\s+/g, ' ').trim();
+            if (v.length < 3) { ui().toast(EA.t('Tulis sebab dulu', 'Write the reason first'), 'bad'); s.querySelector('#cf-why').focus(); return; }
+            if (isPlan()) draft.reason = v; else draft.planNote = v;
+          }
+          draft.checker = ctx.user.code; keepDraft(); ui().closeSheet();
+          if (isPlan()) savePlan(); else save();
+        };
       });
   }
 
   function buildChit(chitId, confirmedAt, checker) {
-    return { chit: chitId, date: draft.date || EA.today(), estate: ctx.estate, rows: draftRows(), jobs: JSON.parse(JSON.stringify(draft.jobs)),
+    var c = { chit: chitId, date: draft.date || EA.today(), estate: ctx.estate, rows: draftRows(), jobs: JSON.parse(JSON.stringify(draft.jobs)),
              rain_mm: draft.rain_mm, rain_time: draft.rain_time, checker: checker, confirmedAt: confirmedAt,
              backlog: getBacklog(ctx.estate), alerts: chitAlerts(),
              keyedBy: ctx.user.code, keyedName: ctx.user.name, rev: 1 };
+    // v1.40: a planned day confirmed on return: no backlog or alerts of today; it keeps its plan and what changed.
+    if (isConfirm()) {
+      var p = plans().find(function (x) { return x.plan === draft.fromPlan; }) || { rows: [], at: '' };
+      c.backlog = null; c.alerts = [];
+      c.fromPlan = draft.fromPlan; c.planAt = p.at; c.confirmedOn = EA.today();
+      c.planDiff = diffRows(p.rows, c.rows); c.planNote = draft.planNote || '';
+    }
+    return c;
+  }
+  // v1.40: the plan being keyed, as it will be saved.
+  function planObj(id, at) {
+    return { plan: id, date: draft.date, estate: ctx.estate, rows: draftRows(), jobs: JSON.parse(JSON.stringify(draft.jobs)), at: at,
+             keyedBy: ctx.user.code, keyedName: ctx.user.name, reason: draft.reason || '' };
+  }
+  function planDetail(p) {
+    var s = summary(p.rows), parts = [];
+    s.sections.forEach(function (x) { x.lines.forEach(function (l) { parts.push(l.task + (l.block ? ' Blk ' + l.block : '') + ' ' + s.tot(l)); }); });
+    return 'Kerja Ahad ' + dm(p.date) + ' (rancangan): ' + parts.join(', ') + ' · ' + s.tot(s.worked) + ' orang';
+  }
+  // v1.40: save a plan: tab FH_PLAN (one row per person, like the muster); never FH_MUSTER or FH_CHIT.
+  // A Sunday plan goes to the Pengurus for LULUS / TOLAK at once (alert kind "jobask", as other work).
+  function savePlan() {
+    if (!(draft.date > EA.today())) { ui().toast(EA.t('Rancangan hanya untuk hari akan datang', 'A plan is only for a day ahead'), 'bad'); dropDraft(); draft = blankDraft(); render(el, ctx); return; }
+    var at = EA.today() + ' ' + EA.ui.hhmm(new Date());
+    var old = draft.planId ? plans().find(function (x) { return x.plan === draft.planId; }) : null;
+    var p = planObj(old ? old.plan : newChitId(draft.date, 'PL'), at);
+    p.rev = old ? (old.rev || 1) + 1 : 1;
+    try {
+      EA.batchStart();
+      var oldBy = {};
+      if (old) old.rows.forEach(function (r) { oldBy[r.worker_id] = r; });
+      p.rows.forEach(function (r) {
+        var o = oldBy[r.worker_id];
+        delete oldBy[r.worker_id];
+        if (o && o.muster === r.muster && o.task_code === r.task_code && o.block === r.block && o.lots === r.lots && o.mandor === r.mandor) { r.id = o.id; return; }
+        r.id = EA.save(TAB_PLAN, ROOM, ctx.estate, { date: p.date, chit: p.plan, block: r.block, lots: r.lots, mandor: r.mandor, worker_id: r.worker_id,
+          task_code: r.task_code, muster: r.muster, confirmed_by: ctx.user.code, confirmed_at: at, note: '' }, o ? o.id : '').id;
+      });
+      Object.keys(oldBy).forEach(function (w) {
+        var o = oldBy[w];
+        EA.save(TAB_PLAN, ROOM, ctx.estate, { date: p.date, chit: p.plan, block: o.block, lots: o.lots, mandor: o.mandor, worker_id: o.worker_id,
+          task_code: o.task_code, muster: o.muster, confirmed_by: ctx.user.code, confirmed_at: at, note: 'removed in change' }, o.id, 'removed');
+      });
+      if (isSunday(p.date)) {
+        p.detail = planDetail(p);
+        if (old && old.askId && old.detail === p.detail && old.reason === p.reason) p.askId = old.askId;
+        else p.askId = EA.save(TAB_ALERT, ROOM, ctx.estate, { date: p.date, chit: p.plan, kind: 'jobask', block: '', lot: '', detail: p.detail,
+          staff_note: p.reason, direction: '', direction_by: '', ref: p.plan }, old && old.askId ? old.askId : '').id;
+      }
+      EA.batchEnd();
+    } catch (e) {
+      EA.batchCancel();
+      ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad');
+      return;
+    }
+    keepPlan(p);
+    dropDraft(); draft = blankDraft();
+    ui().toast(EA.t('Rancangan ' + dm(p.date) + ' disimpan', 'Plan for ' + dm(p.date) + ' saved') + (isSunday(p.date) ? EA.t(' · dihantar ke Pengurus untuk lulus', ' · sent to the manager to approve') : ''));
+    if (navigator.onLine && EA.sendLink()) EA.send();
+    render(el, ctx);
+    showChitObj(planAsChit(p));
   }
 
   function save() {
     var confirmedAt = EA.ui.hhmm(new Date());
     var old = draft.replacing ? chits().find(function (c) { return c.estate === ctx.estate && c.chit === draft.replacing; }) : null;
-    var c = buildChit(old ? old.chit : newChitId(), confirmedAt, draft.checker);
+    var c = buildChit(old ? old.chit : newChitId(draft.date || EA.today()), confirmedAt, draft.checker);
     if (old) c.rev = (old.rev || 1) + 1;
     if (old && isPast()) { c.backlog = old.backlog; c.alerts = old.alerts || []; }
     var fixAsk = draft.fixAsk || null;
@@ -1247,7 +1534,9 @@
       var s = summary(c.rows);
       c.chitRowId = EA.save(TAB_CHIT, ROOM, ctx.estate, { date: c.date, chit: c.chit, rain_mm: c.rain_mm, rain_time: c.rain_time,
         working: s.tot(s.worked), not_working: s.tot(s.notw), grand_total: s.tot(s.grand),
-        confirmed_by: c.checker, confirmed_at: stamp, note: '' }, old && old.chitRowId ? old.chitRowId : '').id;
+        confirmed_by: c.checker, confirmed_at: stamp,
+        note: c.fromPlan ? ('Dari rancangan ' + c.fromPlan + ' (' + c.planAt + ') · disahkan ' + EA.today() + (c.planDiff.length ? ' · beza ' + c.planDiff.length + ': ' + c.planNote : ' · sama')).slice(0, 300) : (old && old.fromPlan ? 'Dari rancangan ' + old.fromPlan : '') },
+        old && old.chitRowId ? old.chitRowId : '').id;
       // v1.32: the clerk asked for this fix: tell the office it is done, with what changed.
       if (fixAsk && old) {
         var ch = diffRows(old.rows, c.rows).map(function (x) { return person(x.w) + (x.kind === 'move' ? ': ' + (x.from.muster || '') + ' → ' + (x.muster || '') : x.kind === 'add' ? ' +' : ' −'); }).join(', ');
@@ -1269,10 +1558,14 @@
       workToo = EA.local.get('fh.work', []).some(function (s) { return s.chit === c.chit; });
       if (workToo) EA.local.set('fh.workchit', c.chit);
     }
+    if (old && old.fromPlan) { c.fromPlan = old.fromPlan; c.planAt = old.planAt; c.planDiff = old.planDiff; c.planNote = old.planNote; c.confirmedOn = old.confirmedOn; }
+    var planned = !!c.fromPlan && !old;
+    if (planned) EA.local.set('fh.workchit', c.chit);
     keepChit(c);
-    dropDraft();
+    dropDraft(); draft = blankDraft();
     ui().toast(EA.t('Chit disimpan', 'Chit saved') + (old ? ' (' + EA.t('dibetulkan', 'corrected') + ')' : '') +
-      (workToo ? EA.t(' · Sekarang betulkan Kerja hari itu', ' · Now fix that day\'s work') : ''));
+      (workToo ? EA.t(' · Sekarang betulkan Kerja hari itu', ' · Now fix that day\'s work') : '') +
+      (planned ? EA.t(' · Sekarang kunci kerja ' + dm(c.date), ' · Now key the work of ' + dm(c.date)) : ''));
     if (navigator.onLine && EA.sendLink()) EA.send();
     render(el, ctx);
     showChit(c.chit);
@@ -1303,8 +1596,23 @@
     function short(code) { return (EA.lists.chitNames && EA.lists.chitNames[code]) || jobNameEn(code); }
     var AWAY_EN = { T: 'Absent', S: 'Sick', C: 'On Leave', L: 'Labour Day', X: 'Transfer' };
     var L = [];
-    L.push('*CHIT MUSTER ' + (est ? est.company + ' ' : '') + c.estate + '*' + (c.rev > 1 ? ' _(dibetulkan · corrected)_' : ''));
-    L.push(ui().dayBm[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear());
+    L.push('*' + (c.isPlan ? 'RANCANGAN · ' : '') + 'CHIT MUSTER ' + (est ? est.company + ' ' : '') + c.estate + '*' + (c.rev > 1 ? ' _(' + (c.isPlan ? 'diubah · changed' : 'dibetulkan · corrected') + ')_' : ''));
+    var pa = String(c.planAt || '');
+    L.push(ui().dayBm[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear() +
+      (c.isPlan && pa.length > 10 ? ' (dirancang ' + dayDm(pa.slice(0, 10)) + ' ' + pa.slice(11) + ')' : ''));
+    // v1.40: a plan says so on top; a confirmed plan says when, and what was different from the plan.
+    if (c.isPlan) {
+      L.push('⏳ _Belum muster sebenar · disahkan bila staf balik_');
+      if (d.getDay() === 0) L.push('⚠ Hari Ahad: perlu lulus Penolong Pengurus' + (c.reason ? ' · sebab: ' + c.reason : ''));
+    }
+    if (c.fromPlan) {
+      L.push('✅ _DISAHKAN ' + (c.confirmedOn ? dayDm(c.confirmedOn) + ' ' : '') + c.confirmedAt + (pa.length > 10 ? ' · dirancang ' + dayDm(pa.slice(0, 10)) : '') + ' (staf cuti)_');
+      var df = c.planDiff || [];
+      L.push('*Beza dari rancangan · Plan vs actual*');
+      if (!df.length) L.push('• Sama seperti rancangan · as planned');
+      df.forEach(function (x) { L.push('• ' + planDiffText(x)); });
+      if (df.length && c.planNote) L.push('Sebab: ' + c.planNote);
+    }
     // v1.17: an old chit keyed with rain still shows it; new chits have none (rain is in the Sugut DMS).
     if (c.rain_mm !== '' && c.rain_mm !== undefined && c.rain_mm !== null) L.push('Hujan semalam: ' + (Number(c.rain_mm) || 0).toFixed(2) + ' mm' + (c.rain_time ? ' (' + c.rain_time + ')' : ''));
     backlogLines(c.backlog).forEach(function (x) { L.push(x); });
@@ -1328,6 +1636,12 @@
     L.push(row('', 'Total not work.', s.notw));
     L.push(row('', 'GRAND TOTAL', s.grand));
     L.push('```');
+    // v1.40: on a Sunday the people not on the chit are resting.
+    if (d.getDay() === 0) {
+      var on = {}; c.rows.forEach(function (r) { if (r.status !== 'removed') on[r.worker_id] = true; });
+      var rest = EA.lists.mandorsFor(c.estate).concat(EA.lists.workersFor(c.estate)).filter(function (w) { return !on[w.id]; }).length;
+      if (rest) L.push('Rehat (hari Ahad) · Rest day: ' + rest + ' orang');
+    }
     s.sections.forEach(function (x) {
       x.lines.forEach(function (l) {
         if (l.lots.length && EA.lists.MACHINE_JOBS.indexOf(l.task) >= 0) { var sp = EA.lists.splitMach(c.estate, l.lots); L.push(l.task + ' jentera: ' + sp.mach.map(function (m) { var x = EA.lists.machinesFor(c.estate).find(function (y) { return y.id === m; }); return x ? x.en : m; }).join(', ') + (sp.lots.length ? ' · Blk ' + l.block + ' petak ' + sp.lots.join(', ') : '')); }
@@ -1340,16 +1654,18 @@
     });
     var mdrs = EA.lists.mandorsFor(c.estate).filter(function (m) { return c.rows.some(function (r) { return r.worker_id === m.id && r.muster === 'H'; }); });
     if (mdrs.length) L.push('Mandor bertugas: ' + mdrs.map(function (m) { return m.name; }).join(', '));
-    L.push('Disediakan: ' + (c.keyedName || c.keyedBy) + ' · ' + c.confirmedAt);
+    L.push('Disediakan: ' + (c.keyedName || c.keyedBy) + ' · ' + (c.isPlan ? 'dirancang ' : c.fromPlan ? 'disahkan ' : '') + c.confirmedAt);
     L.push('E-Book ' + (EA.RELEASE || '') + ' · ' + c.chit);
     return L.join('\n');
   }
 
   function showChit(id) {
     var c = chits().find(function (x) { return x.chit === id; });
-    if (!c) return;
+    if (c) showChitObj(c);
+  }
+  function showChitObj(c) {
     var text = chitText(c);
-    ui().openSheet('<h2 id="sheet-title"><span class="bm">Chit untuk kumpulan WhatsApp</span><span class="en">Chit for the WhatsApp group</span></h2>' +
+    ui().openSheet('<h2 id="sheet-title"><span class="bm">' + (c.isPlan ? 'Rancangan untuk kumpulan WhatsApp' : 'Chit untuk kumpulan WhatsApp') + '</span><span class="en">' + (c.isPlan ? 'Plan for the WhatsApp group' : 'Chit for the WhatsApp group') + '</span></h2>' +
       chitTable(c.rows) +
       '<pre class="chit" id="ch-text">' + esc(text) + '</pre>' +
       '<div class="actions"><button class="btn btn-ghost" type="button" id="ch-copy">COPY<small>Salin</small></button>' +
@@ -1453,5 +1769,8 @@
   EA.fh.wireBacklog = wireBacklog;
   EA.fh.shortDate = shortDate;
   EA.fh.chitText = chitText;
+  EA.fh.plans = plans;
+  EA.fh.pendingPlans = function (estate) { var keep = ctx; ctx = ctx || {}; ctx = Object.assign({}, ctx, { estate: estate }); try { return pendingPlans(); } finally { ctx = keep; } };
+  EA.fh.planAsChit = planAsChit;
   EA.fh.marks = MARKS;
 })();

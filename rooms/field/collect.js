@@ -77,10 +77,13 @@
 
   // For the delivery note's "Estimated tonnage": bunches x this month's bunch weight.
   function abwNow() {
-    var b = EA.fh.getBacklog(ctx.estate), t = b && b.tonnage;
-    if (t && t.abw) return num(t.abw);
+    var b = EA.fh.getBacklog(ctx.estate), t = b && b.tonnage, a = EA.fh.abwOf ? EA.fh.abwOf(t) : 0;
+    if (a) return a;
+    // v1.39: only tickets with a bunch count make the ABW.
     var m = EA.today().slice(0, 7), mt = 0, n = 0;
-    EA.local.get('fh.tickets', []).forEach(function (x) { if (x.estate === ctx.estate && x.date.slice(0, 7) === m) { mt += x.nett; n += x.bunches; } });
+    EA.local.get('fh.tickets', []).forEach(function (x) {
+      if (x.estate === ctx.estate && x.date.slice(0, 7) === m && Number(x.bunches) > 0 && Number(x.nett) > 0) { mt += Number(x.nett); n += Number(x.bunches); }
+    });
     return n ? mt * 1000 / n : 0;
   }
   function totals(list) {

@@ -15,7 +15,14 @@ window.EA = window.EA || {};
     var out = [], now = new Date();
     if (u.role === 'Staff' && now.getHours() >= 5) {
       var today = EA.today(), has = (EA.local.get('fh.chits2', []) || []).some(function (c) { return c.estate === est && c.date === today; });
-      if (!has) out.push({ id: 'CH', p: 1, ic: '!', bm: 'Chit muster hari ini belum dibuat', en: 'Today\'s muster chit is not made yet', sub: EA.t('Buat sebelum kerja mula', 'Make it before work starts'), go: '#field-harvest' });
+      // v1.40: planned leave days gone by come first (confirm, then their work); a day planned for today is not "missing".
+      var pend = EA.fh && EA.fh.pendingPlans ? EA.fh.pendingPlans(est) : [];
+      pend.forEach(function (p) {
+        var d = new Date(p.date + 'T00:00:00'), lbl = EA.ui.dayBm[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1);
+        out.push({ id: 'PL:' + p.plan, p: 0, ic: '!', bm: lbl + ': sahkan kehadiran & kerja', en: lbl + ': confirm attendance & work', sub: EA.t('Rancangan semasa cuti · buat sebelum chit hari ini', 'Planned while on leave · do it before today\'s chit'), go: '#field-harvest' });
+      });
+      var planToday = ((EA.fh && EA.fh.plans ? EA.fh.plans() : []) || []).some(function (p) { return p.estate === est && p.date === today && !p.cancelled; });
+      if (!has && !planToday) out.push({ id: 'CH', p: 1, ic: '!', bm: 'Chit muster hari ini belum dibuat', en: 'Today\'s muster chit is not made yet', sub: EA.t('Buat sebelum kerja mula', 'Make it before work starts'), go: '#field-harvest' });
     }
     var n = EA.waitingMine ? EA.waitingMine() : 0, old = EA.oldestWaiting ? EA.oldestWaiting() : 0;
     if (n && old && Date.now() - old > 30 * 60000) out.push({ id: 'Q', p: 3, ic: '↑', bm: n + ' rekod belum dihantar ke pejabat', en: n + ' records not sent to the office', sub: EA.t('Cari isyarat, tekan di sini untuk HANTAR', 'Find signal, tap here to SEND'), go: 'send' });

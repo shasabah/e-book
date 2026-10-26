@@ -33,13 +33,15 @@ const { chromium } = require('playwright');
   await p.keyboard.press('Escape'); await p.waitForTimeout(200);
   // Day's work
   await p.click('.tabs a[href="#field-harvest/work"]'); await p.waitForTimeout(400);
+  // v1.39: a gang on several lots taps each person's lots; SAME FOR ALL puts everyone on every lot (shared equally).
+  await p.click('[data-allwho="j1"]'); await p.waitForTimeout(200);
   const cps = t(await p.textContent('[data-job="j1"]'));
-  check('work: CPS lots start at 100% (3-30, 3-31)', (await p.locator('[data-job="j1"] button[data-pv="100"][aria-pressed="true"]').count()) === 2);
-  check('work: CPS shared equally, 2.57 / 3 = 0.857 Ha each', /0\.857 Ha/.test(cps), cps.slice(0, 200));
+  check('work: CPS lots start as SIAP (3-30, 3-31)', (await p.locator('[data-job="j1"] button[data-lv="Y"][aria-pressed="true"]').count()) === 2);
+  check('work: CPS SAME FOR ALL shares equally, 2.57 / 3 = 0.857 Ha each', /0\.857 Ha/.test(cps), cps.slice(0, 200));
   check('work: CPS below target flagged', /Bawah sasaran · below target: 2\.57 \/ 7\.5 Ha/.test(cps));
   await p.fill('[data-job="j2"] input[data-w="W-SSGT-001"][data-f="bunches"]', '120');
   await p.fill('[data-job="j2"] input[data-w="W-SSGT-002"][data-f="bunches"]', '80');
-  for (const k of ['j1', 'j2']) await p.click(`[data-st="${k}"][data-v="Y"]`);
+  await p.click('[data-st="j2"][data-v="Y"]');   // v1.39: CPS (j1) follows its lots, already SIAP
   check('work: no CHECK WITH MANDOR', !/MANDOR/i.test(await p.textContent('#wk-check')));
   await p.click('#wk-check'); await p.waitForSelector('#wc-ok');
   check('work: no mandor to choose before saving', (await p.locator('#wc-who').count()) === 0);

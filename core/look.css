@@ -255,6 +255,10 @@ select.text-input { appearance: none; background-image: linear-gradient(45deg, t
 .seg button { border: 0; border-left: 1px solid var(--line); background: var(--surface); color: var(--muted); min-width: 46px; min-height: 44px;
   font: inherit; font-weight: 700; cursor: pointer; padding: 0 6px; }
 .seg button:first-child { border-left: 0; }
+/* v1.41: every pressed button shows it (SIAP / BELUM SIAP, 1 / ½ day, lot done / not done were not highlighted). */
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); font-weight: 700; }
+.seg button[aria-pressed="true"][data-v="Y"], .seg button[aria-pressed="true"][data-lv="Y"] { background: var(--ok); color: #fff; }
+.seg button[aria-pressed="true"][data-v="N"], .seg button[aria-pressed="true"][data-lv="N"] { background: var(--bad); color: #fff; }
 .seg button[aria-pressed="true"][data-k="H"] { background: var(--ok); color: #fff; }
 .seg button[aria-pressed="true"][data-k="S"] { background: var(--wait); color: #fff; }
 .seg button[aria-pressed="true"][data-k="C"] { background: var(--hq); color: #fff; }

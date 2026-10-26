@@ -229,9 +229,29 @@
     st.done = nd.length ? 'N' : 'Y';
     st.reason = nd.map(function (l) { return l + ' ' + whyText(lw[l] || {}); }).join('; ');
   }
+  // v1.42 (Yu Chen, 26 Oct): a lot left BELUM SIAP (rain) keeps who worked it with 0 Ha. The day it is finished,
+  // its Ha is shared over every person-day on it in the last 14 days, so each worker gets what he did; the earlier
+  // days' 0 Ha lines are corrected by new lines on their own day (nothing deleted). Only this phone's saved days.
+  var SETTLE_DAYS = 14;
+  function earlierDays(task, lot) {
+    if (!chit) return [];
+    var from = new Date(chit.date + 'T00:00:00'); from.setDate(from.getDate() - SETTLE_DAYS);
+    var fromIso = from.getFullYear() + '-' + String(from.getMonth() + 1).padStart(2, '0') + '-' + String(from.getDate()).padStart(2, '0'), out = [];
+    saved().forEach(function (s) {
+      if (s.chit === chit.chit || s.estate !== chit.estate || s.date >= chit.date || s.date < fromIso) return;
+      ((s.rec && s.rec.lines) || []).forEach(function (l, i) {
+        if (l.task_code !== task || l.lot !== lot || !l.id) return;
+        if ((num(l.qty) === 0 && !l.settledBy) || l.settledBy === chit.chit) out.push({ s: s, i: i, line: l });
+      });
+    });
+    return out;
+  }
   function shareOut(j) {           // v1.41: each person's lines from the lots he tapped; a lot is split among its people
     var p = draft.prog[j.key] || {}, wh = who(j), lots = chosenLots(j), count = {};
-    lots.forEach(function (l) { count[l] = j.people.filter(function (w) { return (wh[w] || []).indexOf(l) >= 0; }).length; });
+    lots.forEach(function (l) {
+      count[l] = j.people.filter(function (w) { return (wh[w] || []).indexOf(l) >= 0; }).length;
+      if (p[l] === '100' && count[l] && !draft.manual[j.key]) count[l] += earlierDays(j.task, l).length;   // v1.42: earlier person-days on it
+    });
     j.people.forEach(function (w) {
       var mine = lots.filter(function (l) { return (wh[w] || []).indexOf(l) >= 0; });
       // A finished lot's Ha is split among the people on it; a lot not finished is kept with 0 Ha (who worked there).
@@ -346,6 +366,13 @@
         var row = '<div class="wline"><b class="mono">' + esc(lot) + '</b><span class="hint">' + lotHa(lot).toFixed(2) + ' Ha</span>' +
           '<div class="seg"><button type="button" data-lj="' + j.key + '" data-ll="' + esc(lot) + '" data-lv="Y" aria-pressed="' + (v === '100') + '" style="min-width:84px">' + EA.t('SIAP', 'DONE') + '</button>' +
           '<button type="button" data-lj="' + j.key + '" data-ll="' + esc(lot) + '" data-lv="N" aria-pressed="' + (v === '0') + '" style="min-width:110px">' + EA.t('BELUM SIAP', 'NOT DONE') + '</button></div></div>';
+        var ed = v === '100' && !draft.manual[j.key] ? earlierDays(j.task, lot) : [];
+        if (ed.length) {
+          var days = ed.map(function (x) { return niceShort(x.s.date); }).filter(function (x, i, a) { return a.indexOf(x) === i; });
+          var today = j.people.filter(function (w) { return (who(j)[w] || []).indexOf(lot) >= 0; }).length;
+          row += '<p class="hint" data-settle="' + j.key + '|' + esc(lot) + '">' + EA.t('Belum siap sejak ', 'Not finished since ') + esc(days.join(', ')) + ' (' + ed.length + EA.t(' orang-hari). Ha petak dibahagi: ', ' person-days). The lot\'s Ha is shared: ') +
+            lotHa(lot).toFixed(2) + ' ÷ ' + (ed.length + today) + EA.t(' orang-hari', ' person-days') + '</p>';
+        }
         if (v === '0') row += '<div class="wline lot-why"><div class="seg">' +
           '<button type="button" data-lwhy="' + j.key + '|' + esc(lot) + '|rain" aria-pressed="' + (w.why === 'rain') + '">' + EA.t('Hujan', 'Rain') + '</button>' +
           '<button type="button" data-lwhy="' + j.key + '|' + esc(lot) + '|other" aria-pressed="' + (w.why === 'other') + '">' + EA.t('Sebab lain', 'Other') + '</button></div>' +
@@ -720,6 +747,27 @@
           qty: o.qty, unit: o.unit, bunches: o.bunches, confirmed_by: rec.checker, confirmed_at: stamp, note: 'removed in correction',
           bags: o.bags || '', machine: o.machine || '', meter_start: o.meter_start || '', meter_end: o.meter_end || '', hours: o.hours || '' }, o.id, 'removed');
       });
+      // v1.42: settle earlier days of lots finished today (their 0 Ha lines get their share, on their own day).
+      var settled = [];
+      jobsOf(chit).forEach(function (j) {
+        if (!isHa(j) || draft.manual[j.key]) return;
+        var pg = draft.prog[j.key] || {}, wh = who(j);
+        progLots(j).forEach(function (lot) {
+          if (pg[lot] !== '100') return;
+          var today = j.people.filter(function (w) { return (wh[w] || []).indexOf(lot) >= 0; }).length;
+          var ed = earlierDays(j.task, lot);
+          if (!today || !ed.length) return;
+          var share = String(Math.round(lotHa(lot) / (today + ed.length) * 1000) / 1000);
+          ed.forEach(function (x) {
+            var o = x.line;
+            if (o.settledBy === chit.chit && o.qty === share) return;
+            var nid = EA.save(TAB, ROOM, x.s.estate, { date: x.s.date, chit: x.s.chit, worker_id: o.worker_id, task_code: o.task_code, block: o.block, lot: o.lot,
+              qty: share, unit: o.unit, bunches: '', confirmed_by: rec.checker, confirmed_at: stamp, note: 'Petak ' + lot + ' siap ' + niceShort(rec.date) + ': bahagian Ha (' + (today + ed.length) + ' orang-hari)',
+              bags: o.bags || '', machine: '', meter_start: '', meter_end: '', hours: '' }, o.id).id;
+            settled.push({ s: x.s, i: x.i, id: nid, qty: share });
+          });
+        });
+      });
       var oldJobs = {};
       if (old) old.rec.jobs.forEach(function (j) { oldJobs[j.task_code + '|' + j.block + '|' + j.lots] = j; });
       rec.jobs.forEach(function (j) {
@@ -744,6 +792,9 @@
       });
       EA.batchEnd();
     } catch (e) { EA.batchCancel(); ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad'); return; }
+    settled.forEach(function (x) {   // v1.42: the earlier day now carries its share (kept on this phone too)
+      var l = x.s.rec.lines[x.i]; l.hist = (l.hist || []).concat([[l.id, l.qty]]); l.id = x.id; l.qty = x.qty; l.settledBy = rec.chit; keepSaved(x.s);
+    });
     keepSaved({ chit: rec.chit, date: rec.date, estate: rec.estate, rec: rec, lines: draft.lines, status: draft.status, prog: draft.prog, manual: draft.manual, bags: draft.bags || {}, who: draft.who || {}, pbags: draft.pbags || {}, dose: draft.dose || {}, lotwhy: draft.lotwhy || {}, checker: draft.checker, rev: old ? (old.rev || 1) + 1 : 1, chitRev: chit.rev || 1 });
     dropDraft();
     var moved = autoCollect(rec, at, !!(chit && chit.fromPlan && !old));   // v1.40: only the first save of a planned day

@@ -584,18 +584,24 @@ function tonnageMtd_(estate, now) {
   var month = Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM');
   var dnDate = {};
   standingRows_('FH_DISPATCH', estate).forEach(function (r) { if (r.trip && (!dnDate[r.trip] || r.date < dnDate[r.trip])) dnDate[r.trip] = r.date; });
-  var mt = 0, bunches = 0, n = 0, inMonth = {};
+  // v1.39: ABW only from tickets that have a bunch count (abwMt ÷ bunches). Tickets with no bunches
+  // (loaded from the old files, or keyed before the lorry's lots were in E-Book) still count in the
+  // month's tonnes, never in the ABW (22 Oct 2026: 117.72 MT ÷ 801 bunches showed 146.97 kg).
+  var mt = 0, bunches = 0, n = 0, inMonth = {}, abwMt = 0, abwTickets = 0;
   standingRows_('FH_TICKET', estate).forEach(function (t) {
     var d = String((t.trip && dnDate[t.trip]) || t.date);
     if (d.slice(0, 7) !== month) return;
-    mt += Number(t.nett_mt) || 0; bunches += Number(t.bunches) || 0; n++; inMonth[t.ticket_no] = true;
+    var tm = Number(t.nett_mt) || 0, tb = Number(t.bunches) || 0;
+    mt += tm; n++; inMonth[t.ticket_no] = true;
+    if (tb > 0 && tm > 0) { bunches += tb; abwMt += tm; abwTickets++; }
   });
   var blocks = {};
   standingRows_('FH_TICKET_BLOCK', estate).forEach(function (r) {
     if (inMonth[r.ticket_no]) blocks[r.block] = Math.round(((blocks[r.block] || 0) + (Number(r.mt) || 0)) * 1000) / 1000;
   });
-  mt = Math.round(mt * 1000) / 1000;
-  return { month: month, mt: mt, bunches: bunches, tickets: n, abw: bunches ? Math.round(mt * 100000 / bunches) / 100 : 0, blocks: blocks };
+  mt = Math.round(mt * 1000) / 1000; abwMt = Math.round(abwMt * 1000) / 1000;
+  return { month: month, mt: mt, bunches: bunches, tickets: n, abwMt: abwMt, abwTickets: abwTickets,
+           abw: bunches ? Math.round(abwMt * 100000 / bunches) / 100 : 0, blocks: blocks };
 }
 
 // Poor mill gradings (keyed by the clerk) the staff has not yet explained on a morning chit.

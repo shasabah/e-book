@@ -59,6 +59,9 @@ var STATUSES = ['active', 'corrected', 'removed', 'disposed'];
 var ROOM_TABS = {
   FH_MUSTER: ['chit', 'block', 'lots', 'mandor', 'worker_id', 'task_code', 'muster', 'confirmed_by', 'confirmed_at', 'note'],
   FH_CHIT:   ['chit', 'rain_mm', 'rain_time', 'working', 'not_working', 'grand_total', 'confirmed_by', 'confirmed_at', 'note'],
+  // v1.40 E · Rancang & sahkan: the plan of a leave day, one row per person, like FH_MUSTER. Kept apart so a plan
+  // never counts for pay, attendance, rounds or "lari"; the confirmed chit (FH_MUSTER / FH_CHIT) is the record.
+  FH_PLAN:   ['chit', 'block', 'lots', 'mandor', 'worker_id', 'task_code', 'muster', 'confirmed_by', 'confirmed_at', 'note'],
   FH_WORK:   ['chit', 'worker_id', 'task_code', 'block', 'lot', 'qty', 'unit', 'bunches', 'confirmed_by', 'confirmed_at', 'note'],
   FH_JOBDAY: ['chit', 'task_code', 'block', 'lots', 'workers', 'qty', 'unit', 'bunches', 'plan_ha', 'job_status', 'reason', 'flags', 'confirmed_by', 'confirmed_at', 'progress', 'bags', 'target'],
   FH_COLLECT: ['block', 'lot', 'bunches', 'cleared', 'tractor', 'loader', 'note'],
@@ -1789,6 +1792,47 @@ var LORRY_MT = 8;             // v1.33: a full Sugut lorry (Yu Chen, 22 Oct 2026
 var EXPLAIN_KINDS = { grading: 1, ramp: 1, field: 1, jobask: 1 };   // v1.36 jobask: other work outside the main jobs (LULUS / TOLAK)
 function dayDiff_(a, b) { return Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 864e5); }
 function shortD_(iso) { return String(iso || '').slice(8, 10) + '/' + String(iso || '').slice(5, 7); }
+// v1.40 E · Rancang & sahkan: the leave-day plans of an estate (standing FH_PLAN rows by plan), each with
+// whether its day has a chit now (confirmed) and how many people differ from the plan.
+var PLAN_STUCK_DAYS = 3, PLAN_SHOW_DAYS = 14;
+function plans_(est, withDiff) {
+  var by = {}, from = daysAgo_(PLAN_SHOW_DAYS);
+  standingRows_('FH_PLAN', est).forEach(function (r) {
+    if (String(r.date) < from) return;
+    var p = by[r.chit] || (by[r.chit] = { plan: String(r.chit), date: String(r.date), by: String(r.keyed_by), at: String(r.keyed_at), n: 0, rows: [] });
+    if (r.muster === 'H') p.n++;
+    p.rows.push(r);
+  });
+  var list = Object.keys(by).map(function (k) { return by[k]; });
+  if (!list.length) return [];
+  var days = {}; list.forEach(function (p) { days[p.date] = true; });
+  var chits = standingRows_('FH_CHIT', est).filter(function (x) { return days[String(x.date)]; }), musters = null;
+  list.forEach(function (p) {
+    var c = chits.filter(function (x) { return String(x.date) === p.date; })[0];
+    p.done = !!c; p.doneAt = c ? String(c.keyed_at) : '';
+    if (!c || !withDiff || String(p.doneAt).slice(0, 10) < daysAgo_(2)) return;
+    if (!musters) musters = standingRows_('FH_MUSTER', est).filter(function (m) { return days[String(m.date)]; });
+    var real = {}; musters.forEach(function (m) { if (String(m.date) === p.date) real[m.worker_id] = m; });
+    var diff = 0, seen = {};
+    p.rows.forEach(function (r) {
+      seen[r.worker_id] = true;
+      var m = real[r.worker_id];
+      if (!m || m.muster !== r.muster || m.task_code !== r.task_code || String(m.block) !== String(r.block)) diff++;
+    });
+    Object.keys(real).forEach(function (w) { if (!seen[w] && real[w].muster === 'H') diff++; });
+    p.diff = diff;
+  });
+  return list;
+}
+function planAsks_(alerts, est) {
+  if (!alerts.some(function (a) { return a.kind === 'jobask' && /^PL-/.test(String(a.ref)); })) return alerts;
+  var live = {}, newest = {};
+  standingRows_('FH_PLAN', est).forEach(function (x) { live[x.chit] = true; });
+  // Newest by when the office received it (a change keyed offline can arrive after the Pengurus's answer).
+  function when(a) { return String(a.received_at || a.keyed_at || ''); }
+  alerts.forEach(function (a) { if (a.kind === 'jobask' && /^PL-/.test(String(a.ref)) && (!newest[a.ref] || when(a) > when(newest[a.ref]))) newest[a.ref] = a; });
+  return alerts.filter(function (a) { return !(a.kind === 'jobask' && /^PL-/.test(String(a.ref))) || (live[a.ref] && newest[a.ref] === a); });
+}
 function todo_(user, req) {
   var est = String(req.estate || ''), r = user.role;
   if (['Staff', 'Clerk', 'Manager', 'Owner'].indexOf(r) < 0) return { ok: true, estate: est, items: [] };
@@ -1796,6 +1840,10 @@ function todo_(user, req) {
   var today = todayKL_(), yday = daysAgo_(1), items = [];
   function add(o) { items.push(o); }
   var alerts = standingRows_('FH_ALERT', est);
+  // v1.40: a leave-day plan's Sunday ask (ref = the plan, PL-…): only its newest line counts, and none once the plan
+  // is cancelled. The Pengurus's answer is a new row replacing the ask, so the phone (which knows only the first
+  // ask) cannot replace it when the plan changes or is cancelled.
+  alerts = planAsks_(alerts, est);
   // Staff explanations (grading, ramp, field) and the Pengurus's direction on them.
   var explained = alerts.filter(function (a) { return EXPLAIN_KINDS[a.kind] && a.staff_note && String(a.date) >= daysAgo_(14); });
   function roundLate() {
@@ -1863,6 +1911,18 @@ function todo_(user, req) {
       if (!a.direction || String(a.keyed_at).slice(0, 10) < daysAgo_(2)) return;
       if (a.kind === 'jobask') { add({ id: 'DR:' + a.id, p: /^TOLAK/.test(a.direction) ? 2 : 4, ic: 'KJ', bm: String(a.detail || '').replace(/^Kerja lain: /, '') + ' · ' + a.direction + ' (' + (a.direction_by || 'Pengurus') + ')', en: 'Other work: ' + a.direction, sub: shortD_(a.date) + ' · sebab: ' + String(a.staff_note || '').slice(0, 80), go: '' }); return; }
       add({ id: 'DR:' + a.id, p: 4, ic: 'AR', bm: 'Arahan ' + (a.direction_by || 'Pengurus') + ': ' + a.direction, en: 'Direction: ' + a.direction, sub: 'Untuk: ' + String(a.detail || '').slice(0, 80), go: '' });
+    });
+  }
+  var plans = [];
+  try { if (r !== 'Staff') plans = plans_(est, r === 'Clerk' || r === 'Manager'); } catch (e) {}
+  if (r === 'Clerk' || r === 'Manager') {
+    // v1.40: a leave day planned by the staff, and the plan confirmed on his return (with how many differ).
+    plans.forEach(function (p) {
+      var who = un[p.by] || 'Staf';
+      if (!p.done && p.date >= today) add({ id: 'PN:' + p.plan, p: 4, ic: 'CH', bm: 'Rancangan ' + shortD_(p.date) + ' · ' + p.n + ' orang (' + who + ' cuti)', en: 'Leave-day plan for ' + shortD_(p.date),
+        sub: 'Dirancang ' + shortD_(p.at) + ' ' + String(p.at).slice(11, 16) + ' · disahkan bila staf balik', go: '' });
+      if (p.done && String(p.doneAt).slice(0, 10) >= daysAgo_(2)) add({ id: 'PD:' + p.plan, p: 4, ic: 'CH', bm: 'Rancangan ' + shortD_(p.date) + ' disahkan · ' + (p.diff ? p.diff + ' beza' : 'sama'), en: 'Plan for ' + shortD_(p.date) + ' confirmed',
+        sub: 'Oleh ' + who + ' ' + shortD_(p.doneAt) + ' ' + String(p.doneAt).slice(11, 16) + (p.diff ? ' · lihat WhatsApp "Beza dari rancangan"' : ''), go: '' });
     });
   }
   if (r === 'Clerk' || r === 'Manager') {
@@ -1936,6 +1996,12 @@ function todo_(user, req) {
     fixes.forEach(function (x) {
       if (x.done || dayDiff_(String(x.ask.keyed_at).slice(0, 10), today) < 1) return;
       add({ id: 'SF:' + x.ask.id, p: 1, ic: '!', bm: 'Tersangkut: chit ' + shortD_(x.ask.date) + ' belum dibetulkan', en: 'Stuck: a chit fix not done', sub: 'Diminta ' + (un[x.ask.keyed_by] || '') + ' ' + shortD_(x.ask.keyed_at) + ' · "' + String(x.ask.detail).slice(0, 60) + '"', go: '' });
+    });
+    // v1.40: a leave-day plan not confirmed 3 days after its day.
+    plans.forEach(function (p) {
+      if (p.done || p.date >= today || dayDiff_(p.date, today) < PLAN_STUCK_DAYS) return;   // plans_ keeps 14 days: the line ends then
+      add({ id: 'SP:' + p.plan, p: 1, ic: '!', bm: 'Tersangkut: rancangan ' + shortD_(p.date) + ' belum disahkan', en: 'Stuck: a leave-day plan not confirmed',
+        sub: (un[p.by] || 'Staf') + ' · ' + p.n + ' orang dirancang · ' + dayDiff_(p.date, today) + ' hari', go: '' });
     });
     var nd = explained.filter(function (a) { return a.kind !== 'jobask' && !a.direction && dayDiff_(String(a.keyed_at).slice(0, 10), today) >= 2; });
     var nj = explained.filter(function (a) { return a.kind === 'jobask' && !a.direction && dayDiff_(String(a.keyed_at).slice(0, 10), today) >= 2; });

@@ -1525,6 +1525,25 @@
           detail: 'Kerja lain: ' + j.task + ' ' + t.bm + (j.block ? ' · Blk ' + j.block : '') + ' · ' + n + ' orang', staff_note: j.ask, direction: '', direction_by: '', ref: c.chit }, o ? o.id : '').id;
         c.jobAsks.push({ key: k, ask: j.ask, id: id });
       });
+      // v1.41 F (Yu Chen, 26 Oct): on a Sunday only crop work and the important piece-rated jobs go ahead freely
+      // (EA.lists.sundayOk: harvesting and its crop chain, manuring, CPS). Other work sends one request to SDK
+      // (kind "sunask", LULUS / TOLAK by Christy or Wawa, to be named), again only if those people change in a correction.
+      // Switched off 26 Oct (Yu Chen): Sunday work will be asked BEFORE the work (by Saturday) and approved by the
+      // Pengurus; building that after the month-end freeze. Until then Sunday work is agreed in the WhatsApp group.
+      if (EA.lists.sundayAskOnChit && new Date(c.date + 'T00:00:00').getDay() === 0) {
+        var okS = EA.lists.sundayOk || [];
+        var offRows = c.rows.filter(function (r) { return r.muster === 'H' && r.status !== 'removed' && okS.indexOf(r.task_code) < 0; });
+        var codes = offRows.map(function (r) { return r.task_code; }).filter(function (x, i, a) { return a.indexOf(x) === i; });
+        var oS = oldAsks.SUNDAY, askS = 'Kerja hari Ahad · ' + offRows.length + ' orang · ' + codes.join(',');
+        if (offRows.length) {
+          if (oS && oS.ask === askS) c.jobAsks.push(oS);
+          else {
+            var idS = EA.save(TAB_ALERT, ROOM, ctx.estate, { date: c.date, chit: c.chit, kind: 'sunask', block: '', lot: '',
+              detail: 'Kerja hari Ahad: ' + offRows.length + ' orang · ' + codes.join(', '), staff_note: 'Kerja hari Ahad perlu lulus SDK', direction: '', direction_by: '', ref: c.chit }, oS ? oS.id : '').id;
+            c.jobAsks.push({ key: 'SUNDAY', ask: askS, id: idS });
+          }
+        }
+      }
       // v1.27: warnings the staff saved anyway go to the clerk (kind "check").
       (draft.checks || []).forEach(function (k) {
         if ((old && (old.checks || []).indexOf(k.key) >= 0)) return;

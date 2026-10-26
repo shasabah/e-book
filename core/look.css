@@ -638,3 +638,19 @@ div.td-it { cursor: default; }
 .pp-busy > summary { cursor: pointer; font-weight: 700; padding: 8px 0; color: var(--wait); }
 .pp-busy > summary span { display: inline; }
 .pp-ask { margin-bottom: 8px; }
+
+/* v1.40 E · Rancang & sahkan: a plan for a leave day (amber band) and a planned day to confirm (red band). */
+.plan-band { display: block; margin: 0 0 12px; padding: 10px 14px; border-radius: var(--r); background: var(--wait-soft); color: var(--ink); border-left: 0; border: 2px solid var(--wait); }
+.plan-band b { display: block; color: var(--wait); letter-spacing: .02em; }
+.plan-band span { display: block; font-size: .88rem; color: var(--ink); }
+.plan-band.due { background: var(--bad-soft); border-color: var(--bad); }
+.plan-band.due b { color: var(--bad); }
+.plan-due-card { border: 2px solid var(--bad); background: var(--bad-soft); }
+.plan-due-card h2 .bm { color: var(--bad); }
+.plan-steps { display: flex; flex-direction: column; gap: 10px; margin: 10px 0; }
+.plan-steps .btn { width: 100%; }
+.plan-diff { margin: 8px 0 12px; padding: 10px 12px; border-radius: var(--r); background: var(--wait-soft); }
+.plan-diff b { display: block; color: var(--wait); margin-bottom: 4px; }
+.plan-diff span { display: block; font-size: .9rem; }
+.btn.plan-day { display: flex; flex-direction: column; align-items: flex-start; width: 100%; margin: 6px 0; text-align: left; }
+.btn.plan-day small { font-weight: 400; }

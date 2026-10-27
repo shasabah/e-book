@@ -78,7 +78,10 @@ const ago = n => { const x = new Date(Date.now() - n * 864e5); return x.getFullY
   await p.click('[data-lwhy="j4|3-31|rain"]'); await p.waitForTimeout(150);
   const tmr = await p.evaluate(() => { const d = new Date(Date.now() + 864e5); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); });
   await p.fill('[data-lwuntil="j4|3-31"]', tmr); await p.waitForTimeout(150);
-  check('the job shows BELUM SIAP with the lot\'s reason', /BELUM SIAP · 3-31 Hujan · sambung/.test(await p.textContent('[data-hastat="j4"]')), await p.textContent('[data-hastat="j4"]'));
+  // v1.46: a rain lot also tells the kind of rain and the part of the day lost.
+  await p.click('[data-lrain="j4|3-31|HENTI"]'); await p.waitForTimeout(150);
+  await p.click('[data-llost="j4|3-31|0.5"]'); await p.waitForTimeout(150);
+  check('the job shows BELUM SIAP with the lot\'s reason', /BELUM SIAP · 3-31 Hujan \(kerja berhenti, ½ hari\) · sambung/.test(await p.textContent('[data-hastat="j4"]')), await p.textContent('[data-hastat="j4"]'));
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v49-perperson.png', fullPage: true });
   await p.click('#wk-check'); await p.waitForSelector('#wc-ok');
   await p.click('#wc-ok'); await p.waitForTimeout(500);
@@ -97,7 +100,7 @@ const ago = n => { const x = new Date(Date.now() - n * 864e5); return x.getFullY
   const rp = wk.find(r => r.task_code === 'RP');
   check('saved pruning in Ha: the unfinished lot 0 Ha (who worked there kept)', rp && rp.unit === 'Ha' && rp.lot === '3-31' && Number(rp.qty) === 0, JSON.stringify(rp));
   const rj = jd.find(r => r.task_code === 'RP');
-  check('saved pruning job: BELUM SIAP, reason rain and the continue date', rj && rj.job_status === 'not_done' && /3-31 Hujan · sambung/.test(rj.reason) && /belum siap/.test(rj.progress), JSON.stringify(rj && [rj.job_status, rj.reason, rj.progress]));
+  check('saved pruning job: BELUM SIAP, reason rain and the continue date', rj && rj.job_status === 'not_done' && /3-31 Hujan \(kerja berhenti, ½ hari\) · sambung/.test(rj.reason) && /belum siap/.test(rj.progress), JSON.stringify(rj && [rj.job_status, rj.reason, rj.progress]));
   const cj = jd.find(r => r.task_code === 'CPS');
   check('saved CPS job: SIAP by itself (every lot finished)', cj && cj.job_status === 'done' && cj.progress === '3-30 siap, 3-31 siap', JSON.stringify(cj && [cj.job_status, cj.progress]));
   check('no page errors', errs.length === 0, errs.join(' | '));

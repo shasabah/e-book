@@ -220,7 +220,7 @@
   function normProg(d) { Object.keys(d.prog || {}).forEach(function (k) { Object.keys(d.prog[k]).forEach(function (l) { var v = String(d.prog[k][l]); if (v !== '' && v !== '0' && v !== '100') d.prog[k][l] = num(v) > 0 ? '100' : '0'; }); }); return d; }
   function niceShort(iso) { var d = new Date(iso + 'T00:00:00'); return isNaN(d) ? iso : d.getDate() + '/' + (d.getMonth() + 1); }
   function whyText(w) { return (w.why === 'rain' ? 'Hujan' + rainText(w) : 'Lain') + (w.note ? ': ' + w.note : '') + (w.until ? ' · sambung ' + niceShort(w.until) : ''); }
-  // v1.45 TUTUP HARI on save (Yu Chen, 27 Oct): rain is told on the lot, where it happened: what kind (from the job's rain
+  // v1.46 TUTUP HARI on save (Yu Chen, 27 Oct): rain is told on the lot, where it happened: what kind (from the job's rain
   // group, lists/tasks.js) and how much of the day was lost (¼–1). The day close reads it from here; nothing asked twice.
   function rainKinds(code) { var g = EA.lists.rainOf ? EA.lists.rainOf(code) : 'B'; return (EA.lists.rainReasons || []).filter(function (r) { return r.groups.indexOf(g) >= 0; }); }
   function rainText(w) {

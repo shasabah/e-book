@@ -647,7 +647,7 @@
       var pend = pendingPlans();
       if (pend.length) { renderPending(head, pend); return; }
     }
-    // v1.45 TUTUP HARI (Yu Chen, 27 Oct): at the morning chit a day gone by that is complete is closed by the app;
+    // v1.46 TUTUP HARI (Yu Chen, 27 Oct): at the morning chit a day gone by that is complete is closed by the app;
     // a day still incomplete is shown here (and to the Pengurus), the chit still opens: work never waits.
     if (!draft.mode && EA.fh.autoCloseOld) {
       try {

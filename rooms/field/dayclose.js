@@ -106,7 +106,7 @@
   }
   // Which jobs fell short today (BELUM SIAP, or a flag such as under target).
   function shortJobs(jobs) { return jobs.filter(function (j) { return j.status === 'not_done' || /sasaran|target|kurang|under/i.test(String(j.flags || '')); }); }
-  // v1.45 (Yu Chen, 27 Oct): rain is told on each lot in Kerja (Hujan → what kind, ¼–1 day). Read it from the saved work.
+  // v1.46 (Yu Chen, 27 Oct): rain is told on each lot in Kerja (Hujan → what kind, ¼–1 day). Read it from the saved work.
   var RAIN_WHEN = { LEWAT: 'morning', HENTI: 'work', GERIMIS: 'work', BASAH: 'night' };
   function rainFromWork(w) {
     var out = { lots: 0, lost: 0, jobs: [], count: {}, reason: '' };
@@ -280,7 +280,7 @@
     if (j && Array.isArray(j.days)) { EA.local.set(K.office + estate, { at: Date.now(), from: j.from, days: j.days }); document.dispatchEvent(new CustomEvent('fh:dayclose')); }
     return j;
   };
-  // v1.45 (Yu Chen, 27 Oct): no separate daily step. The band on Kerja shows only a day the clerk reopened for a fix.
+  // v1.46 (Yu Chen, 27 Oct): no separate daily step. The band on Kerja shows only a day the clerk reopened for a fix.
   EA.fh.dayCloseBand = function (estate, user) {
     if (!canClose(user)) return '';
     var keep = ctx; ctx = Object.assign({}, ctx || {}, { estate: estate });
@@ -293,7 +293,7 @@
     } finally { ctx = keep; }
   };
 
-  // v1.45: the close at the end of a save. Kerja's report sheet carries this block: when the day is complete it asks
+  // v1.46: the close at the end of a save. Kerja's report sheet carries this block: when the day is complete it asks
   // "Semua lengkap. Tutup hari ini?" (YA, TUTUP / NANTI); when something is still missing it lists it softly with a
   // button to the screen that fixes it (often the lorry, keyed after the work).
   EA.fh.closeBlock = function (estate, user, date) {

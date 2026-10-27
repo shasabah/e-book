@@ -303,7 +303,7 @@
     dropDraft();
     ui().toast(old ? EA.t('Nota hantar dibetulkan', 'Delivery note corrected') : EA.t('Disimpan', 'Saved'));
     render(el, ctx);
-    // v1.45 TUTUP HARI: the lorry is often the last thing keyed; when the day is now complete, ask to close it.
+    // v1.46 TUTUP HARI: the lorry is often the last thing keyed; when the day is now complete, ask to close it.
     if (EA.fh.offerClose && ctx.user) { try { EA.fh.offerClose(ctx.estate, ctx.user, rec.date || EA.today()); } catch (e) {} }
     if (navigator.onLine && EA.sendLink()) EA.send().then(function () {
       return Promise.all([EA.fh.refreshBacklog(ctx.estate), EA.fh.harvest.refreshOpen(ctx.estate)]);

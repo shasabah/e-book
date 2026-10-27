@@ -169,7 +169,8 @@
     var html = '<option value="">' + EA.t('— Pilih kerja —', '— Choose job —') + '</option>';
     var other = !!EA.lists.mainJobs[ctx.estate];      // v1.36: only the jobs outside the main list
     EA.lists.chitSections.forEach(function (s) {
-      var codes = s.tasks.filter(function (c) { return !other || !EA.lists.isMainJob(ctx.estate, c); });
+      // v1.45: and only the estate's own other jobs (the job being changed always stays, so an old line can be read).
+      var codes = s.tasks.filter(function (c) { return !other || (!EA.lists.isMainJob(ctx.estate, c) && (EA.lists.isOtherJob(ctx.estate, c) || c === selected)); });
       if (!codes.length) return;
       html += '<optgroup label="' + esc(s.code + '. ' + EA.t(s.bm, s.en)) + '">' + codes.map(function (c) {
         var t = task(c);

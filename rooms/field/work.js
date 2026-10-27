@@ -844,27 +844,58 @@
     var d = new Date(rec.date + 'T00:00:00'), est = EA.lists.estate(rec.estate);
     var L = ['*KERJA HARIAN ' + (est ? est.company + ' ' : '') + rec.estate + '*' + (rev > 1 ? ' _(dibetulkan · corrected)_' : ''),
              ui().dayBm[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear()];
-    var lastSec = '';
+    // v1.43 (Yu Chen, 27 Oct: "looks unorganized"): no line starts with a space, a number or a bullet, so WhatsApp
+    // never turns lines into lists or wraps them back to the edge. Each job starts with ✅ SIAP / ⏳ BELUM SIAP;
+    // a job with details stands apart with a blank line.
+    var lastSec = '', lastDetail = false;
     rec.jobs.forEach(function (j) {
       var sec = EA.lists.sectionOf(j.task_code);
-      if (sec.code !== lastSec) { L.push(''); L.push(sec.code + '. ' + sec.en); lastSec = sec.code; }
+      if (sec.code !== lastSec) { L.push(''); L.push('*' + sec.code + ' · ' + String(sec.bm).toUpperCase() + '* · ' + sec.en); L.push(''); lastSec = sec.code; lastDetail = false; }
       var k = kind(j.task_code), what;
       if (k === 'bunches') what = j.bunches + ' tandan (purata ' + Math.round(num(j.bunches) / (j.workers || 1)) + ')';
       else if (k === 'ticket') what = 'tan ikut tiket';
       else if (k === 'day') what = j.qty + ' hari' + (num(j.hours) > 0 ? ' · ' + j.hours + ' jam' : '') + (j.task_code === 'ITF' ? ' (+ tan ikut tiket)' : '');
       else what = j.qty + ' ' + unitLabel(j.task_code) + (j.plan_ha ? ' / ' + num(j.plan_ha).toFixed(2) + ' Ha' : '');
-      L.push('• ' + shortName(j.task_code) + (j.block ? ' Blk ' + j.block : '') + ' — ' + j.workers + ' org — ' + what + ' — ' +
-             (j.status === 'done' ? 'SIAP' : j.status === 'not_done' ? 'BELUM SIAP' : '?'));
-      if (j.progress) L.push('   Petak: ' + (/%/.test(j.progress) ? j.progress.replace(/ /g, ', ') : j.progress));
-      if (j.bags) L.push('   Beg baja: ' + j.bags + (j.dose ? ' · dos ' + j.dose + ' kg/pokok' : ''));
-      if (j.target) L.push('   Sasaran: ' + j.target);
-      if (j.status === 'not_done' && j.reason) L.push('   Sebab/tindakan: ' + j.reason);
-      if (j.flags) L.push('   Perhatian: ' + j.flags);
+      var icon = j.status === 'done' ? '✅' : j.status === 'not_done' ? '⏳' : '❔';
+      var D = [], lots = reportLots(j.progress), flags = String(j.flags || '').split('; ').filter(Boolean);
+      if (lots.notDone.length) {
+        if (lots.done.length) D.push('Petak siap: ' + lots.done.join(', '));
+        D.push('BELUM SIAP: ' + lots.notDone.join(', '));
+        if (lots.old && j.reason) D.push('Sebab: ' + j.reason);
+      } else {
+        if (lots.done.length) D.push('Petak: ' + lots.done.join(', ') + ' siap');
+        if (j.status === 'not_done') D.push('BELUM SIAP' + (j.reason ? ': ' + j.reason : ''));
+      }
+      if (j.bags) D.push('Beg baja: ' + j.bags + (j.dose ? ' · dos ' + j.dose + ' kg/pokok' : ''));
+      if (j.target && !flags.some(function (f) { return /sasaran/i.test(f); })) D.push('Sasaran: ' + j.target);
+      flags.forEach(function (f) { D.push('⚠ ' + f.replace(/ · below target/, '')); });
+      if ((D.length || lastDetail) && L[L.length - 1] !== '') L.push('');
+      L.push(icon + ' *' + shortName(j.task_code) + (j.block ? ' · Blk ' + j.block : '') + '* — ' + j.workers + ' org · ' + what);
+      D.forEach(function (x) { L.push(x); });
+      lastDetail = D.length > 0;
     });
     L.push('');
     L.push('Disediakan: ' + (rec.keyedName || '') + ' · ' + rec.at);
-    L.push('E-Book ' + rec.chit);
+    L.push('E-Book ' + (EA.RELEASE ? EA.RELEASE + ' · ' : '') + rec.chit);
     return L.join('\n');
+  }
+  // The lots of a job, finished and not: "3-30 siap, 3-31 belum siap (Hujan · sambung 28/10)" (1.41 on), or the
+  // older "1-15:100% 1-16:50%".
+  function reportLots(p) {
+    var out = { done: [], notDone: [], old: false };
+    p = String(p || '').trim();
+    if (!p) return out;
+    if (/%/.test(p) && !/ siap/.test(p)) {
+      out.old = true;
+      p.split(/[ ,]+/).filter(Boolean).forEach(function (x) { var m = x.split(':'); if (m[1] === '100%') out.done.push(m[0]); else out.notDone.push(m[0] + (m[1] ? ' (' + m[1] + ')' : '')); });
+      return out;
+    }
+    p.split(/, (?=\S+ (?:siap|belum siap))/).forEach(function (x) {
+      var m = x.match(/^(\S+) (siap|belum siap)\s*(.*)$/);
+      if (!m) { out.done.push(x); return; }
+      if (m[2] === 'siap') out.done.push(m[1]); else out.notDone.push(m[1] + (m[3] ? ' ' + m[3] : ''));
+    });
+    return out;
   }
 
   function savedCard(s) {

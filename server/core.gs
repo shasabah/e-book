@@ -88,6 +88,11 @@ var ROOM_TABS = {
   WORKER_LOG: ['worker_id', 'name', 'kind', 'day', 'note', 'answered_by', 'answered_at', 'old_name', 'old_sex', 'new_sex', 'ref'],
   // v1.26 Rekod: the crop budget per estate and month (month = yyyy-mm). Kept only in the office sheet.
   LIST_BUDGET: ['month', 'budget_mt', 'abw_kg', 'work_days', 'note'],
+  // v1.47 Rancangan vs sebenar (Brief "Rancangan & Prestasi" §3, §12 step 3): the year's field maintenance programme,
+  // one line per job, block and month (month = yyyy-mm), from the approved budget (values only, never formulas).
+  // Kept only in the office sheet. round: R1, R2… or the fertiliser for manuring; ha: the block's hectares; dose: kg per
+  // palm (manuring). A revision is a new line that replaces the old one (nothing deleted). Loaded by seedProgramme2026.
+  LIST_PROGRAMME: ['year', 'task_code', 'block', 'month', 'round', 'ha', 'dose', 'note'],
   // v1.41 the piece-rate list, keyed by HQ in the office sheet only (never in the app's code or on GitHub).
   // One line per job code, pay unit and band (e.g. manuring under / over 2 kg per palm), from a date; a new rate
   // is a new line with a later from_date (nothing deleted). target_day = the day's target per person.
@@ -265,6 +270,10 @@ function doRead_(user, req) {
   if (req.action === 'crop') {
     if (!/^\d{4}-\d{2}$/.test(String(req.month || ''))) return { ok: false, error: 'bad_month' };
     return crop_(req.estate, String(req.month));
+  }
+  if (req.action === 'program') {
+    if (!/^\d{4}-\d{2}$/.test(String(req.month || ''))) return { ok: false, error: 'bad_month' };
+    return program_(req.estate, String(req.month));
   }
   if (req.action === 'history') {
     if (!/^\d{4}-\d{2}$/.test(String(req.month || ''))) return { ok: false, error: 'bad_month' };
@@ -2262,4 +2271,103 @@ function crop_(estate, month) {
   return { ok: true, estate: estate, month: month, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'),
     harvesters: Object.keys(byW).map(function (k) { return byW[k]; }).sort(function (a, b) { return a.old === b.old ? (a.name < b.name ? -1 : 1) : a.old ? 1 : -1; }),
     blocks: Object.keys(byB).sort().map(function (k) { return byB[k]; }), tickets: tickets, budget: budgetFor_(estate, month), months: list, imp: imp };
+}
+
+// ---------------- v1.47 Rancangan vs sebenar · plan vs actual (read only) ----------------
+// Approved by Yu Chen 27 Oct 2026 (sample "Rekod → PROGRAM"; Brief "Rancangan & Prestasi" §12 step 3). Nothing is keyed.
+// One call gives the phone what it needs for the month: the crop budget and tonnes of each month this year, the year's
+// maintenance programme (LIST_PROGRAMME) and the hectares done per job, block and month (counted as in rounds_, so the
+// lot colours in Tambah kerja and this report agree), the last harvest date of each lot, and the month's daily keying:
+// days closed (TUTUP HARI), rain lost (from the closes), work keyed the same day, and the ramp left with no fruit from an
+// earlier day. Everyone who sees the room's records may ask (staff, clerk, Pengurus, HQ, Owner).
+function program_(estate, month) {
+  CLOSED_MEMO_ = null;
+  var year = month.slice(0, 4), today = todayKL_(), r2 = function (v) { return Math.round(v * 100) / 100; };
+  var prog = standingRows_('LIST_PROGRAMME', estate).filter(function (r) { return String(r.year) === year; }).map(function (r) {
+    return { task: String(r.task_code), block: String(r.block), month: String(r.month).slice(0, 7), round: String(r.round || ''), ha: Number(r.ha) || 0, dose: Number(r.dose) || 0 };
+  });
+  var done = {};
+  standingRows_('FH_JOBDAY', estate).forEach(function (r) {
+    var d = String(r.date), m = d.slice(0, 7);
+    if (d.slice(0, 4) !== year || m > month || !r.block || !r.task_code) return;
+    var ha = /^ha$/i.test(String(r.unit)) ? Number(r.qty) || 0 : Number(r.plan_ha) || 0;
+    if (!ha) return;
+    var k = r.task_code + '|' + r.block + '|' + m;
+    done[k] = r2((done[k] || 0) + ha);
+  });
+  var crop = {};
+  function cm(m) { return crop[m] || (crop[m] = { month: m, budget: 0, days: 0, mt: 0 }); }
+  standingRows_('LIST_BUDGET', estate).forEach(function (r) {
+    var m = String(r.month).slice(0, 7);
+    if (m.slice(0, 4) === year && m <= month) { cm(m).budget = Number(r.budget_mt) || 0; cm(m).days = Number(r.work_days) || 0; }
+  });
+  standingRows_('FH_TICKET', estate).forEach(function (r) {
+    var m = String(r.date).slice(0, 7);
+    if (m.slice(0, 4) === year && m <= month) cm(m).mt = r2(cm(m).mt + (Number(r.nett_mt) || 0));
+  });
+  // The month's days with a chit, up to yesterday (a day still being worked is not judged).
+  var last = month < today.slice(0, 7) ? month + '-31' : daysAgo_(1), from = dayCloseFrom_(), cl = dayCloses_(estate), days = {};
+  standingRows_('FH_CHIT', estate).forEach(function (r) {
+    var d = String(r.date);
+    if (live_(r) && d.slice(0, 7) === month && d <= last) days[d] = { date: d, closed: '', same: false, ramp: true };
+  });
+  var first = {};
+  standingRows_('FH_JOBDAY', estate).concat(standingRows_('FH_WORK', estate)).forEach(function (r) {
+    var d = String(r.date), at = String(r.keyed_at || '');
+    if (days[d] && live_(r) && (!first[d] || at < first[d])) first[d] = at;
+  });
+  var cut = standingRows_('FH_WORK', estate).filter(function (r) { return r.task_code === HARVEST_CODE && live_(r); });
+  var col = standingRows_('FH_COLLECT', estate).filter(live_), dis = standingRows_('FH_DISPATCH', estate).filter(live_);
+  function upTo(list, d) { return list.filter(function (r) { return String(r.date) <= d; }); }
+  Object.keys(days).forEach(function (d) {
+    var o = days[d], c = cl[d];
+    if (d >= from) o.closed = c && c.closed ? 'Y' : 'N';
+    o.same = !!first[d] && first[d].slice(0, 10) === d;
+    var rp = calcBacklog(upTo(cut, d), upTo(col, d), upTo(dis, d), d).ramp;
+    o.ramp = !rp.bunches || !rp.since || rp.since >= d;     // at the end of the day, no fruit left from an earlier day
+  });
+  var rain = [];
+  standingRows_('FH_DAYCLOSE', estate).forEach(function (r) {
+    var d = String(r.date);
+    if (d.slice(0, 7) !== month || r.kind === 'reopen' || !(Number(r.rain_lost) > 0)) return;
+    rain.push({ date: d, lost: Number(r.rain_lost) || 0, reason: String(r.rain_reason || ''), jobs: String(r.rain_jobs || '') });
+  });
+  rain.sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+  var lots = month === today.slice(0, 7) ? (rounds_(estate).lots[HARVEST_CODE] || {}) : null;
+  return { ok: true, estate: estate, month: month, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), from: from,
+    programme: prog, done: done, crop: Object.keys(crop).sort().map(function (k) { return crop[k]; }), lots: lots,
+    days: Object.keys(days).sort().map(function (d) { return days[d]; }), rain: rain };
+}
+
+/** v1.47: load Sugut's 2026 field maintenance programme into LIST_PROGRAMME once (run from the script editor, Owner).
+ *  From "SPLT.SSGT BUDGET COSTING 2026" (Christy, SDK): sheets "Other Maintenance Programme" and "Manuring Programme";
+ *  where the summary sheet differs (CPS Blk 3–4 in May), the detailed sheet is used (Yu Chen, 27 Oct 2026).
+ *  Lines already there are not added twice. Returns the number added. */
+function seedProgramme2026() {
+  var ha = { '01': 33.20, '02': 33.93, '03': 31.18, '04': 32.34 }, A = ['01', '02'], B = ['03', '04'], ALL = A.concat(B), lines = [];
+  function put(task, blocks, months, rounds, dose) {
+    blocks.forEach(function (b) { months.forEach(function (m, i) { lines.push([task, b, '2026-' + m, rounds[i], dose ? dose[i] : '']); }); });
+  }
+  put('CPS', A, ['02', '05', '08', '11'], ['R1', 'R2', 'R3', 'R4']);
+  put('CPS', B, ['03', '06', '09', '11'], ['R1', 'R2', 'R3', 'R4']);
+  put('SL', A, ['01', '12'], ['R1', 'R2']);
+  put('SL', B, ['02', '12'], ['R1', 'R2']);
+  put('DEC', A, ['01', '12'], ['R1', 'R2']);
+  put('DEC', B, ['02', '12'], ['R1', 'R2']);
+  put('VOPS', ALL, ['04'], ['R1']);
+  put('RP', ALL, ['01', '04', '07', '11'], ['R1', 'R2', 'R3', 'R4']);
+  put('MAN', A, ['03', '04', '06', '08', '10'], ['Bio-Organic', 'FMP', 'NKB', 'NKB', 'NK'], [5, 2.5, 2.5, 2.5, 2.5]);
+  put('MAN', B, ['03', '05', '07', '09', '10'], ['Bio-Organic', 'FMP', 'NKB', 'NKB', 'NK'], [5, 2.5, 2.5, 2.5, 2.5]);
+  var est = 'SSGT', ss = book_(), now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), n = 0, have = {};
+  ROWS_MEMO_ = null;
+  standingRows_('LIST_PROGRAMME', est).forEach(function (r) { have[[r.task_code, r.block, String(r.month).slice(0, 7)].join('|')] = true; });
+  var sh = roomTab_(ss, 'LIST_PROGRAMME'), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  lines.forEach(function (x, i) {
+    if (have[[x[0], x[1], x[2]].join('|')]) return;
+    var row = { id: 'PG-' + est + '-2026-' + (i + 1), date: now.slice(0, 10), company: ESTATE_COMPANY[est] || '', estate: est, keyed_by: 'SEED', keyed_at: now, phone: '', status: 'active', replaces: '',
+      received_at: now, year: '2026', task_code: x[0], block: x[1], month: x[2], round: x[3], ha: ha[x[1]], dose: x[4], note: 'SPLT.SSGT BUDGET COSTING 2026' };
+    sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); })); n++;
+  });
+  Logger.log('seedProgramme2026: ' + n + ' added');
+  return n;
 }

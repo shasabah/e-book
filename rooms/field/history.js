@@ -11,6 +11,7 @@
   EA.fh = EA.fh || {};
   var K = { cache: 'fh.hist.' };
   var el, ctx, month, openDay = '', pane = 'chit';
+  var view = '';   // v1.47: '' = HARIAN (days), 'prog' = PROGRAM · Rancangan vs sebenar (rooms/field/program.js)
   function ui() { return EA.ui; }
   function esc(s) { return EA.ui.esc(s); }
   function $(sel) { return el.querySelector(sel); }
@@ -144,20 +145,31 @@
     var list = merged(ctx.estate, month), thisMonth = ym(new Date());
     var cr = crop(ctx.estate, month), t = totals(list, cr);
     var cache = EA.local.get(K.cache + ctx.estate + '.' + month, null);
+    var prog = view === 'prog' && EA.fh.program;
     el.innerHTML = head(esc(title()), esc(ctx.estate), 'hs-back') +
-      (vo && month === thisMonth ? todayCard(list) : '') +
+      (vo && month === thisMonth && !prog ? todayCard(list) : '') +
+      (EA.fh.program ? '<div class="seg2 pg-seg" role="group"><button type="button" data-view=""' + (prog ? '' : ' class="on" aria-pressed="true"') + '>' + EA.t('HARIAN', 'DAILY') + '</button>' +
+        '<button type="button" data-view="prog"' + (prog ? ' class="on" aria-pressed="true"' : '') + '>' + EA.t('PROGRAM', 'PLAN VS ACTUAL') + '</button></div>' : '') +
       // v1.11: one line for any number of months: ‹ Month › and a year grid behind the month name.
       '<div class="mstep" role="group" aria-label="' + EA.t('Bulan', 'Month') + '">' +
         '<button type="button" id="hs-prev" aria-label="' + EA.t('Bulan sebelum', 'Month before') + '"' + (month <= FIRST_MONTH ? ' disabled' : '') + '>‹</button>' +
         '<button type="button" class="m" id="hs-pick"><b>' + esc(monthLong(month)) + ' ▾</b><small>' + list.length + EA.t(' hari ada rekod', ' days with records') + '</small></button>' +
         '<button type="button" id="hs-next" aria-label="' + EA.t('Bulan selepas', 'Month after') + '"' + (month >= thisMonth ? ' disabled' : '') + '>›</button></div>' +
-      tiles(t, '') +
+      (prog ? '<div id="pg-box">' + EA.fh.program.html(ctx.estate, month) + '</div>' : dayRest(list, t, cache));
+    wireMain(prog);
+  }
+  function dayRest(list, t, cache) {
+    return tiles(t, '') +
       (canPrint(ctx.user) ? '<button type="button" class="rk-print" id="rk-print"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M8 14h8v7H8z"/></svg><span>PRINT MONTH REPORT<small>Cetak laporan bulan · PDF</small></span></button>' : '') +
       '<div id="hs-list">' + (list.length ? weeks(list) :
         '<p class="hint">' + EA.t('Tiada rekod untuk bulan ini.', 'No records for this month.') + '</p>') + '</div>' +
       '<p class="hint" id="hs-note">' + EA.t('P = chit pagi · K = kerja harian · L = lori/tiket. Hijau ada, kuning patut ada tetapi tiada. ', 'P = morning chit · K = day\'s work · L = lorry/ticket. Green there, yellow should be there but is not. ') +
         (cache ? EA.t('Dari pejabat dan telefon ini · dikemas kini ', 'From the office and this phone · updated ') + esc(cache.at) :
         EA.t('Dari telefon ini sahaja (40 hari). Bulan lain dari pejabat bila ada isyarat.', 'From this phone only (40 days). Other months come from the office when there is signal.')) + '</p>';
+  }
+  function wireMain(prog) {
+    var thisMonth = ym(new Date());
+    el.querySelectorAll('[data-view]').forEach(function (b) { b.onclick = function () { view = b.dataset.view; render(el, ctx); }; });
     $('#hs-back').onclick = function () { location.hash = ''; };
     function go(m) { month = m; render(el, ctx); }
     $('#hs-prev').onclick = function () { if (month > FIRST_MONTH) go(addMonths(month, -1)); };
@@ -166,6 +178,7 @@
     el.querySelectorAll('[data-day]').forEach(function (b) { b.onclick = function () { openDay = b.dataset.day; render(el, ctx); window.scrollTo(0, 0); }; });
     el.querySelectorAll('[data-detail]').forEach(function (b) { b.onclick = function () { detail = b.dataset.detail; render(el, ctx); window.scrollTo(0, 0); }; });
     var pb = $('#rk-print'); if (pb) pb.onclick = printSheet;
+    if (prog) { EA.fh.program.wire($('#pg-box'), ctx, month, function () { if (el && document.body.contains(el) && !el.hidden) render(el, ctx); }); return; }
     if (!quiet) refresh();
   }
   // Monday-to-Sunday weeks, newest first, each with its bunches and MT.

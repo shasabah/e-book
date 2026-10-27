@@ -198,6 +198,10 @@
     var rest = !d.harvest && !hasWork && !hasLorry && !anyH;
     var sub = f.corrected ? EA.t('dibetulkan ', 'corrected ') + f.corrected + '×' : d.imp && !d.chits.some(function (c) { return !c.imp; }) ? '<i class="rk-old">' + EA.t('Data lama', 'Old data') + '</i>' : rest ? EA.t('tiada tuaian', 'no harvest') : f.noTicket ? EA.t('belum ada tiket', 'no ticket yet') : '';
     var rows = f.working + f.away;
+    // v1.43 TUTUP HARI: the day's close from the office (closed · open · reopened for a fix).
+    if (d.close === 'closed') sub = (sub ? sub + ' · ' : '') + '<i class="rk-closed">' + EA.t('ditutup', 'closed') + '</i>';
+    else if (d.close === 'reopened' || d.close === 'fixing') sub = (sub ? sub + ' · ' : '') + '<i class="rk-open">' + EA.t('dibuka semula', 'reopened') + '</i>';
+    else if (d.close === 'open' && hasChit && d.date < today) sub = (sub ? sub + ' · ' : '') + '<i class="rk-open">' + EA.t('belum ditutup', 'not closed') + '</i>';
     return '<button type="button" class="rk-r' + (rest ? ' rest' : '') + '" data-day="' + d.date + '"><span class="d"><b>' + esc(shortDay(d.date)) + '</b><small>' + sub + '</small></span>' +
       '<span class="rk-dots"><i class="' + P + '">P</i><i class="' + Kd + '">K</i><i class="' + L + '">L</i></span>' +
       '<span class="n">' + (rows ? f.working + '/' + rows : '—') + '</span><span class="n">' + (d.harvest ? n0(d.harvest) : '—') + '</span>' +

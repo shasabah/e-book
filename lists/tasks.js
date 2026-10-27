@@ -232,3 +232,39 @@ EA.lists.lotRound = { HA: { ready: 10, late: 15 }, LF: { ready: 10, late: 15 } }
 EA.lists.sundayOk = ['HA', 'LF', 'FC', 'ITF', 'LFF', 'LFR', 'OPH', 'ETF', 'MAN', 'CPS'];
 // The request sent from a Sunday chit (after the work) is off: Sunday work is to be approved before it starts.
 EA.lists.sundayAskOnChit = false;
+
+// v1.43 TUTUP HARI · Hujan (Yu Chen, 26 Oct 2026, Brief "Rancangan & Prestasi" §5): rain group per job.
+//   A = stops in ANY rain during work: the work is washed off or spoiled (sprays, pest and disease control,
+//       bait) or it is earthwork that rain turns to mud (roads, drains, culverts, gravel). After night rain it
+//       may be delayed while leaves are wet or roads are soft.
+//   B = stops in HEAVY rain only: outdoor manual or machine work (harvest, manuring, slashing, pruning,
+//       transport, census, outdoor building). After night rain only "tanah / jalan basah" counts.
+//   C = never affected: under a roof or not tied to the field (workshop, general, packing, indoor repairs).
+// A code not listed is B, so a new code never blocks a day close. Rain in mm stays in the Sugut DMS (20 Oct).
+// To confirm with the estate: PCB (beetle; A if sprayed, B if traps), MAN (B so drizzle does not stop
+// manuring; A if the agronomist says no fertiliser in any rain), RMH (B for roof work).
+EA.lists.rainGroups = {
+  A: ['CPS', 'VOPS', 'BS', 'LS', 'OS', 'RS', 'SS',
+      'DTL', 'DCO', 'DCR', 'PCBC', 'PCB', 'PCO', 'PCR', 'PCT', 'PCTB',
+      'OPR', 'GFR', 'GMR', 'RMF', 'RMM', 'CSR', 'CSC', 'RPC'],
+  C: ['MH', 'VMC', 'MDR', 'CA', 'HKH', 'HKST', 'MC', 'SGA', 'SGC', 'WM', 'PF', 'RMO', 'RMS', 'RMW']
+};
+EA.lists.rainOf = function (code) {
+  if (EA.lists.rainGroups.A.indexOf(code) >= 0) return 'A';
+  if (EA.lists.rainGroups.C.indexOf(code) >= 0) return 'C';
+  return 'B';
+};
+// The reasons the staff may pick at TUTUP HARI, and which rain groups each one excuses.
+//   when: 'night' = night or after work (only wet ground counts); 'morning' = before or at muster; 'work' = during work.
+EA.lists.rainReasons = [
+  { code: 'LEWAT',  when: ['morning'],       groups: ['A', 'B'], bm: 'Hujan — lewat mula',                      en: 'Rain — late start' },
+  { code: 'HENTI',  when: ['work'],          groups: ['A', 'B'], bm: 'Hujan — kerja berhenti',                  en: 'Rain — work stopped' },
+  { code: 'GERIMIS', when: ['morning', 'work'], groups: ['A'],   bm: 'Gerimis — kerja racun / jalan tak boleh',  en: 'Drizzle — spray / road work not possible' },
+  { code: 'BASAH',  when: ['night', 'morning', 'work'], groups: ['A', 'B'], bm: 'Tanah / jalan basah — jentera tak boleh masuk', en: 'Wet ground / road — machine could not enter' }
+];
+// Lost work is keyed as a part of the day, never in hours (piece-rate workers leave when the task is done).
+EA.lists.lostDay = [{ v: 0.25, bm: '¼ hari', en: '¼ day' }, { v: 0.5, bm: '½ hari', en: '½ day' }, { v: 0.75, bm: '¾ hari', en: '¾ day' }, { v: 1, bm: '1 hari', en: '1 day' }];
+// Working hours per estate (an estate setting, used only to decide whether rain counts as a reason).
+EA.lists.workHours = { SSGT: { start: '06:00', rest: ['10:30', '11:00'], end: '13:30' } };
+// Durian job codes count as complete at TUTUP HARI: their work lives in the Sugut DMS until the Durian room joins E-Book.
+EA.lists.DMS_JOBS = ['DF'];

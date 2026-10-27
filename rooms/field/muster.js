@@ -601,6 +601,7 @@
     if (viewOnly(c.user) && EA.fh.history) return EA.fh.history.render(container, Object.assign({}, c, { screen: 'history' }));
     if (c.user.role === 'Worker' || c.screen === 'collect') return EA.fh.collect.render(container, c);
     if (c.screen === 'work' && EA.fh.work) return EA.fh.work.render(container, c);
+    if (c.screen === 'close' && EA.fh.dayclose) return EA.fh.dayclose.render(container, c);   // v1.43 TUTUP HARI
     if (c.screen === 'ticket' && EA.fh.ticket) return EA.fh.ticket.render(container, c);
     if (c.screen === 'history' && EA.fh.history) return EA.fh.history.render(container, c);
     el = container; ctx = c;

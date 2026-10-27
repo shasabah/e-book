@@ -24,13 +24,24 @@ window.EA = window.EA || {};
       var planToday = ((EA.fh && EA.fh.plans ? EA.fh.plans() : []) || []).some(function (p) { return p.estate === est && p.date === today && !p.cancelled; });
       if (!has && !planToday) out.push({ id: 'CH', p: 1, ic: '!', bm: 'Chit muster hari ini belum dibuat', en: 'Today\'s muster chit is not made yet', sub: EA.t('Buat sebelum kerja mula', 'Make it before work starts'), go: '#field-harvest' });
     }
+    // v1.43 TUTUP HARI: a past day with a chit on this phone and no close (works with no signal; the office sends the same id).
+    if (u.role === 'Staff' && EA.fh && EA.fh.openDays) {
+      try {
+        EA.fh.openDays(est).filter(function (o) { return o.date < EA.today(); }).forEach(function (o) {
+          var d = new Date(o.date + 'T00:00:00'), lbl = EA.ui.dayBm[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1);
+          out.push({ id: 'TH:' + o.date, p: 1, ic: 'TH', bm: (o.reopened ? 'Hari ' + lbl + ' dibuka semula · tutup semula' : 'Hari ' + lbl + ' belum ditutup') + ' · TUTUP HARI', en: o.reopened ? 'Day ' + lbl + ' reopened · close it again' : 'Day ' + lbl + ' not closed',
+            sub: EA.t('Semak kerja, ramp, lori, hujan, lalu tekan TUTUP HARI', 'Check work, ramp, lorry, rain, then press TUTUP HARI'), go: '#field-harvest/close' });
+        });
+      } catch (e) {}
+    }
     var n = EA.waitingMine ? EA.waitingMine() : 0, old = EA.oldestWaiting ? EA.oldestWaiting() : 0;
     if (n && old && Date.now() - old > 30 * 60000) out.push({ id: 'Q', p: 3, ic: '↑', bm: n + ' rekod belum dihantar ke pejabat', en: n + ' records not sent to the office', sub: EA.t('Cari isyarat, tekan di sini untuk HANTAR', 'Find signal, tap here to SEND'), go: 'send' });
     return out;
   }
   EA.todoItems = function (u, est) {
     if (!u || !ROLES.test(u.role)) return null;
-    var c = cached(u, est), items = localItems(u, est).concat(c ? c.items : []);
+    var c = cached(u, est), items = localItems(u, est).concat(c ? c.items : []), seen = {};
+    items = items.filter(function (x) { if (seen[x.id]) return false; seen[x.id] = true; return true; });   // v1.43: the phone and the office may both know a line
     items.sort(function (a, b) { return a.p - b.p; });
     return { items: items, at: c ? c.at : 0 };
   };

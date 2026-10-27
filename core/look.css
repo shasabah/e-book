@@ -713,3 +713,14 @@ div.td-it { cursor: default; }
 .pg-lots span { padding: 3px 8px; border-radius: 8px; background: var(--paper); border: 1px solid var(--line); }
 .pg-lots small { color: var(--bad); }
 .wait-t { color: var(--wait); font-weight: 700; }
+/* v1.47 B · Ringkasan blok: blocks × programme jobs */
+.pg-gwrap { overflow-x: auto; }
+.pg-grid { border-collapse: collapse; width: 100%; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.pg-grid th { font-size: 11.5px; color: var(--muted); font-weight: 700; padding: 4px 2px; text-align: center; }
+.pg-grid th[scope="row"] { text-align: left; color: var(--ink); font-size: 13.5px; white-space: nowrap; padding-right: 6px; }
+.pg-grid th[scope="row"] small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; }
+.pg-grid td { text-align: center; padding: 4px 2px; border-top: 1px solid var(--line); }
+.pg-g { display: inline-block; min-width: 40px; padding: 5px 2px; border-radius: 9px; font-weight: 700; color: #fff; background: var(--ok); }
+.pg-g.a { background: var(--wait); } .pg-g.r { background: var(--bad); }
+.pg-g.ring { box-shadow: 0 0 0 2.5px var(--surface), 0 0 0 4.5px var(--wait); }
+.pg-g-na { color: var(--muted); }

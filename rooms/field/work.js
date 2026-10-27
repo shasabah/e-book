@@ -219,7 +219,14 @@
   // An older draft may still hold a percentage: anything above 0 counts as a finished lot.
   function normProg(d) { Object.keys(d.prog || {}).forEach(function (k) { Object.keys(d.prog[k]).forEach(function (l) { var v = String(d.prog[k][l]); if (v !== '' && v !== '0' && v !== '100') d.prog[k][l] = num(v) > 0 ? '100' : '0'; }); }); return d; }
   function niceShort(iso) { var d = new Date(iso + 'T00:00:00'); return isNaN(d) ? iso : d.getDate() + '/' + (d.getMonth() + 1); }
-  function whyText(w) { return (w.why === 'rain' ? 'Hujan' : 'Lain') + (w.note ? ': ' + w.note : '') + (w.until ? ' · sambung ' + niceShort(w.until) : ''); }
+  function whyText(w) { return (w.why === 'rain' ? 'Hujan' + rainText(w) : 'Lain') + (w.note ? ': ' + w.note : '') + (w.until ? ' · sambung ' + niceShort(w.until) : ''); }
+  // v1.45 TUTUP HARI on save (Yu Chen, 27 Oct): rain is told on the lot, where it happened: what kind (from the job's rain
+  // group, lists/tasks.js) and how much of the day was lost (¼–1). The day close reads it from here; nothing asked twice.
+  function rainKinds(code) { var g = EA.lists.rainOf ? EA.lists.rainOf(code) : 'B'; return (EA.lists.rainReasons || []).filter(function (r) { return r.groups.indexOf(g) >= 0; }); }
+  function rainText(w) {
+    var r = (EA.lists.rainReasons || []).find(function (x) { return x.code === w.rain; }), l = (EA.lists.lostDay || []).find(function (x) { return x.v === Number(w.lost); });
+    return r || l ? ' (' + [r ? r.bm.replace(/^Hujan — /, '') : '', l ? l.bm : ''].filter(Boolean).join(', ') + ')' : '';
+  }
   // The job is SIAP when every lot is finished; otherwise BELUM SIAP with each lot's reason.
   function syncHaStatus(j) {
     if (!isHa(j)) return;
@@ -378,6 +385,11 @@
         if (v === '0') row += '<div class="wline lot-why"><div class="seg">' +
           '<button type="button" data-lwhy="' + j.key + '|' + esc(lot) + '|rain" aria-pressed="' + (w.why === 'rain') + '">' + EA.t('Hujan', 'Rain') + '</button>' +
           '<button type="button" data-lwhy="' + j.key + '|' + esc(lot) + '|other" aria-pressed="' + (w.why === 'other') + '">' + EA.t('Sebab lain', 'Other') + '</button></div>' +
+          (w.why === 'rain' ? '<div class="seg lot-rain">' + rainKinds(j.task).map(function (r) {
+            return '<button type="button" data-lrain="' + j.key + '|' + esc(lot) + '|' + r.code + '" aria-pressed="' + (w.rain === r.code) + '">' + esc(EA.t(r.bm.replace(/^Hujan — /, ''), r.en.replace(/^Rain — /, ''))) + '</button>';
+          }).join('') + '</div><div class="seg lot-lost">' + (EA.lists.lostDay || []).map(function (o) {
+            return '<button type="button" data-llost="' + j.key + '|' + esc(lot) + '|' + o.v + '" aria-pressed="' + (Number(w.lost) === o.v) + '">' + esc(EA.t(o.bm, o.en)) + '</button>';
+          }).join('') + '</div>' : '') +
           '<input class="text-input" data-lwnote="' + j.key + '|' + esc(lot) + '" value="' + esc(w.note || '') + '" placeholder="' + EA.t('sebab (cth hujan 10 pagi)', 'why (e.g. rain at 10am)') + '">' +
           '<label class="inline-label">' + EA.t('Sambung bila ', 'Continue on ') + '<input type="date" class="text-input" data-lwuntil="' + j.key + '|' + esc(lot) + '" min="' + esc(min) + '" value="' + esc(w.until || '') + '"></label></div>';
         return row;
@@ -525,6 +537,10 @@
     el.querySelectorAll('[data-lwhy]').forEach(function (b) {
       b.onclick = function () { var x = b.dataset.lwhy.split('|'), j = jobByKey(x[0]), lw = lotWhy(j); lw[x[1]] = lw[x[1]] || {}; lw[x[1]].why = x[2]; syncHaStatus(j); keepDraft(); render(el, ctx); };
     });
+    el.querySelectorAll('[data-lrain],[data-llost]').forEach(function (b) {
+      b.onclick = function () { var x = (b.dataset.lrain || b.dataset.llost).split('|'), j = jobByKey(x[0]), lw = lotWhy(j); lw[x[1]] = lw[x[1]] || {};
+        if (b.dataset.lrain) lw[x[1]].rain = x[2]; else lw[x[1]].lost = Number(x[2]); syncHaStatus(j); keepDraft(); render(el, ctx); };
+    });
     el.querySelectorAll('[data-lwnote],[data-lwuntil]').forEach(function (i) {
       i[i.type === 'date' ? 'onchange' : 'oninput'] = function () {
         var x = (i.dataset.lwnote || i.dataset.lwuntil).split('|'), j = jobByKey(x[0]), lw = lotWhy(j); lw[x[1]] = lw[x[1]] || {};
@@ -611,6 +627,8 @@
         progLots(j).filter(function (l) { return String(pg[l]) === '0'; }).forEach(function (l) {
           var w = lw[l] || {};
           if (!w.why) p.push([shortName(j.task) + ' petak ' + l + ': pilih sebab belum siap (Hujan / Sebab lain)', 'Why is the lot not finished']);
+          else if (w.why === 'rain' && !w.rain) p.push([shortName(j.task) + ' petak ' + l + ': hujan bagaimana? (lewat mula / berhenti / tanah basah)', 'What kind of rain']);
+          else if (w.why === 'rain' && !w.lost) p.push([shortName(j.task) + ' petak ' + l + ': berapa hari hilang? (¼ · ½ · ¾ · 1)', 'How much of the day was lost']);
           else if (w.why === 'other' && String(w.note || '').trim().length < 3) p.push([shortName(j.task) + ' petak ' + l + ': tulis sebab', 'Write the reason']);
           if (!w.until) p.push([shortName(j.task) + ' petak ' + l + ': isi bila kerja disambung', 'When does the work continue']);
           else if (chit && w.until < chit.date) p.push([shortName(j.task) + ' petak ' + l + ': tarikh sambung sudah lepas', 'The continue date is in the past']);
@@ -915,13 +933,16 @@
   function showReport(s) {
     if (!s) return;
     var text = reportText(s.rec, s.rev);
+    var cb = EA.fh.closeBlock ? EA.fh.closeBlock(s.estate, ctx.user, s.date) : null;
     ui().openSheet('<h2 id="sheet-title"><span class="bm">Laporan petang untuk WhatsApp</span><span class="en">Evening report for WhatsApp</span></h2>' +
+      (cb ? cb.html : '') +
       '<pre class="chit">' + esc(text) + '</pre>' +
       '<div class="actions"><button class="btn btn-ghost" type="button" id="rp-copy">COPY<small>Salin</small></button>' +
       '<button class="btn btn-ok" type="button" id="rp-wa">WHATSAPP<small>Hantar ke WhatsApp</small></button></div>' +
       '<div class="actions"><button class="btn btn-ghost" type="button" id="rp-close">CLOSE<small>Tutup</small></button></div>',
       function (sh) {
         sh.querySelector('#rp-close').onclick = ui().closeSheet;
+        if (cb) cb.wire(sh, function () { render(el, ctx); });
         sh.querySelector('#rp-copy').onclick = function () { EA.fh.copyText(text); };
         sh.querySelector('#rp-wa').onclick = function () {
           if (navigator.share) navigator.share({ text: text }).catch(function () {});

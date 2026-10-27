@@ -97,7 +97,7 @@
       : (noAns.length || noWhy.length) ? { n: 4, ok: false, bm: (noAns.length + noWhy.length) + ' kerja tanpa jawapan atau sebab', en: (noAns.length + noWhy.length) + ' jobs with no answer or reason', sub: noAns.concat(noWhy).slice(0, 3).map(function (j) { return shortName(j.task_code) + (j.block ? ' Blk ' + j.block : ''); }).join(', '), go: '#field-harvest/work' }
       : { n: 4, ok: true, bm: jobs.filter(function (j) { return j.status === 'done'; }).length + '/' + jobs.length + ' kerja siap' + (jobs.some(function (j) { return j.status === 'not_done'; }) ? ' · sebab ditulis' : ''), en: jobs.filter(function (j) { return j.status === 'done'; }).length + '/' + jobs.length + ' jobs done', sub: '' });
     // 5 · rain fits the jobs (see rainCheck)
-    out.push(rainCheck(jobs, d));
+    out.push(rainCheck(jobs, d, w));
     // 6 · records keyed (waiting ones go with the close)
     var ids = lines.map(function (l) { return l.id; }).concat(jobs.map(function (j) { return j.id; })).filter(Boolean);
     var waiting = ids.filter(function (i) { return EA.isWaiting(i); }).length;
@@ -106,17 +106,30 @@
   }
   // Which jobs fell short today (BELUM SIAP, or a flag such as under target).
   function shortJobs(jobs) { return jobs.filter(function (j) { return j.status === 'not_done' || /sasaran|target|kurang|under/i.test(String(j.flags || '')); }); }
-  function rainCheck(jobs, d) {
-    var when = d.rainWhen || 'none';
-    if (when === 'none') return { n: 5, ok: true, bm: 'Tiada hujan', en: 'No rain', sub: '' };
-    var sj = shortJobs(jobs), reasons = EA.lists.rainReasons || [], rs = reasons.find(function (r) { return r.code === d.rainReason; });
-    if (!sj.length) return { n: 5, ok: true, bm: 'Hujan dicatat tetapi tiada kerja kurang sasaran · tidak direkod', en: 'Rain noted but no job fell short · not recorded', sub: EA.t('Sasaran tercapai, jadi hujan bukan alasan', 'Targets met, so rain is not a reason'), drop: true };
-    if (!rs) return { n: 5, ok: false, bm: 'Pilih sebab hujan', en: 'Pick the rain reason', sub: '', note: 'rain' };
-    if (rs.when.indexOf(when) < 0) return { n: 5, ok: false, bm: 'Sebab "' + rs.bm + '" tidak padan dengan masa hujan', en: 'Reason does not fit the rain timing', sub: when === 'night' ? EA.t('Hujan malam: hanya "tanah / jalan basah" diterima', 'Night rain: only "wet ground" counts') : '', note: 'rain' };
-    if (!d.rainLost) return { n: 5, ok: false, bm: 'Berapa hari hilang? (¼ · ½ · ¾ · 1)', en: 'How much of the day was lost?', sub: '', note: 'rain' };
-    var fit = sj.filter(function (j) { return rs.groups.indexOf(rainOf(j.task_code)) >= 0; });
-    if (!fit.length) return { n: 5, ok: false, bm: 'Kerja yang kurang (' + sj.map(function (j) { return shortName(j.task_code); }).join(', ') + ') tidak terjejas hujan jenis ini', en: 'The jobs that fell short are not affected by this kind of rain', sub: EA.t('Kumpulan C tidak terjejas; kumpulan B hanya hujan lebat', 'Group C is never affected; group B only by heavy rain'), note: 'rain' };
-    return { n: 5, ok: true, bm: rs.bm + ' · ' + lostLabel(d.rainLost) + ' · ' + fit.map(function (j) { return shortName(j.task_code); }).join(', '), en: rs.en + ' · ' + lostLabel(d.rainLost), sub: EA.t('Sasaran tidak diturunkan: kerja tertinggal jadi baki kerja', 'The target is not lowered: lost work becomes catch-up'), jobs: fit.map(function (j) { return j.task_code; }) };
+  // v1.45 (Yu Chen, 27 Oct): rain is told on each lot in Kerja (Hujan → what kind, ¼–1 day). Read it from the saved work.
+  var RAIN_WHEN = { LEWAT: 'morning', HENTI: 'work', GERIMIS: 'work', BASAH: 'night' };
+  function rainFromWork(w) {
+    var out = { lots: 0, lost: 0, jobs: [], count: {}, reason: '' };
+    if (!w || !w.lotwhy) return out;
+    var byKey = {}; ((w.rec && w.rec.jobs) || []).forEach(function (j) { if (j.key) byKey[j.key] = j.task_code; });
+    Object.keys(w.lotwhy).forEach(function (k) {
+      Object.keys(w.lotwhy[k] || {}).forEach(function (lot) {
+        var x = w.lotwhy[k][lot] || {}, pv = w.prog && w.prog[k] ? String(w.prog[k][lot]) : '0';
+        if (x.why !== 'rain' || pv !== '0') return;
+        out.lots++; out.lost = Math.max(out.lost, Number(x.lost) || 0);
+        if (x.rain) out.count[x.rain] = (out.count[x.rain] || 0) + 1;
+        var code = byKey[k]; if (code && out.jobs.indexOf(code) < 0) out.jobs.push(code);
+      });
+    });
+    out.reason = Object.keys(out.count).sort(function (a, b) { return out.count[b] - out.count[a]; })[0] || '';
+    return out;
+  }
+  function rainLabel(r) { var x = (EA.lists.rainReasons || []).find(function (o) { return o.code === r.reason; }); return x ? EA.t(x.bm, x.en) : EA.t('Hujan', 'Rain'); }
+  function rainCheck(jobs, d, w) {
+    var r = rainFromWork(w);
+    if (!r.lots) return { n: 5, ok: true, bm: 'Tiada petak terhenti kerana hujan', en: 'No lot stopped by rain', sub: '' };
+    return { n: 5, ok: true, bm: rainLabel(r) + ' · ' + lostLabel(r.lost) + ' · ' + r.jobs.map(shortName).join(', ') + ' (' + r.lots + ' petak)', en: rainLabel(r) + ' · ' + lostLabel(r.lost),
+      sub: EA.t('Sasaran tidak diturunkan: kerja tertinggal jadi baki kerja', 'The target is not lowered: lost work becomes catch-up'), jobs: r.jobs, rain: r };
   }
   function lostLabel(v) { var x = (EA.lists.lostDay || []).find(function (o) { return o.v === Number(v); }); return x ? EA.t(x.bm, x.en) : String(v); }
 
@@ -154,19 +167,6 @@
         html += '<div class="field"><label><span class="bm">Sebab buah belum ke ramp</span><span class="en">Why the fruit is not at the ramp</span></label>' +
           '<textarea class="text-input" rows="2" id="dc-field" placeholder="' + EA.t('cth: traktor rosak petang, kutip esok pagi', 'e.g. tractor broke down, collect tomorrow morning') + '">' + esc(d.fieldNote || '') + '</textarea></div>';
       }
-      // Rain (check 5)
-      var hrs = (EA.lists.workHours || {})[ctx.estate] || { start: '06:00', end: '13:30' };
-      html += '<div class="field"><label><span class="bm">Hujan hari ini? Bila?</span><span class="en">Rain today? When?</span></label><div class="picks" id="dc-when">' +
-        [['none', 'Tiada', 'None'], ['night', 'Malam / lepas kerja', 'Night / after work'], ['morning', 'Pagi, sebelum muster', 'Before muster'], ['work', 'Masa kerja', 'During work']].map(function (o) {
-          return '<button type="button" class="pick" data-when="' + o[0] + '" aria-pressed="' + ((d.rainWhen || 'none') === o[0]) + '"><b>' + esc(EA.t(o[1], o[2])) + '</b></button>';
-        }).join('') + '</div><p class="hint">' + EA.t('Waktu kerja ' + hrs.start + '–' + hrs.end + '. Hujan di luar waktu kerja hanya dikira jika tanah / jalan basah pagi esok.', 'Working hours ' + hrs.start + '–' + hrs.end + '. Rain outside working hours counts only as wet ground next morning.') + '</p></div>';
-      if ((d.rainWhen || 'none') !== 'none') {
-        var rr = (EA.lists.rainReasons || []).filter(function (r) { return r.when.indexOf(d.rainWhen) >= 0; });
-        html += '<div class="field"><label><span class="bm">Sebab</span><span class="en">Reason</span></label><div class="picks" id="dc-reason">' +
-          rr.map(function (r) { return '<button type="button" class="pick" data-reason="' + r.code + '" aria-pressed="' + (d.rainReason === r.code) + '"><b>' + esc(EA.t(r.bm, r.en)) + '</b><small>' + EA.t('kumpulan ', 'group ') + r.groups.join('+') + '</small></button>'; }).join('') + '</div></div>' +
-          '<div class="field"><label><span class="bm">Kerja hilang</span><span class="en">Work lost</span></label><div class="picks" id="dc-lost">' +
-          (EA.lists.lostDay || []).map(function (o) { return '<button type="button" class="pick" data-lost="' + o.v + '" aria-pressed="' + (Number(d.rainLost) === o.v) + '"><b>' + esc(EA.t(o.bm, o.en)) + '</b></button>'; }).join('') + '</div></div>';
-      }
       html += '<div class="field"><label><span class="bm">Catatan (pilihan)</span><span class="en">Note (optional)</span></label><input class="text-input" id="dc-note" maxlength="150" value="' + esc(d.note || '') + '"></div>' +
         '<div class="actions"><button type="button" class="btn btn-ok" id="dc-close"' + (bad.length ? ' disabled' : '') + '>TUTUP HARI<small>' + EA.t('Kunci hari ' + niceDate(day.date), 'Close ' + niceDate(day.date)) + '</small></button></div>' +
         (bad.length ? '<p class="hint">' + bad.length + EA.t(' perkara belum lengkap. Tekan baris merah untuk membetulkannya.', ' things not complete. Tap a red line to fix it.') + '</p>' : '<p class="hint">' + EA.t('Selepas ditutup, hari ini hanya boleh diubah melalui MINTA BETULKAN CHIT (kerani), dalam 3 hari.', 'After closing, this day changes only through MINTA BETULKAN CHIT (the clerk), within 3 days.') + '</p>') +
@@ -190,47 +190,57 @@
     var d = draftFor(day.date);
     function upd(fn) { fn(d); keepDraft(day.date, d); render(el, ctx); }
     el.querySelectorAll('.dc-go').forEach(function (b) { b.onclick = function () { EA.local.set('fh.workchit', day.chit.chit); location.hash = b.dataset.go; }; });
-    el.querySelectorAll('[data-when]').forEach(function (b) { b.onclick = function () { upd(function (x) { x.rainWhen = b.dataset.when; x.rainReason = ''; x.rainLost = ''; }); }; });
-    el.querySelectorAll('[data-reason]').forEach(function (b) { b.onclick = function () { upd(function (x) { x.rainReason = b.dataset.reason; }); }; });
-    el.querySelectorAll('[data-lost]').forEach(function (b) { b.onclick = function () { upd(function (x) { x.rainLost = b.dataset.lost; }); }; });
     var f = $('#dc-field'); if (f) { f.oninput = function () { d.fieldNote = f.value; keepDraft(day.date, d); }; f.onchange = function () { render(el, ctx); }; }
     var n = $('#dc-note'); if (n) n.oninput = function () { d.note = n.value; keepDraft(day.date, d); };
-    var cb = $('#dc-close'); if (cb) cb.onclick = function () { closeDay(d); };
+    var cb = $('#dc-close'); if (cb) cb.onclick = function () { var dt = day.chit.date, ok = closeChit(ctx.estate, ctx.user, day.chit, d, {}); render(el, ctx); if (ok) showSummary(dt); };
     el.querySelectorAll('[data-sum]').forEach(function (b) { b.onclick = function () { showSummary(b.dataset.sum); }; });
   }
 
   // ---------- closing ----------
-  function closeDay(d) {
-    var c = day.chit, ck = checks(ctx.estate, c, d);
-    if (ck.some(function (x) { return !x.ok; })) { ui().toast(EA.t('Belum lengkap', 'Not complete yet'), 'bad'); render(el, ctx); return; }
+  // One close, used by the screen, by the question at the end of a save, and by the morning self-close.
+  // opts.auto: closed by the app at the next chit because the day was complete (closed_by stays the staff's code).
+  function closeChit(estate, user, c, d, opts) {
+    d = d || {}; opts = opts || {};
+    var ck = checks(estate, c, d);
+    if (ck.some(function (x) { return !x.ok; })) { if (!opts.auto) ui().toast(EA.t('Belum lengkap', 'Not complete yet'), 'bad'); return null; }
     var w = workOf(c), jobs = (w && w.rec && w.rec.jobs) || [], lines = (w && w.rec && w.rec.lines) || [];
-    var rain = ck.find(function (x) { return x.n === 5; }), keepRain = (d.rainWhen || 'none') !== 'none' && !rain.drop;
+    var rain = rainFromWork(w), keepRain = rain.lots > 0;
     var present = (c.rows || []).filter(function (r) { return r.status !== 'removed' && r.muster === 'H'; }).length;
     var total = (c.rows || []).filter(function (r) { return r.status !== 'removed'; }).length;
     var bunches = 0; lines.forEach(function (l) { if (l.task_code === EA.lists.HARVEST) bunches += num(l.bunches); });
-    var lorries = collectsOf(ctx.estate, c.date).filter(function (s) { return s.dispatch && !s.dispatch.replacedBy; }).length;
+    var lorries = collectsOf(estate, c.date).filter(function (s) { return s.dispatch && !s.dispatch.replacedBy; }).length;
     var at = EA.today() + ' ' + EA.ui.hhmm(new Date());
-    var old = closedLocal(ctx.estate, c.date) || closes().find(function (s) { return s.estate === ctx.estate && s.date === c.date; });
+    var old = closes().find(function (s) { return s.estate === estate && s.date === c.date; });
     var checksTxt = ck.map(function (x) { return x.n + (x.ok ? '✓' : '!') + ' ' + x.bm; }).join(' | ').slice(0, 400);
+    var note = [String(d.fieldNote || '').trim(), String(d.note || '').trim(), opts.auto ? 'Ditutup oleh app (lengkap) semasa chit pagi' : ''].filter(Boolean).join(' · ').slice(0, 200);
     var rec;
     try {
-      rec = EA.save(TAB, ROOM, ctx.estate, { date: c.date, chit: c.chit, kind: 'close', closed_by: ctx.user.code, closed_at: at, checks: checksTxt,
-        rain_when: keepRain ? d.rainWhen : '', rain_reason: keepRain ? d.rainReason : '', rain_lost: keepRain ? String(d.rainLost) : '', rain_jobs: keepRain ? (rain.jobs || []).join(' ') : '',
+      rec = EA.save(TAB, ROOM, estate, { date: c.date, chit: c.chit, kind: 'close', closed_by: user.code, closed_at: at, checks: checksTxt,
+        rain_when: keepRain ? (RAIN_WHEN[rain.reason] || 'work') : '', rain_reason: keepRain ? rain.reason : '', rain_lost: keepRain ? String(rain.lost) : '', rain_jobs: keepRain ? rain.jobs.join(' ') : '',
         workers: String(total), present: String(present), bunches: String(bunches), jobs_done: String(jobs.filter(function (j) { return j.status === 'done'; }).length), jobs_planned: String(jobs.length),
-        lorries: String(lorries), note: [String(d.fieldNote || '').trim(), String(d.note || '').trim()].filter(Boolean).join(' · ').slice(0, 200) }, old && old.reopened ? old.id : '');
-    } catch (e) { ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad'); return; }
-    var s = { id: rec.id, estate: ctx.estate, date: c.date, chit: c.chit, at: at.slice(11), by: ctx.user.code, byName: ctx.user.name, present: present, total: total, bunches: bunches,
-      jobsDone: jobs.filter(function (j) { return j.status === 'done'; }).length, jobs: jobs.length, lorries: lorries, rain: keepRain ? (rain.bm.split(' · ')[0] + ' · ' + lostLabel(d.rainLost)) : '', rainJobs: keepRain ? (rain.jobs || []) : [],
+        lorries: String(lorries), note: note }, old && old.reopened ? old.id : '');
+    } catch (e) { if (!opts.auto) ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad'); return null; }
+    var s = { id: rec.id, estate: estate, date: c.date, chit: c.chit, at: at.slice(11), by: user.code, byName: user.name, present: present, total: total, bunches: bunches, auto: !!opts.auto,
+      jobsDone: jobs.filter(function (j) { return j.status === 'done'; }).length, jobs: jobs.length, lorries: lorries, rain: keepRain ? rainLabel(rain) + ' · ' + lostLabel(rain.lost) : '', rainJobs: keepRain ? rain.jobs : [],
       notDone: jobs.filter(function (j) { return j.status === 'not_done'; }).map(function (j) { return { job: shortName(j.task_code) + (j.block ? ' Blk ' + j.block : ''), why: j.reason || '' }; }), note: d.note || '', fieldNote: d.fieldNote || '' };
     var list = closes().filter(function (x) { return !(x.estate === s.estate && x.date === s.date); }); list.push(s); EA.local.set(K.saved, list);
-    var o = EA.local.get(K.office + ctx.estate, null); if (o && o.days) { o.days.forEach(function (x) { if (x.date === c.date) x.state = 'closed'; }); EA.local.set(K.office + ctx.estate, o); }
-    dropDraft(c.date);
-    ui().toast(EA.t('Hari ' + niceDate(c.date) + ' ditutup', 'Day ' + niceDate(c.date) + ' closed'));
+    var o = EA.local.get(K.office + estate, null); if (o && o.days) { o.days.forEach(function (x) { if (x.date === c.date) x.state = 'closed'; }); EA.local.set(K.office + estate, o); }
+    var all = EA.local.get(K.draft, {}); delete all[estate + '|' + c.date]; EA.local.set(K.draft, all);
+    if (!opts.auto) ui().toast(EA.t('Hari ' + niceDate(c.date) + ' ditutup', 'Day ' + niceDate(c.date) + ' closed'));
     if (navigator.onLine && EA.sendLink()) EA.send();
-    render(el, ctx);
-    showSummary(c.date);
+    return s;
   }
-
+  // Whether a day can be closed now: 'none' (not asked: before the start date, already closed, or no chit), 'ready', or 'missing'.
+  function closeState(estate, user, date) {
+    if (!canClose(user)) return { state: 'none' };
+    var keep = ctx; ctx = Object.assign({}, ctx || {}, { estate: estate, user: user });
+    try {
+      var o = openDays(estate).find(function (x) { return x.date === date; });
+      if (!o) return { state: 'none' };
+      var d = draftFor(date), ck = checks(estate, o.chit, d), bad = ck.filter(function (x) { return !x.ok; });
+      return { state: bad.length ? 'missing' : 'ready', chit: o.chit, d: d, checks: ck, bad: bad, reopened: o.reopened };
+    } finally { ctx = keep; }
+  }
   // ---------- the day summary for WhatsApp ----------
   function summaryText(s) {
     var dd = new Date(s.date + 'T00:00:00'), est = EA.lists.estate(s.estate);
@@ -244,12 +254,13 @@
     else L.push('Hujan: tiada');
     if (s.note) L.push('Catatan: ' + s.note);
     L.push('');
-    L.push('Ditutup: ' + (s.byName || s.by) + ' · ' + s.at);
+    L.push('Ditutup: ' + (s.byName || s.by) + ' · ' + s.at + (s.auto ? ' (oleh app, hari lengkap)' : ''));
     L.push('E-Book ' + s.chit);
     return L.join('\n');
   }
-  function showSummary(date) {
-    var s = closes().find(function (x) { return x.estate === ctx.estate && x.date === date; });
+  function showSummary(date, estate) {
+    estate = estate || (ctx && ctx.estate);
+    var s = closes().find(function (x) { return x.estate === estate && x.date === date; });
     if (!s) return;
     var t = summaryText(s);
     ui().openSheet('<h2 id="sheet-title">' + EA.t('Ringkasan hari', 'Day summary') + '</h2><pre class="chit">' + esc(t) + '</pre>' +
@@ -269,19 +280,66 @@
     if (j && Array.isArray(j.days)) { EA.local.set(K.office + estate, { at: Date.now(), from: j.from, days: j.days }); document.dispatchEvent(new CustomEvent('fh:dayclose')); }
     return j;
   };
-  // A small band for the Kerja screen: the open days, and the button to close.
+  // v1.45 (Yu Chen, 27 Oct): no separate daily step. The band on Kerja shows only a day the clerk reopened for a fix.
   EA.fh.dayCloseBand = function (estate, user) {
     if (!canClose(user)) return '';
     var keep = ctx; ctx = Object.assign({}, ctx || {}, { estate: estate });
     try {
-      var open = openDays(estate), today = EA.today();
-      var past = open.filter(function (o) { return o.date < today; });
-      if (!open.length) return '';
-      return '<p class="plan-band' + (past.length ? ' due' : '') + '" id="wk-dayclose"><b>' + (past.length ? EA.t('Hari ' + niceDate(past[0].date) + ' belum ditutup', 'Day ' + niceDate(past[0].date) + ' not closed') : EA.t('Hari ini belum ditutup', 'Today is not closed yet')) + '</b>' +
-        '<span>' + EA.t('Selepas kerja dikunci, tekan TUTUP HARI. Tutup sebelum chit esok pagi.', 'After the work is keyed, press TUTUP HARI. Close before tomorrow\'s chit.') + '</span>' +
-        '<a class="btn btn-ok" href="#field-harvest/close">TUTUP HARI<small>' + EA.t('Semak & kunci hari', 'Check & close the day') + '</small></a></p>';
+      var re = openDays(estate).filter(function (o) { return o.reopened; });
+      if (!re.length) return '';
+      return '<p class="plan-band due" id="wk-dayclose"><b>' + EA.t('Hari ' + niceDate(re[0].date) + ' dibuka semula', 'Day ' + niceDate(re[0].date) + ' reopened') + '</b>' +
+        '<span>' + EA.t('Kerani minta pembetulan. Selepas dibetulkan, tutup hari itu semula.', 'The clerk asked for a fix. After fixing, close that day again.') + '</span>' +
+        '<a class="btn btn-ok" href="#field-harvest/close">TUTUP HARI<small>' + EA.t('Semak & tutup semula', 'Check & close again') + '</small></a></p>';
     } finally { ctx = keep; }
   };
 
-  EA.fh.dayclose = { render: render, summaryText: summaryText, checks: checks, rainCheck: rainCheck };
+  // v1.45: the close at the end of a save. Kerja's report sheet carries this block: when the day is complete it asks
+  // "Semua lengkap. Tutup hari ini?" (YA, TUTUP / NANTI); when something is still missing it lists it softly with a
+  // button to the screen that fixes it (often the lorry, keyed after the work).
+  EA.fh.closeBlock = function (estate, user, date) {
+    var st = closeState(estate, user, date);
+    if (st.state === 'none') return null;
+    var html;
+    if (st.state === 'ready') html = '<div class="dc-ask" id="dc-ask"><b>✓ ' + EA.t('Semua lengkap. Tutup hari ' + niceDate(date) + '?', 'All complete. Close ' + niceDate(date) + '?') + '</b>' +
+      '<small>' + EA.t('Selepas ditutup, hari ini hanya diubah melalui MINTA BETULKAN CHIT (kerani).', 'After closing, changes only through MINTA BETULKAN CHIT (the clerk).') + '</small>' +
+      '<div class="actions"><button type="button" class="btn btn-ghost" id="dc-later">NANTI<small>' + EA.t('Ada lagi untuk dikunci', 'More to key') + '</small></button>' +
+      '<button type="button" class="btn btn-ok" id="dc-yes">YA, TUTUP<small>' + EA.t('Tutup hari', 'Close the day') + '</small></button></div></div>';
+    else html = '<div class="dc-ask dc-wait" id="dc-ask"><b>' + EA.t('Tutup hari bila lengkap:', 'Close the day when complete:') + '</b>' +
+      st.bad.map(function (x) { return '<button type="button" class="link-btn dc-go" data-go="' + esc(x.go || '#field-harvest/close') + '">• ' + esc(EA.t(x.bm, x.en)) + '</button>'; }).join('') + '</div>';
+    return { state: st.state, html: html, wire: function (sh, after) {
+      var y = sh.querySelector('#dc-yes'), l = sh.querySelector('#dc-later');
+      if (l) l.onclick = function () { var a = sh.querySelector('#dc-ask'); if (a) a.remove(); };
+      if (y) y.onclick = function () {
+        var s = closeChit(estate, user, st.chit, st.d, {});
+        if (!s) return;
+        ui().closeSheet(); if (after) after(); showSummary(date, estate);
+      };
+      sh.querySelectorAll('.dc-go').forEach(function (b) { b.onclick = function () { ui().closeSheet(); EA.local.set('fh.workchit', st.chit.chit); location.hash = b.dataset.go; }; });
+    } };
+  };
+  // After the Ramp / lorry save: ask only when the day is now complete (never nag about what is still missing there).
+  EA.fh.offerClose = function (estate, user, date) {
+    var cb = EA.fh.closeBlock(estate, user, date);
+    if (!cb || cb.state !== 'ready') return false;
+    ui().openSheet('<h2 id="sheet-title">' + EA.t('Tutup hari', 'Close the day') + '</h2>' + cb.html, function (sh) { cb.wire(sh, null); });
+    return true;
+  };
+  // Safety net at the next morning's chit: a day gone by that is complete but was not closed is closed by the app
+  // (marked "ditutup oleh app"); a day still incomplete stays open and is shown on the chit and to the Pengurus.
+  EA.fh.autoCloseOld = function (estate, user) {
+    if (!canClose(user)) return { closed: [], missing: [] };
+    var out = { closed: [], missing: [] }, today = EA.today();
+    var keep = ctx; ctx = Object.assign({}, ctx || {}, { estate: estate, user: user });
+    try {
+      openDays(estate).filter(function (o) { return o.date < today && !o.reopened; }).forEach(function (o) {
+        var st = closeState(estate, user, o.date);
+        if (st.state === 'ready') { if (closeChit(estate, user, o.chit, st.d, { auto: true })) out.closed.push(o.date); }
+        else if (st.state === 'missing') out.missing.push({ date: o.date, bad: st.bad });
+      });
+    } finally { ctx = keep; }
+    if (out.closed.length) ui().toast(EA.t('Hari ' + out.closed.map(niceDate).join(', ') + ' lengkap · ditutup oleh app', 'Day ' + out.closed.map(niceDate).join(', ') + ' complete · closed by the app'));
+    return out;
+  };
+
+  EA.fh.dayclose = { render: render, summaryText: summaryText, checks: checks, rainCheck: rainCheck, rainFromWork: rainFromWork, closeChit: closeChit, closeState: closeState };
 })();

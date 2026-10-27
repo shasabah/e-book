@@ -647,6 +647,16 @@
       var pend = pendingPlans();
       if (pend.length) { renderPending(head, pend); return; }
     }
+    // v1.45 TUTUP HARI (Yu Chen, 27 Oct): at the morning chit a day gone by that is complete is closed by the app;
+    // a day still incomplete is shown here (and to the Pengurus), the chit still opens: work never waits.
+    if (!draft.mode && EA.fh.autoCloseOld) {
+      try {
+        var ac = EA.fh.autoCloseOld(ctx.estate, ctx.user);
+        if (ac.missing.length) head += '<p class="plan-band due" id="fh-dcmiss"><b>' + EA.t('Hari ' + ac.missing.map(function (m) { return dayDm(m.date); }).join(', ') + ' belum lengkap', 'Day ' + ac.missing.map(function (m) { return dayDm(m.date); }).join(', ') + ' not complete') + '</b>' +
+          '<span>' + esc(ac.missing[0].bad.map(function (x) { return EA.t(x.bm, x.en); }).join(' · ')) + '</span>' +
+          '<a class="btn" href="#field-harvest/close">' + EA.t('LENGKAPKAN', 'COMPLETE IT') + '<small>' + EA.t('Lengkapkan & tutup hari', 'Complete & close the day') + '</small></a></p>';
+      } catch (e) {}
+    }
     var started = draft.jobs.length || Object.keys(draft.marks).length || draft.replacing || draft.newChit || draft.mode;
     if (todaysChits().length && !started) {
       el.innerHTML = head +

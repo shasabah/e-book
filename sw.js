@@ -28,7 +28,7 @@ var FILES = [
   'rooms/field/muster.js',
   'rooms/field/work.js', 'rooms/field/dayclose.js',
   'rooms/field/harvest.js', 'rooms/field/collect.js', 'rooms/field/ticket.js',
-  'rooms/field/history.js',
+  'rooms/field/history.js', 'rooms/field/program.js',
   'core/users.js', 'core/workers.js', 'core/mills.js', 'core/todo.js', 'core/admin.js', 'core/qr-app.svg',
   'manifest.webmanifest', 'core/icons/logo.svg', 'core/icons/favicon-32.png', 'core/icons/apple-touch-icon.png',
   'core/icons/icon-192.png', 'core/icons/icon-512.png', 'core/icons/icon-maskable-512.png',

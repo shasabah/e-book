@@ -232,6 +232,9 @@ EA.lists.roundPlans = { SSGT: { CPS: 4, RP: 4, SL: 2, DEC: 2, VOPS: 1, MAN: 5 } 
 EA.lists.roundPlanFor = function (estate, code) { var p = EA.lists.roundPlans[estate]; return p && p[code] || 0; };
 // v1.23: harvest round (2–3 rounds a month): a lot is ready again after 10 days, late after 15.
 EA.lists.lotRound = { HA: { ready: 10, late: 15 }, LF: { ready: 10, late: 15 } };
+// v1.47 Rancangan vs sebenar: kg in one fertiliser bag, to turn manuring Ha into bags and person-days (20 bags a day).
+// 50 kg until HQ confirms the bag size of each fertiliser.
+EA.lists.bagKg = 50;
 // v1.41 (Yu Chen, 26 Oct): work allowed on a Sunday without asking: harvesting and the crop chain (FFB), and the
 // important piece-rated jobs manuring and CPS. Everything else on a Sunday needs SDK's approval (Christy or Wawa, to be named).
 EA.lists.sundayOk = ['HA', 'LF', 'FC', 'ITF', 'LFF', 'LFR', 'OPH', 'ETF', 'MAN', 'CPS'];

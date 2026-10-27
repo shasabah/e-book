@@ -20,6 +20,9 @@ About 10 minutes. Use a NEW Google Sheet. Do not use the DMS sheet.
 Deploy > Manage deployments > pencil on the SAME deployment > Version: New version > Deploy.
 The link stays the same, so no phone needs a new link.
 
+**1.47 Rancangan vs sebenar (once, after the new version is deployed):** pick `seedProgramme2026` in the list, then Run.
+It adds Sugut's 2026 field maintenance programme (72 lines) to the LIST_PROGRAMME tab. Running it twice adds nothing.
+
 ## Adding a real person (only at the pilot)
 
 In the script editor, run `addUser` from a small function, for example:

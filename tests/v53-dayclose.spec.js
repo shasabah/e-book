@@ -50,43 +50,33 @@ const { chromium } = require('playwright');
     localStorage.setItem('fh.work', JSON.stringify([{ chit: 'CH-SSGT-P13-1', date: yd, estate: 'SSGT', rev: 1, chitRev: 1, lines: {}, status: {}, rec: { chit: 'CH-SSGT-P13-1', date: yd, estate: 'SSGT', at: '17:00',
       lines: [{ id: 'w1', worker_id: 'H1', task_code: 'HA', block: '01', lot: '1-13', qty: '', unit: 'bunch', bunches: '120' }, { id: 'w2', worker_id: 'H2', task_code: 'HA', block: '01', lot: '1-14', qty: '', unit: 'bunch', bunches: '110' },
               { id: 'w3', worker_id: 'S1', task_code: 'CPS', block: '02', lot: '2-1', qty: '1.5', unit: 'Ha', bunches: '' }],
-      jobs: [{ id: 'j1', task_code: 'HA', block: '01', lots: '1-13 1-14', workers: 2, bunches: '230', status: 'done', reason: '' },
-             { id: 'j2', task_code: 'CPS', block: '02', lots: '2-1 2-2', workers: 1, qty: '1.5', unit: 'Ha', status: 'not_done', reason: '2-2 hujan 11 pagi, sambung esok' }] } }]));
+      jobs: [{ id: 'j1', key: 'j1', task_code: 'HA', block: '01', lots: '1-13 1-14', workers: 2, bunches: '230', status: 'done', reason: '' },
+             { id: 'j2', key: 'j2', task_code: 'CPS', block: '02', lots: '2-1 2-2', workers: 1, qty: '1.5', unit: 'Ha', status: 'not_done', reason: '2-2 Hujan (kerja berhenti, ½ hari) · sambung esok' }] },
+      prog: { j2: { '2-1': '100', '2-2': '0' } }, lotwhy: { j2: { '2-2': { why: 'rain', rain: 'HENTI', lost: 0.5, until: yd } } } }]));
     // the tractor took the fruit to the ramp; one lorry with a DN
     localStorage.setItem('fh.collect', JSON.stringify([{ date: yd, estate: 'SSGT', at: '15:00', lines: [{ block: '01', lot: '1-13', bunches: 120, cleared: 'Y' }, { block: '01', lot: '1-14', bunches: 110, cleared: 'Y' }], dispatch: { trip: 'LR-1', dn: '8524', lorry: 'SA1', mill: 'BOU', bunches: 230 }, ids: [] }]));
   }, yd);
   await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(100); await p.evaluate(() => { location.hash = 'field-harvest/close'; }); await p.waitForSelector('#dc-close'); await p.waitForTimeout(200);
   txt = await p.innerText('#room');
   check('work keyed: 4 working (durian worker counts, no line needed), 230 bunches at the ramp, 1 lorry with DN, 1/2 jobs done · button on', !(await p.$eval('#dc-close', b => b.disabled)) && /4 orang bekerja, 0 tidak hadir/.test(txt) && /230 tandan dituai · semua ke ramp/.test(txt) && /1 lori keluar, semua ada DN/.test(txt) && /1\/2 kerja siap/.test(txt), txt.slice(0, 400));
-  // night rain: only wet ground is offered
-  await p.click('[data-when="night"]'); await p.waitForTimeout(150);
-  const nightReasons = await p.$$eval('#dc-reason [data-reason]', a => a.map(x => x.dataset.reason));
-  check('night rain offers only "tanah / jalan basah"', nightReasons.join(',') === 'BASAH', nightReasons.join(','));
-  // rain during work, reason HENTI, no fraction yet → red; then ½ day → accepted (CPS fell short, group A)
-  await p.click('[data-when="work"]'); await p.waitForTimeout(150); await p.click('[data-reason="HENTI"]'); await p.waitForTimeout(150);
-  txt = await p.innerText('#room');
-  check('rain without "how much lost" blocks the close', await p.$eval('#dc-close', b => b.disabled) && /Berapa hari hilang/.test(txt));
-  await p.click('[data-lost="0.5"]'); await p.waitForTimeout(150);
-  txt = await p.innerText('#room');
-  check('rain HENTI ½ day accepted for CPS (group A fell short)', !(await p.$eval('#dc-close', b => b.disabled)) && /kerja berhenti · ½ hari · Circle Spraying/.test(txt), txt.slice(0, 500));
+  check('rain read from the lot in Kerja: kerja berhenti · ½ hari · CPS (1 lot); no rain questions on the screen', /kerja berhenti · ½ hari · Circle Spraying \(1 petak\)/.test(txt) && !(await p.$('[data-when]')), txt.slice(0, 500));
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v53-dayclose.png' });
   await p.click('#dc-close'); await p.waitForTimeout(400);
   const dc = posted.filter(x => x.tab === 'FH_DAYCLOSE');
-  check('TUTUP HARI: one FH_DAYCLOSE row, kind close, rain kept, 4 present', dc.length === 1 && dc[0].row.kind === 'close' && dc[0].row.rain_reason === 'HENTI' && dc[0].row.rain_lost === '0.5' && dc[0].row.rain_jobs === 'CPS' && dc[0].row.present === '4' && dc[0].row.bunches === '230' && dc[0].row.jobs_done === '1', JSON.stringify(dc[0] && dc[0].row).slice(0, 300));
+  check('TUTUP HARI: one FH_DAYCLOSE row, kind close, rain kept (from the lot), 4 present', dc.length === 1 && dc[0].row.kind === 'close' && dc[0].row.rain_reason === 'HENTI' && dc[0].row.rain_when === 'work' && dc[0].row.rain_lost === '0.5' && dc[0].row.rain_jobs === 'CPS' && dc[0].row.present === '4' && dc[0].row.bunches === '230' && dc[0].row.jobs_done === '1', JSON.stringify(dc[0] && dc[0].row).slice(0, 300));
   const sheet = await p.innerText('#sheet-back').catch(() => '');
   check('day summary for WhatsApp shows bunches, jobs, rain and catch-up', /TUTUP HARI SPLT SSGT/.test(sheet) && /230 tandan/.test(sheet) && /Kerja: 1\/2 siap/.test(sheet) && /Hujan: Hujan — kerja berhenti/.test(sheet) && /baki kerja/.test(sheet), sheet.slice(0, 300));
   await p.click('#ds-back'); await p.waitForTimeout(200);
   txt = await p.innerText('#room');
   check('after the close the day leaves the open list', /Semua hari sudah ditutup/.test(txt) && /Hari ditutup/.test(txt), txt.slice(0, 200));
-  // Rain noted when nothing fell short: not recorded
+  // No lot stopped by rain: the close row carries no rain
   await p.evaluate((yd) => {
     localStorage.setItem('fh.dayclose', '[]'); localStorage.removeItem('fh.daydraft');
-    const w = JSON.parse(localStorage.getItem('fh.work')); w[0].rec.jobs[1].status = 'done'; w[0].rec.jobs[1].reason = ''; localStorage.setItem('fh.work', JSON.stringify(w));
+    const w = JSON.parse(localStorage.getItem('fh.work')); w[0].rec.jobs[1].status = 'done'; w[0].rec.jobs[1].reason = ''; w[0].prog = { j2: { '2-1': '100', '2-2': '100' } }; w[0].lotwhy = {}; localStorage.setItem('fh.work', JSON.stringify(w));
   }, yd);
   await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(100); await p.evaluate(() => { location.hash = 'field-harvest/close'; }); await p.waitForSelector('#dc-close'); await p.waitForTimeout(200);
-  await p.click('[data-when="work"]'); await p.waitForTimeout(150);
   txt = await p.innerText('#room');
-  check('rain when every job met its target: "tidak direkod", close still allowed', /tiada kerja kurang sasaran · tidak direkod/.test(txt) && !(await p.$eval('#dc-close', b => b.disabled)), txt.slice(0, 300));
+  check('no lot stopped by rain: "Tiada petak terhenti kerana hujan", close allowed', /Tiada petak terhenti kerana hujan/.test(txt) && !(await p.$eval('#dc-close', b => b.disabled)), txt.slice(0, 300));
   await p.click('#dc-close'); await p.waitForTimeout(400);
   const q2 = posted.filter(x => x.tab === 'FH_DAYCLOSE');
   check('the second close row carries no rain', q2.length === 2 && q2[1].row.rain_when === '' && q2[1].row.rain_reason === '', JSON.stringify(q2[1] && q2[1].row).slice(0, 200));

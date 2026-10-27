@@ -674,3 +674,10 @@ div.td-it { cursor: default; }
 .plan-band .btn { margin-top: 8px; display: inline-flex; }
 .rk-closed { color: var(--ok); font-style: normal; }
 .rk-open { color: var(--wait); font-style: normal; }
+.dc-ask { display: grid; gap: 6px; margin: 0 0 12px; padding: 12px 14px; border-radius: var(--r); border: 2px solid var(--ok); background: var(--ok-soft, #e8f3e8); }
+.dc-ask b { color: var(--ok); }
+.dc-ask small { color: var(--muted); }
+.dc-ask.dc-wait { border-color: var(--wait); background: var(--wait-soft); }
+.dc-ask.dc-wait b { color: var(--wait); }
+.dc-ask .dc-go { text-align: left; }
+.lot-rain, .lot-lost { margin-top: 6px; flex-wrap: wrap; }

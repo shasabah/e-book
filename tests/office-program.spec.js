@@ -35,7 +35,12 @@ const tabs = {
     R('x1', '2026-09-10', 'STF', '2026-09-10 18:00', ['CH-10','close','STF','2026-09-10 18:00','','work','HENTI','0.5','Circle Spraying (1 petak)','3','3','100','1','1','0',''])]),
   LIST_BUDGET: S(['month','budget_mt','abw_kg','work_days','note'], [R('b8', '2026-08-01', 'OWN', '', ['2026-08','195','','24','']), R('b9', '2026-09-01', 'OWN', '', ['2026-09','210','','24','']), R('b10', '2026-10-01', 'OWN', '', ['2026-10','220','','26',''])]),
   FH_ALERT: S(['chit','kind','block','lot','detail','staff_note','direction','direction_by','ref']),
-  FH_MUSTER: S(['chit','block','lots','mandor','worker_id','task_code','muster','confirmed_by','confirmed_at','note']),
+  FH_MUSTER: S(['chit','block','lots','mandor','worker_id','task_code','muster','confirmed_by','confirmed_at','note'], [
+    R('u1', D(1), 'STF', D(1) + ' 06:10', ['CH-a','03','','','M1','MAN','H','','','']), R('u2', D(1), 'STF', D(1) + ' 06:10', ['CH-a','03','','','M2','MAN','H','','','']),
+    R('u3', D(1), 'STF', D(1) + ' 06:10', ['CH-a','03','','','M3','MAN','S','','','']),
+    R('u4', D(2), 'STF', D(2) + ' 06:10', ['CH-b','03','','','M1','MAN','H','','','']), R('u5', D(2), 'STF', D(2) + ' 06:10', ['CH-b','03','','','M2','MAN','H','','','']),
+    R('u6', D(2), 'STF', D(2) + ' 06:10', ['CH-b','03','','','M4','MAN','H','','','']),
+    R('u7', D(12), 'STF', D(12) + ' 06:10', ['CH-c','03','','','M5','MAN','H','','',''])]),
   USERS: new Sheet([['user_code','name','role','estates','key_hash','status','added_at','phones','position']])
 };
 const props = { DAYCLOSE_FROM: '2026-09-01' };
@@ -73,6 +78,7 @@ check('days before the TUTUP HARI start are not judged on closing', dd('10').clo
 const thisMonth = T.toISOString().slice(0, 7);
 r = ctx.program_('SSGT', thisMonth);
 check('this month: last harvest date of each lot', r.lots && r.lots['1-5'] === D(3), JSON.stringify(r.lots));
+check('people per job a day: manuring 2 and 3 in the last 7 days → 2.5 (sick and 12 days ago not counted)', r.gang && r.gang.MAN === 2.5, JSON.stringify(r.gang));
 r = ctx.doRead_(staff, { action: 'program', estate: 'SSGT', month: '2026-9' });
 check('a bad month is refused', r.error === 'bad_month', JSON.stringify(r));
 r = ctx.doRead_(staff, { action: 'program', estate: 'MELU', month: '2026-09' });

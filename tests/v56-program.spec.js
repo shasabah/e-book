@@ -26,7 +26,7 @@ const OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30'
   const errs = []; let asks = 0; p.on('pageerror', e => errs.push(e.message));
   const now = D(0), m = now.slice(0, 7);
   const live = { ok: true, estate: 'SSGT', month: m, at: now + ' 21:30', from: '2020-01-01', programme: programme(m.slice(0, 4)),
-    done: { ['CPS|01|' + m]: 5 }, crop: [{ month: m, budget: 220, days: 26, mt: 150.25 }],
+    done: { ['CPS|01|' + m]: 5 }, crop: [{ month: m, budget: 220, days: 26, mt: 150.25 }], gang: { CPS: 1, MAN: 1, SL: 1, DEC: 1, VOPS: 1, RP: 1 },
     lots: { '1-1': D(2), '1-2': D(12), '1-3': D(20) },
     days: [{ date: D(1), closed: 'Y', same: true, ramp: false }, { date: D(2), closed: 'N', same: false, ramp: true }],
     rain: [{ date: D(1), lost: 0.5, reason: 'HENTI', jobs: 'Circle Spraying (1 petak)' }] };
@@ -62,6 +62,8 @@ const OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30'
   check('slashing 1 due (Jan / Feb), VOPS 1 (Apr)', c.sl.due === 1 && c.vops === 1);
   check('next month (Nov): CPS R4 and pruning R4 on 130.65 Ha', c.next.CPS && near(c.next.CPS.ha, 130.65) && c.next.CPS.label === 'R4' && c.next.RP && near(c.next.RP.ha, 130.65), JSON.stringify(c.next));
   const h = await p.evaluate(d => { localStorage.setItem('fh.prog.SSGT.2026-10', JSON.stringify(d)); return EA.fh.program.html('SSGT', '2026-10'); }, OCT);
+  check('block grid first: Blk 01–04 × jobs; CPS Blk 01 red −1.5; manuring Blk 01 green with the October ring', h.indexOf('pg-grid') > 0 && h.indexOf('pg-grid') < h.indexOf('Tan BTS') && /class="pg-g r"[^>]*title="CPS Blk 01">−1\.5/.test(h) && /class="pg-g g ring"[^>]*title="MAN Blk 01">/.test(h), (h.match(/<span class="pg-g[^<]*/g) || []).slice(0, 8).join(' | '));
+  check('block grid: the blocks with most red are named with their count', /Paling banyak merah: <span class="pg-chip">Blk 0\d · [1-6]<\/span>/.test(h), (h.match(/Paling banyak merah:.{0,120}/) || [''])[0]);
   check('October page: Membaja NK this month on Blk 1–4 (130.65 Ha), dose 2.5', /Membaja|Manuring/.test(h) && /NK/.test(h) && /130\.65 Ha/.test(h) && /2\.5 kg/.test(h), h.slice(0, 200));
   check('October page: rounds to the end of September, CPS red −1.3 or worse… shown first (most behind)', /hingga akhir Sep|to the end of Sep/.test(h) && h.indexOf('Pruning') < h.indexOf('Slashing') || h.indexOf('Cantas') < h.indexOf('Tebas'));
   check('October page: rain from TUTUP HARI starts 04/11 (before the start date)', /mula 04\/11|starts 04\/11/.test(h));
@@ -71,6 +73,8 @@ const OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30'
   check('Rekod has HARIAN / PROGRAM', !!(await p.$('[data-view="prog"]')) && !!(await p.$('[data-view=""]')));
   await p.click('[data-view="prog"]'); await p.waitForTimeout(1500);
   const t1 = await p.innerText('#room');
+  check('crop due counts working days (Mon–Sat): "(n/m hari kerja)"', /Patut hingga \d\d\/\d\d \(\d+\/2[4-7] hari kerja\)/.test(t1), (t1.match(/Patut hingga[^\n]*/) || [''])[0]);
+  check('this month: people a day from the office → "perlu N hari; kurang N hari" (or cukup)', /Purata 1 orang sehari \(7 hari lepas\) → perlu \d+ hari; (kurang \d+ hari|cukup)/.test(t1), (t1.match(/Purata[^\n]*/) || [''])[0]);
   check('PROGRAM: crop card, budget 220 MT, actual 150.25 MT', /220 MT/.test(t1) && /150\.25 MT/.test(t1), t1.slice(0, 400));
   check('PROGRAM: 164 lots, 1 in round, 1 ready, 1 late, the rest without a harvest record', /164 (petak|lots)/.test(t1) && /Tiada rekod tuai|No harvest record/.test(t1), t1.slice(t1.indexOf('164'), t1.indexOf('164') + 200));
   check('PROGRAM: rain ½ day this month from the close', /½ hari hilang|½ days lost/.test(t1) && /Circle Spraying/.test(t1));

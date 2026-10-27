@@ -2334,9 +2334,23 @@ function program_(estate, month) {
   });
   rain.sort(function (a, b) { return a.date < b.date ? -1 : 1; });
   var lots = month === today.slice(0, 7) ? (rounds_(estate).lots[HARVEST_CODE] || {}) : null;
+  // v1.47 (Yu Chen, 28 Oct): people per job a day, the average over the last 7 days the job was worked (chit, present),
+  // so the phone can say "6 orang perlu 5–6 hari; tinggal 4 hari kerja → kurang 2 hari".
+  var wk = daysAgo_(7), per = {};
+  standingRows_('FH_MUSTER', estate).forEach(function (r) {
+    var d = String(r.date);
+    if (!live_(r) || r.muster !== 'H' || !r.task_code || d < wk || d > today) return;
+    var t = per[r.task_code] || (per[r.task_code] = {}), w = t[d] || (t[d] = {});
+    w[String(r.worker_id)] = true;
+  });
+  var gang = {};
+  Object.keys(per).forEach(function (code) {
+    var ds = Object.keys(per[code]), n = ds.reduce(function (a, d) { return a + Object.keys(per[code][d]).length; }, 0);
+    gang[code] = Math.round(n / ds.length * 10) / 10;
+  });
   return { ok: true, estate: estate, month: month, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), from: from,
     programme: prog, done: done, crop: Object.keys(crop).sort().map(function (k) { return crop[k]; }), lots: lots,
-    days: Object.keys(days).sort().map(function (d) { return days[d]; }), rain: rain };
+    days: Object.keys(days).sort().map(function (d) { return days[d]; }), rain: rain, gang: gang };
 }
 
 /** v1.47: load Sugut's 2026 field maintenance programme into LIST_PROGRAMME once (run from the script editor, Owner).

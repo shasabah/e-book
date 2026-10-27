@@ -410,6 +410,14 @@
 
   // ---------- the four detail pages (v1.26), like the estate's Excel sheets ----------
   var byBlock = false;
+  // v1.47 (Yu Chen, 28 Oct): "due by today" counts working days (Monday–Saturday), not calendar days: no harvest on Sunday.
+  // done = working days from the 1st to today (the whole month once it is past), total = working days in the month.
+  function workShare(m) {
+    var t = EA.today(), x = new Date(m + '-01T00:00:00'), dm = daysIn(m), upTo = m < t.slice(0, 7) ? dm : m > t.slice(0, 7) ? 0 : Number(t.slice(8, 10)), done = 0, total = 0;
+    for (var i = 1; i <= dm; i++) { if (new Date(x.getFullYear(), x.getMonth(), i).getDay() === 0) continue; total++; if (i <= upTo) done++; }
+    return { done: done, total: total, frac: total ? done / total : 0 };
+  }
+  EA.fh.workShare = workShare;
   function elapsed(m) { var t = EA.today(); return m < t.slice(0, 7) ? daysIn(m) : m > t.slice(0, 7) ? 0 : Number(t.slice(8, 10)); }
   function renderDetail() {
     var list = merged(ctx.estate, month), cr = crop(ctx.estate, month), t = totals(list, cr);
@@ -428,7 +436,7 @@
     var b = cr.budget, el2 = elapsed(month), dm = daysIn(month);
     if (!b || !b.mt) return '<div class="card"><p class="hint">' + EA.t('Bajet bulan ini belum dimuat di pejabat.', 'This month\'s budget is not loaded in the office yet.') + '</p></div>';
     var abw = b.abw || t.abw || 0, tgtB = abw ? Math.round(b.mt * 1000 / abw) : 0, perDay = b.days && tgtB ? Math.round(tgtB / b.days) : 0;
-    var due = perDay ? Math.round(perDay * b.days * el2 / dm) : 0, pct = tgtB ? Math.round(t.bunches / tgtB * 100) : 0, beza = t.bunches - due;
+    var due = perDay ? Math.round(perDay * b.days * workShare(month).frac) : 0, pct = tgtB ? Math.round(t.bunches / tgtB * 100) : 0, beza = t.bunches - due;
     return '<div class="card rk-card"><h2>' + EA.t('Bulan ini', 'This month') + '<small>' + EA.t('bajet ', 'budget ') + b.mt + ' MT · ABW ' + (b.abw || '—') + '</small></h2>' +
       '<div class="rk-kv"><span>' + EA.t('Sasaran tandan bulan', 'Target bunches, month') + '</span><b>' + n0(tgtB) + '</b>' +
       '<span>' + EA.t('Sasaran sehari', 'Target per day') + ' (' + b.days + EA.t(' hari kerja)', ' working days)') + '</span><b>' + n0(perDay) + '</b>' +
@@ -480,7 +488,7 @@
   function mtPage(cr, t) {
     var b = cr.budget, el2 = elapsed(month), dm = daysIn(month);
     var h = b && b.mt ? '<div class="card rk-card"><h2>' + EA.t('Bajet', 'Budget') + '<small>' + b.mt + ' MT</small></h2><div class="rk-kv"><span>' + EA.t('Hingga kini', 'To date') + '</span><b>' + f2(t.mt) + ' MT · ' + Math.round(t.mt / b.mt * 100) + '%</b>' +
-      '<span>' + EA.t('Patut hingga hari ini', 'Due by today') + '</span><b>' + (b.mt * el2 / dm).toFixed(1) + ' MT</b></div><div class="rk-bar"><i style="width:' + Math.min(100, Math.round(t.mt / b.mt * 100)) + '%"></i></div></div>'
+      '<span>' + EA.t('Patut hingga hari ini', 'Due by today') + '</span><b>' + (b.mt * workShare(month).frac).toFixed(1) + ' MT</b></div><div class="rk-bar"><i style="width:' + Math.min(100, Math.round(t.mt / b.mt * 100)) + '%"></i></div></div>'
       : '<div class="card"><p class="hint">' + EA.t('Bajet bulan ini belum dimuat di pejabat.', 'This month\'s budget is not loaded in the office yet.') + '</p></div>';
     h += '<div class="card rk-card"><h2>' + EA.t('Ikut kilang', 'By mill') + '</h2><div class="rk-mills">' + mills(cr).map(function (m) { return '<div>' + esc(m.mill) + '<b>' + f2(m.mt) + ' MT</b>' + m.n + EA.t(' lori', ' lorries') + ' · reject ' + m.rej + '</div>'; }).join('') + '</div></div>';
     return h + (cr.tickets.length ? '<div class="rk-grid">' + ticketTable(cr) + '</div><p class="hint">' + EA.t('↔ Leret untuk timbangan, ABW dan reject.', '↔ Swipe for weights, ABW and reject.') + '</p>' : '<p class="hint">' + EA.t('Tiada tiket bulan ini.', 'No tickets this month.') + '</p>');

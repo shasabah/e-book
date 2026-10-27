@@ -90,21 +90,45 @@
   function tone(gap) { return gap <= -1 ? 'r' : gap < -0.05 ? 'a' : 'g'; }
 
   // ---------- the cards ----------
+  // v1.47 B · Ringkasan blok (Yu Chen, 28 Oct): blocks down, programme jobs across, one dot per cell for the rounds
+  // to the end of last month (green on programme, amber behind, red one round or more behind), so the block that needs
+  // the gang shows at a glance. A cell with this month's programme still open has an amber ring.
+  var GRID_ORDER = ['CPS', 'MAN', 'RP', 'SL', 'DEC', 'VOPS'];
+  function gridCard(estate, month, cal) {
+    var codes = Object.keys(cal.jobs).sort(function (a, b) { var x = GRID_ORDER.indexOf(a), y = GRID_ORDER.indexOf(b); return (x < 0 ? 99 : x) - (y < 0 ? 99 : y) || (a < b ? -1 : 1); });
+    var blocks = {}; codes.forEach(function (c) { Object.keys(cal.jobs[c].blocks).forEach(function (b) { blocks[b] = true; }); });
+    var bl = Object.keys(blocks).sort(), prev = addMonths(month, -1), worst = {};
+    if (!codes.length || !bl.length) return '';
+    var rows = bl.map(function (b) {
+      return '<tr><th scope="row">Blk ' + esc(b) + '<small>' + f2(blockHa(estate, b) || (cal.jobs[codes[0]].blocks[b] || {}).ha || 0) + ' Ha</small></th>' + codes.map(function (c) {
+        var x = cal.jobs[c].blocks[b];
+        if (!x) return '<td class="pg-g-na">·</td>';
+        var t = x.due || x.rounds ? tone(x.gap) : 'g', ring = x.nowHa && x.doneNow < x.nowHa ? ' ring' : '';
+        if (t === 'r') worst[b] = (worst[b] || 0) + 1;
+        return '<td><span class="pg-g ' + t + ring + '" title="' + esc(c + ' Blk ' + b) + '">' + (x.due || x.rounds ? sgn(x.gap) : '0') + '</span></td>';
+      }).join('') + '</tr>';
+    }).join('');
+    var bad = Object.keys(worst).sort(function (a, b) { return worst[b] - worst[a]; });
+    return '<div class="card pg-card"><h2>' + EA.t('Ringkasan blok', 'Blocks at a glance') + '<small>' + EA.t('beza pusingan hingga akhir ', 'rounds gap to the end of ') + mon(prev) + EA.t(' · bulat = program bulan ini belum siap', ' · ring = this month\'s programme not done') + '</small></h2>' +
+      '<div class="pg-gwrap"><table class="pg-grid"><tr><th></th>' + codes.map(function (c) { return '<th scope="col">' + esc(c) + '</th>'; }).join('') + '</tr>' + rows + '</table></div>' +
+      '<p class="pg-note">' + (bad.length ? EA.t('Paling banyak merah: ', 'Most red: ') + bad.map(function (b) { return '<span class="pg-chip">Blk ' + esc(b) + ' · ' + worst[b] + '</span>'; }).join('') : EA.t('Tiada blok satu pusingan di belakang.', 'No block is a round behind.')) + '</p>' +
+      '<p class="pg-note">' + codes.map(function (c) { return '<b>' + esc(c) + '</b> ' + esc(job(c)); }).join(' · ') + '</p></div>';
+  }
   function cropCard(month, data) {
     var c = (data.crop || []).find(function (x) { return x.month === month; }) || {};
     if (!c.budget) return '<div class="card"><p class="hint">' + EA.t('Bajet bulan ini belum dimuat di pejabat.', 'This month\'s budget is not loaded in the office yet.') + '</p></div>';
-    var today = EA.today(), cur = month === today.slice(0, 7), el = cur ? Number(today.slice(8, 10)) : daysIn(month);
-    var due = c.budget * el / daysIn(month), pct = due ? Math.round(c.mt / due * 100) : 0, beza = c.mt - due;
+    var today = EA.today(), cur = month === today.slice(0, 7), ws = EA.fh.workShare(month);
+    var due = c.budget * ws.frac, pct = due ? Math.round(c.mt / due * 100) : 0, beza = c.mt - due;
     var yb = 0, ym2 = 0; (data.crop || []).forEach(function (x) { if (x.month < month) { yb += x.budget; ym2 += x.mt; } });
     yb += due; ym2 += c.mt;
     var cls = pct >= 100 ? '' : pct >= 85 ? 'w' : 'b';
     return '<div class="card pg-card"><h2>' + EA.t('Tan BTS bulan ini', 'FFB tonnes this month') + '<small>' + EA.t('Bajet ', 'Budget ') + mon(month) + ' ' + c.budget + ' MT' + (c.days ? ' · ' + c.days + EA.t(' hari kerja', ' working days') : '') + '</small></h2>' +
-      '<div class="pg-kv"><span>' + (cur ? EA.t('Patut hingga ', 'Due by ') + dm(today) : EA.t('Bajet bulan', 'Month budget')) + '</span><b>' + f1(due) + ' MT</b>' +
+      '<div class="pg-kv"><span>' + (cur ? EA.t('Patut hingga ', 'Due by ') + dm(today) + ' (' + ws.done + '/' + ws.total + EA.t(' hari kerja)', ' working days)') : EA.t('Bajet bulan', 'Month budget')) + '</span><b>' + f1(due) + ' MT</b>' +
       '<span>' + EA.t('Sebenar (tiket kilang)', 'Actual (mill tickets)') + '</span><b>' + f2(c.mt) + ' MT · ' + pct + '%</b>' +
       '<span>' + EA.t('Beza', 'Variance') + '</span><b class="' + (beza < 0 ? 'bad-text' : 'ok-t') + '">' + sgn(beza) + ' MT</b>' +
       '<span>' + EA.t('Tahun ini (Jan–', 'This year (Jan–') + mon(month) + ')</span><b>' + n0(ym2) + ' / ' + n0(yb) + ' MT · ' + (yb ? Math.round(ym2 / yb * 100) : 0) + '%</b></div>' +
       '<div class="pg-bar"><i class="' + cls + '" style="width:' + Math.min(100, c.budget ? c.mt / c.budget * 100 : 0) + '%"></i><em style="left:' + Math.min(100, due / c.budget * 100) + '%"></em></div>' +
-      '<p class="pg-note">' + EA.t('Garis hitam = patut hingga hari ini. Kuning bawah 100%, merah bawah 85%.', 'Black line = due by today. Amber under 100%, red under 85%.') + '</p></div>';
+      '<p class="pg-note">' + EA.t('Garis hitam = patut hingga hari ini (hari kerja Isnin–Sabtu). Kuning bawah 100%, merah bawah 85%.', 'Black line = due by today (working days Monday–Saturday). Amber under 100%, red under 85%.') + '</p></div>';
   }
   function lotsCard(estate, data) {
     if (!data.lots) return '';
@@ -128,7 +152,7 @@
         (open.lots ? '<p class="pg-lots">' + list.map(function (x) { return '<span>' + esc(x.lot) + ' <small>' + (x.age < 0 ? '—' : x.age + EA.t(' hr', ' d')) + '</small></span>'; }).join('') + '</p>' : '') : '') +
       '</div>';
   }
-  function nowCard(estate, month, cal) {
+  function nowCard(estate, month, cal, data) {
     var rows = [], left = daysLeft(month);
     Object.keys(cal.jobs).sort().forEach(function (code) {
       var j = cal.jobs[code], bl = Object.keys(j.blocks).sort().map(function (k) { return j.blocks[k]; }).filter(function (b) { return b.nowHa; });
@@ -143,10 +167,19 @@
           return '<tr><td>Blk ' + esc(b.block) + '</td><td>' + f2(b.nowHa) + '</td><td>' + (b.doneNow ? f1(b.doneNow) + ' · ' + p + '%' : '0') + '</td><td class="st">' + dot(p >= 100 ? 'g' : p > 0 ? 'a' : 'r') + '</td></tr>';
         }).join('') +
         '<tr class="tot"><td>' + EA.t('Jumlah', 'Total') + '</td><td>' + f2(ha) + '</td><td>' + f1(dn) + ' · ' + (ha ? Math.round(dn / ha * 100) : 0) + '%</td><td></td></tr></table>' +
-        (rest > 0.05 ? '<p class="pg-note">' + EA.t('Baki ', 'Left ') + f1(rest) + ' Ha' + (pd ? ' ≈ ' + Math.ceil(pd) + EA.t(' orang-hari', ' person-days') : '') + (month === EA.today().slice(0, 7) ? ' · ' + EA.t('tinggal ', '') + left + EA.t(' hari kerja', ' working days left') : '') + '.</p>' : '') +
+        (rest > 0.05 ? '<p class="pg-note">' + EA.t('Baki ', 'Left ') + f1(rest) + ' Ha' + (pd ? ' ≈ ' + Math.ceil(pd) + EA.t(' orang-hari', ' person-days') : '') + (month === EA.today().slice(0, 7) ? ' · ' + EA.t('tinggal ', '') + left + EA.t(' hari kerja', ' working days left') : '') + '.' + gangText(code, pd, left, month, data) + '</p>' : '') +
         '</div>');
     });
     return rows.length ? rows.join('') : '<div class="card"><p class="hint">' + EA.t('Tiada kerja program bulan ini.', 'No programme work this month.') + '</p></div>';
+  }
+  // v1.47 (Yu Chen, 28 Oct): with the people on this job a day (average of the last 7 days the job was worked, from the
+  // office), how many days the rest needs against the working days left: "kurang 2 hari" in red, or "cukup" in green.
+  function gangText(code, pd, left, month, data) {
+    var g = data && data.gang && data.gang[code];
+    if (!g || !pd || month !== EA.today().slice(0, 7)) return '';
+    var need = Math.ceil(pd / g - 0.05), short = need - left, n = Math.round(g * 10) / 10;
+    return '<br>' + EA.t('Purata ' + n + ' orang sehari (7 hari lepas) → perlu ' + need + ' hari', 'Average ' + n + ' people a day (last 7 days) → needs ' + need + ' days') + '; ' +
+      (short > 0 ? '<b class="bad-text">' + EA.t('kurang ' + short + ' hari', short + (short > 1 ? ' days' : ' day') + ' short') + '</b>' : '<b class="ok-t">' + EA.t('cukup', 'enough') + '</b>') + '.';
   }
   function roundsCard(month, cal) {
     var prev = addMonths(month, -1), codes = Object.keys(cal.jobs).filter(function (c) { var j = cal.jobs[c]; return j.due > 0 || j.rounds > 0; });
@@ -195,13 +228,16 @@
     if (!data) return '<div class="card"><p class="hint">' + (EA.sendLink() && navigator.onLine ? EA.t('Memuat dari pejabat…', 'Loading from the office…') : EA.t('Perlu isyarat untuk muat dari pejabat.', 'Needs signal to load from the office.')) + '</p></div>';
     var cal = calc(estate, month, data), noProg = !(data.programme || []).length;
     function lab(n, bm, en) { return '<div class="pg-lab">' + n + ' · ' + EA.t(bm, en) + '</div>'; }
-    return lab(1, 'Hasil', 'Crop') + cropCard(month, data) +
-      (data.lots ? lab(2, 'Pusingan tuai', 'Harvest round') + lotsCard(estate, data) : '') +
+    var n = 0;
+    function L(bm, en) { n++; return lab(n, bm, en); }
+    return (noProg ? '' : L('Ringkasan blok', 'Blocks at a glance') + gridCard(estate, month, cal)) +
+      L('Hasil', 'Crop') + cropCard(month, data) +
+      (data.lots ? L('Pusingan tuai', 'Harvest round') + lotsCard(estate, data) : '') +
       (noProg ? '<div class="card"><p class="hint">' + EA.t('Program rawatan tahun ini belum dimuat di pejabat.', 'This year\'s maintenance programme is not loaded in the office yet.') + '</p></div>' :
-        lab(3, 'Program rawatan bulan ini', 'This month\'s programme') + nowCard(estate, month, cal) +
-        lab(4, 'Pusingan tahun ini', 'Rounds this year') + roundsCard(month, cal) +
-        lab(5, 'Baki kerja', 'Catch-up') + catchCard(month, cal, data)) +
-      lab(6, 'Disiplin harian', 'Daily keying') + daysCard(month, data) +
+        L('Program rawatan bulan ini', 'This month\'s programme') + nowCard(estate, month, cal, data) +
+        L('Pusingan tahun ini', 'Rounds this year') + roundsCard(month, cal) +
+        L('Baki kerja', 'Catch-up') + catchCard(month, cal, data)) +
+      L('Disiplin harian', 'Daily keying') + daysCard(month, data) +
       '<p class="hint">' + EA.t('Lihat sahaja. Dari pejabat · dikemas kini ', 'View only. From the office · updated ') + esc(data.at || '') + '</p>';
   }
   async function refresh(estate, month, after) {

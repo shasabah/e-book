@@ -192,6 +192,11 @@ EA.lists.chitNames = {
 // RMH need approval. OPR (road & drain repair) and ETF (lorry to mill) stay main.
 EA.lists.mainJobs = { SSGT: ['HA', 'ITF', 'LFF', 'LF', 'DF', 'MDR', 'CA', 'WM', 'CPS', 'VOPS', 'MAN', 'SL', 'RP', 'AP', 'OPH', 'OPR', 'ETF'] };
 EA.lists.isMainJob = function (estate, code) { var m = EA.lists.mainJobs[estate]; return !m || m.indexOf(code) >= 0; };
+// v1.45 (Yu Chen, 27 Oct): the "+ Kerja lain · minta lulus" list shows only the other jobs the estate really does
+// (ticked by Yu Chen; CPT census palm and LG/UL loading fertiliser / seedlings added back from the Sugut piece rate list).
+// An estate without a list here shows every other code. Old records with a code not on the list still show as before.
+EA.lists.otherJobs = { SSGT: ['LFR', 'DEC', 'BU', 'SS', 'BS', 'LS', 'OS', 'OPF', 'SP', 'RMF', 'RMM', 'GFR', 'GMR', 'RPC', 'CSR', 'CSB', 'RS', 'MC', 'ITLM', 'CPT', 'LG/UL'] };
+EA.lists.isOtherJob = function (estate, code) { var o = EA.lists.otherJobs[estate]; return !o || o.indexOf(code) >= 0; };
 // v1.36 (Yu Chen, 25 Oct): the shortcut buttons show only the jobs keyed every day; the other main jobs
 // (rounds and occasional work) fold under one button, so the list stays short.
 EA.lists.dailyJobs = { SSGT: ['HA', 'ITF', 'LFF', 'LF', 'DF', 'MDR', 'CA', 'WM'] };

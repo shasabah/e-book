@@ -114,7 +114,8 @@ const { chromium } = require('playwright');
   const more = await p.$$eval('#jb-more [data-quick]', a => a.map(x => x.dataset.quick));
   check('phone: the other main jobs fold under "Kerja pusingan & lain" (closed): CPS VOPS MAN SL RP AP OP ETF', more.join(' ') === 'CPS VOPS MAN SL RP AP OP ETF' && !(await p.$eval('#jb-more', d => d.open)), more.join(' '));
   const others = await p.$$eval('#jb-task option', a => a.map(x => x.value).filter(Boolean));
-  check('phone: "Kerja lain" lists only the other jobs (60, incl. DEC SP RMH OPF)', others.length === 60 && ['RMF', 'MT', 'DEC', 'SP', 'RMH', 'OPF'].every(c => others.includes(c)) && !others.includes('HA') && !others.includes('OPR'), String(others.length));
+  // v1.45: Sugut keeps only 21 other jobs (ticked by Yu Chen, 27 Oct); RMH and MT are off Sugut's list.
+  check('phone: "Kerja lain" lists only Sugut\'s other jobs (21, incl. DEC SP OPF RMF)', others.length === 21 && ['RMF', 'DEC', 'SP', 'OPF'].every(c => others.includes(c)) && !others.includes('HA') && !others.includes('OPR') && !others.includes('MT') && !others.includes('RMH'), String(others.length));
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v47-addjob.png', fullPage: true });
   // other work: needs a reason
   await p.selectOption('#jb-task', 'RMF'); await p.waitForTimeout(200);
@@ -145,11 +146,14 @@ const { chromium } = require('playwright');
   check('phone: OPF (field work by machine) now needs a reason (approval)', await p.isVisible('#jb-whybox'));
   await p.click('#jb-cancel'); await p.waitForTimeout(200);
   // workshop (machine support): needs a reason (not a Sugut main job) and the machine worked on, lorry and genset too
+  // v1.45: MH is off Sugut's other-work list; let it back for this check only (workshop behaviour is shared by every estate)
+  await p.evaluate(() => EA.lists.otherJobs.SSGT.push('MH'));
   await p.click('#fh-addjob'); await p.waitForSelector('#jb-task'); await p.selectOption('#jb-task', 'MH'); await p.waitForTimeout(200);
   check('phone: workshop (MH) asks the machine worked on (incl. lorry, genset) and a reason; under General · Bengkel',
     await p.isVisible('#jb-machbox') && await p.isHidden('#jb-forbox') && await p.isVisible('#jb-whybox') && (await p.$$eval('#jb-mach [data-mach]', a => a.map(x => x.dataset.mach).join(' '))) === 'FARMTRACTOR BACKHOE EXCAVATOR LORRY GENSET'
     && await p.evaluate(() => EA.lists.sectionOf('MH').code === '5' && EA.lists.partOf('MH').en === 'Workshop'));
   await p.click('#jb-cancel'); await p.waitForTimeout(200);
+  await p.evaluate(() => { EA.lists.otherJobs.SSGT.pop(); });
   // durian farm: the durian block by itself
   await p.click('#fh-addjob'); await p.waitForSelector('#jb-task'); await p.click('#jb-quick [data-quick="DF"]'); await p.waitForTimeout(200);
   check('phone: DF takes the durian farm by itself (lots A / B / C)', (await p.inputValue('#jb-block')) === 'DR' && (await p.$$eval('#jb-block option', a => a.length)) === 1);

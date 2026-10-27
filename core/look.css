@@ -629,6 +629,7 @@ div.td-it { cursor: default; }
 .jb-more > summary span { display: inline; }
 .jb-more > summary { cursor: pointer; font-weight: 700; padding: 8px 0; color: var(--ok); }
 .jb-more > summary .en { font-weight: 500; opacity: .8; }
+.jb-more > summary .jb-more-names { display: block; font-weight: 400; color: var(--ink); font-size: .88rem; margin-top: 2px; }
 .jb-small .pick { padding: 6px 8px; }
 .jb-small .pick small { font-size: .72rem; }
 /* v1.38: a person already marked shrinks to a short line; chosen names sit at the top of PILIH ORANG */

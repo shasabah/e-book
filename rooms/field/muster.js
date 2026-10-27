@@ -1022,7 +1022,9 @@
       '<div class="field"><span class="inline"><span class="bm">' + (hasMain ? 'Kerja harian' : 'Kerja biasa') + '</span> · <span class="en">' + (hasMain ? 'Every day' : 'Usual jobs') + '</span></span><div class="picks jb-quick" id="jb-quick">' +
         EA.lists.quickJobsFor(ctx.estate).map(function (c) { var t = task(c); return '<button type="button" class="pick" data-quick="' + c + '" aria-pressed="' + (c === pick.task) + '"><b>' + c + '</b><small>' + esc(EA.t(t.bm, t.en)) + '</small></button>'; }).join('') + '</div>' +
         // v1.36: the other main jobs (rounds, machines, lorry, repairs), folded so the shortcuts stay short.
-        (EA.lists.moreJobsFor(ctx.estate).length ? '<details class="jb-more" id="jb-more"' + (EA.lists.moreJobsFor(ctx.estate).indexOf(pick.task) >= 0 || EA.lists.OP_JOBS.indexOf(pick.task) >= 0 ? ' open' : '') + '><summary><span class="bm">Kerja pusingan & lain · ' + EA.lists.moreJobsFor(ctx.estate).length + '</span> <span class="en">Round & other main jobs</span></summary><div class="picks jb-quick jb-small">' +
+        (EA.lists.moreJobsFor(ctx.estate).length ? '<details class="jb-more" id="jb-more"' + (EA.lists.moreJobsFor(ctx.estate).indexOf(pick.task) >= 0 || EA.lists.OP_JOBS.indexOf(pick.task) >= 0 || (pick.task && !EA.lists.isMainJob(ctx.estate, pick.task)) ? ' open' : '') + '><summary><span class="bm">Kerja pusingan & lain · ' + EA.lists.moreJobsFor(ctx.estate).length + '</span> <span class="en">Round & other main jobs</span>' +
+          // v1.43 (27 Oct): the names show on the folded button, so Membaja is found without opening it.
+          '<small class="jb-more-names">' + esc(EA.lists.moreJobsFor(ctx.estate).map(function (c) { var t = c === 'OP' ? { bm: 'Operator jentera', en: 'Machine operator' } : task(c); return EA.t(t.bm, t.en); }).join(', ')) + '</small></summary><div class="picks jb-quick jb-small">' +
           EA.lists.moreJobsFor(ctx.estate).map(function (c) { var t = c === 'OP' ? { bm: 'Operator jentera', en: 'Machine operator' } : task(c); return '<button type="button" class="pick" data-quick="' + c + '" aria-pressed="' + (c === pick.task || (c === 'OP' && EA.lists.OP_JOBS.indexOf(pick.task) >= 0)) + '"><b>' + c + '</b><small>' + esc(EA.t(t.bm, t.en)) + '</small></button>'; }).join('') + '</div></details>' : '') + '</div>' +
       '<div class="field' + (hasMain ? ' jb-other' : '') + '"><label for="jb-task"><span class="bm">' + (hasMain ? '+ Kerja lain · minta lulus' : 'Kerja (semua kod)') + '</span><span class="en">' + (hasMain ? 'Other work · needs the Assistant Manager\'s approval' : 'Job code (all codes)') + '</span></label><select id="jb-task" class="text-input">' + taskOptions(pick.task) + '</select></div>' +
       // v1.36: other work needs a reason; Samsir answers LULUS / TOLAK. The job goes on the chit at once.
@@ -1525,6 +1527,14 @@
         var id = EA.save(TAB_ALERT, ROOM, ctx.estate, { date: c.date, chit: c.chit, kind: 'jobask', block: j.block, lot: j.lots.join(' '),
           detail: 'Kerja lain: ' + j.task + ' ' + t.bm + (j.block ? ' · Blk ' + j.block : '') + ' · ' + n + ' orang', staff_note: j.ask, direction: '', direction_by: '', ref: c.chit }, o ? o.id : '').id;
         c.jobAsks.push({ key: k, ask: j.ask, id: id });
+      });
+      // v1.43 (27 Oct): a correction that takes away an "other work" job (e.g. DCO keyed for manuring, changed to MAN)
+      // withdraws its request, so the Assistant Manager is not left with a request for work that was not done.
+      Object.keys(oldAsks).forEach(function (k) {
+        var o = oldAsks[k];
+        if (k === 'SUNDAY' || !o || !o.id || c.jobAsks.some(function (a) { return a.key === k; })) return;
+        EA.save(TAB_ALERT, ROOM, ctx.estate, { date: c.date, chit: c.chit, kind: 'jobask', block: '', lot: '', detail: 'Ditarik: kerja ditukar dalam pembetulan',
+          staff_note: o.ask || '', direction: '', direction_by: '', ref: c.chit }, o.id, 'removed');
       });
       // v1.41 F (Yu Chen, 26 Oct): on a Sunday only crop work and the important piece-rated jobs go ahead freely
       // (EA.lists.sundayOk: harvesting and its crop chain, manuring, CPS). Other work sends one request to SDK

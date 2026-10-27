@@ -658,3 +658,18 @@ div.td-it { cursor: default; }
 .plan-diff span { display: block; font-size: .9rem; }
 .btn.plan-day { display: flex; flex-direction: column; align-items: flex-start; width: 100%; margin: 6px 0; text-align: left; }
 .btn.plan-day small { font-weight: 400; }
+
+/* v1.43 TUTUP HARI (day close) */
+.dc-list { margin: 0; padding: 0 0 0 1.2em; display: grid; gap: 8px; }
+.dc-it > span, .dc-it > button { display: block; text-align: left; width: 100%; background: none; border: 0; padding: 6px 8px; border-radius: var(--r); color: inherit; font: inherit; }
+.dc-it b { display: block; font-weight: 600; }
+.dc-it small { display: block; color: var(--muted); font-size: .82rem; }
+.dc-ok > span { background: var(--ok-soft, #e8f3e8); }
+.dc-ok b { color: var(--ok); }
+.dc-drop > span { background: var(--wait-soft); }
+.dc-bad > button, .dc-bad > span { background: var(--bad-soft, #fbe9e7); }
+.dc-bad b { color: var(--bad, #b3261e); }
+.dc-bad > button { cursor: pointer; border: 1.5px solid var(--bad, #b3261e); }
+.plan-band .btn { margin-top: 8px; display: inline-flex; }
+.rk-closed { color: var(--ok); font-style: normal; }
+.rk-open { color: var(--wait); font-style: normal; }

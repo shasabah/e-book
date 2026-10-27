@@ -329,7 +329,11 @@
     busy: ['Pejabat sibuk. Akan cuba lagi sendiri.', 'The office is busy. It will try again by itself.'],
     slow: ['Google lambat. Rekod selamat di telefon, akan cuba lagi sendiri.', 'Google is slow. Records are safe on the phone; it will try again by itself.'],
     office_error: ['Pejabat ada masalah. Akan cuba lagi sendiri; jika berulang, beritahu Yu Chen.', 'The office had a problem. It will try again; if it keeps happening, tell Yu Chen.'],
-    refused: ['Pejabat belum terima. Akan cuba lagi sendiri.', 'The office has not taken it yet. It will try again by itself.']
+    refused: ['Pejabat belum terima. Akan cuba lagi sendiri.', 'The office has not taken it yet. It will try again by itself.'],
+    // v1.43 TUTUP HARI
+    day_closed: ['Hari itu sudah ditutup (TUTUP HARI). Pembetulan hanya melalui MINTA BETULKAN CHIT (kerani), dalam 3 hari.', 'That day is already closed (TUTUP HARI). Changes only through MINTA BETULKAN CHIT (the clerk), within 3 days.'],
+    already_closed: ['Hari itu sudah ditutup sebelum ini.', 'That day was already closed.'],
+    no_chit: ['Tiada chit pagi untuk hari itu; hari tidak boleh ditutup.', 'No morning chit for that day; it cannot be closed.']
   };
   function refusalText(e) {
     var k = String(e).split(':')[0], m = REFUSED[k];

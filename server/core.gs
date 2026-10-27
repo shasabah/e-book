@@ -97,9 +97,88 @@ var ROOM_TABS = {
   LIST_MILLS: ['name', 'kind', 'location', 'note', 'active'],
   // v1.29 one line per step of a new mill request. kind: request, checked, approved, rejected; ref = the request line.
   MILL_LOG: ['ref', 'name', 'mill_kind', 'location', 'kind', 'note'],
+  // v1.43 TUTUP HARI (room DCL, Brief "Rancangan & Prestasi" §4–5): one row per day close. kind: close (the staff
+  // closed the day) or reopen (written by the office when the clerk asks for a chit fix, so the 3-day correction can
+  // be keyed; the staff closes the day again after). checks: the six checks as passed/explained (text). Rain is a
+  // reason, never a reading: rain_when night/morning/work, rain_reason LEWAT/HENTI/GERIMIS/BASAH, rain_lost ¼–1 day,
+  // rain_jobs the job codes it excuses. The day summary numbers are kept so the WhatsApp text can be made again.
+  FH_DAYCLOSE: ['chit', 'kind', 'closed_by', 'closed_at', 'checks', 'rain_when', 'rain_reason', 'rain_lost', 'rain_jobs',
+                'workers', 'present', 'bunches', 'jobs_done', 'jobs_planned', 'lorries', 'note'],
   // Errors on phones, so the builder can see what went wrong without asking for screenshots.
   APP_ERROR: ['where', 'message', 'stack', 'version', 'agent']
 };
+
+// ---------------- v1.43 TUTUP HARI: the day lock ----------------
+// Once the staff has closed a day, the office refuses new chit, work, collection and lorry rows for that estate and
+// date (error day_closed). The day opens again only through MINTA BETULKAN CHIT (C / C2, within FIX_DAYS): while a
+// fix ask for that date stands, rows for that date are accepted, and a fix is a new line pointing at the old one.
+// The Owner and HQ are never locked out (office corrections are logged as such). Tickets, grading, alerts and the
+// day-close rows themselves are never locked. Days before the TUTUP HARI start date are never locked either.
+var DAY_LOCK_TABS = ['FH_MUSTER', 'FH_CHIT', 'FH_PLAN', 'FH_WORK', 'FH_JOBDAY', 'FH_COLLECT', 'FH_DISPATCH', 'FH_DISPATCH_LOT'];
+var DAYCLOSE_FROM_DEFAULT = '2026-11-04';
+function dayCloseFrom_() { try { return PropertiesService.getScriptProperties().getProperty('DAYCLOSE_FROM') || DAYCLOSE_FROM_DEFAULT; } catch (e) { return DAYCLOSE_FROM_DEFAULT; } }
+var CLOSED_MEMO_ = null;
+// The standing close per date: the newest close or reopen row wins. Returns { 'yyyy-mm-dd': { closed: true/false, by, at, id } }.
+function dayCloses_(estate) {
+  if (CLOSED_MEMO_ && CLOSED_MEMO_[estate]) return CLOSED_MEMO_[estate];
+  var out = {};
+  standingRows_('FH_DAYCLOSE', estate).forEach(function (r) {
+    var d = String(r.date), prev = out[d];
+    var at = String(r.closed_at || r.keyed_at);
+    if (prev && prev.at > at) return;
+    out[d] = { closed: r.kind !== 'reopen', by: String(r.closed_by || r.keyed_by), at: at, id: r.id, kind: String(r.kind || 'close'), rain: String(r.rain_reason || '') };
+  });
+  // A fix ask (C · Betulkan chit) that still stands opens the day for FIX_DAYS, even without a reopen row.
+  var fixOpen = {};
+  standingRows_('FH_ALERT', estate).forEach(function (a) { if (a.kind === 'fixask' && String(a.date) >= daysAgo_(FIX_DAYS)) fixOpen[String(a.date)] = true; });
+  Object.keys(out).forEach(function (d) { if (fixOpen[d]) out[d].fixOpen = true; });
+  CLOSED_MEMO_ = CLOSED_MEMO_ || {};
+  return (CLOSED_MEMO_[estate] = out);
+}
+function dayLocked_(user, tab, row) {
+  if (DAY_LOCK_TABS.indexOf(String(tab)) < 0) return false;
+  if (user.role === 'Owner' || user.role === 'HQ') return false;
+  var d = String(row.date);
+  if (d < dayCloseFrom_()) return false;
+  var c = dayCloses_(String(row.estate))[d];
+  return !!(c && c.closed && !c.fixOpen);
+}
+// A day-close row: only kind close or reopen; a close needs a chit for that day (the staff cannot close a day that
+// was never started); closing a day already closed is refused unless the row replaces the old close (a correction).
+// The office does not repeat the phone's six checks (it would need every tab again); it records what the phone found.
+function dayCloseCheck_(user, tab, row) {
+  if (String(tab) !== 'FH_DAYCLOSE') return '';
+  var kind = String(row.kind || 'close');
+  if (kind !== 'close' && kind !== 'reopen') return 'bad_kind';
+  if (kind === 'reopen' && user.role !== 'Owner' && user.role !== 'HQ') return 'not_allowed';
+  var d = String(row.date), est = String(row.estate);
+  if (kind === 'close') {
+    var hasChit = standingRows_('FH_CHIT', est).some(function (c) { return String(c.date) === d; });
+    if (!hasChit) return 'no_chit';
+    var c = dayCloses_(est)[d];
+    if (c && c.closed && !c.fixOpen && !row.replaces) return 'already_closed';
+    if (!row.closed_by) row.closed_by = user.user_code;
+    if (!row.closed_at) row.closed_at = String(row.keyed_at || '');
+  }
+  return '';
+}
+// The office writes a reopen row when the clerk asks for a chit fix on a closed day, so Rekod shows the day as
+// "dibuka semula" and the staff's TUTUP HARI button comes back for it.
+function reopenDay_(user, est, date, chit, why) {
+  CLOSED_MEMO_ = null;   // the day locks are read fresh in every call
+  var c = dayCloses_(est)[date];
+  if (!c || !c.closed) return;
+  var ss = book_(), sh = roomTab_(ss, 'FH_DAYCLOSE');
+  if (!sh) return;
+  var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
+  var row = { id: 'DC-' + est + '-' + now.replace(/\D/g, '') + '-' + Math.random().toString(36).slice(2, 6), date: date, company: ESTATE_COMPANY[est] || '', estate: est,
+    keyed_by: user.user_code, keyed_at: now, phone: 'OFFICE', status: 'active', replaces: '', received_at: now,
+    chit: chit, kind: 'reopen', closed_by: user.user_code, closed_at: now, checks: '', rain_when: '', rain_reason: '', rain_lost: '', rain_jobs: '',
+    workers: '', present: '', bunches: '', jobs_done: '', jobs_planned: '', lorries: '', note: 'Dibuka semula: ' + String(why || '').slice(0, 150) };
+  sh.appendRow(head.map(function (k) { return plain(row[k] === undefined ? '' : row[k]); }));
+  CLOSED_MEMO_ = null;
+}
 
 // ---------------- requests ----------------
 
@@ -150,7 +229,7 @@ function doPost_(e) {
 // ---- v1.19: read answers remembered for 60 s, shared by everyone asking the same thing ----
 // Any call that may write (save, users, switches, ...) makes a new "generation", so a remembered
 // answer is never older than the last change.
-var READS_ = { crop: 1, workers: 1, mills: 1, todo: 1, ungraded: 1, harvest: 1, trips: 1, people: 1, history: 1, backlog: 1, rounds: 1, adminSummary: 1, adminPhones: 1, adminProblems: 1, adminSwitches: 1 };
+var READS_ = { crop: 1, dayclose: 1, workers: 1, mills: 1, todo: 1, ungraded: 1, harvest: 1, trips: 1, people: 1, history: 1, backlog: 1, rounds: 1, adminSummary: 1, adminPhones: 1, adminProblems: 1, adminSwitches: 1 };
 var READ_SECONDS = 60;
 function gen_() { return CacheService.getScriptCache().get('gen') || '0'; }
 function newGen_() { try { CacheService.getScriptCache().put('gen', String(Date.now()) + Math.floor(Math.random() * 1000), 21600); } catch (e) {} }
@@ -182,6 +261,7 @@ function doRead_(user, req) {
   if (req.action === 'trips') return openTrips(req.estate);
   if (req.action === 'backlog') return backlog(req.estate);
   if (req.action === 'rounds') return rounds_(req.estate);
+  if (req.action === 'dayclose') return dayCloseRead_(req.estate);
   if (req.action === 'crop') {
     if (!/^\d{4}-\d{2}$/.test(String(req.month || ''))) return { ok: false, error: 'bad_month' };
     return crop_(req.estate, String(req.month));
@@ -304,6 +384,9 @@ function saveRow(user, tab, row) {
   if (STATUSES.indexOf(row.status) < 0) return { ok: false, error: 'bad_status' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(row.date))) return { ok: false, error: 'bad_date' };
   if (beforeLive_(user, row, tab)) return { ok: true, skipped: 'before_live' };
+  CLOSED_MEMO_ = null;
+  if (dayLocked_(user, tab, row)) return { ok: false, error: 'day_closed' };
+  var dc = dayCloseCheck_(user, tab, row); if (dc) return { ok: false, error: dc };
   row.keyed_by = user.user_code;                 // always the person whose key it is
   row.received_at = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
 
@@ -364,6 +447,7 @@ function saveBatch(user, items) {
   if (!lock.tryLock(25000)) return { ok: false, error: 'busy' };
   try {
     var tabs = {}, results = [];
+    CLOSED_MEMO_ = null;
     function tabInfo(name) {
       if (tabs[name] !== undefined) return tabs[name];
       var sh = roomTab_(ss, name);
@@ -403,6 +487,9 @@ function saveBatch(user, items) {
       if (STATUSES.indexOf(row.status) < 0) return fail('bad_status');
       if (!/^\d{4}-\d{2}-\d{2}$/.test(String(row.date))) return fail('bad_date');
       if (beforeLive_(user, row, tab)) { results.push({ id: id, ok: true, skipped: 'before_live' }); return; }
+      // v1.43: a closed day takes no new rows (C / C2 corrections excepted); a day close must be for a day with a chit.
+      if (dayLocked_(user, tab, row)) return fail('day_closed');
+      var dcErr = dayCloseCheck_(user, tab, row); if (dcErr) return fail(dcErr);
       row.keyed_by = user.user_code;
       row.received_at = now;
       var extra = Object.keys(row).filter(function (k) { return t.head.indexOf(k) < 0; });
@@ -495,6 +582,7 @@ function rounds_(estate) {
 // Each day: its chits (with the people, and every version: who changed what, when), the day's
 // work per job, harvest bunches, lorries and their mill tickets. The phone shows it as it is.
 function history_(estate, month) {
+  CLOSED_MEMO_ = null;   // v1.43: the day locks are read fresh in every call
   function inM(d) { return String(d).slice(0, 7) === month; }
   function hm(v) { var m = String(v || '').match(/(\d\d:\d\d)$/); return m ? m[1] : ''; }
   var days = {};
@@ -549,8 +637,28 @@ function history_(estate, month) {
     if (r.trip && trips[r.trip]) trips[r.trip].ticket = t;
     else if (inM(r.date) && !r.trip) { day(r.date).tickets.push(t); if (!live_(r)) day(r.date).imp = true; }
   });
+  // v1.43: each day's close (TUTUP HARI): closed, open, or reopened for a fix.
+  var cl = dayCloses_(estate), from = dayCloseFrom_();
+  Object.keys(days).forEach(function (d) {
+    if (d < from) return;
+    var c = cl[d];
+    days[d].close = !c ? 'open' : c.closed ? (c.fixOpen ? 'fixing' : 'closed') : 'reopened';
+    if (c) { days[d].closeBy = un[c.by] || c.by; days[d].closeAt = hm(c.at); days[d].rain = c.rain || ''; }
+  });
   return { ok: true, estate: estate, month: month, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'),
            days: Object.keys(days).sort().reverse().map(function (d) { return days[d]; }) };
+}
+// v1.43: the last 14 days with a chit and whether each is closed, for the staff's TUTUP HARI list and Perlu tindakan.
+function dayCloseRead_(estate) {
+  CLOSED_MEMO_ = null;   // the day locks are read fresh in every call
+  var from = dayCloseFrom_(), since = daysAgo_(14), cl = dayCloses_(estate), out = {};
+  standingRows_('FH_CHIT', estate).forEach(function (r) {
+    var d = String(r.date);
+    if (!live_(r) || d < from || d < since || d > todayKL_()) return;
+    out[d] = out[d] || { date: d, chit: String(r.chit), state: 'open' };
+  });
+  Object.keys(out).forEach(function (d) { var c = cl[d]; if (c) { out[d].state = c.closed ? (c.fixOpen ? 'fixing' : 'closed') : 'reopened'; out[d].by = c.by; out[d].at = c.at; } });
+  return { ok: true, estate: estate, from: from, days: Object.keys(out).sort().map(function (d) { return out[d]; }) };
 }
 
 // Field backlog per lot = bunches cut (harvesters, FH_WORK HA) - bunches collected
@@ -1840,6 +1948,7 @@ function planAsks_(alerts, est) {
   return alerts.filter(function (a) { return !(a.kind === 'jobask' && /^PL-/.test(String(a.ref))) || (live[a.ref] && newest[a.ref] === a); });
 }
 function todo_(user, req) {
+  CLOSED_MEMO_ = null;   // v1.43: the day locks are read fresh in every call
   var est = String(req.estate || ''), r = user.role;
   if (['Staff', 'Clerk', 'Manager', 'Owner', 'HQ'].indexOf(r) < 0) return { ok: true, estate: est, items: [] };
   if (user.estates.indexOf(est) < 0) return { ok: false, error: 'not_your_estate' };
@@ -2028,6 +2137,22 @@ function todo_(user, req) {
       if (pr.fresh) add({ id: 'PE:' + today, p: 3, ic: 'TF', bm: pr.fresh + ' masalah telefon baru', en: pr.fresh + ' new phone problems', sub: 'Lihat Pentadbir · Masalah', go: '#admin' });
     } catch (e) {}
   }
+  // v1.43 TUTUP HARI (Brief §4): a day with a chit that is not closed. Deadline = before the next chit, so the staff
+  // sees it as soon as the day is past; the Pengurus sees a red line once a later chit exists; the Owner once it is
+  // open for 2 days or more. Days before the start date (DAYCLOSE_FROM) and imported days are never asked for.
+  try {
+    var dcAll = dayCloseRead_(est).days;
+    var dcl = dcAll.filter(function (x) { return x.state !== 'closed' && x.date < today; });
+    var lastChit = dcAll.map(function (x) { return x.date; }).sort().pop() || '';
+    dcl.forEach(function (x) {
+      var age = dayDiff_(x.date, today), reop = x.state === 'reopened' || x.state === 'fixing';
+      if (r === 'Staff') add({ id: 'TH:' + x.date, p: 1, ic: 'TH', bm: (reop ? 'Hari ' + shortD_(x.date) + ' dibuka semula · tutup semula' : 'Hari ' + shortD_(x.date) + ' belum ditutup') + ' · TUTUP HARI',
+        en: reop ? 'Day ' + shortD_(x.date) + ' reopened · close it again' : 'Day ' + shortD_(x.date) + ' not closed', sub: (age === 1 ? 'Semalam' : age + ' hari lalu') + ' · semak kerja, ramp, lori, hujan, lalu tekan TUTUP HARI', go: '#field-harvest/close' });
+      if (r === 'Manager' && (lastChit > x.date || age >= 1)) add({ id: 'TH:' + x.date, p: age >= 2 ? 1 : 2, ic: 'TH', bm: 'Hari ' + shortD_(x.date) + ' belum ditutup oleh Staf', en: 'Day ' + shortD_(x.date) + ' not closed by the staff',
+        sub: (reop ? 'Dibuka semula untuk pembetulan · ' : '') + age + ' hari · chit berikutnya sudah dibuat' + (age >= 2 ? ' · Pemilik diberitahu' : ''), go: '' });
+      if (r === 'Owner' && age >= 2) add({ id: 'TO:' + x.date, p: 1, ic: '!', bm: 'Tersangkut: hari ' + shortD_(x.date) + ' belum ditutup (' + age + ' hari)', en: 'Stuck: day ' + shortD_(x.date) + ' not closed', sub: 'Staf belum TUTUP HARI · Pengurus sudah diberitahu', go: '' });
+    });
+  } catch (e) {}
   items.sort(function (a, b) { return a.p - b.p; });
   return { ok: true, estate: est, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), items: items };
 }
@@ -2061,6 +2186,7 @@ function todoDirect_(user, req) {
 // "fixdone" (ref = the ask) when the corrected chit is saved. The Pengurus is told; nobody approves.
 var FIX_DAYS = 3;
 function chitAsk_(user, req) {
+  CLOSED_MEMO_ = null;   // v1.43: the day locks are read fresh in every call
   if (user.role !== 'Clerk' && user.role !== 'Owner') return { ok: false, error: 'not_allowed' };
   var est = String(req.estate || ''), chit = String(req.chit || ''), note = String(req.note || '').replace(/\s+/g, ' ').trim().slice(0, 200);
   if (user.estates.indexOf(est) < 0) return { ok: false, error: 'not_your_estate' };
@@ -2081,6 +2207,7 @@ function chitAsk_(user, req) {
       keyed_by: user.user_code, keyed_at: now, phone: String(req.phone || ''), status: 'active', replaces: '', received_at: now,
       chit: chit, kind: 'fixask', block: '', lot: '', detail: note, staff_note: '', direction: '', direction_by: '', ref: chit };
     sh.appendRow(head.map(function (k) { return plain(row[k] === undefined ? '' : row[k]); }));
+    try { reopenDay_(user, est, String(c.date), chit, note); } catch (e) {}   // v1.43: a closed day opens for the fix
     return { ok: true, done: 'fixask', id: row.id };
   } finally { lock.releaseLock(); }
 }

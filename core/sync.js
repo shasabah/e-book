@@ -203,11 +203,14 @@ window.EA = window.EA || {};
           // A delivery note correction refused because the lorry already has a ticket: it can never be
           // accepted, so it leaves the waiting list and is kept apart (shown on Collect & dispatch).
           else if (r.error === 'ticketed') { done[r.id] = true; refused.push(r.id); }
+          // v1.43 TUTUP HARI: an entry for a day already closed (or a close for a day with no chit, or closed twice)
+          // can never be accepted either: it leaves the waiting list and is kept apart, with the reason shown.
+          else if (/^(day_closed|already_closed|no_chit)$/.test(String(r.error))) { done[r.id] = true; refused.push(r.id); }
           else if (!firstErr) firstErr = r.error;
         });
         if (refused.length) {
           var keep = get('ea.refused', []);
-          chunk.forEach(function (it) { if (refused.indexOf(it.row.id) >= 0) keep.push({ id: it.row.id, tab: it.tab, trip: it.row.trip || '', at: Date.now() }); });
+          chunk.forEach(function (it) { if (refused.indexOf(it.row.id) >= 0) { var rr = (j.results || []).find(function (x) { return x.id === it.row.id; }); keep.push({ id: it.row.id, tab: it.tab, trip: it.row.trip || '', date: it.row.date || '', error: rr ? rr.error : '', at: Date.now() }); } });
           set('ea.refused', keep.slice(-200)); refusedAll += refused.length;
         }
         // Read the list again: something may have been saved while this was sending.

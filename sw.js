@@ -26,7 +26,7 @@ var FILES = [
   'lists/lots.js',
   'lists/targets.js',
   'rooms/field/muster.js',
-  'rooms/field/work.js',
+  'rooms/field/work.js', 'rooms/field/dayclose.js',
   'rooms/field/harvest.js', 'rooms/field/collect.js', 'rooms/field/ticket.js',
   'rooms/field/history.js',
   'core/users.js', 'core/workers.js', 'core/mills.js', 'core/todo.js', 'core/admin.js', 'core/qr-app.svg',

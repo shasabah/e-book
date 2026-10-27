@@ -76,7 +76,8 @@ check('Pengurus: red line, day not closed by the staff', t.items.some(x => x.id 
 t = ctx.todo_(owner, { estate: 'SSGT' });
 check('Owner: no line yet (open under 2 days)', !t.items.some(x => /^TO:/.test(x.id)), JSON.stringify(t.items.map(x => x.id)));
 // close D(1) again (replacing the first close) → closed again
-r = ctx.saveBatch(staff, [{ tab: 'FH_DAYCLOSE', row: row('dc5', D(1), { chit: 'CH-1', kind: 'close', closed_by: 'STF', closed_at: D(0) + ' 20:00', checks: '', rain_when: '', rain_reason: '', rain_lost: '', rain_jobs: '', workers: '4', present: '3', bunches: '230', jobs_done: '2', jobs_planned: '2', lorries: '1', note: '', replaces: 'dc1' }) }]);
+r = ctx.saveBatch(staff, [{ tab: 'FH_DAYCLOSE', row: row('dc5', D(1), { chit: 'CH-1', kind: 'close', closed_by: 'STF', closed_at: new Date(Date.now() + 60000).toISOString().slice(0, 16).replace('T', ' '),   // after the reopen, whatever the hour (was a fixed 20:00, failed after 20:00 UTC)
+  checks: '', rain_when: '', rain_reason: '', rain_lost: '', rain_jobs: '', workers: '4', present: '3', bunches: '230', jobs_done: '2', jobs_planned: '2', lorries: '1', note: '', replaces: 'dc1' }) }]);
 check('closing again after the fix is accepted', r.results[0].ok === true, JSON.stringify(r));
 const rd = ctx.dayCloseRead_('SSGT');
 check('dayclose read: D(2) closed, D(1) fixing (fix ask still stands), today open', JSON.stringify(rd.days.map(x => x.date + ':' + x.state)) === JSON.stringify([D(2) + ':closed', D(1) + ':fixing', D(0) + ':open']), JSON.stringify(rd.days));

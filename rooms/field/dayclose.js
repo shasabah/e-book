@@ -31,7 +31,12 @@
   function rainOf(code) { return EA.lists.rainOf ? EA.lists.rainOf(code) : 'B'; }
   function isDms(code) { return (EA.lists.DMS_JOBS || []).indexOf(code) >= 0; }
   function canClose(u) { return !!u && (u.role === 'Staff' || u.role === 'Owner' || u.role === 'HQ'); }
-  function from() { var o = EA.local.get(K.office + (ctx && ctx.estate), null); return (o && o.from) || '2026-11-04'; }
+  // v1.43.1 (Yu Chen, 27 Oct): practice logins (Mod Latihan, code L-) may close any day with a chit, so the screen
+  // can be tried with made-up workers before the real start date (4 Nov). Real logins wait for the start date.
+  function from() {
+    if (EA.practice && EA.practice()) return '2020-01-01';
+    var o = EA.local.get(K.office + (ctx && ctx.estate), null); return (o && o.from) || '2026-11-04';
+  }
 
   // ---------- what this phone knows about a day ----------
   function closes() { return EA.local.get(K.saved, []).filter(function (s) { return s.date >= EA.dayAgo(40); }); }

@@ -493,8 +493,8 @@
     if (r.from === 'error') return 'DMS tidak dapat dibaca · could not read the DMS';
     if (!r.date) return 'belum ada dalam DMS · not in the DMS yet';
     var d = r.date.slice(8, 10) + '/' + String(Number(r.date.slice(5, 7)));
-    var src = r.from === 'JPS' ? 'JPS' + (r.station ? ' ' + r.station : '') : 'DMS';
-    return (Number(r.mm) > 0 ? Number(r.mm).toFixed(1) + ' mm' : 'tiada hujan · no rain (0 mm)') + ' (' + src + ', ' + d + (r.from === 'DMS' && r.bands ? ', ' + r.bands : '') + ')';
+    var extra = r.from === 'DMS' ? [r.bands, r.note].filter(function (x) { return x; }).join(', ') : '';
+    return (Number(r.mm) > 0 ? Number(r.mm).toFixed(1).replace(/\.0$/, '') + ' mm' : 'tiada hujan · no rain (0 mm)') + ' (' + (r.from === 'JPS' ? 'JPS' : 'DMS') + ', ' + d + (extra ? ', ' + extra : '') + ')';
   }
   function backlogLines(b) {
     if (!b) return [];

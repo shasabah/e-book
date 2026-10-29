@@ -708,12 +708,21 @@ function dmsRows_(ss, name) {
   var v = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getValues(), h = v[0].map(function (x) { return String(x).trim(); });
   return v.slice(1).map(function (r) { var o = {}; h.forEach(function (k, i) { o[k] = r[i]; }); return o; });
 }
+// The DMS keys one line per rain day the next morning (about 6–8 am): date = the day the rain fell, mm, kind rain/dry,
+// note (Lebat, Renyai-renyai …), bands = JSON of rain spells {"a":{"s":"17:30","e":"19:45"}, …}. Checked 29 Oct 2026.
+function dmsBands_(v) {
+  try {
+    var o = typeof v === 'string' ? (v.trim() ? JSON.parse(v) : {}) : (v || {});
+    return Object.keys(o).map(function (k) { return o[k] && o[k].s ? o[k].s + (o[k].e ? '–' + o[k].e : '') : ''; })
+      .filter(String).sort().join(', ');
+  } catch (e) { return ''; }
+}
 function dmsRain_(estate, now) {
   if (!RAIN_ESTATES[estate]) return null;
   var today = Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd');
   var yday = Utilities.formatDate(new Date(now.getTime() - 864e5), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd');
-  var key = 'dmsrain.' + estate + '.' + Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd-HH');
-  try { var hit = CacheService.getScriptCache().get(key); if (hit) return JSON.parse(hit); } catch (e) {}
+  var key = 'dmsrain.' + estate + '.' + today, cache = null;
+  try { cache = CacheService.getScriptCache(); var hit = cache.get(key); if (hit) return JSON.parse(hit); } catch (e) { cache = null; }
   var out = { date: '', mm: null, from: 'none', bands: '', note: '', station: '' };
   try {
     var id = ''; try { id = PropertiesService.getScriptProperties().getProperty('DMS_SHEET_ID') || ''; } catch (e) {}
@@ -721,23 +730,24 @@ function dmsRain_(estate, now) {
     dmsRows_(ss, 'RAIN').forEach(function (r, i) {
       var d = dmsDay_(r.date), mm = Number(r.mm);
       if ((d !== today && d !== yday) || r.mm === '' || r.mm === null || !isFinite(mm)) return;
-      var at = String(r.at || '') + ' ' + ('00000' + i).slice(-6);          // the newest reading wins (a re-key replaces)
-      if (!best || d > best.d || (d === best.d && at > best.at)) best = { d: d, at: at, mm: mm, bands: r.bands, note: r.note, kind: r.kind };
+      var at = (r.at instanceof Date ? Utilities.formatDate(r.at, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm:ss') : String(r.at || '')) + ' ' + ('00000' + i).slice(-6);
+      if (!best || d > best.d || (d === best.d && at > best.at)) best = { d: d, at: at, mm: mm, bands: r.bands, note: r.note };   // newest wins (a re-key replaces)
     });
     if (best) {
       out.date = best.d; out.mm = Math.round(best.mm * 10) / 10; out.from = 'DMS';
-      out.bands = String(best.bands || '').slice(0, 40); out.note = String(best.note || '').slice(0, 60);
+      out.bands = best.mm > 0 ? dmsBands_(best.bands).slice(0, 40) : ''; out.note = String(best.note || '').trim().slice(0, 30);
     } else {
-      var j = null;
+      var j = null;                                                         // JPS: only a finished day's figure
       dmsRows_(ss, 'JPS_RAIN').forEach(function (r) {
-        var d = dmsDay_(r.date), mm = Number(r.mm);
-        if ((d !== today && d !== yday) || r.mm === '' || r.mm === null || !isFinite(mm)) return;
+        var d = dmsDay_(r.date), mm = Number(r.mm), fin = String(r.final).trim();
+        if ((d !== today && d !== yday) || r.mm === '' || r.mm === null || !isFinite(mm) || !(fin === '1' || fin === 'true' || fin === 'Y')) return;
         if (!j || d > j.d) j = { d: d, mm: mm, station: r.station };
       });
       if (j) { out.date = j.d; out.mm = Math.round(j.mm * 10) / 10; out.from = 'JPS'; out.station = String(j.station || '').slice(0, 30); }
     }
   } catch (e) { out.from = 'error'; }
-  try { CacheService.getScriptCache().put(key, JSON.stringify(out), 3600); } catch (e) {}
+  // yesterday's DMS reading is keyed about 6–8 am, often after the chit: until it is in, look again every 10 minutes
+  try { if (cache) cache.put(key, JSON.stringify(out), out.from === 'DMS' ? 3 * 3600 : 600); } catch (e) {}
   return out;
 }
 

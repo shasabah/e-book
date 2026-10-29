@@ -487,9 +487,18 @@
   function checkText(x) {
     return x.lot + ': mandor ' + x.mandor + ', pemuat ' + x.loader + ' (beza ' + (x.loader - x.mandor > 0 ? '+' : '') + (x.loader - x.mandor) + (x.cleared ? ', habis ' + shortDate(x.cleared) : '') + ')';
   }
+  // v1.48: the latest rain reading from the Sugut DMS (keyed there once), or the JPS station when the DMS has none.
+  function rainText(r) {
+    if (!r || !r.from) return '';
+    if (r.from === 'error') return 'DMS tidak dapat dibaca · could not read the DMS';
+    if (!r.date) return 'belum ada dalam DMS · not in the DMS yet';
+    var d = r.date.slice(8, 10) + '/' + String(Number(r.date.slice(5, 7)));
+    var src = r.from === 'JPS' ? 'JPS' + (r.station ? ' ' + r.station : '') : 'DMS';
+    return (Number(r.mm) > 0 ? Number(r.mm).toFixed(1) + ' mm' : 'tiada hujan · no rain (0 mm)') + ' (' + src + ', ' + d + (r.from === 'DMS' && r.bands ? ', ' + r.bands : '') + ')';
+  }
   function backlogLines(b) {
     if (!b) return [];
-    var L = (b.tonnage ? ['Tan bulan ini · Month to date: ' + tonnageText(b.tonnage)] : []).concat(['Baki ladang · Field: ' + (b.fieldTotal || 0) + ' tandan' + (b.field && b.field.length ? ' (' + b.field.map(function (x) { return x.lot + ' ' + x.bunches; }).join(', ') + ')' : ''),
+    var L = (b.rain && b.rain.from ? ['Hujan · Rain: ' + rainText(b.rain)] : []).concat(b.tonnage ? ['Tan bulan ini · Month to date: ' + tonnageText(b.tonnage)] : []).concat(['Baki ladang · Field: ' + (b.fieldTotal || 0) + ' tandan' + (b.field && b.field.length ? ' (' + b.field.map(function (x) { return x.lot + ' ' + x.bunches; }).join(', ') + ')' : ''),
              'Baki ramp · Ramp: ' + ((b.ramp && b.ramp.bunches) || 0) + ' tandan' + (b.ramp && b.ramp.bunches ? ' (' + rampText(b.ramp) + ')' : '')]);
     return L;
   }
@@ -497,6 +506,8 @@
     var b = getBacklog(estate);
     var t = b && b.tonnage;
     var body = !b ? '<p class="hint">' + EA.t('Belum ada. Perlu isyarat sekali untuk ambil dari pejabat.', 'Not yet: needs signal once to get it from the office.') + '</p>' :
+      (b.rain && b.rain.from ? '<div class="list-line" id="fh-rain"><div><b>' + EA.t('Hujan: ', 'Rain: ') + esc(rainText(b.rain)) + '</b><span class="en">' +
+        EA.t('Dari DMS Sugut (dikunci sekali di DMS)', 'From the Sugut DMS (keyed once, in the DMS)') + '</span></div></div>' : '') +
       (t ? '<div class="list-line"><div><b>' + EA.t('Tan bulan ini: ', 'Month to date: ') + Number(t.mt || 0).toFixed(2) + ' MT</b><span class="en">' +
         (t.tickets ? esc(tonnageDetail(t)) : EA.t('Belum ada tiket bulan ini', 'No tickets this month yet')) + '</span>' +
         (Object.keys(t.blocks || {}).length ? '<span class="en">' + Object.keys(t.blocks).sort().map(function (k) { return 'Blk ' + esc(k) + ' ' + Number(t.blocks[k]).toFixed(2); }).join(' · ') + '</span>' : '') +

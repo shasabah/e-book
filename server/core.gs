@@ -685,7 +685,60 @@ function backlog(estate) {
   var now = new Date();
   var b = calcBacklog(cut, col, dis, Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd'));
   return { ok: true, estate: estate, at: Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'),
-           field: b.field, fieldTotal: b.fieldTotal, ramp: b.ramp, checks: b.checks, grading: gradingAlerts_(estate, now), tonnage: tonnageMtd_(estate, now) };
+           field: b.field, fieldTotal: b.fieldTotal, ramp: b.ramp, checks: b.checks, grading: gradingAlerts_(estate, now), tonnage: tonnageMtd_(estate, now),
+           rain: dmsRain_(estate, now) };
+}
+
+// v1.48 (Yu Chen, 29 Oct 2026: "staff key rainfall in the DMS daily, but the chit can't link"): the morning chit
+// shows the latest rain reading from the Sugut DMS. Rain is still keyed once, in the DMS (20 Oct, Rule 3); E-Book
+// only reads it. The newest DMS reading dated today or yesterday is used; with none, the nearest JPS station's
+// figure that the DMS already fetches (tab JPS_RAIN), marked JPS. Remembered for an hour (the DMS book is large).
+var DMS_SHEET_ID = '1BaxqGMwwbz_2m4Ryd2quBgmoAqk-uyE4gdlPcd0S2tw';
+var RAIN_ESTATES = { SSGT: true };
+function dmsDay_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd');
+  var s = String(v || '').trim(), m;
+  if ((m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2);
+  if ((m = s.match(/^(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})/))) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  return '';
+}
+function dmsRows_(ss, name) {
+  var sh = ss.getSheetByName(name);
+  if (!sh || sh.getLastRow() < 2) return [];
+  var v = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getValues(), h = v[0].map(function (x) { return String(x).trim(); });
+  return v.slice(1).map(function (r) { var o = {}; h.forEach(function (k, i) { o[k] = r[i]; }); return o; });
+}
+function dmsRain_(estate, now) {
+  if (!RAIN_ESTATES[estate]) return null;
+  var today = Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd');
+  var yday = Utilities.formatDate(new Date(now.getTime() - 864e5), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd');
+  var key = 'dmsrain.' + estate + '.' + Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd-HH');
+  try { var hit = CacheService.getScriptCache().get(key); if (hit) return JSON.parse(hit); } catch (e) {}
+  var out = { date: '', mm: null, from: 'none', bands: '', note: '', station: '' };
+  try {
+    var id = ''; try { id = PropertiesService.getScriptProperties().getProperty('DMS_SHEET_ID') || ''; } catch (e) {}
+    var ss = SpreadsheetApp.openById(id || DMS_SHEET_ID), best = null;
+    dmsRows_(ss, 'RAIN').forEach(function (r, i) {
+      var d = dmsDay_(r.date), mm = Number(r.mm);
+      if ((d !== today && d !== yday) || r.mm === '' || r.mm === null || !isFinite(mm)) return;
+      var at = String(r.at || '') + ' ' + ('00000' + i).slice(-6);          // the newest reading wins (a re-key replaces)
+      if (!best || d > best.d || (d === best.d && at > best.at)) best = { d: d, at: at, mm: mm, bands: r.bands, note: r.note, kind: r.kind };
+    });
+    if (best) {
+      out.date = best.d; out.mm = Math.round(best.mm * 10) / 10; out.from = 'DMS';
+      out.bands = String(best.bands || '').slice(0, 40); out.note = String(best.note || '').slice(0, 60);
+    } else {
+      var j = null;
+      dmsRows_(ss, 'JPS_RAIN').forEach(function (r) {
+        var d = dmsDay_(r.date), mm = Number(r.mm);
+        if ((d !== today && d !== yday) || r.mm === '' || r.mm === null || !isFinite(mm)) return;
+        if (!j || d > j.d) j = { d: d, mm: mm, station: r.station };
+      });
+      if (j) { out.date = j.d; out.mm = Math.round(j.mm * 10) / 10; out.from = 'JPS'; out.station = String(j.station || '').slice(0, 30); }
+    }
+  } catch (e) { out.from = 'error'; }
+  try { CacheService.getScriptCache().put(key, JSON.stringify(out), 3600); } catch (e) {}
+  return out;
 }
 
 // The people list for the user's estates (active only), for the phones' muster and day's work.

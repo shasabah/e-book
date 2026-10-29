@@ -145,10 +145,11 @@
     var list = merged(ctx.estate, month), thisMonth = ym(new Date());
     var cr = crop(ctx.estate, month), t = totals(list, cr);
     var cache = EA.local.get(K.cache + ctx.estate + '.' + month, null);
-    var prog = view === 'prog' && EA.fh.program;
+    var progOn = EA.fh.program && (EA.practice && EA.practice() || (ctx.user && ctx.user.role === 'Owner') || EA.today() >= (EA.lists.programFrom || ''));
+    var prog = view === 'prog' && progOn;
     el.innerHTML = head(esc(title()), esc(ctx.estate), 'hs-back') +
       (vo && month === thisMonth && !prog ? todayCard(list) : '') +
-      (EA.fh.program ? '<div class="seg2 pg-seg" role="group"><button type="button" data-view=""' + (prog ? '' : ' class="on" aria-pressed="true"') + '>' + EA.t('HARIAN', 'DAILY') + '</button>' +
+      (progOn ? '<div class="seg2 pg-seg" role="group"><button type="button" data-view=""' + (prog ? '' : ' class="on" aria-pressed="true"') + '>' + EA.t('HARIAN', 'DAILY') + '</button>' +
         '<button type="button" data-view="prog"' + (prog ? ' class="on" aria-pressed="true"' : '') + '>' + EA.t('PROGRAM', 'PLAN VS ACTUAL') + '</button></div>' : '') +
       // v1.11: one line for any number of months: ‹ Month › and a year grid behind the month name.
       '<div class="mstep" role="group" aria-label="' + EA.t('Bulan', 'Month') + '">' +

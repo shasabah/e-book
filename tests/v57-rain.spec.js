@@ -19,11 +19,11 @@ const RH = ['uuid','date','mm','note','by','byId','at','device','kind','bands'],
 // 1 DMS has yesterday (keyed twice: the second replaces) and an old day; JPS also has a figure
 let c = office({ RAIN: new Sheet([RH,
   ['u1', new Date('2026-10-20T00:00:00Z'), 40, '', 'F', 'F1', '2026-10-20 07:00', 'p', 'rain', ''],
-  ['u2', '28/10/2026', 10, '', 'F', 'F1', '2026-10-29 06:40', 'p', 'rain', 'pagi'],
-  ['u3', '28/10/2026', 12.46, 'lebat petang', 'F', 'F1', '2026-10-29 06:55', 'p', 'rain', 'petang']]),
-  JPS_RAIN: new Sheet([JH, ['2026-10-28', 'Ldg Sugut', 30, 'Y', '', '']]) });
+  ['u2', '28/10/2026', 10, '', 'F', 'F1', '2026-10-29 06:40', 'p', 'rain', '{"a":{"s":"14:40","e":"17:15"}}'],
+  ['u3', '2026-10-28', 12.46, 'Lebat', 'F', 'F1', '2026-10-29 06:55:12', 'p', 'rain', '{"n":{"s":"18:15","e":"20:40"},"a":{"s":"14:40","e":"17:15"}}']]),
+  JPS_RAIN: new Sheet([JH, ['2026-10-28', '1160251RF', 30, 1, '', '']]) });
 let r = c.dmsRain_('SSGT', now);
-check('office: newest DMS reading of yesterday (re-key wins), rounded', r.from === 'DMS' && r.date === '2026-10-28' && r.mm === 12.5 && r.bands === 'petang', JSON.stringify(r));
+check('office: newest DMS reading of yesterday (re-key wins), rounded', r.from === 'DMS' && r.date === '2026-10-28' && r.mm === 12.5 && r.bands === '14:40–17:15, 18:15–20:40' && r.note === 'Lebat', JSON.stringify(r));
 check('office: the DMS book is the Sugut DMS', opened[0] === '1BaxqGMwwbz_2m4Ryd2quBgmoAqk-uyE4gdlPcd0S2tw', opened[0]);
 check('office: other estates get no rain line', c.dmsRain_('MELU', now) === null);
 // 2 a 0 mm day is a reading, not a gap
@@ -31,9 +31,9 @@ c = office({ RAIN: new Sheet([RH, ['u4', '2026-10-29', 0, '', 'F', 'F1', '', 'p'
 r = c.dmsRain_('SSGT', now);
 check('office: 0 mm in the DMS is used (no rain), not replaced by JPS', r.from === 'DMS' && r.mm === 0, JSON.stringify(r));
 // 3 nothing in the DMS for today or yesterday: JPS
-c = office({ RAIN: new Sheet([RH, ['u1', '2026-10-20', 40, '', 'F', 'F1', '', 'p', 'rain', '']]), JPS_RAIN: new Sheet([JH, ['2026-10-28', 'Ldg Sugut', 7.25, 'Y', '', '']]) });
+c = office({ RAIN: new Sheet([RH, ['u1', '2026-10-20', 40, '', 'F', 'F1', '', 'p', 'rain', '']]), JPS_RAIN: new Sheet([JH, ['2026-10-28', '1160251RF', 7.25, 1, '', ''], ['2026-10-29', '1160251RF', 3, 0, '', '']]) });
 r = c.dmsRain_('SSGT', now);
-check('office: no DMS reading → JPS station figure', r.from === 'JPS' && r.mm === 7.3 && r.station === 'Ldg Sugut', JSON.stringify(r));
+check('office: no DMS reading → JPS station figure', r.from === 'JPS' && r.mm === 7.3 && r.date === '2026-10-28', JSON.stringify(r));
 // 4 none at all, and no access
 c = office({ RAIN: new Sheet([RH]) }); r = c.dmsRain_('SSGT', now);
 check('office: nothing keyed → empty (chit says not in the DMS yet)', r.from === 'none' && r.mm === null, JSON.stringify(r));
@@ -46,7 +46,7 @@ const { chromium } = require('playwright');
 (async () => {
   const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: 390, height: 844 } });
   const errs = []; p.on('pageerror', e => errs.push(e.message));
-  let rain = { from: 'DMS', date: '2026-10-28', mm: 12.5, bands: 'petang', note: '', station: '' };
+  let rain = { from: 'DMS', date: '2026-10-28', mm: 12.5, bands: '14:40–17:15', note: 'Lebat', station: '' };
   await p.route('https://script.google.com/**', async rt => {
     const bd = JSON.parse(rt.request().postData() || '{}'); const sw = { testModeOff: true, live: { 'field-harvest': ['SSGT'] }, cleanFrom: '' };
     let o = { ok: true, sw };
@@ -64,11 +64,11 @@ const { chromium } = require('playwright');
   await p.reload(); await p.fill('#key', '123456'); await p.waitForSelector('#home:not([hidden])');
   await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForSelector('#fh-addjob'); await p.waitForTimeout(900);
   const card = (await p.$('#fh-rain')) ? await p.innerText('#fh-rain') : '';
-  check('phone card: rain from the DMS shows', /12\.5 mm \(DMS, 28\/10, petang\)/.test(card), card);
+  check('phone card: rain from the DMS shows', /12\.5 mm \(DMS, 28\/10, 14:40–17:15, Lebat\)/.test(card), card);
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v57-rain.png' });
   const txt = await p.evaluate(() => EA.roomViews['field-harvest'].chitText({ date: '2026-10-29', estate: 'SSGT', rows: [], jobs: [], alerts: [],
-    backlog: { field: [], fieldTotal: 0, ramp: { bunches: 0 }, rain: { from: 'JPS', date: '2026-10-28', mm: 0, station: 'Ldg Sugut' } } }));
-  check('chit text: JPS fallback line, 0 mm says no rain', /Hujan · Rain: tiada hujan · no rain \(0 mm\) \(JPS Ldg Sugut, 28\/10\)/.test(txt), txt.split('\n').filter(l => /Hujan/.test(l)).join(' | '));
+    backlog: { field: [], fieldTotal: 0, ramp: { bunches: 0 }, rain: { from: 'JPS', date: '2026-10-28', mm: 0, station: '1160251RF' } } }));
+  check('chit text: JPS fallback line, 0 mm says no rain', /Hujan · Rain: tiada hujan · no rain \(0 mm\) \(JPS, 28\/10\)/.test(txt), txt.split('\n').filter(l => /Hujan/.test(l)).join(' | '));
   const old = await p.evaluate(() => EA.roomViews['field-harvest'].chitText({ date: '2026-10-29', estate: 'SSGT', rows: [], jobs: [], alerts: [], backlog: { field: [], fieldTotal: 0, ramp: { bunches: 0 } } }));
   const none = await p.evaluate(() => EA.roomViews['field-harvest'].chitText({ date: '2026-10-29', estate: 'SSGT', rows: [], jobs: [], alerts: [], backlog: { field: [], fieldTotal: 0, ramp: { bunches: 0 }, rain: { from: 'none', date: '', mm: null } } }));
   check('chit text: nothing keyed in the DMS says so', /Hujan · Rain: belum ada dalam DMS · not in the DMS yet/.test(none));

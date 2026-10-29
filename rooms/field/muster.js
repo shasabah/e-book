@@ -850,18 +850,36 @@
     return chits().filter(function (c) { return c.estate === ctx.estate && c.date < t; })
       .sort(function (a, b) { return (a.date + a.confirmedAt) < (b.date + b.confirmedAt) ? 1 : -1; })[0] || null;
   }
+  // v1.48.1 (Sugut MAN 27–29 Oct: each day's chit kept yesterday's lots and added 6 more, so finished lots were
+  // keyed again): lots that day's Kerja marked SIAP for a lot-by-lot job (Ha) are not copied; lots BELUM SIAP stay.
+  function lotsDoneOn(c) {
+    var s = (EA.local.get('fh.work', []) || []).find(function (x) { return x.chit === c.chit; }), out = {};
+    ((s && s.rec && s.rec.jobs) || []).forEach(function (j) {
+      var m, re = /(?:^|, )([\w\-\/]+) siap(?=,|$)/g, k = j.task_code + '|' + (j.block || '');
+      out[k] = out[k] || [];
+      while ((m = re.exec(String(j.progress || '')))) out[k].push(m[1]);
+    });
+    return out;
+  }
   function copyLast() {
     var c = lastChit(); if (!c) return;
     draft.jobs = []; draft.marks = {}; draft.jobOf = {}; draft.nextJob = 1;
-    var taken = onOtherChit();
+    var taken = onOtherChit(), fin = lotsDoneOn(c), dropped = 0;
     c.rows.forEach(function (r) {
       if (r.status === 'removed' || r.muster !== 'H' || taken[r.worker_id] || !EA.lists.worker(r.worker_id)) return;
-      var j = draft.jobs.find(function (x) { return x.task === r.task_code && x.block === r.block && x.lots.join(' ') === r.lots; });
-      if (!j) { j = { key: 'j' + (draft.nextJob++), task: r.task_code, block: r.block, lots: r.lots ? r.lots.split(' ') : [], mandor: r.mandor }; draft.jobs.push(j); }
+      var j = draft.jobs.find(function (x) { return x.task === r.task_code && x.block === r.block && x.from === (r.lots || ''); });
+      if (!j) {
+        var lots = r.lots ? r.lots.split(' ') : [], done = fin[r.task_code + '|' + (r.block || '')] || [];
+        var tk = EA.lists.task && EA.lists.task(r.task_code), unitHa = !!(tk && tk.unit === 'Ha');
+        if (unitHa && done.length) { var left = lots.filter(function (l) { return done.indexOf(l) < 0; }); dropped += lots.length - left.length; lots = left; }
+        j = { key: 'j' + (draft.nextJob++), task: r.task_code, block: r.block, lots: lots, mandor: r.mandor, from: r.lots || '' }; draft.jobs.push(j);
+      }
       draft.marks[r.worker_id] = 'H'; draft.jobOf[r.worker_id] = j.key;
     });
+    draft.jobs.forEach(function (j) { delete j.from; });
     keepDraft(); render(el, ctx);
-    ui().toast(EA.t('Disalin. Ubah petak dan yang berbeza', 'Copied. Change the lots and anything different'));
+    ui().toast(dropped ? EA.t('Disalin. Petak yang sudah siap semalam dibuang (' + dropped + '). Pilih petak hari ini', 'Copied. Lots finished yesterday taken off (' + dropped + '). Choose today\'s lots')
+      : EA.t('Disalin. Ubah petak dan yang berbeza', 'Copied. Change the lots and anything different'));
   }
   function draftRows() {
     var rows = [];

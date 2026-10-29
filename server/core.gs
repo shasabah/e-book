@@ -120,7 +120,7 @@ var ROOM_TABS = {
 // The Owner and HQ are never locked out (office corrections are logged as such). Tickets, grading, alerts and the
 // day-close rows themselves are never locked. Days before the TUTUP HARI start date are never locked either.
 var DAY_LOCK_TABS = ['FH_MUSTER', 'FH_CHIT', 'FH_PLAN', 'FH_WORK', 'FH_JOBDAY', 'FH_COLLECT', 'FH_DISPATCH', 'FH_DISPATCH_LOT'];
-var DAYCLOSE_FROM_DEFAULT = '2026-11-04';
+var DAYCLOSE_FROM_DEFAULT = '2026-11-09';   // v1.47 (Yu Chen, 29 Oct): real trial from the week after the 6 Nov meeting (was 4 Nov)
 function dayCloseFrom_() { try { return PropertiesService.getScriptProperties().getProperty('DAYCLOSE_FROM') || DAYCLOSE_FROM_DEFAULT; } catch (e) { return DAYCLOSE_FROM_DEFAULT; } }
 var CLOSED_MEMO_ = null;
 // The standing close per date: the newest close or reopen row wins. Returns { 'yyyy-mm-dd': { closed: true/false, by, at, id } }.
@@ -2358,6 +2358,16 @@ function program_(estate, month) {
  *  where the summary sheet differs (CPS Blk 3–4 in May), the detailed sheet is used (Yu Chen, 27 Oct 2026).
  *  Lines already there are not added twice. Returns the number added. */
 function seedProgramme2026() {
+  // v1.47 (29 Oct): both books — the live sheet for real logins and the TEST sheet for practice logins (Mod Latihan).
+  var was = PRACTICE_, n = 0;
+  try {
+    PRACTICE_ = false; BOOK_ = null; ROWS_MEMO_ = null; n += seedProgrammeInto_();
+    PRACTICE_ = true; BOOK_ = null; ROWS_MEMO_ = null; n += seedProgrammeInto_();
+  } finally { PRACTICE_ = was; BOOK_ = null; ROWS_MEMO_ = null; }
+  Logger.log('seedProgramme2026: ' + n + ' added (live and practice sheets)');
+  return n;
+}
+function seedProgrammeInto_() {
   var ha = { '01': 33.20, '02': 33.93, '03': 31.18, '04': 32.34 }, A = ['01', '02'], B = ['03', '04'], ALL = A.concat(B), lines = [];
   function put(task, blocks, months, rounds, dose) {
     blocks.forEach(function (b) { months.forEach(function (m, i) { lines.push([task, b, '2026-' + m, rounds[i], dose ? dose[i] : '']); }); });
@@ -2382,6 +2392,5 @@ function seedProgramme2026() {
       received_at: now, year: '2026', task_code: x[0], block: x[1], month: x[2], round: x[3], ha: ha[x[1]], dose: x[4], note: 'SPLT.SSGT BUDGET COSTING 2026' };
     sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); })); n++;
   });
-  Logger.log('seedProgramme2026: ' + n + ' added');
   return n;
 }

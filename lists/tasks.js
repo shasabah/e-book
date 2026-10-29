@@ -235,6 +235,9 @@ EA.lists.lotRound = { HA: { ready: 10, late: 15 }, LF: { ready: 10, late: 15 } }
 // v1.47 Rancangan vs sebenar: kg in one fertiliser bag, to turn manuring Ha into bags and person-days (20 bags a day).
 // 50 kg until HQ confirms the bag size of each fertiliser.
 EA.lists.bagKg = 50;
+// v1.47 (Yu Chen, 29 Oct): Rekod → PROGRAM opens for everyone from the trial week (team meeting 6 Nov). Before that only
+// practice logins (Mod Latihan) and the Owner see it.
+EA.lists.programFrom = '2026-11-09';
 // v1.41 (Yu Chen, 26 Oct): work allowed on a Sunday without asking: harvesting and the crop chain (FFB), and the
 // important piece-rated jobs manuring and CPS. Everything else on a Sunday needs SDK's approval (Christy or Wawa, to be named).
 EA.lists.sundayOk = ['HA', 'LF', 'FC', 'ITF', 'LFF', 'LFR', 'OPH', 'ETF', 'MAN', 'CPS'];

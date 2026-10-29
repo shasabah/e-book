@@ -35,7 +35,7 @@
   // can be tried with made-up workers before the real start date (4 Nov). Real logins wait for the start date.
   function from() {
     if (EA.practice && EA.practice()) return '2020-01-01';
-    var o = EA.local.get(K.office + (ctx && ctx.estate), null); return (o && o.from) || '2026-11-04';
+    var o = EA.local.get(K.office + (ctx && ctx.estate), null); return (o && o.from) || '2026-11-09';
   }
 
   // ---------- what this phone knows about a day ----------

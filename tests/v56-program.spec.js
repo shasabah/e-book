@@ -70,6 +70,13 @@ const OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30'
 
   // 2 · the screen
   await p.evaluate(() => { location.hash = 'field-harvest/history'; }); await p.waitForTimeout(600);
+  // v1.47 (29 Oct): before the trial week only practice logins and the Owner see PROGRAM
+  await p.evaluate(() => { EA.lists.programFrom = '2099-01-01'; location.hash = ''; }); await p.waitForTimeout(200);
+  await p.evaluate(() => { location.hash = 'field-harvest/history'; }); await p.waitForTimeout(500);
+  check('before the trial week a real staff login has no PROGRAM button (HARIAN only)', !(await p.$('[data-view="prog"]')) && !!(await p.$('.rk-sum')));
+  check('the Owner sees PROGRAM before the trial week', await p.evaluate(() => { const u = Object.assign({}, EA.session && EA.session.user ? EA.session.user : {}, { role: 'Owner' }); const d = document.createElement('div'); document.body.appendChild(d); EA.fh.history.render(d, { estate: 'SSGT', user: u, room: 'field-harvest' }); const ok = !!d.querySelector('[data-view="prog"]'); d.remove(); return ok; }));
+  await p.evaluate(() => { EA.lists.programFrom = '2000-01-01'; location.hash = ''; }); await p.waitForTimeout(200);
+  await p.evaluate(() => { location.hash = 'field-harvest/history'; }); await p.waitForTimeout(500);
   check('Rekod has HARIAN / PROGRAM', !!(await p.$('[data-view="prog"]')) && !!(await p.$('[data-view=""]')));
   await p.click('[data-view="prog"]'); await p.waitForTimeout(1500);
   const t1 = await p.innerText('#room');

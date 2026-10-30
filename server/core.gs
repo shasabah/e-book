@@ -2367,6 +2367,58 @@ function seedProgramme2026() {
   Logger.log('seedProgramme2026: ' + n + ' added (live and practice sheets)');
   return n;
 }
+/** v1.48 (Yu Chen, 30 Oct 2026): align E-Book with the estate's status report "SPLT.SSGT Current status as at 29.10.2026".
+ *  Run once from the script editor (Owner). Nothing is deleted: each change is a new line that replaces the old one.
+ *  1. CPS programme 2026 → the revision approved by management in July 2026 (3 rounds, 60–90 days apart):
+ *     Blk 01 and 02 Feb, Aug, Nov; Blk 03 Mar, Jul, Oct; Blk 04 Mar, Aug, Nov. Live and practice sheets.
+ *  2. Old data (Data lama) in FH_JOBDAY, live sheet only: decreeping (DEC) lines are removed (they copied slashing; the
+ *     report has no decreeping), and three manuring lines the report does not count as rounds: Borate in Jan (Blk 01,
+ *     Blk 03) and the extra NK-Mix line in Jul (Blk 01, 26.91 Ha). Work keyed on the phones is never touched.
+ *  Running it twice changes nothing. Returns what it did. */
+function fixFromStatus29Oct() {
+  var was = PRACTICE_, out = { programme: 0, removed: 0 };
+  try {
+    PRACTICE_ = false; BOOK_ = null; ROWS_MEMO_ = null; out.programme += reviseCps2026_();
+    PRACTICE_ = true; BOOK_ = null; ROWS_MEMO_ = null; out.programme += reviseCps2026_();
+    PRACTICE_ = false; BOOK_ = null; ROWS_MEMO_ = null;
+    var note = 'Bukan pusingan dalam Status Ladang 29.10.2026 (Data lama dibetulkan)';
+    standingRows_('FH_JOBDAY', 'SSGT').forEach(function (r) {
+      if (String(r.keyed_by) !== IMPORT_BY || String(r.date).slice(0, 4) !== '2026') return;
+      var m = String(r.date).slice(0, 7), q = Number(r.qty) || Number(r.plan_ha) || 0, off = false;
+      if (r.task_code === 'DEC') off = true;
+      if (r.task_code === 'MAN' && m === '2026-01' && (r.block === '01' || r.block === '03')) off = true;
+      if (r.task_code === 'MAN' && m === '2026-07' && r.block === '01' && Math.abs(q - 26.91) < 0.005) off = true;
+      if (off) { removeLine_('FH_JOBDAY', r, r.task_code === 'DEC' ? 'Salinan tebas (SL); tiada cabut menjalar dalam Status Ladang 29.10.2026' : note); out.removed++; }
+    });
+  } finally { PRACTICE_ = was; BOOK_ = null; ROWS_MEMO_ = null; }
+  Logger.log('fixFromStatus29Oct: ' + JSON.stringify(out));
+  return out;
+}
+function removeLine_(tab, r, why) {
+  var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
+  var sh = roomTab_(book_(), tab), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  var row = {}; head.forEach(function (c) { row[c] = r[c] === undefined ? '' : r[c]; });
+  row.id = String(r.id) + '-X'; row.replaces = r.id; row.status = 'removed'; row.keyed_by = 'OWNER-FIX'; row.keyed_at = now; row.received_at = now;
+  if (head.indexOf('note') >= 0) row.note = why;
+  sh.appendRow(head.map(function (c) { return plain(row[c]); }));
+}
+function reviseCps2026_() {
+  var want = { '01': ['02', '08', '11'], '02': ['02', '08', '11'], '03': ['03', '07', '10'], '04': ['03', '08', '11'] };
+  var ha = { '01': 33.20, '02': 33.93, '03': 31.18, '04': 32.34 }, tag = 'Program CPS disemak, lulus pengurusan Jul 2026';
+  var cps = standingRows_('LIST_PROGRAMME', 'SSGT').filter(function (r) { return String(r.year) === '2026' && r.task_code === 'CPS'; });
+  if (cps.length && cps.every(function (r) { return String(r.note) === tag; })) return 0;   // already revised
+  cps.forEach(function (r) { removeLine_('LIST_PROGRAMME', r, 'Diganti: ' + tag); });
+  var sh = roomTab_(book_(), 'LIST_PROGRAMME'), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0], n = 0;
+  var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
+  Object.keys(want).forEach(function (b) {
+    want[b].forEach(function (mm, i) {
+      var row = { id: 'PG-SSGT-2026-CPS-' + b + '-' + mm, date: now.slice(0, 10), company: 'SPLT', estate: 'SSGT', keyed_by: 'OWNER-FIX', keyed_at: now, phone: '', status: 'active', replaces: '',
+        received_at: now, year: '2026', task_code: 'CPS', block: b, month: '2026-' + mm, round: 'R' + (i + 1), ha: ha[b], dose: '', note: tag };
+      sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); })); n++;
+    });
+  });
+  return n;
+}
 function seedProgrammeInto_() {
   var ha = { '01': 33.20, '02': 33.93, '03': 31.18, '04': 32.34 }, A = ['01', '02'], B = ['03', '04'], ALL = A.concat(B), lines = [];
   function put(task, blocks, months, rounds, dose) {

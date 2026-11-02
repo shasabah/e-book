@@ -2280,6 +2280,7 @@ function crop_(estate, month) {
 // lot colours in Tambah kerja and this report agree), the last harvest date of each lot, and the month's daily keying:
 // days closed (TUTUP HARI), rain lost (from the closes), work keyed the same day, and the ramp left with no fruit from an
 // earlier day. Everyone who sees the room's records may ask (staff, clerk, Pengurus, HQ, Owner).
+var AP_OPEN_ = { SSGT: { at: '2026-10-31' } };   // v1.48: count AP palms keyed after this date (balance 362 in Status Ladang 29.10.2026)
 function program_(estate, month) {
   CLOSED_MEMO_ = null;
   var year = month.slice(0, 4), today = todayKL_(), r2 = function (v) { return Math.round(v * 100) / 100; };
@@ -2348,7 +2349,16 @@ function program_(estate, month) {
     var ds = Object.keys(per[code]), n = ds.reduce(function (a, d) { return a + Object.keys(per[code][d]).length; }, 0);
     gang[code] = Math.round(n / ds.length * 10) / 10;
   });
-  return { ok: true, estate: estate, month: month, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), from: from,
+  // v1.48 (Yu Chen, 2 Nov): abandoned palms pruned (AP, palms) after a start date, so the phone can count down the balance.
+  var apFrom = String((AP_OPEN_[estate] || {}).at || ''), ap = null;
+  if (apFrom) {
+    ap = { done: 0 };
+    standingRows_('FH_JOBDAY', estate).forEach(function (r) {
+      var d = String(r.date);
+      if (r.task_code === 'AP' && live_(r) && d > apFrom && d <= today) ap.done += Number(r.qty) || 0;
+    });
+  }
+  return { ok: true, estate: estate, month: month, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), from: from, ap: ap,
     programme: prog, done: done, crop: Object.keys(crop).sort().map(function (k) { return crop[k]; }), lots: lots,
     days: Object.keys(days).sort().map(function (d) { return days[d]; }), rain: rain, gang: gang };
 }
@@ -2448,6 +2458,49 @@ function cpsBudgetInto_() {
         received_at: now, year: '2026', task_code: 'CPS', block: b, month: '2026-' + mm, round: 'R' + (i + 1), ha: ha[b], dose: '', note: CPS_BUDGET_NOTE_ };
       sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); })); n++;
     });
+  });
+  return n;
+}
+/** v1.48 (Yu Chen, 2 Nov 2026): Sugut's plan for Nov–Dec 2026, agreed after the 31 Oct meeting. Run once (Owner).
+ *  1. CPS back to the 2026 budget, 4 rounds (cpsBudgetInto_). Live and practice sheets.
+ *  2. Manuring: 4 rounds in 2026, not 5. The Oct round 5 lines (NK) are removed. Live and practice.
+ *  3. Slashing and decreeping are not advised: only the work that is needed, with approval. The Dec slashing round 2
+ *     and all 2026 decreeping lines are removed from the programme. Live and practice.
+ *  4. Crop budget Nov 230 MT and Dec 180 MT, 26 working days each, from "SPLT.SSGT SUMMARY BUDGET 2026" (Target 1),
+ *     added only where the month is missing. Live and practice.
+ *  Nothing is deleted: each removal is a new line. Running it twice changes nothing. Returns what it did. */
+function planNovDec2026() {
+  var was = PRACTICE_, out = { cps: 0, removed: 0, budget: 0 };
+  try {
+    [false, true].forEach(function (pr) {
+      PRACTICE_ = pr; BOOK_ = null; ROWS_MEMO_ = null;
+      out.cps += cpsBudgetInto_();
+      ROWS_MEMO_ = null;
+      standingRows_('LIST_PROGRAMME', 'SSGT').forEach(function (r) {
+        if (String(r.year) !== '2026') return;
+        var m = String(r.month).slice(0, 7), why = '';
+        if (r.task_code === 'MAN' && m === '2026-10') why = 'Membaja 2026: 4 pusingan sahaja (Yu Chen, 2 Nov 2026)';
+        if (r.task_code === 'SL' && m === '2026-12') why = 'Tebas tidak digalakkan: hanya kerja perlu, dengan kelulusan (Yu Chen, 2 Nov 2026)';
+        if (r.task_code === 'DEC') why = 'Cabut menjalar tidak digalakkan: hanya kerja perlu, dengan kelulusan (Yu Chen, 2 Nov 2026)';
+        if (why) { removeLine_('LIST_PROGRAMME', r, why); out.removed++; }
+      });
+      ROWS_MEMO_ = null;
+      out.budget += budgetInto_('SSGT', { '2026-11': 230, '2026-12': 180 }, 26, 'SPLT.SSGT SUMMARY BUDGET 2026 (Target 1)');
+    });
+  } finally { PRACTICE_ = was; BOOK_ = null; ROWS_MEMO_ = null; }
+  Logger.log('planNovDec2026: ' + JSON.stringify(out));
+  return out;
+}
+function budgetInto_(est, want, days, note) {
+  var have = {}, n = 0;
+  standingRows_('LIST_BUDGET', est).forEach(function (r) { have[String(r.month).slice(0, 7)] = true; });
+  var sh = roomTab_(book_(), 'LIST_BUDGET'), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
+  Object.keys(want).forEach(function (m) {
+    if (have[m]) return;
+    var row = { id: 'BG-' + est + '-' + m, date: now.slice(0, 10), company: ESTATE_COMPANY[est] || '', estate: est, keyed_by: 'OWNER-FIX', keyed_at: now, phone: '', status: 'active', replaces: '',
+      received_at: now, month: m, budget_mt: want[m], abw_kg: '', work_days: days, note: note };
+    sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); })); n++;
   });
   return n;
 }

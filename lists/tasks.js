@@ -238,6 +238,9 @@ EA.lists.bagKg = 50;
 // v1.47 (Yu Chen, 29 Oct): Rekod → PROGRAM opens for everyone from the trial week (team meeting 6 Nov). Before that only
 // practice logins (Mod Latihan) and the Owner see it.
 EA.lists.programFrom = '2026-11-04';
+// v1.48 (Yu Chen, 2 Nov 2026): what Sugut must finish before the year ends, shown under "Program rawatan bulan ini":
+// manuring up to the year's programme (4 rounds in 2026) and the abandoned palms left in the estate status of 29 Oct.
+EA.lists.yearEnd = { SSGT: { year: '2026', from: '2026-11', man: true, ap: { open: 362, at: '2026-10-31', by: '2026-12-31' } } };
 // v1.41 (Yu Chen, 26 Oct): work allowed on a Sunday without asking: harvesting and the crop chain (FFB), and the
 // important piece-rated jobs manuring and CPS. Everything else on a Sunday needs SDK's approval (Christy or Wawa, to be named).
 EA.lists.sundayOk = ['HA', 'LF', 'FC', 'ITF', 'LFF', 'LFR', 'OPH', 'ETF', 'MAN', 'CPS'];

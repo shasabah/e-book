@@ -2419,6 +2419,38 @@ function reviseCps2026_() {
   });
   return n;
 }
+/** v1.48 (Yu Chen, 2 Nov 2026): CPS back to the 2026 budget, 4 rounds — Blk 01 and 02 Feb, May, Aug, Nov; Blk 03 and 04
+ *  Mar, Jun, Sep, Nov. The July 2026 revision (3 rounds) stays only as a note on each line. Live and practice sheets.
+ *  Run once from the script editor (Owner). Nothing is deleted: the revised lines are replaced by new lines.
+ *  Running it twice changes nothing. Returns the number of lines added. */
+function cpsBackToBudget2026() {
+  var was = PRACTICE_, n = 0;
+  try {
+    PRACTICE_ = false; BOOK_ = null; ROWS_MEMO_ = null; n += cpsBudgetInto_();
+    PRACTICE_ = true; BOOK_ = null; ROWS_MEMO_ = null; n += cpsBudgetInto_();
+  } finally { PRACTICE_ = was; BOOK_ = null; ROWS_MEMO_ = null; }
+  Logger.log('cpsBackToBudget2026: ' + n + ' added (live and practice sheets)');
+  return n;
+}
+var CPS_BUDGET_NOTE_ = 'SPLT.SSGT BUDGET COSTING 2026: 4 pusingan (semakan Jul 2026 ke 3 pusingan: nota sahaja)';
+function cpsBudgetInto_() {
+  var want = { '01': ['02', '05', '08', '11'], '02': ['02', '05', '08', '11'], '03': ['03', '06', '09', '11'], '04': ['03', '06', '09', '11'] };
+  var ha = { '01': 33.20, '02': 33.93, '03': 31.18, '04': 32.34 };
+  ROWS_MEMO_ = null;
+  var cps = standingRows_('LIST_PROGRAMME', 'SSGT').filter(function (r) { return String(r.year) === '2026' && r.task_code === 'CPS'; });
+  if (cps.length === 16 && cps.every(function (r) { return String(r.note) === CPS_BUDGET_NOTE_; })) return 0;   // already back on the budget
+  cps.forEach(function (r) { removeLine_('LIST_PROGRAMME', r, 'Diganti: CPS ikut bajet 2026, 4 pusingan (Yu Chen, 2 Nov 2026)'); });
+  var sh = roomTab_(book_(), 'LIST_PROGRAMME'), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0], n = 0;
+  var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
+  Object.keys(want).forEach(function (b) {
+    want[b].forEach(function (mm, i) {
+      var row = { id: 'PG-SSGT-2026-CPS4-' + b + '-' + mm, date: now.slice(0, 10), company: 'SPLT', estate: 'SSGT', keyed_by: 'OWNER-FIX', keyed_at: now, phone: '', status: 'active', replaces: '',
+        received_at: now, year: '2026', task_code: 'CPS', block: b, month: '2026-' + mm, round: 'R' + (i + 1), ha: ha[b], dose: '', note: CPS_BUDGET_NOTE_ };
+      sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); })); n++;
+    });
+  });
+  return n;
+}
 function seedProgrammeInto_() {
   var ha = { '01': 33.20, '02': 33.93, '03': 31.18, '04': 32.34 }, A = ['01', '02'], B = ['03', '04'], ALL = A.concat(B), lines = [];
   function put(task, blocks, months, rounds, dose) {

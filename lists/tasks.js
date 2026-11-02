@@ -228,7 +228,7 @@ EA.lists.machinesFor = function (estate, code) {
 };
 // v1.22: rounds a year per job (the estate's yearly budget programme; Sugut 2026 budget).
 // Manuring counts applications done, whatever the fertiliser.
-EA.lists.roundPlans = { SSGT: { CPS: 3, RP: 4, SL: 2, DEC: 2, VOPS: 1, MAN: 5 } };   // v1.48: CPS 3 rounds a year (revision approved by management, Jul 2026)
+EA.lists.roundPlans = { SSGT: { CPS: 4, RP: 4, SL: 2, DEC: 2, VOPS: 1, MAN: 5 } };   // v1.48 (Yu Chen, 2 Nov): CPS 4 rounds a year, as the 2026 budget (the Jul 2026 revision to 3 is kept only as a note)
 EA.lists.roundPlanFor = function (estate, code) { var p = EA.lists.roundPlans[estate]; return p && p[code] || 0; };
 // v1.23: harvest round (2–3 rounds a month): a lot is ready again after 10 days, late after 15.
 EA.lists.lotRound = { HA: { ready: 10, late: 15 }, LF: { ready: 10, late: 15 } };
@@ -237,7 +237,7 @@ EA.lists.lotRound = { HA: { ready: 10, late: 15 }, LF: { ready: 10, late: 15 } }
 EA.lists.bagKg = 50;
 // v1.47 (Yu Chen, 29 Oct): Rekod → PROGRAM opens for everyone from the trial week (team meeting 6 Nov). Before that only
 // practice logins (Mod Latihan) and the Owner see it.
-EA.lists.programFrom = '2026-11-09';
+EA.lists.programFrom = '2026-11-04';
 // v1.41 (Yu Chen, 26 Oct): work allowed on a Sunday without asking: harvesting and the crop chain (FFB), and the
 // important piece-rated jobs manuring and CPS. Everything else on a Sunday needs SDK's approval (Christy or Wawa, to be named).
 EA.lists.sundayOk = ['HA', 'LF', 'FC', 'ITF', 'LFF', 'LFR', 'OPH', 'ETF', 'MAN', 'CPS'];

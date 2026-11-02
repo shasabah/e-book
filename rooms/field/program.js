@@ -172,6 +172,40 @@
     });
     return rows.length ? rows.join('') : '<div class="card"><p class="hint">' + EA.t('Tiada kerja program bulan ini.', 'No programme work this month.') + '</p></div>';
   }
+  // v1.48 (Yu Chen, 2 Nov): "Siapkan sebelum akhir tahun" — manuring to the year's programme, block by block, and the
+  // abandoned palms left, with what a day must do to finish by 31 Dec.
+  function workDaysTo(end) {
+    var today = EA.today(), n = 0, d = new Date(today + 'T00:00:00'), e = new Date(end + 'T00:00:00');
+    for (d.setDate(d.getDate() + 1); d <= e; d.setDate(d.getDate() + 1)) { if (d.getDay() !== 0) n++; }
+    return n;
+  }
+  function yearEndCard(estate, month, cal, data) {
+    var ye = EA.lists.yearEnd && EA.lists.yearEnd[estate];
+    if (!ye || month.slice(0, 4) !== ye.year || month < ye.from || month !== EA.today().slice(0, 7)) return '';
+    var parts = [], done = data.done || {};
+    if (ye.man && cal.jobs.MAN) {
+      var want = {}, got = {};
+      (data.programme || []).forEach(function (r) { if (r.task === 'MAN') want[r.block] = (want[r.block] || 0) + r.ha; });
+      Object.keys(done).forEach(function (k) { var q = k.split('|'); if (q[0] === 'MAN') got[q[1]] = (got[q[1]] || 0) + done[k]; });
+      var rounds = 0; (data.programme || []).forEach(function (r) { if (r.task === 'MAN' && r.block === Object.keys(want).sort()[0]) rounds++; });
+      var rows = Object.keys(want).sort().map(function (b) { return { block: b, left: Math.max(0, want[b] - (got[b] || 0)), dose: lastDose(data, 'MAN', b, ye.year + '-12') }; });
+      var rest = 0, pd = 0; rows.forEach(function (x) { rest += x.left; pd += personDays(estate, 'MAN', x.left, x.block, x.dose); });
+      parts.push('<h2>' + EA.t('Membaja: siapkan ' + rounds + ' pusingan', 'Manuring: finish ' + rounds + ' rounds') + '<small>' + EA.t('program ' + ye.year + ' · sebelum hujan lebat', ye.year + ' programme · before the heavy rain') + '</small></h2>' +
+        (rest > 0.05 ? '<table class="pg-t"><tr><th>' + EA.t('Blok', 'Block') + '</th><th>' + EA.t('Baki Ha', 'Ha left') + '</th><th></th></tr>' +
+          rows.map(function (x) { return '<tr><td>Blk ' + esc(x.block) + '</td><td>' + (x.left > 0.05 ? f1(x.left) : EA.t('siap', 'done')) + '</td><td class="st">' + dot(x.left > 0.05 ? 'r' : 'g') + '</td></tr>'; }).join('') +
+          '<tr class="tot"><td>' + EA.t('Jumlah', 'Total') + '</td><td>' + f1(rest) + '</td><td></td></tr></table>' +
+          '<p class="pg-note">' + (pd ? '≈ ' + Math.ceil(pd) + EA.t(' orang-hari', ' person-days') + ' · ' : '') + EA.t('tinggal ', '') + daysLeft(month) + EA.t(' hari kerja bulan ini', ' working days left this month') + '.' + gangText('MAN', pd, daysLeft(month), month, data) + '</p>'
+          : '<p class="pg-note ok-t">' + EA.t('Semua blok siap untuk tahun ini.', 'Every block is done for the year.') + '</p>'));
+    }
+    if (ye.ap && data.ap) {
+      var left = Math.max(0, ye.ap.open - (Number(data.ap.done) || 0)), wd = workDaysTo(ye.ap.by), per = wd ? Math.ceil(left / wd) : left;
+      parts.push('<h2>' + EA.t('Pokok terbiar: siapkan semua', 'Abandoned palms: finish them all') + '<small>' + EA.t('baki ', 'left on ') + dm(ye.ap.at) + ' ' + n0(ye.ap.open) + EA.t(' pokok · hingga ', ' palms · by ') + dm(ye.ap.by) + '</small></h2>' +
+        '<div class="pg-kv"><span>' + EA.t('Siap sejak ', 'Done since ') + dm(ye.ap.at) + '</span><b>' + n0(Number(data.ap.done) || 0) + '</b>' +
+        '<span>' + EA.t('Baki', 'Left') + '</span><b class="' + (left ? 'bad-text' : 'ok-t') + '">' + n0(left) + EA.t(' pokok', ' palms') + '</b>' +
+        (left ? '<span>' + EA.t('Perlu sehari (' + wd + ' hari kerja)', 'Needed a day (' + wd + ' working days)') + '</span><b>' + per + EA.t(' pokok', ' palms') + '</b>' : '') + '</div>');
+    }
+    return parts.length ? '<div class="card pg-card">' + parts.join('<hr class="pg-hr">') + '</div>' : '';
+  }
   // v1.47 (Yu Chen, 28 Oct): with the people on this job a day (average of the last 7 days the job was worked, from the
   // office), how many days the rest needs against the working days left: "kurang 2 hari" in red, or "cukup" in green.
   function gangText(code, pd, left, month, data) {
@@ -234,7 +268,7 @@
       L('Hasil', 'Crop') + cropCard(month, data) +
       (data.lots ? L('Pusingan tuai', 'Harvest round') + lotsCard(estate, data) : '') +
       (noProg ? '<div class="card"><p class="hint">' + EA.t('Program rawatan tahun ini belum dimuat di pejabat.', 'This year\'s maintenance programme is not loaded in the office yet.') + '</p></div>' :
-        L('Program rawatan bulan ini', 'This month\'s programme') + nowCard(estate, month, cal, data) +
+        L('Program rawatan bulan ini', 'This month\'s programme') + nowCard(estate, month, cal, data) + yearEndCard(estate, month, cal, data) +
         L('Pusingan tahun ini', 'Rounds this year') + roundsCard(month, cal) +
         L('Baki kerja', 'Catch-up') + catchCard(month, cal, data)) +
       L('Disiplin harian', 'Daily keying') + daysCard(month, data) +

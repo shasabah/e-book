@@ -1,8 +1,15 @@
 // Shared list: lots (petak) of Sugut, from the QField map export of 18 Oct 2026.
-// 164 lots, 130.65 Ha, 17,835 palms. Block totals match the 2027 business plan exactly.
+// 164 lots, 131.88 Ha, 17,835 palms.
 // Work and crop are keyed by LOT; block is the reporting unit (decided 18 Oct 2026).
 // lat/lon = centre point of the lot, used to suggest the nearest lot from the phone's GPS.
-// Check: lot 2-11 shows 0.09 Ha with 196 palms - likely a typo in the map.
+// Lot 2-11 was 0.09 Ha with 196 palms on the map. The map's own picture shows a big lot, so 0.09 was a
+// typo (Yu Chen, 3 Nov 2026: "if 196 palm then we should change the ha"). Set to 1.32 Ha, measured from
+// the traced outline in lists/lot-shapes.js net of its road share; 196 palms at Block 02's 139 palms/Ha
+// would give 1.41 Ha, so the true size is about 1.3-1.4 Ha.
+// Because of that fix the lots of Block 02 now add to 35.16 Ha, not the 33.93 Ha of the 2027 business
+// plan (Sugut 131.88 instead of 130.65). The programme still works on the business plan's block Ha
+// (lists/estates.js, server/core.gs), so Block 02 will read a little over 100% when every lot is done.
+// HQ to confirm the block Ha for 2027.
 window.EA = window.EA || {};
 EA.lists = EA.lists || {};
 EA.lists.lots = [
@@ -55,7 +62,7 @@ EA.lists.lots = [
   { estate: 'SSGT', block: '02', lot: '2-8', ha: 2.26, palms: 346, planted: 2006, lat: 6.123287, lon: 117.217549 },
   { estate: 'SSGT', block: '02', lot: '2-9', ha: 0.99, palms: 149, planted: 2006, lat: 6.124444, lon: 117.217102 },
   { estate: 'SSGT', block: '02', lot: '2-10', ha: 1.08, palms: 162, planted: 2006, lat: 6.124021, lon: 117.216862 },
-  { estate: 'SSGT', block: '02', lot: '2-11', ha: 0.09, palms: 196, planted: 2006, lat: 6.120582, lon: 117.217009 },
+  { estate: 'SSGT', block: '02', lot: '2-11', ha: 1.32, palms: 196, planted: 2006, lat: 6.120582, lon: 117.217009 },
   { estate: 'SSGT', block: '02', lot: '2-12', ha: 0.74, palms: 116, planted: 2006, lat: 6.122619, lon: 117.216878 },
   { estate: 'SSGT', block: '02', lot: '2-13', ha: 1.12, palms: 182, planted: 2006, lat: 6.121464, lon: 117.217309 },
   { estate: 'SSGT', block: '02', lot: '2-14', ha: 1.59, palms: 216, planted: 2006, lat: 6.122206, lon: 117.218 },

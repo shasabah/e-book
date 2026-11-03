@@ -93,6 +93,11 @@ var ROOM_TABS = {
   // Kept only in the office sheet. round: R1, R2… or the fertiliser for manuring; ha: the block's hectares; dose: kg per
   // palm (manuring). A revision is a new line that replaces the old one (nothing deleted). Loaded by seedProgramme2026.
   LIST_PROGRAMME: ['year', 'task_code', 'block', 'month', 'round', 'ha', 'dose', 'note'],
+  // v1.49 (Yu Chen, 3 Nov 2026): the starting point of each lot for jobs that were keyed by block only before 21 Oct:
+  // one line per lot and job, with the date the lot was last done (CPS) or the round it has reached (MAN R4).
+  // Marked by Ferezelly on the printed block maps at the 5 Nov meeting, loaded once by seedLotStart. After that the
+  // daily keying by lot keeps it up to date; a later line for the same lot and job replaces the earlier one.
+  LIST_LOTSTART: ['task_code', 'block', 'lot', 'done_on', 'round', 'note'],
   // v1.41 the piece-rate list, keyed by HQ in the office sheet only (never in the app's code or on GitHub).
   // One line per job code, pay unit and band (e.g. manuring under / over 2 kg per palm), from a date; a new rate
   // is a new line with a later from_date (nothing deleted). target_day = the day's target per person.
@@ -2280,7 +2285,8 @@ function crop_(estate, month) {
 // lot colours in Tambah kerja and this report agree), the last harvest date of each lot, and the month's daily keying:
 // days closed (TUTUP HARI), rain lost (from the closes), work keyed the same day, and the ramp left with no fruit from an
 // earlier day. Everyone who sees the room's records may ask (staff, clerk, Pengurus, HQ, Owner).
-var AP_OPEN_ = { SSGT: { at: '2026-10-31' } };   // v1.48: count AP palms keyed after this date (balance 362 in Status Ladang 29.10.2026)
+var AP_OPEN_ = { SSGT: { at: '2026-10-31' } };
+var LOT_START_ = { SSGT: { manFrom: '2026-10-31' } };   // v1.49: manuring keyed by lot after this date counts for round 4   // v1.48: count AP palms keyed after this date (balance 362 in Status Ladang 29.10.2026)
 function program_(estate, month) {
   CLOSED_MEMO_ = null;
   var year = month.slice(0, 4), today = todayKL_(), r2 = function (v) { return Math.round(v * 100) / 100; };
@@ -2334,7 +2340,29 @@ function program_(estate, month) {
     rain.push({ date: d, lost: Number(r.rain_lost) || 0, reason: String(r.rain_reason || ''), jobs: String(r.rain_jobs || '') });
   });
   rain.sort(function (a, b) { return a.date < b.date ? -1 : 1; });
-  var lots = month === today.slice(0, 7) ? (rounds_(estate).lots[HARVEST_CODE] || {}) : null;
+  var rl = month === today.slice(0, 7) ? rounds_(estate).lots : null, lots = rl ? (rl[HARVEST_CODE] || {}) : null;
+  // v1.49: per-lot state for the 3-level PROGRAM (lot level): last CPS date, manuring round 4 done, last harvest bunches.
+  var lotJobs = null;
+  if (rl) {
+    lotJobs = { CPS: {}, MAN: {}, bunches: {} };
+    standingRows_('LIST_LOTSTART', estate).forEach(function (r) {
+      var lot = String(r.lot), d = String(r.done_on).slice(0, 10);
+      if (r.task_code === 'CPS' && d) lotJobs.CPS[lot] = d;
+      if (r.task_code === 'MAN' && /R4/i.test(String(r.round))) lotJobs.MAN[lot] = d || '2026-10-31';
+    });
+    var manFrom = String((LOT_START_[estate] || {}).manFrom || '2026-10-31');
+    Object.keys(rl.CPS || {}).forEach(function (l) { if (!lotJobs.CPS[l] || rl.CPS[l] > lotJobs.CPS[l]) lotJobs.CPS[l] = rl.CPS[l]; });
+    Object.keys(rl.MAN || {}).forEach(function (l) { if (rl.MAN[l] > manFrom && (!lotJobs.MAN[l] || rl.MAN[l] > lotJobs.MAN[l])) lotJobs.MAN[l] = rl.MAN[l]; });
+    // bunches the last time each lot was harvested (sum of the harvesters' lines on that day)
+    var lastB = {};
+    standingRows_('FH_WORK', estate).forEach(function (r) {
+      if (r.task_code !== HARVEST_CODE || !live_(r) || !r.lot) return;
+      var l = String(r.lot), d = String(r.date), o = lastB[l];
+      if (!o || d > o.date) lastB[l] = { date: d, b: Number(r.bunches) || 0 };
+      else if (d === o.date) o.b += Number(r.bunches) || 0;
+    });
+    Object.keys(lastB).forEach(function (l) { lotJobs.bunches[l] = lastB[l].b; });
+  }
   // v1.47 (Yu Chen, 28 Oct): people per job a day, the average over the last 7 days the job was worked (chit, present),
   // so the phone can say "6 orang perlu 5–6 hari; tinggal 4 hari kerja → kurang 2 hari".
   var wk = daysAgo_(7), per = {};
@@ -2359,7 +2387,7 @@ function program_(estate, month) {
     });
   }
   return { ok: true, estate: estate, month: month, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), from: from, ap: ap,
-    programme: prog, done: done, crop: Object.keys(crop).sort().map(function (k) { return crop[k]; }), lots: lots,
+    programme: prog, done: done, crop: Object.keys(crop).sort().map(function (k) { return crop[k]; }), lots: lots, lotJobs: lotJobs,
     days: Object.keys(days).sort().map(function (d) { return days[d]; }), rain: rain, gang: gang };
 }
 
@@ -2501,6 +2529,41 @@ function budgetInto_(est, want, days, note) {
     var row = { id: 'BG-' + est + '-' + m, date: now.slice(0, 10), company: ESTATE_COMPANY[est] || '', estate: est, keyed_by: 'OWNER-FIX', keyed_at: now, phone: '', status: 'active', replaces: '',
       received_at: now, month: m, budget_mt: want[m], abw_kg: '', work_days: days, note: note };
     sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); })); n++;
+  });
+  return n;
+}
+/** v1.49 (Yu Chen, 3 Nov 2026): load the lots Ferezelly marked on the printed block maps (5 Nov meeting) into
+ *  LIST_LOTSTART, live and practice sheets. Run from the script editor (Owner) with the text below filled in.
+ *  One line per group: "CPS 2026-10-14: 1-1 1-2 1-3" (lots sprayed on about that date) or "MAN R4: 3-1 3-2" (lots that
+ *  already had manuring round 4). Lots may be separated by spaces or commas. A lot given twice for the same job: the
+ *  last line wins. Running it twice adds nothing new. Returns the number of lines added. */
+var LOT_START_TEXT_ = [
+  // 'CPS 2026-10-14: 1-1 1-2 1-3',
+  // 'MAN R4: 3-1 3-2 3-3'
+].join('\n');
+function seedLotStart() {
+  var was = PRACTICE_, n = 0;
+  try {
+    [false, true].forEach(function (pr) { PRACTICE_ = pr; BOOK_ = null; ROWS_MEMO_ = null; n += lotStartInto_('SSGT', LOT_START_TEXT_); });
+  } finally { PRACTICE_ = was; BOOK_ = null; ROWS_MEMO_ = null; }
+  Logger.log('seedLotStart: ' + n + ' added (live and practice sheets)');
+  return n;
+}
+function lotStartInto_(est, text) {
+  var have = {}, n = 0, now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
+  standingRows_('LIST_LOTSTART', est).forEach(function (r) { have[r.task_code + '|' + r.lot] = String(r.done_on).slice(0, 10) + '|' + String(r.round || ''); });
+  var sh = roomTab_(book_(), 'LIST_LOTSTART'), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  String(text || '').split(/\n/).forEach(function (line) {
+    var m = line.match(/^\s*(CPS|MAN)\s*(R\d)?\s*(\d{4}-\d\d-\d\d)?\s*:\s*(.+)$/i);
+    if (!m) return;
+    var code = m[1].toUpperCase(), round = (m[2] || '').toUpperCase(), d = m[3] || '';
+    m[4].split(/[\s,]+/).forEach(function (lot) {
+      if (!/^\d+-\d+$/.test(lot)) return;
+      if (have[code + '|' + lot] === d + '|' + round) return;
+      var row = { id: 'LS-' + est + '-' + code + '-' + lot + '-' + now.replace(/\D/g, '').slice(0, 12), date: now.slice(0, 10), company: ESTATE_COMPANY[est] || '', estate: est, keyed_by: 'OWNER-FIX', keyed_at: now, phone: '',
+        status: 'active', replaces: '', received_at: now, task_code: code, block: lot.split('-')[0].padStart(2, '0'), lot: lot, done_on: d, round: round, note: 'Ditanda Ferezelly pada peta blok, mesyuarat 5 Nov 2026' };
+      sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); })); n++; have[code + '|' + lot] = d + '|' + round;
+    });
   });
   return n;
 }

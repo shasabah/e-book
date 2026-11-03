@@ -118,3 +118,4 @@ check('the ticks come back with the month: manuring 1-1 done, CPS 1-2 dated 14 O
 check('an untick (a later row with no date) wins over the earlier tick: 1-9 is not done', !!r.lotJobs && !r.lotJobs.MAN['1-9'], JSON.stringify(r.lotJobs && r.lotJobs.MAN));
 check('nothing is deleted: both 1-9 rows are still in the sheet', tabs.LIST_LOTSTART.rows.filter(x => x[11] === '1-9').length === 2, String(tabs.LIST_LOTSTART.rows.filter(x => x[11] === '1-9').length));
 check('a past month carries no lot state (lots are for the current month only)', ctx.program_('SSGT', '2026-09').lotJobs === null);
+check('the office keeps "ticked as not done" apart from "never recorded", so the phone does not guess for it', !!r.lotJobs.off && r.lotJobs.off.MAN['1-9'] === true && !r.lotJobs.off.MAN['1-1'], JSON.stringify(r.lotJobs.off));

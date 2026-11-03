@@ -121,10 +121,16 @@
     return { k: d ? 'g' : 'x', date: d || '', act: !d };
   }
   // CPS: days since the lot's last spray. g under 60 (wait), a 60–120 (can spray), r over 120 or no record.
-  function cpsState(data, l) {
-    var d = data.lotJobs && data.lotJobs.CPS ? data.lotJobs.CPS[l.lot] : '', age = d ? daysBetween(d, EA.today()) : -1;
+  function cpsState(data, l, estate) {
+    var d = data.lotJobs && data.lotJobs.CPS ? data.lotJobs.CPS[l.lot] : '', est = false;
+    var off = data.lotJobs && data.lotJobs.off && data.lotJobs.off.CPS && data.lotJobs.off.CPS[l.lot];
+    if (!d && !off) {   // nothing known for this lot: fall back to the month the block finished its round (estimate)
+      var t = EA.lists.cpsLastRound && EA.lists.cpsLastRound[estate || (data && data.estate)];
+      if (t && t[l.block]) { d = t[l.block]; est = true; }
+    }
+    var age = d ? daysBetween(d, EA.today()) : -1;
     var k = age < 0 ? 'x' : age > CPS_RULE.late ? 'r' : age >= CPS_RULE.again ? 'a' : 'g';
-    return { k: k, age: age, date: d, act: k !== 'g' };
+    return { k: k, age: age, date: d, est: est, act: k !== 'g' };
   }
   function noLotData(data) { return !data.lotJobs; }
   // The Staf bertugas ticks his own estate's lots; the Owner may too. Everyone else only looks (Yu Chen, 3 Nov 2026).
@@ -189,12 +195,13 @@
       '</div>';
     return h;
   }
+  // "Done" is not the same as green: a lot sprayed 70 days ago is done but shows amber, because amber is about timing.
+  function isDone(code, st) { return code === 'CPS' ? !!(st && st.date) : !!(st && st.k === 'g'); }
   // What the lot would be after the ticks so far: the staff's change if any, else what the records say.
   function tickValue(id, lot, allStates) {
     var t = tick[id];
     if (t && t.set[lot]) return t.set[lot] === 'y';
-    var st = allStates && allStates[lot];
-    return !!(st && st.k === 'g');
+    return isDone(id.split('.')[0], allStates && allStates[lot]);
   }
   var MON_PICK = 4;   // how many months back the CPS "sprayed when" chooser offers
   function tickBar(estate, code, b, id) {
@@ -285,9 +292,10 @@
     var per = {}, states = {}, left = daysLeft(month), nowHa = 0, pd = 0, rounds = (cal.jobs.CPS && cal.jobs.CPS.total) || EA.lists.roundPlanFor(estate, 'CPS') || 4;
     blocksOf(estate).forEach(function (b) { per[b] = { b: b, can: 0, late: 0, wait: 0, items: [], lastDate: '', nextDate: '' }; });
     (EA.lists.lotsFor(estate) || []).forEach(function (l) {
-      var st = cpsState(data, l), p = per[l.block]; if (!p) return;
+      var st = cpsState(data, l, estate), p = per[l.block]; if (!p) return;
       states[l.lot] = st;
-      st.text = st.age < 0 ? EA.t('tiada rekod', 'no record') : st.age + EA.t(' hr', ' d');
+      st.text = st.age < 0 ? EA.t('tiada rekod', 'no record') : st.age + EA.t(' hr', ' d') + (st.est ? '*' : '');
+      if (st.est) p.est = true;
       if (st.k === 'g') { p.wait += l.ha || 0; if (st.date && (!p.nextDate || st.date < p.nextDate)) p.nextDate = st.date; }
       else { p.can += l.ha || 0; if (st.k === 'r' || st.k === 'x') p.late += l.ha || 0; p.items.push({ lot: l.lot, k: st.k, age: st.age, sub: st.text }); }
       if (st.date > p.lastDate) p.lastDate = st.date;
@@ -298,7 +306,7 @@
       var k = p.late > 0.05 ? 'r' : p.can > 0.05 ? 'a' : 'g', text, right = p.pd ? '≈ ' + Math.ceil(p.pd) + EA.t(' o-h', ' p-d') : '';
       if (p.can > 0.05) text = 'Blk ' + p.b + ' · ' + EA.t('boleh racun ', 'can spray ') + f1(p.can) + ' Ha';
       else { var nx = p.nextDate ? new Date(p.nextDate + 'T00:00:00') : null; if (nx) nx.setDate(nx.getDate() + CPS_RULE.again); text = 'Blk ' + p.b + ' · ' + EA.t('tunggu', 'wait') + (nx ? ' · ' + EA.t('boleh dari ', 'from ') + dm(ym(nx) + '-' + String(nx.getDate()).padStart(2, '0')) : ''); right = ''; }
-      return blockLine(estate, 'CPS', p.b, k, text, right, states, p.items, p.can > 0.05 ? EA.t('hari sejak racun · kuning = boleh racun (' + CPS_RULE.again + ' hari ke atas) · merah = lewat (' + CPS_RULE.late + ' hari) atau tiada rekod', 'days since spray · amber = may spray (' + CPS_RULE.again + ' days or more) · red = late (' + CPS_RULE.late + ' days) or no record') : '', states, canTick(estate));
+      return blockLine(estate, 'CPS', p.b, k, text, right, states, p.items, p.can > 0.05 || p.est ? (p.est ? EA.t('* anggaran: rekod blok, bukan petak (Status Ladang 29.10.2026) — betulkan dengan SEMAK PETAK<br>', '* estimated from the block record, not the lot (estate status 29.10.2026) — correct it with CHECK LOTS<br>') : '') + EA.t('hari sejak racun · kuning = boleh racun (' + CPS_RULE.again + ' hari ke atas) · merah = lewat (' + CPS_RULE.late + ' hari) atau tiada rekod', 'days since spray · amber = may spray (' + CPS_RULE.again + ' days or more) · red = late (' + CPS_RULE.late + ' days) or no record') : '', states, canTick(estate));
     });
     var nodata = noLotData(data) ? '<p class="pg-note">' + EA.t('Peta petak terisi sendiri apabila kerja dikunci ikut petak. Jumlah Ha di atas sudah betul.', 'The lot map fills itself as work is keyed by lot. The Ha above are already right.') + '</p>' : '';
     return '<div class="card pg-card"><h2>' + EA.t('CPS · racun bulatan', 'CPS · circle spray') + '<small>' + EA.t('sasaran ' + rounds + ' pusingan setahun (±' + CPS_RULE.target + ' hari) · paling awal ' + CPS_RULE.again + ' hari selepas racun lepas', 'target ' + rounds + ' rounds a year (±' + CPS_RULE.target + ' days) · at the earliest ' + CPS_RULE.again + ' days after the last spray') + '</small></h2>' + lines.join('') +
@@ -421,7 +429,7 @@
   // What the records say today, before any tick, for every lot of the block.
   function baseStates(estate, id, data) {
     var code = id.split('.')[0], b = id.split('.')[1], out = {};
-    (EA.lists.lotsFor(estate, b) || []).forEach(function (l) { out[l.lot] = code === 'CPS' ? cpsState(data, l) : manState(data, l); });
+    (EA.lists.lotsFor(estate, b) || []).forEach(function (l) { out[l.lot] = code === 'CPS' ? cpsState(data, l, estate) : manState(data, l); });
     return out;
   }
   // Save only the lots the staff actually changed: one row each, nothing deleted. done_on empty = not done.
@@ -432,10 +440,14 @@
     var when = code === 'CPS' ? lastDayOf(t.month) : EA.today(), n = 0;
     try {
       Object.keys(t.set).forEach(function (lot) {
-        var want = t.set[lot] === 'y', had = !!(t.base[lot] && t.base[lot].k === 'g');
+        var want = t.set[lot] === 'y', had = isDone(code, t.base[lot]);
         if (want === had) return;
         EA.save('LIST_LOTSTART', 'FH', estate, { task_code: code, block: b, lot: lot, done_on: want ? when : '', round: '', note: EA.t('Semak petak', 'Lot check') });
-        if (data.lotJobs && data.lotJobs[code]) { if (want) data.lotJobs[code][lot] = when; else delete data.lotJobs[code][lot]; }
+        if (data.lotJobs && data.lotJobs[code]) {
+          if (!data.lotJobs.off) data.lotJobs.off = { CPS: {}, MAN: {} };
+          if (want) { data.lotJobs[code][lot] = when; delete data.lotJobs.off[code][lot]; }
+          else { delete data.lotJobs[code][lot]; data.lotJobs.off[code][lot] = true; }
+        }
         n++;
       });
     } catch (e) { EA.ui.toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message); return; }

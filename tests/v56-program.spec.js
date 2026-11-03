@@ -72,10 +72,13 @@ const OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30'
     const data = { lots: { '1-1': D(2), '1-2': D(12), '1-3': D(20) }, lotJobs: { CPS: { '1-1': D(10), '1-2': D(70), '1-3': D(130) }, MAN: { '1-1': D(5) }, bunches: { '1-3': 118 } } };
     const L = n => EA.lists.lot('SSGT', n);
     return { h1: S.harvest('SSGT', data, L('1-1')), h2: S.harvest('SSGT', data, L('1-2')), h3: S.harvest('SSGT', data, L('1-3')), h4: S.harvest('SSGT', data, L('1-4')),
-      c1: S.cps(data, L('1-1')), c2: S.cps(data, L('1-2')), c3: S.cps(data, L('1-3')), c4: S.cps(data, L('1-4')), m1: S.man(data, L('1-1')), m2: S.man(data, L('1-2')), rule: EA.fh.program.CPS_RULE };
+      c1: S.cps(data, L('1-1'), 'SSGT'), c2: S.cps(data, L('1-2'), 'SSGT'), c3: S.cps(data, L('1-3'), 'SSGT'), c4: S.cps(data, L('1-4'), 'SSGT'),
+      cNone: S.cps(data, L('1-4')), m1: S.man(data, L('1-1')), m2: S.man(data, L('1-2')), rule: EA.fh.program.CPS_RULE, fall: EA.lists.cpsLastRound.SSGT };
   });
   check('harvest: 2 days green, 12 amber (ready), 20 red (late) with 118 bunches last time, no record = x', st.h1.k === 'g' && st.h2.k === 'a' && st.h3.k === 'r' && st.h3.bunches === 118 && st.h4.k === 'x', JSON.stringify([st.h1, st.h2, st.h3, st.h4]));
-  check('CPS: 10 days wait (green), 70 can spray (amber), 130 late (red), no record red/x; rule: target 90, earliest 60, late 120', st.c1.k === 'g' && st.c2.k === 'a' && st.c3.k === 'r' && st.c4.k === 'x' && st.rule.again === 60 && st.rule.target === 90 && st.rule.late === 120, JSON.stringify([st.c1, st.c2, st.c3, st.c4]));
+  check('CPS: 10 days wait (green), 70 can spray (amber), 130 late (red); rule: target 90, earliest 60, late 120', st.c1.k === 'g' && st.c2.k === 'a' && st.c3.k === 'r' && st.rule.again === 60 && st.rule.target === 90 && st.rule.late === 120, JSON.stringify([st.c1, st.c2, st.c3]));
+  check('a lot with no spray record of its own falls back to the month its block finished the round, and is marked an estimate', st.c4.est === true && st.c4.date === st.fall['01'] && st.c4.age > 0 && st.cNone.k === 'x' && !st.cNone.est, JSON.stringify(st.c4) + ' | fallback ' + st.fall['01']);
+  check('the fallback dates come from the estate status report: Blk 01 and 03 October, Blk 02 and 04 September', st.fall['01'] === '2026-10-15' && st.fall['03'] === '2026-10-15' && st.fall['02'] === '2026-09-15' && st.fall['04'] === '2026-09-15', JSON.stringify(st.fall));
   check('manuring: round keyed = green; no lot record = grey, never red (block Ha stays the true figure)', st.m1.k === 'g' && !st.m1.act && st.m2.k === 'x' && st.m2.act);
 
   // 2 · the screen
@@ -147,13 +150,23 @@ const OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30'
   await p.click('[data-pg="CPS.01"]'); await p.waitForTimeout(300);
   await p.click('[data-pgtick="CPS.01"]'); await p.waitForTimeout(400);
   check('CPS tick mode asks when it was sprayed (four months to choose)', (await p.$$('[data-pgmon]')).length === 4);
+  // every Blk 01 lot starts green from the block fallback, so first untick the block, then tick it with a chosen month
   await p.evaluate(() => { window.__saved = []; });
-  await p.click('[data-pgall="CPS.01"][data-v="y"]'); await p.waitForTimeout(200);
+  await p.click('[data-pgall="CPS.01"][data-v="n"]'); await p.waitForTimeout(200);
+  await p.click('[data-pgsave="CPS.01"]'); await p.waitForTimeout(600);
+  const unticks = await p.evaluate(() => window.__saved);
+  check('unticking a block saves one row per lot that had a date (incl. the two with real records), each with no date', unticks.length === n01 && unticks.every(x => x.f.task_code === 'CPS' && x.f.done_on === ''), unticks.length + ' of ' + n01);
+  const afterUntick = await p.innerText('#pg-box');
+  check('after the untick Blk 01 has no spray record at all, so the whole block may be sprayed', /Blk 01 · boleh racun 3[0-9]\.\d Ha/.test(afterUntick), (afterUntick.match(/Blk 01 · boleh[^\n]*/) || [''])[0]);
+  await p.evaluate(() => { window.__saved = []; });
+  await p.click('[data-pgtick="CPS.01"]'); await p.waitForTimeout(400);
   const mons = await p.$$('[data-pgmon]'); await mons[2].click(); await p.waitForTimeout(200);
+  await p.click('[data-pgall="CPS.01"][data-v="y"]'); await p.waitForTimeout(200);
   await p.click('[data-pgsave="CPS.01"]'); await p.waitForTimeout(600);
   const cpsTicks = await p.evaluate(() => window.__saved);
   const two = cpsTicks.find(x => x.f.lot === '1-5') || { f: {} };
-  check('a CPS tick carries the chosen month, so the 60-day clock starts from it', cpsTicks.length > 0 && /^\d{4}-\d\d-\d\d$/.test(two.f.done_on || '') && two.f.task_code === 'CPS', JSON.stringify(two.f));
+  const want2 = await p.evaluate(() => { const d = new Date(); d.setMonth(d.getMonth() - 2); return d.toISOString().slice(0, 7); });
+  check('a CPS tick carries the month chosen in "Racun bila?", so the 60-day clock starts from it', cpsTicks.length === n01 && two.f.task_code === 'CPS' && (two.f.done_on || '').slice(0, 7) === want2, JSON.stringify(two.f) + ' want ' + want2);
   // only the staff and the Owner may tick
   const asPengurus = await p.evaluate(() => {
     const u = EA.currentUser(), real = EA.currentUser;

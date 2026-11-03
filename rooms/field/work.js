@@ -114,6 +114,15 @@
         Object.keys(fresh.lines).forEach(function (w) { d.lines[w] = keep[w] && (!was[w] || was[w] === now[w]) ? keep[w] : fresh.lines[w]; });
         Object.keys(fresh.status).forEach(function (k) { if (!d.status[k]) d.status[k] = fresh.status[k]; });
         Object.keys(fresh.prog).forEach(function (k) { if (!d.prog[k]) d.prog[k] = fresh.prog[k]; });
+        // v1.48.1 (Ferezelly, 29 Oct: the chit fixed to 6 lots, Kerja still showed all the old lots): lots taken off the
+        // job on the fixed chit leave Kerja too, unless they were added here by hand (+ Petak lain).
+        d.added = d.added || {};
+        jobsOf(c).forEach(function (j) {
+          var pg = d.prog[j.key], add = d.added[j.key] || [];
+          if (!pg) return;
+          Object.keys(pg).forEach(function (l) { if (j.lots.indexOf(l) < 0 && add.indexOf(l) < 0) { delete pg[l]; if (d.lotwhy && d.lotwhy[j.key]) delete d.lotwhy[j.key][l]; } });
+          if (d.who && d.who[j.key]) Object.keys(d.who[j.key]).forEach(function (w) { d.who[j.key][w] = (d.who[j.key][w] || []).filter(function (l) { return j.lots.indexOf(l) >= 0 || add.indexOf(l) >= 0; }); });
+        });
         Object.keys(fresh.who).forEach(function (k) { if (!d.who[k]) d.who[k] = fresh.who[k]; });
         d.chitRev = c.rev || 1;
       }
@@ -548,7 +557,12 @@
       };
     });
     el.querySelectorAll('[data-paddlot]').forEach(function (s) {
-      s.onchange = function () { if (!this.value) return; draft.prog[s.dataset.paddlot] = draft.prog[s.dataset.paddlot] || {}; draft.prog[s.dataset.paddlot][this.value] = ''; keepDraft(); render(el, ctx); };
+      s.onchange = function () {
+        if (!this.value) return; var k = s.dataset.paddlot;
+        draft.prog[k] = draft.prog[k] || {}; draft.prog[k][this.value] = '';
+        draft.added = draft.added || {}; draft.added[k] = (draft.added[k] || []).concat([this.value]);
+        keepDraft(); render(el, ctx);
+      };
     });
     el.querySelectorAll('[data-manual]').forEach(function (b) {
       b.onclick = function () { var key = b.dataset.manual; draft.manual[key] = !draft.manual[key]; if (!draft.manual[key]) shareOut(jobByKey(key)); keepDraft(); render(el, ctx); };

@@ -44,7 +44,7 @@ const { chromium } = require('playwright');
   check('lots finished and not: two lines, the why only once', /\nPetak siap: 3-30\nBELUM SIAP: 3-31 \(Hujan · sambung 28\/10\)\n/.test(txt) && (txt.match(/sambung 28\/10/g) || []).length === 1);
   check('manuring: bags and dose', /\nPetak: 2-1, 2-2 siap\nBeg baja: 60 · dos 2\.5 kg\/pokok\n/.test(txt));
   check('simple jobs one line each, no blank line between them', /\n✅ \*[^\n]*\* — 1 org · 1 hari\n✅ \*[^\n]*Blk DR\* — 2 org · 342/.test(txt), txt.split('*5 · AM* · General')[1]);
-  check('last line has the version and the chit', /\nE-Book \d+\.\d+ · MC-SSGT-P13-20261026-1$/.test(txt));
+  check('last line has the version and the chit', /\nE-Book \d+\.\d+(\.\d+)? · MC-SSGT-P13-20261026-1$/.test(txt));
   console.log(txt);
 
   // ---------- 2. Membaja on the folded button ----------

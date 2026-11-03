@@ -239,7 +239,10 @@
       if (st.k === 'a') p.ready++;
       if (st.act) p.items.push({ lot: l.lot, k: st.k, age: st.age, sub: st.text });
     });
-    var bl = Object.keys(per).map(function (k) { return per[k]; }).sort(function (a, b) { return b.late - a.late || b.none - a.none || b.ready - a.ready || (a.b < b.b ? -1 : 1); });
+    // Rank on what the staff can act on: lots past the round first, then lots ready, and only then lots with no record.
+    // A lot with no record is not overdue — before 21 Oct 2026 harvest was keyed by block, so those lots simply have no
+    // date of their own yet; they fill in as the first full round is keyed.
+    var bl = Object.keys(per).map(function (k) { return per[k]; }).sort(function (a, b) { return b.late - a.late || b.ready - a.ready || b.none - a.none || (a.b < b.b ? -1 : 1); });
     var rank = { r: 0, x: 1, a: 2, g: 3 };
     bl.forEach(function (p) { p.items.sort(function (a, b) { return rank[a.k] - rank[b.k] || b.age - a.age; }); summary[p.b].red += p.late ? 1 : 0; });
     var mt = EA.lists.harvestMtDay || 1.5, lines = bl.map(function (p) {

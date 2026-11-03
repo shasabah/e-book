@@ -239,7 +239,9 @@ function doPost_(e) {
 // ---- v1.19: read answers remembered for 60 s, shared by everyone asking the same thing ----
 // Any call that may write (save, users, switches, ...) makes a new "generation", so a remembered
 // answer is never older than the last change.
-var READS_ = { crop: 1, dayclose: 1, workers: 1, mills: 1, todo: 1, ungraded: 1, harvest: 1, trips: 1, people: 1, history: 1, backlog: 1, rounds: 1, adminSummary: 1, adminPhones: 1, adminProblems: 1, adminSwitches: 1 };
+// Every action answered in doRead_ must be listed here, or it is sent to doWrite_ and
+// comes back 'unknown_action' (1.49.1: 'program' was missing since 1.47).
+var READS_ = { crop: 1, dayclose: 1, workers: 1, mills: 1, todo: 1, ungraded: 1, harvest: 1, trips: 1, people: 1, history: 1, backlog: 1, rounds: 1, program: 1, adminSummary: 1, adminPhones: 1, adminProblems: 1, adminSwitches: 1 };
 var READ_SECONDS = 60;
 function gen_() { return CacheService.getScriptCache().get('gen') || '0'; }
 function newGen_() { try { CacheService.getScriptCache().put('gen', String(Date.now()) + Math.floor(Math.random() * 1000), 21600); } catch (e) {} }

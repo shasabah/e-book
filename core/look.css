@@ -725,3 +725,24 @@ div.td-it { cursor: default; }
 .pg-g.a { background: var(--wait); } .pg-g.r { background: var(--bad); }
 .pg-g.ring { box-shadow: 0 0 0 2.5px var(--surface), 0 0 0 4.5px var(--wait); }
 .pg-g-na { color: var(--muted); }
+/* v1.49 PROGRAM 3 levels */
+.pg-lab { display: flex; justify-content: space-between; align-items: baseline; }
+.pg-lab i { font-style: normal; text-transform: none; letter-spacing: 0; font-size: 11px; padding: 0 8px; border-radius: 10px; background: var(--paper); color: var(--ink); }
+.pg-big { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.pg-big div { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
+.pg-big b { display: block; font-size: 26px; line-height: 1.1; font-weight: 800; }
+.pg-big span { font-size: 12.5px; color: var(--muted); }
+.pg-bl { display: grid; grid-template-columns: 17px minmax(0, 1fr) auto; gap: 6px; align-items: center; width: 100%; padding: 8px 0; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.pg-bl:first-of-type { border-top: 0; }
+.pg-bl em { font-style: normal; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.pg-bl .pg-dot { margin-right: 0; }
+.pg-lotbox { background: var(--paper); border-radius: 10px; padding: 8px 10px 10px; margin: 0 0 8px; }
+.pg-lotbox .pg-lots { margin-top: 6px; }
+.pg-lots span.r small { color: var(--bad); } .pg-lots span.a small { color: var(--wait); } .pg-lots span.g small, .pg-lots span.x small { color: var(--muted); }
+.pg-map { display: block; width: 100%; height: auto; margin-top: 6px; }
+.pg-map path { stroke: #fff; stroke-width: 1.2; fill: var(--ok); }
+.pg-map path.a { fill: var(--wait); } .pg-map path.r { fill: var(--bad); } .pg-map path.x { fill: var(--muted); }
+.pg-map text { font: 600 9px -apple-system, system-ui, sans-serif; fill: #17301f; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.pg-bt { margin-top: 8px; }
+.pg-bt th:first-child small { font-weight: 400; color: var(--muted); }
+.pg-t tr.pg-old td { color: var(--muted); }

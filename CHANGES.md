@@ -2,6 +2,7 @@
 
 One line per release: date, version, what changed.
 
+- 2026-11-09 — v1.49 (82) — PROGRAM is one screen with three levels: (1) the estate today — worst block, harvesters a day against what the crop budget needs, tonnes this month and this year; (2) by job — Tuai, Membaja, CPS, Pokok terbiar, with the blocks ranked worst first, Ha left, person-days and "cukup / kurang N hari"; (3) by lot — tap a block to see only the lots that need action, as a block map (lot outlines, red / amber / green) or a list ("4-03 · 23 hr · 118" = days since harvest, bunches last time). The old block grid, "rounds this year" and "work behind" cards are replaced; every job per block is still there, under one tap on level 1 (pruning, VOP spray and slashing grey, old block data). CPS: 4 rounds a year, a lot may be sprayed again from 60 days, red from 120. Office: the PROGRAM read now carries each lot's last CPS date, manuring round and last harvest bunches (new list LIST_LOTSTART, loaded once by seedLotStart from the lots Ferezelly marks on the printed block maps).
 - 2026-10-17 — v1 (test copy, not released) — Main page started: login with 6-digit key, phone setup, sync bar with waiting count, LOAD IT bar, room tiles by role and estate, milestones for Owner and HQ.
 - 2026-10-17 — v1 (test copy, not released) — App named Estate Book (Buku Ladang), replacing "Sugut DMS" on the header and login page.
 - 2026-10-17 — v1 (test copy, not released) — "EB" letters replaced by a small open-book mark; the app is only ever called Estate Book.

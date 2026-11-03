@@ -23,7 +23,7 @@ var FILES = [
   'lists/estates.js',
   'lists/test-users.js',
   'lists/tasks.js',
-  'lists/lots.js',
+  'lists/lots.js', 'lists/lot-shapes.js',
   'lists/targets.js',
   'rooms/field/muster.js',
   'rooms/field/work.js', 'rooms/field/dayclose.js',

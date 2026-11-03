@@ -119,3 +119,12 @@ check('an untick (a later row with no date) wins over the earlier tick: 1-9 is n
 check('nothing is deleted: both 1-9 rows are still in the sheet', tabs.LIST_LOTSTART.rows.filter(x => x[11] === '1-9').length === 2, String(tabs.LIST_LOTSTART.rows.filter(x => x[11] === '1-9').length));
 check('a past month carries no lot state (lots are for the current month only)', ctx.program_('SSGT', '2026-09').lotJobs === null);
 check('the office keeps "ticked as not done" apart from "never recorded", so the phone does not guess for it', !!r.lotJobs.off && r.lotJobs.off.MAN['1-9'] === true && !r.lotJobs.off.MAN['1-1'], JSON.stringify(r.lotJobs.off));
+
+// 1.49.1: the phone asks over the one door (doPost). An action answered in doRead_ but left out of
+// READS_ is sent to doWrite_ instead and comes back 'unknown_action' — what broke PLAN VS ACTUAL.
+const readActions = (code.slice(code.indexOf('function doRead_'), code.indexOf('function doWrite_'))
+  .match(/req\.action === '([a-zA-Z]+)'/g) || []).map(s => s.replace(/.*'([a-zA-Z]+)'.*/, '$1'));
+check('doRead_ answers more than one action (the scan works)', readActions.length > 5, String(readActions.length));
+const missing = readActions.filter(a => !ctx.READS_[a]);
+check('every action doRead_ answers is in READS_, so the phone reaches it', missing.length === 0, missing.join(', '));
+check('program is in READS_', ctx.READS_.program === 1);

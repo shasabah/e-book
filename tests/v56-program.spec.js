@@ -76,7 +76,7 @@ const OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30'
   });
   check('harvest: 2 days green, 12 amber (ready), 20 red (late) with 118 bunches last time, no record = x', st.h1.k === 'g' && st.h2.k === 'a' && st.h3.k === 'r' && st.h3.bunches === 118 && st.h4.k === 'x', JSON.stringify([st.h1, st.h2, st.h3, st.h4]));
   check('CPS: 10 days wait (green), 70 can spray (amber), 130 late (red), no record red/x; rule 60 / 120', st.c1.k === 'g' && st.c2.k === 'a' && st.c3.k === 'r' && st.c4.k === 'x' && st.rule.again === 60 && st.rule.late === 120, JSON.stringify([st.c1, st.c2, st.c3, st.c4]));
-  check('manuring: round done = green, not done = red (needs action)', st.m1.k === 'g' && !st.m1.act && st.m2.k === 'r' && st.m2.act);
+  check('manuring: round keyed = green; no lot record = grey, never red (block Ha stays the true figure)', st.m1.k === 'g' && !st.m1.act && st.m2.k === 'x' && st.m2.act);
 
   // 2 · the screen
   await p.evaluate(() => { location.hash = 'field-harvest/history'; }); await p.waitForTimeout(600);

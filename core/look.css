@@ -757,3 +757,66 @@ div.td-it { cursor: default; }
 .pg-lots button { font: inherit; font-size: 13px; padding: 3px 8px; border-radius: 8px; background: var(--paper); border: 1px solid var(--line); color: var(--ink); cursor: pointer; }
 .pg-lots button.g { background: var(--ok-soft, #e1f3e6); border-color: var(--ok); color: var(--ok); font-weight: 600; }
 .pg-lots button.x { color: var(--muted); }
+
+/* v1.50 Rekod → ORANG · the month by person (KEHADIRAN) */
+.or-tabs { display: flex; border-bottom: 2px solid var(--line); margin: 2px 0 10px; }
+.or-tabs button { flex: 1; background: none; border: 0; border-bottom: 3px solid transparent; margin-bottom: -2px; padding: 7px 0 6px; font: inherit; font-weight: 700; font-size: .74rem; color: var(--muted); cursor: pointer; }
+.or-tabs button .or-soon { display: block; font-weight: 400; font-size: .6rem; }
+#or-box { min-width: 0; }
+.or-tabs button.on { color: var(--ok); border-bottom-color: var(--ok); }
+.or-tabs button[disabled] { opacity: .45; cursor: default; }
+.or-gangs { display: flex; gap: 5px; flex-wrap: wrap; margin: 0 0 8px; }
+.or-gangs button { border: 1.5px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 11px; font: inherit; font-size: .78rem; font-weight: 700; cursor: pointer; }
+.or-gangs button.on { background: var(--ink, #17301f); color: #fff; border-color: transparent; }
+.or-alert { background: #fbe6e6; border: 1px solid #efb9b9; color: #7a1f1f; font-size: .84rem; line-height: 1.45; }
+.or-alert b { display: block; }
+.or-ok { color: var(--ok); font-weight: 700; }
+.or-wrap { max-width: 100%; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line); border-radius: 12px; background: var(--surface, #fff); }
+.or-g { width: max-content; min-width: 100%; }
+.or-g th { position: sticky; top: 0; z-index: 2; text-align: center; padding: 4px 2px; }
+.or-g th.nm { z-index: 4; text-align: left; padding-left: 8px; min-width: 112px; }
+.or-g td { text-align: center; padding: 0; height: 28px; min-width: 25px; font-weight: 700; font-size: .68rem; border-bottom: 1px solid rgba(0,0,0,.04); }
+.or-g td.nm { padding: 0; min-width: 112px; max-width: 112px; }
+.or-g td.nm button { display: block; width: 100%; height: 28px; background: none; border: 0; padding: 0 8px; font: inherit; font-weight: 600; font-size: .74rem; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; color: inherit; }
+.or-g td.nm.or-off button { color: var(--muted); text-decoration: line-through; }
+.or-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #a32020; margin-left: 4px; vertical-align: middle; }
+.or-h { background: #e3f1e6; color: #1e7a37; } .or-m { background: #d9ede0; color: #1a6b31; } .or-c { background: #e6eefb; color: #1f55a8; }
+.or-p { background: #ece7f7; color: #5b3fa0; } .or-l { background: #fdf0dc; color: #9a6508; } .or-d { background: #eeeeee; color: #555; }
+.or-aT { background: #fbe6e6; color: #a32020; } .or-aS { background: #fdf0dc; color: #9a6508; } .or-aC { background: #e6eefb; color: #1f55a8; }
+.or-aL { background: #e6eefb; color: #1f55a8; } .or-aX { background: #eeeeee; color: #555; }
+.or-sn { background: #f3f4f3; color: #b3bbb5; } th.or-nc { background: #dbe7f5; color: #1f55a8; }
+.or-g td.or-im { font-style: italic; opacity: .72; }
+.or-g td.tt { border-left: 1px solid var(--line); background: var(--surface, #fff); min-width: 32px; font-size: .72rem; }
+.or-g td.tt small { font-weight: 400; color: var(--muted); font-size: .58rem; }
+.or-g th.tt { border-left: 1px solid var(--line); }
+.or-g tr.or-gh td { background: #eef2ee; text-align: left; font-weight: 800; padding: 3px 8px; color: #3c4a41; font-size: .7rem; height: 22px; }
+.or-g tr.or-ft td { background: #f3f6f3; font-weight: 700; font-size: .66rem; color: #3c4a41; }
+.or-g tr.or-ft td.nm { padding-left: 8px; font-size: .7rem; }
+.or-g td.or-l4 { text-align: left; padding-left: 8px; }
+.or-key { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0 0; }
+.or-key span { font-size: .7rem; padding: 2px 8px; border-radius: 999px; }
+.or-ptop { display: flex; gap: 10px; align-items: center; margin: 2px 0 6px; }
+.or-ptop h2 { margin: 0; font-size: 1.15rem; line-height: 1.1; }
+.or-pback { background: var(--surface); border: 2px solid var(--ok); color: var(--ok); border-radius: 12px; min-height: 44px; padding: 4px 12px; font: inherit; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.or-person .card h2 small { display: block; font-weight: 400; color: var(--muted); font-size: .75rem; }
+.or-tag { display: inline-block; font-size: .74rem; padding: 2px 9px; border-radius: 999px; background: #e8f4ea; color: #1e7a37; font-weight: 700; margin: 4px 0 8px; }
+.or-tag.m { background: #fdf0dc; color: #9a6508; }
+.or-sum { grid-template-columns: repeat(4, 1fr); }
+.or-sum div { background: var(--surface, #fff); border: 1px solid var(--line); border-radius: 10px; padding: 7px 4px; text-align: center; }
+.or-sum b { display: block; font-size: 1.05rem; } .or-sum small { color: var(--muted); font-size: .64rem; }
+.or-jobs td.nm small, .or-days td small { color: var(--muted); font-weight: 400; }
+.or-days td.l { text-align: left; white-space: normal; }
+.or-days td.or-mk { width: 30px; text-align: center; font-weight: 800; }
+.or-nl { font-style: normal; color: #a32020; font-size: .68rem; }
+@media print {
+  .pr-or { width: 100%; }
+  .pr-or th, .pr-or td { padding: 1px 2px !important; font-size: 7.5px !important; text-align: center; height: 12px; }
+  .pr-or td.l, .pr-or th.l { text-align: left; } .pr-or td.l i { font-style: normal; color: #8a938c; font-size: 6px; }
+  .pr-or th.sn, .pr-or td.sn { background: #f1f1ef !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .pr-or td.mH, .pr-or td.mD { background: #e8f4ea !important; color: #1a6b31; font-weight: 700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .pr-or td.mD { background: #eeeeee !important; color: #444; }
+  .pr-or td.mT { background: #fbe6e6 !important; color: #9a1f1f; font-weight: 700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .pr-or td.mS { background: #fdf0dc !important; color: #8a5a06; font-weight: 700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .pr-or td.mC, .pr-or td.mL { background: #e6eefb !important; color: #1f55a8; font-weight: 700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .pr-or td.im { font-style: italic; }
+}

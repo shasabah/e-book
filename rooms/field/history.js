@@ -147,17 +147,20 @@
     var cache = EA.local.get(K.cache + ctx.estate + '.' + month, null);
     var progOn = EA.fh.program && (EA.practice && EA.practice() || (ctx.user && ctx.user.role === 'Owner') || EA.today() >= (EA.lists.programFrom || ''));
     var prog = view === 'prog' && progOn;
+    var orgOn = !!EA.fh.people, org = view === 'org' && orgOn;          // v1.50: ORANG, the month by person (everyone who sees Rekod)
     el.innerHTML = head(esc(title()), esc(ctx.estate), 'hs-back') +
-      (vo && month === thisMonth && !prog ? todayCard(list) : '') +
-      (progOn ? '<div class="seg2 pg-seg" role="group"><button type="button" data-view=""' + (prog ? '' : ' class="on" aria-pressed="true"') + '>' + EA.t('HARIAN', 'DAILY') + '</button>' +
-        '<button type="button" data-view="prog"' + (prog ? ' class="on" aria-pressed="true"' : '') + '>' + EA.t('PROGRAM', 'PLAN VS ACTUAL') + '</button></div>' : '') +
+      (vo && month === thisMonth && !prog && !org ? todayCard(list) : '') +
+      (progOn || orgOn ? '<div class="seg2 pg-seg" role="group"><button type="button" data-view=""' + (prog || org ? '' : ' class="on" aria-pressed="true"') + '>' + EA.t('HARIAN', 'DAILY') + '</button>' +
+        (progOn ? '<button type="button" data-view="prog"' + (prog ? ' class="on" aria-pressed="true"' : '') + '>' + EA.t('PROGRAM', 'PLAN VS ACTUAL') + '</button>' : '') +
+        (orgOn ? '<button type="button" data-view="org"' + (org ? ' class="on" aria-pressed="true"' : '') + '>' + EA.t('ORANG', 'PEOPLE') + '</button>' : '') + '</div>' : '') +
       // v1.11: one line for any number of months: ‹ Month › and a year grid behind the month name.
       '<div class="mstep" role="group" aria-label="' + EA.t('Bulan', 'Month') + '">' +
         '<button type="button" id="hs-prev" aria-label="' + EA.t('Bulan sebelum', 'Month before') + '"' + (month <= FIRST_MONTH ? ' disabled' : '') + '>‹</button>' +
         '<button type="button" class="m" id="hs-pick"><b>' + esc(monthLong(month)) + ' ▾</b><small>' + list.length + EA.t(' hari ada rekod', ' days with records') + '</small></button>' +
         '<button type="button" id="hs-next" aria-label="' + EA.t('Bulan selepas', 'Month after') + '"' + (month >= thisMonth ? ' disabled' : '') + '>›</button></div>' +
-      (prog ? '<div id="pg-box">' + EA.fh.program.html(ctx.estate, month) + '</div>' : dayRest(list, t, cache));
-    wireMain(prog);
+      (prog ? '<div id="pg-box">' + EA.fh.program.html(ctx.estate, month) + '</div>' :
+       org ? '<div id="or-box">' + EA.fh.people.html(ctx.estate, month, list, cr, ctx.user) + '</div>' : dayRest(list, t, cache));
+    wireMain(prog, org, list, cr);
   }
   function dayRest(list, t, cache) {
     return tiles(t, '') +
@@ -168,11 +171,11 @@
         (cache ? EA.t('Dari pejabat dan telefon ini · dikemas kini ', 'From the office and this phone · updated ') + esc(cache.at) :
         EA.t('Dari telefon ini sahaja (40 hari). Bulan lain dari pejabat bila ada isyarat.', 'From this phone only (40 days). Other months come from the office when there is signal.')) + '</p>';
   }
-  function wireMain(prog) {
+  function wireMain(prog, org, list, cr) {
     var thisMonth = ym(new Date());
-    el.querySelectorAll('[data-view]').forEach(function (b) { b.onclick = function () { view = b.dataset.view; render(el, ctx); }; });
+    el.querySelectorAll('[data-view]').forEach(function (b) { b.onclick = function () { view = b.dataset.view; if (EA.fh.peopleReset) EA.fh.peopleReset(); render(el, ctx); }; });
     $('#hs-back').onclick = function () { location.hash = ''; };
-    function go(m) { month = m; render(el, ctx); }
+    function go(m) { month = m; if (EA.fh.peopleReset) EA.fh.peopleReset(); render(el, ctx); }
     $('#hs-prev').onclick = function () { if (month > FIRST_MONTH) go(addMonths(month, -1)); };
     $('#hs-next').onclick = function () { if (month < thisMonth) go(addMonths(month, 1)); };
     $('#hs-pick').onclick = function () { pickMonth(Number(month.slice(0, 4)), go); };
@@ -180,6 +183,7 @@
     el.querySelectorAll('[data-detail]').forEach(function (b) { b.onclick = function () { detail = b.dataset.detail; render(el, ctx); window.scrollTo(0, 0); }; });
     var pb = $('#rk-print'); if (pb) pb.onclick = printSheet;
     if (prog) { EA.fh.program.wire($('#pg-box'), ctx, month, function () { if (el && document.body.contains(el) && !el.hidden) render(el, ctx); }); return; }
+    if (org) EA.fh.people.wire($('#or-box'), ctx, month, function () { if (el && document.body.contains(el) && !el.hidden) render(el, ctx); }, list, cr);
     if (!quiet) refresh();
   }
   // Monday-to-Sunday weeks, newest first, each with its bunches and MT.

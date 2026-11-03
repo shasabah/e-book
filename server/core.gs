@@ -2580,6 +2580,44 @@ function lotStartInto_(est, text) {
   });
   return n;
 }
+/** v1.49 (Yu Chen, 3 Nov 2026): finish the "Data lama" import, which stopped at September 2026.
+ *  Christy's status report of 29.10.2026 shows manuring done in October that E-Book never received, because the team
+ *  only began keying maintenance by lot on 21 Oct: Blk 02 24.02 Ha, Blk 03 25.69 Ha and Blk 04 15.17 Ha in October,
+ *  against 13.09 Ha the staff keyed for Blk 03 (22-23 Oct) and none for Blk 02 or Blk 04. The muster confirms it:
+ *  in October the manuring gang was mustered only on Blk 03 (22-23 Oct) and Blk 01 (27-30 Oct), so the rest was done
+ *  before E-Book started. Only the difference is added, dated 20 Oct 2026 (the last day before keying began).
+ *  Blk 01 is left alone: Christy shows no October manuring there, while the staff keyed 28.87 Ha on 27-30 Oct; the
+ *  staff's own record is the better one and her next report will pick it up.
+ *  Live sheet only (the practice sheet is for training, not for the estate's history). Run once from the editor.
+ *  Running it twice adds nothing. Returns the Ha added per block. */
+var OCT_MAN_2026_ = { '02': 24.02, '03': 25.69, '04': 15.17 };
+function importOct2026Manuring() {
+  var was = PRACTICE_, out = {};
+  try {
+    PRACTICE_ = false; BOOK_ = null; ROWS_MEMO_ = null;
+    var est = 'SSGT', have = {};
+    standingRows_('FH_JOBDAY', est).forEach(function (r) {
+      if (r.task_code !== 'MAN' || String(r.date).slice(0, 7) !== '2026-10') return;
+      var ha = /^ha$/i.test(String(r.unit)) ? Number(r.qty) || 0 : Number(r.plan_ha) || 0;
+      have[String(r.block)] = Math.round(((have[String(r.block)] || 0) + ha) * 100) / 100;
+    });
+    var sh = roomTab_(book_(), 'FH_JOBDAY'), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
+    Object.keys(OCT_MAN_2026_).forEach(function (b) {
+      var gap = Math.round((OCT_MAN_2026_[b] - (have[b] || 0)) * 100) / 100;
+      if (gap < 0.05) { out[b] = 0; return; }
+      if (standingRows_('FH_JOBDAY', est).some(function (r) { return String(r.id) === 'IMP-' + est + '-MAN-202610-' + b; })) { out[b] = 0; return; }
+      var row = { id: 'IMP-' + est + '-MAN-202610-' + b, date: '2026-10-20', company: ESTATE_COMPANY[est] || '', estate: est, keyed_by: IMPORT_BY, keyed_at: now, phone: '', status: 'active', replaces: '',
+        received_at: now, chit: '', task_code: 'MAN', block: b, lots: '', workers: '', qty: gap, unit: 'Ha', bunches: '', plan_ha: '', job_status: 'done', reason: '', flags: '',
+        confirmed_by: '', confirmed_at: '', progress: '', bags: '', target: '', dose: '',
+        note: 'Data lama: membaja Okt 1-20 ikut Status Ladang 29.10.2026, sebelum kerja dikunci ikut petak' };
+      sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); }));
+      out[b] = gap;
+    });
+  } finally { PRACTICE_ = was; BOOK_ = null; ROWS_MEMO_ = null; }
+  Logger.log('importOct2026Manuring: ' + JSON.stringify(out));
+  return out;
+}
 function seedProgrammeInto_() {
   var ha = { '01': 33.20, '02': 33.93, '03': 31.18, '04': 32.34 }, A = ['01', '02'], B = ['03', '04'], ALL = A.concat(B), lines = [];
   function put(task, blocks, months, rounds, dose) {

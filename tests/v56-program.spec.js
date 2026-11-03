@@ -99,18 +99,28 @@ const OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30'
   check('daily keying: days closed 1 / 2, ramp 1 / 2, keyed same day 1 / 2; rain ½ day', (t1.match(/1 \/ 2 (hari|days)/g) || []).length === 3 && /½/.test(t1), (t1.match(/\d \/ \d (hari|days)/g) || []).join(' | '));
   check('one office call for the page (no loop)', asks === 1, String(asks));
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v56-program.png', fullPage: true });
-  // level 3: the block's lots as a list (no shapes loaded), short form "1-3 · 20 hr · 118"
-  await p.click('[data-pg="HA.01"]'); await p.waitForTimeout(300);
-  const lots = await p.innerText('.pg-lotbox .pg-lots');
-  check('level 3: Blk 01 harvest lots as a list, late first ("1-3 20 hr · 118"), no-record next, ready last; no map button without shapes', /^1-3 20 hr · 118/.test(lots) && lots.indexOf('1-2 12 hr · 90') > lots.indexOf('tiada rekod') && !(await p.$('[data-pgmap]')) && asks === 1, lots.slice(0, 80));
-  // with lot shapes: the map is drawn first, SENARAI switches to the list
-  await p.evaluate(() => { EA.lists.lotShapes = { SSGT: {} }; EA.lists.lotsFor('SSGT', '01').forEach(l => { const d = 0.0004; EA.lists.lotShapes.SSGT[l.lot] = [[l.lon - d, l.lat - d], [l.lon + d, l.lat - d], [l.lon + d, l.lat + d], [l.lon - d, l.lat + d], [l.lon - d, l.lat - d]]; }); });
-  await p.click('[data-pg="HA.01"]'); await p.waitForTimeout(200); await p.click('[data-pg="HA.01"]'); await p.waitForTimeout(300);
-  const mapN = await p.evaluate(() => ({ paths: document.querySelectorAll('.pg-map path').length, red: document.querySelectorAll('.pg-map path.r').length, amber: document.querySelectorAll('.pg-map path.a').length, grey: document.querySelectorAll('.pg-map path.x').length, texts: document.querySelectorAll('.pg-map text').length }));
+  // level 3, real lot shapes (lists/lot-shapes.js): the block map is drawn first
   const n01 = await p.evaluate(() => EA.lists.lotsFor('SSGT', '01').length);
-  check('level 3 map: every Blk 01 lot drawn (1 red, 1 amber, 1 green, the rest grey), each with its number', mapN.paths === n01 && mapN.red === 1 && mapN.amber === 1 && mapN.grey === n01 - 3 && mapN.texts === n01, JSON.stringify(mapN) + ' of ' + n01);
+  const shaped = await p.evaluate(() => { const S = (EA.lists.lotShapes || {}).SSGT || {}; return EA.lists.lotsFor('SSGT', '01').filter(l => S[l.lot]).length; });
+  check('every Blk 01 lot has an outline in lists/lot-shapes.js', shaped === n01, shaped + ' of ' + n01);
+  await p.click('[data-pg="HA.01"]'); await p.waitForTimeout(400);
+  // a lot cut by the river is several rings, so count the lots behind the paths (the <title> names them), not the paths
+  const mapN = await p.evaluate(() => {
+    const by = { r: new Set(), a: new Set(), g: new Set(), x: new Set() }, paths = [...document.querySelectorAll('.pg-map path')];
+    paths.forEach(el => { const lot = (el.querySelector('title') || {}).textContent.split(' ')[0]; (by[el.getAttribute('class')] || by.x).add(lot); });
+    return { paths: paths.length, red: [...by.r], amber: [...by.a], green: [...by.g], grey: by.x.size, texts: document.querySelectorAll('.pg-map text').length };
+  });
+  check('level 3 map: every Blk 01 lot drawn from the real outlines and coloured by its state (1-3 red, 1-2 amber, 1-1 green, the rest grey), one number per lot', mapN.paths >= n01 && mapN.red.join() === '1-3' && mapN.amber.join() === '1-2' && mapN.green.join() === '1-1' && mapN.grey === n01 - 3 && mapN.texts === n01 && asks === 1, JSON.stringify(mapN) + ' of ' + n01);
+  // SENARAI switches the same block to the list: late first, then no record, then ready
   await p.click('[data-pgmap="HA.01"][data-v="list"]'); await p.waitForTimeout(300);
-  check('SENARAI switches the same block to the list, without asking the office again', !(await p.$('.pg-map')) && !!(await p.$('.pg-lotbox .pg-lots')) && asks === 1, String(asks));
+  const lots = await p.innerText('.pg-lotbox .pg-lots');
+  check('SENARAI: the same block as a list, late first ("1-3 20 hr · 118"), no-record next, ready last, no office call', !(await p.$('.pg-map')) && /^1-3 20 hr · 118/.test(lots) && lots.indexOf('1-2 12 hr · 90') > lots.indexOf('tiada rekod') && asks === 1, lots.slice(0, 80));
+  // a block with no outlines yet (another estate, or before the shapes are traced): the list only, no PETA / SENARAI
+  await p.evaluate(() => { window.__shapes = EA.lists.lotShapes; EA.lists.lotShapes = {}; });
+  await p.click('[data-pg="HA.01"]'); await p.waitForTimeout(200); await p.click('[data-pg="HA.01"]'); await p.waitForTimeout(400);
+  check('no outlines for the block: the lots show as a list, with no PETA / SENARAI buttons', !(await p.$('[data-pgmap]')) && !(await p.$('.pg-map')) && !!(await p.$('.pg-lotbox .pg-lots')), '');
+  await p.evaluate(() => { EA.lists.lotShapes = window.__shapes; });
+  await p.click('[data-pg="HA.01"]'); await p.waitForTimeout(200);
   await p.click('[data-pg="blocks"]'); await p.waitForTimeout(300);
   check('level 1 tap: all jobs by block table, 4 blocks, old-data jobs grey', (await p.$$('.pg-bt')).length === 4 && (await p.$$('.pg-bt tr.pg-old')).length >= 4 && asks === 1, String((await p.$$('.pg-bt')).length));
   await p.click('[data-view=""]'); await p.waitForTimeout(300);

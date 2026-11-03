@@ -75,7 +75,7 @@ const OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30'
       c1: S.cps(data, L('1-1')), c2: S.cps(data, L('1-2')), c3: S.cps(data, L('1-3')), c4: S.cps(data, L('1-4')), m1: S.man(data, L('1-1')), m2: S.man(data, L('1-2')), rule: EA.fh.program.CPS_RULE };
   });
   check('harvest: 2 days green, 12 amber (ready), 20 red (late) with 118 bunches last time, no record = x', st.h1.k === 'g' && st.h2.k === 'a' && st.h3.k === 'r' && st.h3.bunches === 118 && st.h4.k === 'x', JSON.stringify([st.h1, st.h2, st.h3, st.h4]));
-  check('CPS: 10 days wait (green), 70 can spray (amber), 130 late (red), no record red/x; rule 60 / 120', st.c1.k === 'g' && st.c2.k === 'a' && st.c3.k === 'r' && st.c4.k === 'x' && st.rule.again === 60 && st.rule.late === 120, JSON.stringify([st.c1, st.c2, st.c3, st.c4]));
+  check('CPS: 10 days wait (green), 70 can spray (amber), 130 late (red), no record red/x; rule: target 90, earliest 60, late 120', st.c1.k === 'g' && st.c2.k === 'a' && st.c3.k === 'r' && st.c4.k === 'x' && st.rule.again === 60 && st.rule.target === 90 && st.rule.late === 120, JSON.stringify([st.c1, st.c2, st.c3, st.c4]));
   check('manuring: round keyed = green; no lot record = grey, never red (block Ha stays the true figure)', st.m1.k === 'g' && !st.m1.act && st.m2.k === 'x' && st.m2.act);
 
   // 2 · the screen
@@ -94,7 +94,7 @@ const OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30'
   check('level 1: crop due by today in working days, actual 150.2 MT, year line', /patut hingga \d\d\/\d\d \(\d+ hari\)/.test(t1) && /150\.[23] MT · \d+%/.test(t1) && /Tahun \(Jan–/.test(t1), (t1.match(/Nov: [^\n]*|patut hingga[^\n]*/) || [''])[0]);
   check('level 2: Tuai card ranks Blk 01 first: 1 late lot, the rest with no record counted apart, bunches waiting', /Tuai · pusingan/.test(t1) && /Blk 01 · 1 petak lewat · 36 tiada rekod\n±118 tandan/.test(t1), (t1.match(/Blk 01 · [^\n]*\n[^\n]*/) || [''])[0]);
   check('level 2: Membaja card, Blk 01 has 32 of 33.2 Ha left (only 1-1 done), person-days and "cukup / kurang" from 1 person a day', /Membaja · pusingan \d/.test(t1) && /Blk 01 · 3[0-3]\.\d Ha lagi/.test(t1) && /orang-hari · 1 orang → \d+ hari · (cukup|kurang \d+ hari)/.test(t1), (t1.match(/Blk 01 · 3[^\n]*|orang-hari[^\n]*/g) || []).join(' | '));
-  check('level 2: CPS card, 60-day rule in the heading; Blk 01 can spray (1-2 and 1-3 and the lots with no record)', /CPS · racun bulatan\n4 pusingan setahun · ulang selepas 60 hari/.test(t1) && /Blk 01 · boleh racun \d+\.\d Ha/.test(t1), (t1.match(/Blk 01 · boleh[^\n]*/) || [''])[0]);
+  check('level 2: CPS card, target 90 days and earliest 60 in the heading; Blk 01 can spray (1-2 and 1-3 and the lots with no record)', /CPS · racun bulatan\nsasaran 4 pusingan setahun \(±90 hari\) · paling awal 60 hari/.test(t1) && /Blk 01 · boleh racun \d+\.\d Ha/.test(t1), (t1.match(/Blk 01 · boleh[^\n]*/) || [''])[0]);
   check('level 2: abandoned palms 362 − 58 = 304 left, palms a day to 31/12', /304 pokok/.test(t1) && /Perlu sehari \(\d+ hari kerja\)\n\d+ pokok/.test(t1));
   check('daily keying: days closed 1 / 2, ramp 1 / 2, keyed same day 1 / 2; rain ½ day', (t1.match(/1 \/ 2 (hari|days)/g) || []).length === 3 && /½/.test(t1), (t1.match(/\d \/ \d (hari|days)/g) || []).join(' | '));
   check('one office call for the page (no loop)', asks === 1, String(asks));

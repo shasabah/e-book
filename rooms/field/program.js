@@ -11,8 +11,9 @@
 //   Then Disiplin harian — days closed, ramp with no fruit from an earlier day, work keyed the same day.
 // Lot states come from the office in one call (program_): last harvest per lot and bunches, last CPS date per lot,
 // manuring round done per lot (LIST_LOTSTART marked by Ferezelly on 5 Nov 2026, then the daily keying by lot).
-// CPS rule (Yu Chen, 3 Nov 2026): 4 rounds a year 90 days apart; a lot may be sprayed again from 60 days after its last
-// spray; red from 120 days. Harvest round: ready 10–15 days, late over 15 (lists/tasks.js lotRound).
+// CPS rule (Yu Chen, 3 Nov 2026): the target is 4 rounds a year, about 90 days apart. 60 days is the earliest a lot may
+// be sprayed again (under that the circle is still clean and the chemical is wasted), so a lot turns amber "boleh racun"
+// at 60 days — which is what lets Sugut catch up this year — and red "lewat" past 120 days, a round missed. Harvest round: ready 10–15 days, late over 15 (lists/tasks.js lotRound).
 // Tonnes stay at block level; a lot shows days and bunches only (exact numbers). Pruning, VOP spray and slashing are
 // not ranked (old data, by block only); they show grey in the block's job table.
 (function () {
@@ -20,7 +21,7 @@
   EA.fh = EA.fh || {};
   var KEY = 'fh.prog.';
   var open = {}, asking = {}, silent = false, oldOffice = false;
-  var CPS_RULE = { again: 60, late: 120 };
+  var CPS_RULE = { target: 90, again: 60, late: 120 };   // target gap 90 days (4 rounds a year); earliest 60; late past 120
   function esc(s) { return EA.ui.esc(s); }
   function f1(v) { return (Math.round(v * 10) / 10).toFixed(1); }
   function f2(v) { return (Math.round(v * 100) / 100).toFixed(2); }
@@ -236,10 +237,10 @@
       var k = p.late > 0.05 ? 'r' : p.can > 0.05 ? 'a' : 'g', text, right = p.pd ? '≈ ' + Math.ceil(p.pd) + EA.t(' o-h', ' p-d') : '';
       if (p.can > 0.05) text = 'Blk ' + p.b + ' · ' + EA.t('boleh racun ', 'can spray ') + f1(p.can) + ' Ha';
       else { var nx = p.nextDate ? new Date(p.nextDate + 'T00:00:00') : null; if (nx) nx.setDate(nx.getDate() + CPS_RULE.again); text = 'Blk ' + p.b + ' · ' + EA.t('tunggu', 'wait') + (nx ? ' · ' + EA.t('boleh dari ', 'from ') + dm(ym(nx) + '-' + String(nx.getDate()).padStart(2, '0')) : ''); right = ''; }
-      return blockLine(estate, 'CPS', p.b, k, text, right, states, p.items, p.can > 0.05 ? EA.t('hari sejak racun · merah lebih ' + CPS_RULE.late + ' hari atau tiada rekod', 'days since spray · red over ' + CPS_RULE.late + ' days or no record') : '');
+      return blockLine(estate, 'CPS', p.b, k, text, right, states, p.items, p.can > 0.05 ? EA.t('hari sejak racun · kuning = boleh racun (' + CPS_RULE.again + ' hari ke atas) · merah = lewat (' + CPS_RULE.late + ' hari) atau tiada rekod', 'days since spray · amber = may spray (' + CPS_RULE.again + ' days or more) · red = late (' + CPS_RULE.late + ' days) or no record') : '');
     });
     var nodata = noLotData(data) ? '<p class="pg-note">' + EA.t('Peta petak terisi sendiri apabila kerja dikunci ikut petak. Jumlah Ha di atas sudah betul.', 'The lot map fills itself as work is keyed by lot. The Ha above are already right.') + '</p>' : '';
-    return '<div class="card pg-card"><h2>' + EA.t('CPS · racun bulatan', 'CPS · circle spray') + '<small>' + EA.t(rounds + ' pusingan setahun · ulang selepas ' + CPS_RULE.again + ' hari · tidak dipercepat', rounds + ' rounds a year · repeat after ' + CPS_RULE.again + ' days · never earlier') + '</small></h2>' + lines.join('') +
+    return '<div class="card pg-card"><h2>' + EA.t('CPS · racun bulatan', 'CPS · circle spray') + '<small>' + EA.t('sasaran ' + rounds + ' pusingan setahun (±' + CPS_RULE.target + ' hari) · paling awal ' + CPS_RULE.again + ' hari selepas racun lepas', 'target ' + rounds + ' rounds a year (±' + CPS_RULE.target + ' days) · at the earliest ' + CPS_RULE.again + ' days after the last spray') + '</small></h2>' + lines.join('') +
       (nowHa > 0.05 ? '<p class="pg-note">' + EA.t('Boleh racun sekarang ', 'Can spray now ') + f1(nowHa) + ' Ha · ' + gangLine('CPS', pd, left, data) + '</p>' : '') + nodata + '</div>';
   }
   function apCard(estate, data) {

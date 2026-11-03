@@ -21,6 +21,10 @@
   EA.fh = EA.fh || {};
   var KEY = 'fh.prog.';
   var open = {}, asking = {}, silent = false, oldOffice = false;
+  // SEMAK PETAK (v1.49, Yu Chen 3 Nov 2026): the Staf bertugas ticks which lots have already had this round, so the
+  // Nov–Dec outstanding list is real and 2027 can be planned per lot. tick[job.block] = { set: {lot: 'y'|'n'}, month }.
+  var tick = {};
+  var TICKABLE = { CPS: 1, MAN: 1 };
   var CPS_RULE = { target: 90, again: 60, late: 120 };   // target gap 90 days (4 rounds a year); earliest 60; late past 120
   function esc(s) { return EA.ui.esc(s); }
   function f1(v) { return (Math.round(v * 10) / 10).toFixed(1); }
@@ -123,6 +127,11 @@
     return { k: k, age: age, date: d, act: k !== 'g' };
   }
   function noLotData(data) { return !data.lotJobs; }
+  // The Staf bertugas ticks his own estate's lots; the Owner may too. Everyone else only looks (Yu Chen, 3 Nov 2026).
+  function canTick(estate) {
+    var u = EA.currentUser && EA.currentUser();
+    return !!(u && (u.role === 'Staff' || u.role === 'Owner') && (u.estates || []).indexOf(estate) >= 0);
+  }
 
   // ---------- level 3: the lots of one block, as a map or a list ----------
   function shapesFor(estate, block) {
@@ -131,7 +140,7 @@
     (EA.lists.lotsFor(estate, block) || []).forEach(function (l) { if (all[l.lot]) { out[l.lot] = all[l.lot]; n++; } });
     return n ? out : null;
   }
-  function lotMap(estate, block, states) {
+  function lotMap(estate, block, states, tickId) {
     var sh = shapesFor(estate, block); if (!sh) return '';
     var rings = [], lots = EA.lists.lotsFor(estate, block) || [];
     function each(lot, fn) { var g = sh[lot]; if (!g) return; (Array.isArray(g[0][0]) ? g : [g]).forEach(fn); }
@@ -143,24 +152,62 @@
     function Y(lat) { return ((-lat * ky - minY) * s + 4).toFixed(1); }
     lots.forEach(function (l) {
       var st = states[l.lot]; if (!st) return;
-      each(l.lot, function (ring) { rings.push('<path class="' + st.k + '" d="M' + ring.map(function (p) { return X(p[0]) + ',' + Y(p[1]); }).join('L') + 'Z"><title>' + esc(l.lot + ' · ' + f2(l.ha) + ' Ha' + (st.text ? ' · ' + st.text : '')) + '</title></path>'); });
+      each(l.lot, function (ring) { rings.push('<path class="' + st.k + '"' + (tickId ? ' data-pglot="' + esc(tickId + '|' + l.lot) + '"' : '') + ' d="M' + ring.map(function (p) { return X(p[0]) + ',' + Y(p[1]); }).join('L') + 'Z"><title>' + esc(l.lot + ' · ' + f2(l.ha) + ' Ha' + (st.text ? ' · ' + st.text : '')) + '</title></path>'); });
     });
     lots.forEach(function (l) { if (sh[l.lot] && l.lat) rings.push('<text x="' + X(l.lon) + '" y="' + Y(l.lat) + '">' + esc(l.lot.split('-')[1]) + '</text>'); });
-    return '<svg class="pg-map" viewBox="0 0 ' + (W + 8) + ' ' + H + '" role="img" aria-label="' + esc(EA.t('Peta Blk ', 'Map Blk ') + block) + '">' + rings.join('') + '</svg>';
+    return '<svg class="pg-map' + (tickId ? ' pg-tap' : '') + '" viewBox="0 0 ' + (W + 8) + ' ' + H + '" role="img" aria-label="' + esc(EA.t('Peta Blk ', 'Map Blk ') + block) + '">' + rings.join('') + '</svg>';
   }
-  function lotList(items) {
-    return '<p class="pg-lots">' + items.map(function (x) { return '<span class="' + x.k + '">' + esc(x.lot) + (x.sub ? ' <small>' + esc(x.sub) + '</small>' : '') + '</span>'; }).join('') + '</p>';
+  function lotList(items, tickId) {
+    return '<p class="pg-lots">' + items.map(function (x) {
+      var inner = esc(x.lot) + (x.sub ? ' <small>' + esc(x.sub) + '</small>' : '');
+      return tickId ? '<button type="button" class="' + x.k + '" data-pglot="' + esc(tickId + '|' + x.lot) + '" aria-pressed="' + (x.k === 'g') + '">' + inner + '</button>'
+        : '<span class="' + x.k + '">' + inner + '</span>';
+    }).join('') + '</p>';
   }
   // One block line under a job: tap to open its lots (map if shapes exist and PETA chosen, else list).
-  function blockLine(estate, code, b, k, text, right, states, items, foot) {
+  function blockLine(estate, code, b, k, text, right, states, items, foot, allStates, canTick) {
     var id = code + '.' + b, on = !!open[id], hasMap = !!shapesFor(estate, b), map = hasMap && open['map.' + id] !== false;
-    var h = '<button type="button" class="pg-bl" data-pg="' + esc(id) + '" aria-expanded="' + on + '">' + dot(k) + '<span>' + text + '</span><em>' + right + (items.length ? (on ? ' ‹' : ' ›') : '') + '</em></button>';
-    if (!on || !items.length) return h;
-    h += '<div class="pg-lotbox">' +
-      (hasMap ? '<div class="seg pg-seg"><button type="button" data-pgmap="' + esc(id) + '" data-v="map" aria-pressed="' + map + '">' + EA.t('PETA', 'MAP') + '</button><button type="button" data-pgmap="' + esc(id) + '" data-v="list" aria-pressed="' + !map + '">' + EA.t('SENARAI', 'LIST') + '</button></div>' : '') +
-      (map ? lotMap(estate, b, states) : lotList(items)) +
-      (foot ? '<p class="pg-note">' + foot + '</p>' : '') + '</div>';
+    var t = tick[id], ticking = !!t;
+    var h = '<button type="button" class="pg-bl" data-pg="' + esc(id) + '" aria-expanded="' + on + '">' + dot(k) + '<span>' + text + '</span><em>' + right + (items.length || ticking ? (on ? ' ‹' : ' ›') : '') + '</em></button>';
+    if (!on || (!items.length && !ticking)) return h;
+    // SEMAK PETAK: every lot of the block, coloured by what the tick would save (green done, grey not done).
+    var shown = items, st = states;
+    if (ticking) {
+      st = {}; shown = [];
+      (EA.lists.lotsFor(estate, b) || []).forEach(function (l) {
+        var now = tickValue(id, l.lot, allStates);
+        st[l.lot] = { k: now ? 'g' : 'x', text: now ? EA.t('siap', 'done') : EA.t('belum', 'not done') };
+        shown.push({ lot: l.lot, k: st[l.lot].k, sub: f2(l.ha) + ' Ha' });
+      });
+    }
+    h += '<div class="pg-lotbox' + (ticking ? ' pg-ticking' : '') + '">' +
+      (ticking ? tickBar(estate, code, b, id) : '') +
+      (hasMap && !ticking ? '<div class="seg pg-seg"><button type="button" data-pgmap="' + esc(id) + '" data-v="map" aria-pressed="' + map + '">' + EA.t('PETA', 'MAP') + '</button><button type="button" data-pgmap="' + esc(id) + '" data-v="list" aria-pressed="' + !map + '">' + EA.t('SENARAI', 'LIST') + '</button></div>' : '') +
+      ((map || ticking) && hasMap ? lotMap(estate, b, st, ticking ? id : '') : lotList(shown, ticking ? id : '')) +
+      (ticking ? '<p class="pg-note">' + EA.t('Tekan petak untuk tukar siap / belum. Hijau = sudah buat pusingan ini.', 'Tap a lot to switch done / not done. Green = this round is done.') + '</p>' : (foot ? '<p class="pg-note">' + foot + '</p>' : '')) +
+      (canTick && !ticking ? '<button type="button" class="link-btn pg-more" data-pgtick="' + esc(id) + '">' + EA.t('SEMAK PETAK ›', 'CHECK LOTS ›') + '</button>' : '') +
+      '</div>';
     return h;
+  }
+  // What the lot would be after the ticks so far: the staff's change if any, else what the records say.
+  function tickValue(id, lot, allStates) {
+    var t = tick[id];
+    if (t && t.set[lot]) return t.set[lot] === 'y';
+    var st = allStates && allStates[lot];
+    return !!(st && st.k === 'g');
+  }
+  var MON_PICK = 4;   // how many months back the CPS "sprayed when" chooser offers
+  function tickBar(estate, code, b, id) {
+    var t = tick[id], n = 0, tot = (EA.lists.lotsFor(estate, b) || []).length;
+    (EA.lists.lotsFor(estate, b) || []).forEach(function (l) { if (tickValue(id, l.lot, t.base)) n++; });
+    var h = '<div class="pg-tickbar"><b>' + EA.t('Semak petak · Blk ', 'Check lots · Blk ') + esc(b) + '</b><span>' + n + ' / ' + tot + EA.t(' siap', ' done') + '</span></div>' +
+      '<div class="seg pg-seg"><button type="button" data-pgall="' + esc(id) + '" data-v="y">' + EA.t('SEMUA SIAP', 'ALL DONE') + '</button><button type="button" data-pgall="' + esc(id) + '" data-v="n">' + EA.t('SEMUA BELUM', 'ALL NOT DONE') + '</button></div>';
+    if (code === 'CPS') {
+      var opts = [];
+      for (var i = 0; i < MON_PICK; i++) { var m = addMonths(EA.today().slice(0, 7), -i); opts.push('<button type="button" data-pgmon="' + esc(id) + '" data-v="' + m + '" aria-pressed="' + (t.month === m) + '">' + mon(m) + '</button>'); }
+      h += '<div class="pg-tickbar"><span>' + EA.t('Racun bila?', 'Sprayed when?') + '</span></div><div class="seg pg-seg">' + opts.join('') + '</div>';
+    }
+    return h + '<div class="pg-tickact"><button type="button" class="btn" data-pgsave="' + esc(id) + '">' + EA.t('SIMPAN', 'SAVE') + '</button><button type="button" class="link-btn" data-pgcancel="' + esc(id) + '">' + EA.t('BATAL', 'CANCEL') + '</button></div>';
   }
   function gangLine(code, pd, left, data, bm, en) {
     var g = data && data.gang && data.gang[code];
@@ -210,14 +257,28 @@
       st.text = f2(l.ha) + ' Ha · ' + bags + EA.t(' beg', ' bags');
       p.ha += l.ha || 0; p.items.push({ lot: l.lot, k: 'x', sub: f2(l.ha) + ' · ' + bags });
     });
-    Object.keys(per).forEach(function (b) { var p = per[b]; p.pd = personDays(estate, 'MAN', p.ha, b, lastDose(data, 'MAN', b, month) || 2.5); rest += p.ha; pd += p.pd; if (p.ha > 0.05) summary[b].red++; });
+    // The Ha still to do comes from the office's block figures (programme Ha for the year less the Ha done): that is the
+    // accounting truth and it matches the estate status report. The lots only say WHICH ones, and until they are all
+    // ticked the lot sum is larger. Both are shown, so a real gap between them is visible instead of hidden.
+    Object.keys(per).forEach(function (b) {
+      var p = per[b], x = j.blocks[b];
+      p.lotHa = p.ha;
+      p.ha = x ? Math.max(0, Math.round((x.all * x.ha - x.doneAll) * 100) / 100) : p.lotHa;
+      p.unknown = (EA.lists.lotsFor(estate, b) || []).filter(function (l) { return !(states[l.lot] && states[l.lot].k === 'g'); }).length;
+      p.pd = personDays(estate, 'MAN', p.ha, b, lastDose(data, 'MAN', b, month) || 2.5); rest += p.ha; pd += p.pd; if (p.ha > 0.05) summary[b].red++;
+    });
     var bl = Object.keys(per).map(function (k) { return per[k]; }).sort(function (a, b) { return b.ha - a.ha || (a.b < b.b ? -1 : 1); });
     var lines = bl.map(function (p) {
       var k = p.ha > 0.05 ? (p.ha > blockHa(estate, p.b) * 0.5 ? 'r' : 'a') : 'g';
-      return blockLine(estate, 'MAN', p.b, k, 'Blk ' + p.b + ' · ' + (p.ha > 0.05 ? f1(p.ha) + EA.t(' Ha lagi', ' Ha left') : EA.t('siap', 'done')), p.pd ? '≈ ' + Math.ceil(p.pd) + EA.t(' o-h', ' p-d') : '', states, p.items, p.ha > 0.05 ? EA.t('kelabu = belum ada rekod petak · hijau = sudah dibaja · Ha · beg', 'grey = no lot record yet · green = manured · Ha · bags') : '');
+      var gap = p.lotHa - p.ha, note = p.ha > 0.05
+        ? EA.t('kelabu = belum ada rekod petak · hijau = sudah dibaja · Ha · beg', 'grey = no lot record yet · green = manured · Ha · bags') +
+          (p.unknown ? '<br>' + EA.t(p.unknown + ' petak belum ditanda (' + f1(p.lotHa) + ' Ha). Rekod blok kata ' + f1(p.ha) + ' Ha lagi — tekan SEMAK PETAK untuk tanda petak mana sudah siap.',
+                                     p.unknown + ' lots not ticked yet (' + f1(p.lotHa) + ' Ha). The block record says ' + f1(p.ha) + ' Ha left — tap CHECK LOTS to mark which are done.') : '')
+        : '';
+      return blockLine(estate, 'MAN', p.b, k, 'Blk ' + p.b + ' · ' + (p.ha > 0.05 ? f1(p.ha) + EA.t(' Ha lagi', ' Ha left') : EA.t('siap', 'done')), p.pd ? '≈ ' + Math.ceil(p.pd) + EA.t(' o-h', ' p-d') : '', states, p.items, note, states, canTick(estate));
     });
     var nodata = noLotData(data) ? '<p class="pg-note">' + EA.t('Peta petak terisi sendiri apabila kerja dikunci ikut petak. Jumlah Ha di atas sudah betul.', 'The lot map fills itself as work is keyed by lot. The Ha above are already right.') + '</p>' : '';
-    return '<div class="card pg-card"><h2>' + EA.t('Membaja · pusingan ', 'Manuring · round ') + rounds + '<small>' + f1(rest) + EA.t(' Ha lagi · siap sebelum hujan lebat', ' Ha left · finish before the heavy rain') + '</small></h2>' + lines.join('') +
+    return '<div class="card pg-card"><h2>' + EA.t('Membaja · pusingan ', 'Manuring · round ') + rounds + '<small>' + f1(rest) + EA.t(' Ha lagi ikut rekod blok · siap sebelum hujan lebat', ' Ha left by the block record · finish before the heavy rain') + '</small></h2>' + lines.join('') +
       (rest > 0.05 ? '<p class="pg-note">' + gangLine('MAN', pd, left, data) + (left ? ' · ' + EA.t('tinggal ' + left + ' hari kerja bulan ini', left + ' working days left this month') : '') + '</p>' : '<p class="pg-note ok-t">' + EA.t('Semua petak siap untuk tahun ini.', 'Every lot is done for the year.') + '</p>') + nodata + '</div>';
   }
   function cpsCard(estate, month, cal, data, summary) {
@@ -237,7 +298,7 @@
       var k = p.late > 0.05 ? 'r' : p.can > 0.05 ? 'a' : 'g', text, right = p.pd ? '≈ ' + Math.ceil(p.pd) + EA.t(' o-h', ' p-d') : '';
       if (p.can > 0.05) text = 'Blk ' + p.b + ' · ' + EA.t('boleh racun ', 'can spray ') + f1(p.can) + ' Ha';
       else { var nx = p.nextDate ? new Date(p.nextDate + 'T00:00:00') : null; if (nx) nx.setDate(nx.getDate() + CPS_RULE.again); text = 'Blk ' + p.b + ' · ' + EA.t('tunggu', 'wait') + (nx ? ' · ' + EA.t('boleh dari ', 'from ') + dm(ym(nx) + '-' + String(nx.getDate()).padStart(2, '0')) : ''); right = ''; }
-      return blockLine(estate, 'CPS', p.b, k, text, right, states, p.items, p.can > 0.05 ? EA.t('hari sejak racun · kuning = boleh racun (' + CPS_RULE.again + ' hari ke atas) · merah = lewat (' + CPS_RULE.late + ' hari) atau tiada rekod', 'days since spray · amber = may spray (' + CPS_RULE.again + ' days or more) · red = late (' + CPS_RULE.late + ' days) or no record') : '');
+      return blockLine(estate, 'CPS', p.b, k, text, right, states, p.items, p.can > 0.05 ? EA.t('hari sejak racun · kuning = boleh racun (' + CPS_RULE.again + ' hari ke atas) · merah = lewat (' + CPS_RULE.late + ' hari) atau tiada rekod', 'days since spray · amber = may spray (' + CPS_RULE.again + ' days or more) · red = late (' + CPS_RULE.late + ' days) or no record') : '', states, canTick(estate));
     });
     var nodata = noLotData(data) ? '<p class="pg-note">' + EA.t('Peta petak terisi sendiri apabila kerja dikunci ikut petak. Jumlah Ha di atas sudah betul.', 'The lot map fills itself as work is keyed by lot. The Ha above are already right.') + '</p>' : '';
     return '<div class="card pg-card"><h2>' + EA.t('CPS · racun bulatan', 'CPS · circle spray') + '<small>' + EA.t('sasaran ' + rounds + ' pusingan setahun (±' + CPS_RULE.target + ' hari) · paling awal ' + CPS_RULE.again + ' hari selepas racun lepas', 'target ' + rounds + ' rounds a year (±' + CPS_RULE.target + ' days) · at the earliest ' + CPS_RULE.again + ' days after the last spray') + '</small></h2>' + lines.join('') +
@@ -336,7 +397,53 @@
   function wire(box, ctx, month, redraw) {
     box.querySelectorAll('[data-pg]').forEach(function (b) { b.onclick = function () { var k = b.dataset.pg; open[k] = !open[k]; quietly(redraw); }; });
     box.querySelectorAll('[data-pgmap]').forEach(function (b) { b.onclick = function () { open['map.' + b.dataset.pgmap] = b.dataset.v === 'map'; quietly(redraw); }; });
+    // SEMAK PETAK
+    box.querySelectorAll('[data-pgtick]').forEach(function (b) { b.onclick = function () {
+      var id = b.dataset.pgtick, data = EA.local.get(KEY + ctx.estate + '.' + month, null) || {};
+      tick[id] = { set: {}, month: EA.today().slice(0, 7), base: baseStates(ctx.estate, id, data) };
+      quietly(redraw);
+    }; });
+    box.querySelectorAll('[data-pglot]').forEach(function (b) { b.onclick = function () {
+      var p = b.dataset.pglot.split('|'), id = p[0], lot = p[1], t = tick[id]; if (!t) return;
+      t.set[lot] = tickValue(id, lot, t.base) ? 'n' : 'y';
+      quietly(redraw);
+    }; });
+    box.querySelectorAll('[data-pgall]').forEach(function (b) { b.onclick = function () {
+      var id = b.dataset.pgall, t = tick[id]; if (!t) return;
+      (EA.lists.lotsFor(ctx.estate, id.split('.')[1]) || []).forEach(function (l) { t.set[l.lot] = b.dataset.v; });
+      quietly(redraw);
+    }; });
+    box.querySelectorAll('[data-pgmon]').forEach(function (b) { b.onclick = function () { var t = tick[b.dataset.pgmon]; if (t) { t.month = b.dataset.v; quietly(redraw); } }; });
+    box.querySelectorAll('[data-pgcancel]').forEach(function (b) { b.onclick = function () { delete tick[b.dataset.pgcancel]; quietly(redraw); }; });
+    box.querySelectorAll('[data-pgsave]').forEach(function (b) { b.onclick = function () { saveTicks(ctx, month, b.dataset.pgsave, redraw); }; });
     if (!silent) refresh(ctx.estate, month, redraw);
   }
+  // What the records say today, before any tick, for every lot of the block.
+  function baseStates(estate, id, data) {
+    var code = id.split('.')[0], b = id.split('.')[1], out = {};
+    (EA.lists.lotsFor(estate, b) || []).forEach(function (l) { out[l.lot] = code === 'CPS' ? cpsState(data, l) : manState(data, l); });
+    return out;
+  }
+  // Save only the lots the staff actually changed: one row each, nothing deleted. done_on empty = not done.
+  function saveTicks(ctx, month, id, redraw) {
+    var t = tick[id]; if (!t) return;
+    var code = id.split('.')[0], b = id.split('.')[1], estate = ctx.estate;
+    var key = KEY + estate + '.' + month, data = EA.local.get(key, null) || {};
+    var when = code === 'CPS' ? lastDayOf(t.month) : EA.today(), n = 0;
+    try {
+      Object.keys(t.set).forEach(function (lot) {
+        var want = t.set[lot] === 'y', had = !!(t.base[lot] && t.base[lot].k === 'g');
+        if (want === had) return;
+        EA.save('LIST_LOTSTART', 'FH', estate, { task_code: code, block: b, lot: lot, done_on: want ? when : '', round: '', note: EA.t('Semak petak', 'Lot check') });
+        if (data.lotJobs && data.lotJobs[code]) { if (want) data.lotJobs[code][lot] = when; else delete data.lotJobs[code][lot]; }
+        n++;
+      });
+    } catch (e) { EA.ui.toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message); return; }
+    if (data.lotJobs) EA.local.set(key, data);
+    delete tick[id];
+    EA.ui.toast(n ? EA.t(n + ' petak disimpan', n + ' lots saved') : EA.t('Tiada perubahan', 'No change'));
+    quietly(redraw);
+  }
+  function lastDayOf(m) { var x = new Date(m + '-01T00:00:00'), e = daysIn(m), today = EA.today(); var d = m + '-' + String(e).padStart(2, '0'); return d > today ? today : d; }
   EA.fh.program = { html: html, wire: wire, calc: calc, refresh: refresh, states: { harvest: harvestState, man: manState, cps: cpsState }, CPS_RULE: CPS_RULE };
 })();

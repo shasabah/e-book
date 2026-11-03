@@ -99,3 +99,22 @@ r = ctx.doRead_(staff, { action: 'program', estate: 'MELU', month: '2026-09' });
 check('another estate is refused', r.error === 'not_your_estate', JSON.stringify(r));
 r = ctx.doRead_(staff, { action: 'program', estate: 'SSGT', month: '2026-09' });
 check('the staff may read it', r.ok === true && r.programme.length === 68);
+
+// v1.49 SEMAK PETAK: the staff ticks which lots have had the round (LIST_LOTSTART)
+const pengurus = { user_code: 'PGR', role: 'Pengurus', estates: ['SSGT'] };
+const clerk = { user_code: 'CLK', role: 'Clerk', estates: ['SSGT'] };
+check('the staff may write a lot tick; the Pengurus and the clerk may not', ctx.canWrite_(staff, 'LIST_LOTSTART') === true && ctx.canWrite_(pengurus, 'LIST_LOTSTART') === false && ctx.canWrite_(clerk, 'LIST_LOTSTART') === false);
+check('a lot tick is not a shared list: the staff still cannot write the programme or the people list', ctx.canWrite_(staff, 'LIST_PROGRAMME') === false && ctx.canWrite_(staff, 'LIST_PEOPLE') === false);
+const LS = (id, at, vals) => [id, at.slice(0, 10), 'SPLT', 'SSGT', 'STF', at, 'P13', 'active', ''].concat(vals, ['']);
+tabs.LIST_LOTSTART = S(['task_code','block','lot','done_on','round','note'], [
+  LS('ls1', D(2) + ' 09:00', ['MAN', '01', '1-1', D(2), '', 'Semak petak']),
+  LS('ls2', D(2) + ' 09:00', ['CPS', '01', '1-2', '2026-10-14', '', 'Semak petak']),
+  LS('ls3', D(2) + ' 09:00', ['MAN', '01', '1-9', D(2), '', 'Semak petak']),
+  LS('ls4', D(1) + ' 17:30', ['MAN', '01', '1-9', '', '', 'Semak petak'])        // ticked, then unticked the next day
+]);
+const mo = D(0).slice(0, 7);
+r = ctx.program_('SSGT', mo);
+check('the ticks come back with the month: manuring 1-1 done, CPS 1-2 dated 14 Oct', !!r.lotJobs && r.lotJobs.MAN['1-1'] === D(2) && r.lotJobs.CPS['1-2'] === '2026-10-14', JSON.stringify(r.lotJobs && { MAN: r.lotJobs.MAN, CPS: r.lotJobs.CPS }));
+check('an untick (a later row with no date) wins over the earlier tick: 1-9 is not done', !!r.lotJobs && !r.lotJobs.MAN['1-9'], JSON.stringify(r.lotJobs && r.lotJobs.MAN));
+check('nothing is deleted: both 1-9 rows are still in the sheet', tabs.LIST_LOTSTART.rows.filter(x => x[11] === '1-9').length === 2, String(tabs.LIST_LOTSTART.rows.filter(x => x[11] === '1-9').length));
+check('a past month carries no lot state (lots are for the current month only)', ctx.program_('SSGT', '2026-09').lotJobs === null);

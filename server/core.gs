@@ -378,6 +378,9 @@ var TICKET_TABS = ['FH_TICKET', 'FH_GRADING', 'FH_TICKET_BLOCK', 'FH_TICKET_HARV
 function canWrite_(user, tab) {
   var r = user.role;
   if (tab === 'APP_ERROR' || tab === 'CHECK') return true;
+  // v1.49 SEMAK PETAK: the Staf bertugas ticks which lots have had the round (LIST_LOTSTART), for his own estate.
+  // It is a record of field work, not a shared list, so the staff may write it; every tick is a new row.
+  if (tab === 'LIST_LOTSTART') return r === 'Staff' || r === 'Owner' || r === 'HQ';
   if (/^LIST_/.test(tab)) return r === 'Owner' || r === 'HQ';
   if (TICKET_TABS.indexOf(tab) >= 0) return r === 'Clerk' || r === 'Owner' || r === 'HQ';
   // v1.12: the clerk keys only tickets and grading (above); the chit, day's work and lorry only the
@@ -2345,12 +2348,18 @@ function program_(estate, month) {
   var lotJobs = null;
   if (rl) {
     lotJobs = { CPS: {}, MAN: {}, bunches: {} };
+    // SEMAK PETAK (v1.49): the staff's ticks. The newest tick per job and lot wins; done_on empty = "not done",
+    // so an untick is just a later row. The daily keying by lot (below) still wins over an older tick.
+    var tickAt = {};
     standingRows_('LIST_LOTSTART', estate).forEach(function (r) {
-      var lot = String(r.lot), d = String(r.done_on).slice(0, 10);
-      if (r.task_code === 'CPS' && d) lotJobs.CPS[lot] = d;
-      if (r.task_code === 'MAN' && /R4/i.test(String(r.round))) lotJobs.MAN[lot] = d || '2026-10-31';
+      var code = String(r.task_code), lot = String(r.lot), k = code + '|' + lot, at = String(r.keyed_at || r.date || '');
+      if (code !== 'CPS' && code !== 'MAN') return;
+      if (tickAt[k] && at < tickAt[k]) return;
+      tickAt[k] = at;
+      var d = String(r.done_on).slice(0, 10);
+      if (d) lotJobs[code][lot] = d; else delete lotJobs[code][lot];
     });
-    var manFrom = String((LOT_START_[estate] || {}).manFrom || '2026-10-31');
+    var manFrom = String((LOT_START_[estate] || {}).manFrom || '2026-10-31');   // manuring keyed by lot after this date counts for the round
     Object.keys(rl.CPS || {}).forEach(function (l) { if (!lotJobs.CPS[l] || rl.CPS[l] > lotJobs.CPS[l]) lotJobs.CPS[l] = rl.CPS[l]; });
     Object.keys(rl.MAN || {}).forEach(function (l) { if (rl.MAN[l] > manFrom && (!lotJobs.MAN[l] || rl.MAN[l] > lotJobs.MAN[l])) lotJobs.MAN[l] = rl.MAN[l]; });
     // bunches the last time each lot was harvested (sum of the harvesters' lines on that day)

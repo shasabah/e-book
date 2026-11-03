@@ -746,3 +746,14 @@ div.td-it { cursor: default; }
 .pg-bt { margin-top: 8px; }
 .pg-bt th:first-child small { font-weight: 400; color: var(--muted); }
 .pg-t tr.pg-old td { color: var(--muted); }
+/* v1.49 SEMAK PETAK: ticking lots on the block map or list */
+.pg-ticking { outline: 2px solid var(--wait); }
+.pg-tickbar { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13.5px; margin: 2px 0 6px; }
+.pg-tickbar b { font-size: 14px; }
+.pg-tickbar span { color: var(--muted); font-size: 12.5px; }
+.pg-tickact { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+.pg-tickact .btn { flex: 1; min-height: 44px; }
+.pg-map.pg-tap path { cursor: pointer; }
+.pg-lots button { font: inherit; font-size: 13px; padding: 3px 8px; border-radius: 8px; background: var(--paper); border: 1px solid var(--line); color: var(--ink); cursor: pointer; }
+.pg-lots button.g { background: var(--ok-soft, #e1f3e6); border-color: var(--ok); color: var(--ok); font-weight: 600; }
+.pg-lots button.x { color: var(--muted); }

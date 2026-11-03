@@ -27,7 +27,7 @@ const OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30'
   const errs = []; let asks = 0; p.on('pageerror', e => errs.push(e.message));
   const now = D(0), m = now.slice(0, 7);
   const live = { ok: true, estate: 'SSGT', month: m, at: now + ' 21:30', from: '2020-01-01', programme: programme(m.slice(0, 4)),
-    done: { ['CPS|01|' + m]: 5 }, crop: [{ month: m, budget: 220, days: 26, mt: 150.25 }], gang: { CPS: 1, MAN: 1, SL: 1, DEC: 1, VOPS: 1, RP: 1, HA: 3.4 },
+    done: { ['CPS|01|' + m]: 5, ['MAN|01|' + m.slice(0, 4) + '-03']: 33.2, ['MAN|01|' + m.slice(0, 4) + '-06']: 33.2, ['MAN|01|' + m.slice(0, 4) + '-08']: 37.85 }, crop: [{ month: m, budget: 220, days: 26, mt: 150.25 }], gang: { CPS: 1, MAN: 1, SL: 1, DEC: 1, VOPS: 1, RP: 1, HA: 3.4 },
     lots: { '1-1': D(2), '1-2': D(12), '1-3': D(20) }, lotJobs: { CPS: { '1-1': D(10), '1-2': D(70), '1-3': D(130) }, MAN: { '1-1': D(5) }, bunches: { '1-3': 118, '1-2': 90 } }, ap: { done: 58 },
     days: [{ date: D(1), closed: 'Y', same: true, ramp: false }, { date: D(2), closed: 'N', same: false, ramp: true }],
     rain: [{ date: D(1), lost: 0.5, reason: 'HENTI', jobs: 'Circle Spraying (1 petak)' }] };
@@ -93,7 +93,7 @@ const OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30'
   check('level 1: worst block named, harvesters 3.4 a day against the need (230 MT budget → 6)', /Blk 0\d\n(paling teruk|worst|tiada blok merah|no block red)/.test(t1) && /3\.4\npenuai sehari · perlu \d/.test(t1), (t1.match(/Blk 0\d\n[^\n]*\n3\.4\n[^\n]*/) || [''])[0]);
   check('level 1: crop due by today in working days, actual 150.2 MT, year line', /patut hingga \d\d\/\d\d \(\d+ hari\)/.test(t1) && /150\.[23] MT · \d+%/.test(t1) && /Tahun \(Jan–/.test(t1), (t1.match(/Nov: [^\n]*|patut hingga[^\n]*/) || [''])[0]);
   check('level 2: Tuai card ranks Blk 01 first: 1 late lot, the rest with no record counted apart, bunches waiting', /Tuai · pusingan/.test(t1) && /Blk 01 · 1 petak lewat · 36 tiada rekod\n±118 tandan/.test(t1), (t1.match(/Blk 01 · [^\n]*\n[^\n]*/) || [''])[0]);
-  check('level 2: Membaja card, Blk 01 has 32 of 33.2 Ha left (only 1-1 done), person-days and "cukup / kurang" from 1 person a day', /Membaja · pusingan \d/.test(t1) && /Blk 01 · 3[0-3]\.\d Ha lagi/.test(t1) && /orang-hari · 1 orang → \d+ hari · (cukup|kurang \d+ hari)/.test(t1), (t1.match(/Blk 01 · 3[^\n]*|orang-hari[^\n]*/g) || []).join(' | '));
+  check('level 2: Membaja Ha left comes from the block record (5 rounds × 33.2 Ha − 104.25 done = 61.8), not from the unticked lots', /Membaja · pusingan \d/.test(t1) && /Ha lagi ikut rekod blok/.test(t1) && /Blk 01 · 61\.8 Ha lagi/.test(t1) && /orang-hari · 1 orang → \d+ hari · (cukup|kurang \d+ hari)/.test(t1), (t1.match(/Blk 01 · 6[^\n]*|Ha lagi ikut[^\n]*/g) || []).join(' | '));
   check('level 2: CPS card, target 90 days and earliest 60 in the heading; Blk 01 can spray (1-2 and 1-3 and the lots with no record)', /CPS · racun bulatan\nsasaran 4 pusingan setahun \(±90 hari\) · paling awal 60 hari/.test(t1) && /Blk 01 · boleh racun \d+\.\d Ha/.test(t1), (t1.match(/Blk 01 · boleh[^\n]*/) || [''])[0]);
   check('level 2: abandoned palms 362 − 58 = 304 left, palms a day to 31/12', /304 pokok/.test(t1) && /Perlu sehari \(\d+ hari kerja\)\n\d+ pokok/.test(t1));
   check('daily keying: days closed 1 / 2, ramp 1 / 2, keyed same day 1 / 2; rain ½ day', (t1.match(/1 \/ 2 (hari|days)/g) || []).length === 3 && /½/.test(t1), (t1.match(/\d \/ \d (hari|days)/g) || []).join(' | '));
@@ -121,6 +121,50 @@ const OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30'
   check('no outlines for the block: the lots show as a list, with no PETA / SENARAI buttons', !(await p.$('[data-pgmap]')) && !(await p.$('.pg-map')) && !!(await p.$('.pg-lotbox .pg-lots')), '');
   await p.evaluate(() => { EA.lists.lotShapes = window.__shapes; });
   await p.click('[data-pg="HA.01"]'); await p.waitForTimeout(200);
+  // SEMAK PETAK (v1.49): the staff ticks which lots have had the round; only CPS and manuring, never harvest
+  await p.click('[data-pg="HA.01"]'); await p.waitForTimeout(200);
+  check('no SEMAK PETAK on the harvest card (lots are already keyed daily)', !(await p.$('[data-pgtick="HA.01"]')));
+  await p.click('[data-pg="MAN.01"]'); await p.waitForTimeout(300);
+  check('SEMAK PETAK offered on manuring', !!(await p.$('[data-pgtick="MAN.01"]')));
+  const manOpen = await p.innerText('#pg-box');
+  check('an open Membaja block says how many lots are still unticked beside the block figure, so the two can be compared', /3[0-9] petak belum ditanda \(3[0-9]\.\d Ha\)\. Rekod blok kata 61\.8 Ha lagi/.test(manOpen), (manOpen.match(/petak belum ditanda[^\n]*/) || [''])[0]);
+  await p.evaluate(() => { window.__saved = []; const orig = EA.save; EA.save = function (tab, room, est, f) { window.__saved.push({ tab: tab, f: f }); return orig.apply(EA, arguments); }; });
+  await p.click('[data-pgtick="MAN.01"]'); await p.waitForTimeout(400);
+  check('tick mode shows every lot of the block, and no month chooser for manuring', (await p.$$('.pg-ticking [data-pglot]')).length >= n01 && !(await p.$('[data-pgmon]')) && !!(await p.$('[data-pgsave="MAN.01"]')));
+  const before = await p.innerText('.pg-tickbar');
+  await p.click('[data-pgall="MAN.01"][data-v="y"]'); await p.waitForTimeout(300);
+  check('SEMUA SIAP marks the whole block done (" ' + n01 + ' / ' + n01 + ' siap")', (await p.innerText('.pg-tickbar')).indexOf(n01 + ' / ' + n01) >= 0, before + ' → ' + await p.innerText('.pg-tickbar'));
+  await p.click('.pg-ticking [data-pglot$="|1-7"]'); await p.waitForTimeout(300);
+  check('tapping one lot turns it back to not done', (await p.innerText('.pg-tickbar')).indexOf((n01 - 1) + ' / ' + n01) >= 0, await p.innerText('.pg-tickbar'));
+  await p.click('[data-pgsave="MAN.01"]'); await p.waitForTimeout(600);
+  const ticks = await p.evaluate(() => window.__saved);
+  const one = ticks.find(x => x.f.lot === '1-2') || { f: {} };
+  check('SIMPAN saves only the lots that changed (1-1 was already done and 1-7 was never done, so neither is saved)', ticks.length === n01 - 2 && ticks.every(x => x.tab === 'LIST_LOTSTART') && !ticks.some(x => x.f.lot === '1-1' || x.f.lot === '1-7'), ticks.length + ' rows of ' + (n01 - 2));
+  check('each tick carries the job, block, lot and the date it was done', one.f.task_code === 'MAN' && one.f.block === '01' && one.f.lot === '1-2' && /^\d{4}-\d\d-\d\d$/.test(one.f.done_on || ''), JSON.stringify(one.f));
+  const afterSave = await p.innerText('#pg-box');
+  check('after SIMPAN tick mode closes; the block record still says 61.8 Ha, and the lot line now names the single lot left (1.5 Ha)', !(await p.$('.pg-ticking')) && /Blk 01 · 61\.8 Ha lagi/.test(afterSave) && /1 petak belum ditanda \(1\.5 Ha\)/.test(afterSave), (afterSave.match(/Blk 01[^\n]*|petak belum ditanda[^\n]*/g) || []).join(' | '));
+  // CPS: the same, with a "sprayed when" chooser
+  await p.click('[data-pg="CPS.01"]'); await p.waitForTimeout(300);
+  await p.click('[data-pgtick="CPS.01"]'); await p.waitForTimeout(400);
+  check('CPS tick mode asks when it was sprayed (four months to choose)', (await p.$$('[data-pgmon]')).length === 4);
+  await p.evaluate(() => { window.__saved = []; });
+  await p.click('[data-pgall="CPS.01"][data-v="y"]'); await p.waitForTimeout(200);
+  const mons = await p.$$('[data-pgmon]'); await mons[2].click(); await p.waitForTimeout(200);
+  await p.click('[data-pgsave="CPS.01"]'); await p.waitForTimeout(600);
+  const cpsTicks = await p.evaluate(() => window.__saved);
+  const two = cpsTicks.find(x => x.f.lot === '1-5') || { f: {} };
+  check('a CPS tick carries the chosen month, so the 60-day clock starts from it', cpsTicks.length > 0 && /^\d{4}-\d\d-\d\d$/.test(two.f.done_on || '') && two.f.task_code === 'CPS', JSON.stringify(two.f));
+  // only the staff and the Owner may tick
+  const asPengurus = await p.evaluate(() => {
+    const u = EA.currentUser(), real = EA.currentUser;
+    EA.currentUser = () => Object.assign({}, u, { role: 'Pengurus' });
+    const d = document.createElement('div');
+    d.innerHTML = EA.fh.program.html('SSGT', new Date().toISOString().slice(0, 7));
+    const n = d.querySelectorAll('[data-pgtick]').length;
+    EA.currentUser = real;
+    return n;
+  });
+  check('the Pengurus sees no SEMAK PETAK (he only looks)', asPengurus === 0, String(asPengurus));
   await p.click('[data-pg="blocks"]'); await p.waitForTimeout(300);
   check('level 1 tap: all jobs by block table, 4 blocks, old-data jobs grey', (await p.$$('.pg-bt')).length === 4 && (await p.$$('.pg-bt tr.pg-old')).length >= 4 && asks === 1, String((await p.$$('.pg-bt')).length));
   await p.click('[data-view=""]'); await p.waitForTimeout(300);

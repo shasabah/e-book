@@ -243,6 +243,13 @@ EA.lists.programFrom = '2026-11-04';
 EA.lists.yearEnd = { SSGT: { year: '2026', from: '2026-11', man: true, ap: { open: 362, at: '2026-10-31', by: '2026-12-31' } } };
 // v1.49: a harvester's day (budget: 1.5 MT a day, 18 Ha) and a Sugut bunch (budget ABW, used only to turn waiting bunches
 // into harvester-days on PROGRAM).
+// v1.49 (Yu Chen, 3 Nov 2026): where a lot has no spray record of its own, PROGRAM falls back to the month its block
+// finished its last CPS round, traced from "SPLT.SSGT Current status as at 29.10.2026" (Christy):
+//   Blk 01 Mar + Oct (33.20 + 31.20 Ha) · Blk 02 Mar–Apr + Aug–Sep (36.00 + 33.93) · Blk 03 Jan–Mar + Jul–Sep–Oct
+//   (31.16 + 30.18) · Blk 04 Apr + Aug–Sep (30.00 + 34.00). A round spread over two or three months is dated at the
+//   middle of its last month, because the block record never says which lot was sprayed in which month.
+// It is an estimate and the screen says so. Any lot Ferezelly ticks in SEMAK PETAK replaces it.
+EA.lists.cpsLastRound = { SSGT: { '01': '2026-10-15', '02': '2026-09-15', '03': '2026-10-15', '04': '2026-09-15' } };
 EA.lists.harvestMtDay = 1.5;
 EA.lists.abwKg = 12;
 // v1.41 (Yu Chen, 26 Oct): work allowed on a Sunday without asking: harvesting and the crop chain (FFB), and the

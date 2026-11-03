@@ -2350,6 +2350,9 @@ function program_(estate, month) {
     lotJobs = { CPS: {}, MAN: {}, bunches: {} };
     // SEMAK PETAK (v1.49): the staff's ticks. The newest tick per job and lot wins; done_on empty = "not done",
     // so an untick is just a later row. The daily keying by lot (below) still wins over an older tick.
+    // off: lots the staff ticked as NOT done. Kept apart from "never recorded", so the phone does not fall back to the
+    // block's figures for a lot the staff has answered for.
+    lotJobs.off = { CPS: {}, MAN: {} };
     var tickAt = {};
     standingRows_('LIST_LOTSTART', estate).forEach(function (r) {
       var code = String(r.task_code), lot = String(r.lot), k = code + '|' + lot, at = String(r.keyed_at || r.date || '');
@@ -2357,10 +2360,11 @@ function program_(estate, month) {
       if (tickAt[k] && at < tickAt[k]) return;
       tickAt[k] = at;
       var d = String(r.done_on).slice(0, 10);
-      if (d) lotJobs[code][lot] = d; else delete lotJobs[code][lot];
+      if (d) { lotJobs[code][lot] = d; delete lotJobs.off[code][lot]; }
+      else { delete lotJobs[code][lot]; lotJobs.off[code][lot] = true; }
     });
     var manFrom = String((LOT_START_[estate] || {}).manFrom || '2026-10-31');   // manuring keyed by lot after this date counts for the round
-    Object.keys(rl.CPS || {}).forEach(function (l) { if (!lotJobs.CPS[l] || rl.CPS[l] > lotJobs.CPS[l]) lotJobs.CPS[l] = rl.CPS[l]; });
+    Object.keys(rl.CPS || {}).forEach(function (l) { if (!lotJobs.CPS[l] || rl.CPS[l] > lotJobs.CPS[l]) { lotJobs.CPS[l] = rl.CPS[l]; delete lotJobs.off.CPS[l]; } });
     Object.keys(rl.MAN || {}).forEach(function (l) { if (rl.MAN[l] > manFrom && (!lotJobs.MAN[l] || rl.MAN[l] > lotJobs.MAN[l])) lotJobs.MAN[l] = rl.MAN[l]; });
     // bunches the last time each lot was harvested (sum of the harvesters' lines on that day)
     var lastB = {};

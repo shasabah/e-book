@@ -1980,6 +1980,20 @@ function todo_(user, req) {
   alerts = planAsks_(alerts, est);
   // Staff explanations (grading, ramp, field) and the Pengurus's direction on them.
   var explained = alerts.filter(function (a) { return EXPLAIN_KINDS[a.kind] && a.staff_note && String(a.date) >= daysAgo_(14); });
+  // v1.50.1 (Yu Chen, 4 Nov: "clear whatever problem gone first"): an explanation of fruit left in the field or on the
+  // ramp that has no direction yet leaves the lists once that fruit is gone (the lot, or the ramp, has no fruit from
+  // before the explanation). Nothing is changed in the sheet; the explanation stays in the record. Grading
+  // explanations and other work (LULUS / TOLAK) still wait for the Pengurus.
+  var blNow = null;
+  function stillOpen(a) {
+    if (a.direction || (a.kind !== 'field' && a.kind !== 'ramp')) return true;
+    if (!blNow) { try { blNow = backlog(est); } catch (e) { return true; } }
+    var ad = String(a.date).slice(0, 10);
+    if (a.kind === 'field') return (blNow.field || []).some(function (x) { return String(x.lot) === String(a.lot) && (!x.since || x.since < ad); });
+    var rp = blNow.ramp || {};
+    return !!Number(rp.bunches) && (!rp.since || rp.since < ad);
+  }
+  explained = explained.filter(stillOpen);
   function roundLate() {
     var rd = rounds_(est), lots = (rd.lots || {})[HARVEST_CODE] || {}, byB = {};
     Object.keys(lots).forEach(function (l) {

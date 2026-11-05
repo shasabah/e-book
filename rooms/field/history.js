@@ -165,7 +165,7 @@
   function dayRest(list, t, cache) {
     return tiles(t, '') +
       (canPrint(ctx.user) ? '<button type="button" class="rk-print" id="rk-print"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M8 14h8v7H8z"/></svg><span>PRINT MONTH REPORT<small>Cetak laporan bulan · PDF</small></span></button>' : '') +
-      '<div id="hs-list">' + (list.length ? weeks(list) :
+      '<div id="hs-list">' + (list.length || month === ym(new Date()) ? weeks(withMissing(list)) :
         '<p class="hint">' + EA.t('Tiada rekod untuk bulan ini.', 'No records for this month.') + '</p>') + '</div>' +
       '<p class="hint" id="hs-note">' + EA.t('P = chit pagi · K = kerja harian · L = lori/tiket. Hijau ada, kuning patut ada tetapi tiada. ', 'P = morning chit · K = day\'s work · L = lorry/ticket. Green there, yellow should be there but is not. ') +
         (cache ? EA.t('Dari pejabat dan telefon ini · dikemas kini ', 'From the office and this phone · updated ') + esc(cache.at) :
@@ -186,6 +186,30 @@
     if (org) EA.fh.people.wire($('#or-box'), ctx, month, function () { if (el && document.body.contains(el) && !el.hidden) render(el, ctx); }, list, cr);
     if (!quiet) refresh();
   }
+  // v1.51.3 (Yu Chen, 6 Nov: "cannot show 5 and 6 Nov record?"): a working day with nothing keyed used to vanish
+  // from the list. Now every working day (Monday to Saturday, not a public holiday) from the first live day of the
+  // month (or the 1st, this month) up to today gets a row; a day with nothing gets yellow P and K: "tiada rekod".
+  function withMissing(list) {
+    var t = EA.today(), have = {}, live = list.filter(function (d) { return !d.imp || d.chits.some(function (c) { return !c.imp; }); });
+    list.forEach(function (d) { have[d.date] = true; });
+    var from = live.length ? live[live.length - 1].date : (month === ym(new Date()) ? month + '-01' : '');
+    if (!from) return list;
+    var end = month + '-' + String(daysIn(month)).padStart(2, '0'), stop = t < end ? t : end, out = list.slice();
+    var hol = EA.lists.holidays || [];
+    for (var d = new Date(from + 'T00:00:00'); ; d.setDate(d.getDate() + 1)) {
+      var iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      if (iso > stop) break;
+      if (!have[iso] && d.getDay() !== 0 && hol.indexOf(iso) < 0) out.push({ date: iso, missing: true });
+    }
+    return out.sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
+  }
+  function missLine(d) {
+    var today = d.date === EA.today();
+    return '<div class="rk-r rk-miss"><span class="d"><b>' + esc(shortDay(d.date)) + '</b><small><i class="rk-open">' +
+      (today ? EA.t('belum ada rekod hari ini', 'nothing yet today') : EA.t('tiada rekod', 'nothing came in')) + '</i></small></span>' +
+      '<span class="rk-dots"><i class="w">P</i><i class="' + (today ? 'o' : 'w') + '">K</i><i class="o">L</i></span>' +
+      '<span class="n">—</span><span class="n">—</span><span class="n">—</span></div>';
+  }
   // Monday-to-Sunday weeks, newest first, each with its bunches and MT.
   function weekStart(iso) { var d = new Date(iso + 'T00:00:00'), k = (d.getDay() + 6) % 7; d.setDate(d.getDate() - k); return d; }
   function weeks(list) {
@@ -198,12 +222,12 @@
     var nowKey = weekStart(EA.today()).toDateString();
     return groups.map(function (g) {
       var e = new Date(g.start); e.setDate(e.getDate() + 6);
-      var b = 0, mt = 0; g.days.forEach(function (d) { b += d.harvest; mt += dayFacts(d).mt; });
+      var b = 0, mt = 0; g.days.forEach(function (d) { if (d.missing) return; b += d.harvest; mt += dayFacts(d).mt; });
       var mons = EA.t(ui().monBm, ui().monEn);
       var label = (g.start.toDateString() === nowKey ? EA.t('Minggu ini · ', 'This week · ') : '') + g.start.getDate() + (g.start.getMonth() !== e.getMonth() ? ' ' + mons[g.start.getMonth()] : '') + '–' + e.getDate() + ' ' + mons[e.getMonth()];
       return '<div class="rk-wk"><span>' + esc(label) + '</span><span>' + n0(b) + EA.t(' tandan', ' bunches') + (mt ? ' · ' + f2(mt) + ' MT' : '') + '</span></div>' +
         '<div class="rk-tbl"><div class="rk-r rk-h"><span>' + EA.t('Hari', 'Day') + '</span><span>P K L</span><span class="n">' + EA.t('Hadir', 'Present') + '</span><span class="n">' + EA.t('Tandan', 'Bunches') + '</span><span class="n">MT</span></div>' +
-        g.days.map(dayLine).join('') + '</div>';
+        g.days.map(function (d) { return d.missing ? missLine(d) : dayLine(d); }).join('') + '</div>';
     }).join('');
   }
   function dayLine(d) {

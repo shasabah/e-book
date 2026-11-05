@@ -222,6 +222,8 @@
     } catch (e) { if (!opts.auto) ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad'); return null; }
     var s = { id: rec.id, estate: estate, date: c.date, chit: c.chit, at: at.slice(11), by: user.code, byName: user.name, present: present, total: total, bunches: bunches, auto: !!opts.auto,
       jobsDone: jobs.filter(function (j) { return j.status === 'done'; }).length, jobs: jobs.length, lorries: lorries, rain: keepRain ? rainLabel(rain) + ' · ' + lostLabel(rain.lost) : '', rainJobs: keepRain ? rain.jobs : [],
+      // v1.50.1 (Yu Chen, 5 Nov): who was away, by name and mark, for the day summary.
+      away: (c.rows || []).filter(function (r) { return r.status !== 'removed' && r.muster !== 'H'; }).map(function (r) { return person(r.worker_id) + ' (' + r.muster + ')'; }),
       notDone: jobs.filter(function (j) { return j.status === 'not_done'; }).map(function (j) { return { job: shortName(j.task_code) + (j.block ? ' Blk ' + j.block : ''), why: j.reason || '' }; }), note: d.note || '', fieldNote: d.fieldNote || '' };
     var list = closes().filter(function (x) { return !(x.estate === s.estate && x.date === s.date); }); list.push(s); EA.local.set(K.saved, list);
     var o = EA.local.get(K.office + estate, null); if (o && o.days) { o.days.forEach(function (x) { if (x.date === c.date) x.state = 'closed'; }); EA.local.set(K.office + estate, o); }
@@ -246,6 +248,7 @@
     var dd = new Date(s.date + 'T00:00:00'), est = EA.lists.estate(s.estate);
     var L = ['*TUTUP HARI ' + (est ? est.company + ' ' : '') + s.estate + '*', ui().dayBm[dd.getDay()] + ' ' + dd.getDate() + '/' + (dd.getMonth() + 1) + '/' + dd.getFullYear(), ''];
     L.push('Pekerja: ' + s.present + '/' + s.total + ' hadir');
+    if (s.away && s.away.length) L.push('Tidak hadir: ' + s.away.join(', '));
     L.push('Tuaian: ' + s.bunches + ' tandan' + (s.lorries ? ' · ' + s.lorries + ' lori keluar' : ' · tiada lori'));
     L.push('Kerja: ' + s.jobsDone + '/' + s.jobs + ' siap');
     (s.notDone || []).forEach(function (j) { L.push('  • ' + j.job + ' BELUM SIAP' + (j.why ? ' — ' + j.why : '')); });

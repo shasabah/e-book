@@ -591,8 +591,13 @@
   }
   function chitAlerts() {
     if (isPast()) { var o = chits().find(function (c) { return c.chit === draft.replacing; }); return o ? (o.alerts || []) : []; }
+    // v1.50.2: an alert already on an earlier chit (same key, same detail) is marked seen: the WhatsApp text counts it
+    // instead of writing it out again every morning.
+    var before = {};
+    chits().forEach(function (c) { if (c.estate === ctx.estate && c.date < EA.today()) (c.alerts || []).forEach(function (x) { before[x.key + '|' + (x.kind === 'field' ? x.detail : '')] = true; }); });
     return alertsFrom(getBacklog(ctx.estate)).map(function (a) {
-      return { key: a.key, kind: a.kind, block: a.block, lot: a.lot, ref: a.ref || '', detail: a.detail, text: a.bm, note: String(alertNote(a.key, a.def).note || '').trim() };
+      return { key: a.key, kind: a.kind, block: a.block, lot: a.lot, ref: a.ref || '', detail: a.detail, text: a.bm, note: String(alertNote(a.key, a.def).note || '').trim(),
+               seen: !!before[a.key + '|' + (a.kind === 'field' ? a.detail : '')] };
     });
   }
 
@@ -1645,6 +1650,48 @@
   }
 
   // ---------- the chit text for the WhatsApp group (laid out like the paper) ----------
+  // v1.50.2 (Yu Chen, 5 Nov, option A): one line per problem on the WhatsApp chit. Lots of one block with the same
+  // reason are joined (total bunches, earliest day, lot range); mill tickets with the same reason are joined with a
+  // short flag each; an alert already on an earlier chit is only counted ("masih terbuka"), its detail stays in the app.
+  function lotRange(lots) {
+    var xs = lots.slice().sort(function (a, b) { var p = a.split('-'), q = b.split('-'); return (Number(p[0]) - Number(q[0])) || (Number(p[1]) - Number(q[1])); });
+    var nums = xs.map(function (l) { return Number(String(l).split('-')[1]); }), pre = String(xs[0]).split('-')[0];
+    var run = xs.length > 2 && xs.every(function (l, i) { return String(l).split('-')[0] === pre && (i === 0 || nums[i] === nums[i - 1] + 1); });
+    return run ? xs[0] + ' hingga ' + xs[xs.length - 1] : xs.join(', ');
+  }
+  function shortFlag(f) {
+    return String(f || '').split(/;\s*/).map(function (p) {
+      var m;
+      if ((m = p.match(/Ditolak (\d+) tandan/))) return 'tolak ' + m[1];
+      if ((m = p.match(/Penalti ([\d.]+%)/))) return 'penalti ' + m[1];
+      if ((m = p.match(/^Mentah \+ kurang masak ([\d.]+%)/))) return 'mentah ' + m[1];
+      if ((m = p.match(/^Busuk ([\d.]+%)/))) return 'busuk ' + m[1];
+      if ((m = p.match(/^Kotor ([\d.]+%)/))) return 'kotor ' + m[1];
+      return p.replace(/\s*·\s*dari fail HQ/, '').trim();
+    }).filter(function (x) { return x; }).join(', ');
+  }
+  function alertLines(alerts) {
+    var out = [], fresh = alerts.filter(function (a) { return !a.seen; }), old = alerts.filter(function (a) { return a.seen; });
+    var groups = [], by = {};
+    fresh.forEach(function (a) {
+      var k = a.kind === 'field' ? 'F|' + a.block + '|' + a.note : a.kind === 'grading' ? 'G|' + a.note : 'X|' + a.key;
+      if (!by[k]) { by[k] = { kind: a.kind, block: a.block, note: a.note, items: [] }; groups.push(by[k]); }
+      by[k].items.push(a);
+    });
+    groups.forEach(function (g) {
+      var note = g.note ? ' → ' + g.note : '';
+      if (g.kind === 'field') {
+        var n = 0, since = '', lots = [];
+        g.items.forEach(function (a) { var m = String(a.detail).match(/^(\d+) tandan sejak (\S+)/); if (m) { n += Number(m[1]); if (!since || m[2] < since) since = m[2]; } lots.push(a.lot); });
+        out.push('• Ladang Blk ' + g.block + ': ' + n + ' tandan' + (since ? ' sejak ' + since.replace(/^0/, '') : '') + ' (' + lotRange(lots) + ')' + note);
+      } else if (g.kind === 'grading') {
+        var t = g.items.map(function (a) { var m = String(a.detail).match(/^Tiket (\S+): (.*)$/); return m ? m[1] + ' ' + shortFlag(m[2]) : shortFlag(a.detail); });
+        out.push('• Gred kilang' + (t.length > 1 ? ' ' + t.length + ' tiket' : '') + ': ' + t.join(' · ') + note);
+      } else out.push('• ' + g.items[0].text + note);
+    });
+    if (old.length) out.push('_(+' + old.length + ' masih terbuka: ' + old.map(function (a) { return a.kind === 'grading' ? 'tiket ' + a.ref : a.kind === 'field' ? 'petak ' + a.lot : 'ramp'; }).join(', ') + ')_');
+    return out;
+  }
   function chitText(c) {
     var d = new Date(c.date + 'T00:00:00');
     var s = summary(c.rows);
@@ -1676,8 +1723,8 @@
     if (c.rain_mm !== '' && c.rain_mm !== undefined && c.rain_mm !== null) L.push('Hujan semalam: ' + (Number(c.rain_mm) || 0).toFixed(2) + ' mm' + (c.rain_time ? ' (' + c.rain_time + ')' : ''));
     backlogLines(c.backlog).forEach(function (x) { L.push(x); });
     if (c.alerts && c.alerts.length) {
-      L.push('*⚠ AMARAN · ALERT — untuk tindakan Penolong Pengurus*');
-      c.alerts.forEach(function (a) { L.push('• ' + a.text + ' → ' + a.note); });
+      L.push('*⚠ AMARAN · ALERT*');
+      alertLines(c.alerts).forEach(function (x) { L.push(x); });
     }
     L.push('```');
     L.push(pad('Blk', 4) + pad('Job', 17) + pad('Mdr', 4) + pad('M', 3) + pad('F', 3) + 'Tot');

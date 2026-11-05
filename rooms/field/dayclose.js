@@ -2,8 +2,8 @@
 // From the brief "Rancangan & Prestasi" §4–5, approved by Yu Chen 26 Oct 2026. Live at Sugut from November 2026.
 //
 // At the end of the day the Staf bertugas presses TUTUP HARI. Before the day closes the phone checks it is complete:
-//   1. every worker on the chit has a work line, or is marked S / C / T (durian job codes count as complete:
-//      their work lives in the Sugut DMS until the Durian room joins E-Book);
+//   1. v1.51: every worker on the estate list has a pay line: on the chit, and a work line with its quantity, or
+//      1 / ½ day (every durian farm job is by the day), or S / C / T. Letters as the checkroll: P, 1, ½, S, L, X;
 //   2. harvest lots are keyed and collected to the ramp, or the backlog is explained;
 //   3. every lorry that went has its delivery note;
 //   4. work that differs from the morning chit has a reason (a job BELUM SIAP with no reason, or not answered);
@@ -29,7 +29,66 @@
   function shortName(code) { return (EA.lists.chitNames && EA.lists.chitNames[code]) || (task(code) ? task(code).en : code); }
   function person(id) { var w = EA.lists.worker(id); return w ? w.name : id; }
   function rainOf(code) { return EA.lists.rainOf ? EA.lists.rainOf(code) : 'B'; }
-  function isDms(code) { return (EA.lists.DMS_JOBS || []).indexOf(code) >= 0; }
+  // ---------- v1.51 pay lines (Yu Chen, 5 Nov; Decisions Log 5 Nov; doc "Muster ke Gaji") ----------
+  // Every worker on the estate list gets one letter a day, the same letters as the checkroll:
+  // P piece work (paid on the quantity) · 1 / ½ day work · S sick · L leave (chit C) · X absent (chit T).
+  // Piece work is never a half day. Every job at the durian farm is by the day. Rates and RM stay in the office.
+  var AWAY = { S: 'S', C: 'L', T: 'X' };
+  function durianBlock(estate) { var d = EA.lists.durian && EA.lists.durian[estate]; return d ? d.block : ''; }
+  var OP_JOBS = ['OPH', 'OPR', 'OPF'];
+  function payKind(estate, l) {
+    var t = task(l.task_code);
+    if (l.block && String(l.block) === durianBlock(estate)) return 'day';
+    if (OP_JOBS.indexOf(l.task_code) >= 0) return 'hour';
+    if (l.task_code === EA.lists.HARVEST) return 'bunches';
+    if (!t || t.unit === 'day') return 'day';
+    if (t.unit === 'MT') return 'ticket';
+    return 'qty';
+  }
+  function unitWord(estate, l) {
+    var k = payKind(estate, l), t = task(l.task_code) || {};
+    return k === 'bunches' ? 'tandan' : k === 'day' ? 'hari' : k === 'hour' ? 'jam' : k === 'ticket' ? 'MT' : (t.unit === 'bag' ? 'beg' : t.unit === 'palm' ? 'pokok' : t.unit || '');
+  }
+  function r3(v) { return Math.round(v * 1000) / 1000; }
+  // Everyone the phone's list says works at this estate today (workers and mandors).
+  function listed(estate) { return (EA.lists.mandorsFor ? EA.lists.mandorsFor(estate) : []).concat(EA.lists.workersFor ? EA.lists.workersFor(estate) : []); }
+  // The pay lines of a day: one per person on the day's chits, with the problems that stop the close.
+  function payLines(estate, c, lines) {
+    var rows = [], seen = {}, out = { people: [], jobs: [], count: { P: 0, '1': 0, '½': 0, S: 0, L: 0, X: 0 }, missing: [], noLine: [], badDay: [] };
+    EA.fh.allChits().filter(function (x) { return x.estate === estate && x.date === c.date; }).forEach(function (x) {
+      (x.rows || []).forEach(function (r) { if (r.status !== 'removed' && !seen[r.worker_id]) { seen[r.worker_id] = true; rows.push(r); } });
+      // the work lines of the day's other chits too (one gang, one chit)
+      if (x.chit !== c.chit) { var wx = workOf(x); lines = lines.concat((wx && wx.rec && wx.rec.lines) || []); }
+    });
+    var byW = {}; lines.forEach(function (l) { (byW[l.worker_id] = byW[l.worker_id] || []).push(l); });
+    var jobs = {};
+    rows.forEach(function (r) {
+      if (r.muster !== 'H') { var a = AWAY[r.muster] || 'X'; out.count[a]++; out.people.push({ w: r.worker_id, letter: a }); return; }
+      var ls = byW[r.worker_id] || [];
+      if (!ls.length) { out.noLine.push(r.worker_id); return; }
+      var k = payKind(estate, ls[0]), letter = 'P';
+      if (k === 'day') {
+        var d = ls.reduce(function (a, l) { return a + num(l.qty); }, 0);
+        if (!(d === 1 || d === 0.5)) out.badDay.push(r.worker_id);
+        letter = d === 0.5 ? '½' : '1';
+      }
+      out.count[letter]++; out.people.push({ w: r.worker_id, letter: letter });
+      ls.forEach(function (l) {
+        var kk = payKind(estate, l), key = l.task_code + '|' + (l.block || ''), j = jobs[key];
+        if (!j) j = jobs[key] = { task: l.task_code, block: l.block || '', kind: kk, unit: unitWord(estate, l), who: {}, total: 0, letter: kk === 'day' ? '1' : 'P' };
+        j.who[l.worker_id] = true;
+        j.bags = (j.bags || 0) + num(l.bags);
+        j.total += kk === 'bunches' ? num(l.bunches) : kk === 'hour' ? num(l.hours) : kk === 'ticket' ? 0 : num(l.qty);
+      });
+    });
+    out.jobs = Object.keys(jobs).map(function (k) { var j = jobs[k]; j.n = Object.keys(j.who).length; j.total = r3(j.total); return j; });
+    // On the estate list but on no chit that day: the day cannot settle his pay. Sunday is a rest day: only those
+    // who came are on the chit, so no one is missing (public holidays the same once HQ gives the list).
+    var rest = new Date(c.date + 'T00:00:00').getDay() === 0 || (EA.lists.holidays && EA.lists.holidays.indexOf(c.date) >= 0);
+    if (!rest) listed(estate).forEach(function (w) { if (!seen[w.id]) out.missing.push(w.id); });
+    return out;
+  }
+  function payCountText(pl) { return ['P', '1', '½', 'S', 'L', 'X'].filter(function (k) { return pl.count[k]; }).map(function (k) { return k + ' ' + pl.count[k]; }).join(' · '); }
   function canClose(u) { return !!u && (u.role === 'Staff' || u.role === 'Owner' || u.role === 'HQ'); }
   // v1.43.1 (Yu Chen, 27 Oct): practice logins (Mod Latihan, code L-) may close any day with a chit, so the screen
   // can be tried with made-up workers before the real start date (4 Nov). Real logins wait for the start date.
@@ -69,13 +128,13 @@
   function checks(estate, c, d) {
     var out = [], w = workOf(c), lines = (w && w.rec && w.rec.lines) || [], jobs = (w && w.rec && w.rec.jobs) || [];
     var present = (c.rows || []).filter(function (r) { return r.status !== 'removed' && r.muster === 'H'; });
-    var absent = (c.rows || []).filter(function (r) { return r.status !== 'removed' && r.muster !== 'H'; }).length;
-    // 1 · every worker present has a work line (durian codes count)
-    var hasLine = {}; lines.forEach(function (l) { hasLine[l.worker_id] = true; });
-    var missing = present.filter(function (r) { return !isDms(r.task_code) && !hasLine[r.worker_id]; });
-    out.push(!w ? { n: 1, ok: false, bm: 'Kerja harian belum dikunci', en: 'The day\'s work is not keyed', sub: present.length + EA.t(' orang hadir di chit', ' people present on the chit'), go: '#field-harvest/work' }
-      : missing.length ? { n: 1, ok: false, bm: missing.length + ' orang hadir tiada baris kerja', en: missing.length + ' present with no work line', sub: missing.slice(0, 4).map(function (r) { return person(r.worker_id); }).join(', ') + (missing.length > 4 ? ' +' + (missing.length - 4) : ''), go: '#field-harvest/work' }
-      : { n: 1, ok: true, bm: present.length + ' orang bekerja, ' + absent + ' tidak hadir · semua ada baris kerja', en: present.length + ' working, ' + absent + ' away · every worker has a work line', sub: '' });
+    // 1 · v1.51: every worker on the list has a pay line (a letter, and a quantity or a day)
+    var pl = payLines(estate, c, lines), names = function (ids) { return ids.slice(0, 4).map(person).join(', ') + (ids.length > 4 ? ' +' + (ids.length - 4) : ''); };
+    if (!w) out.push({ n: 1, ok: false, bm: 'Kerja harian belum dikunci', en: 'The day\'s work is not keyed', sub: present.length + EA.t(' orang hadir di chit', ' people present on the chit'), go: '#field-harvest/work' });
+    else if (pl.missing.length) out.push({ n: 1, ok: false, bm: pl.missing.length + ' orang dalam senarai tiada dalam chit', en: pl.missing.length + ' on the list but not on the chit', sub: names(pl.missing) + EA.t(' · betulkan chit: hadir dengan kerja, atau S / C / T', ' · fix the chit: present with a job, or S / C / T'), go: '#field-harvest' });
+    else if (pl.noLine.length) out.push({ n: 1, ok: false, bm: pl.noLine.length + ' orang hadir tiada baris kerja', en: pl.noLine.length + ' present with no work line', sub: names(pl.noLine), go: '#field-harvest/work' });
+    else if (pl.badDay.length) out.push({ n: 1, ok: false, bm: pl.badDay.length + ' orang kerja harian tanpa 1 / ½ hari', en: pl.badDay.length + ' day workers without 1 / ½ day', sub: names(pl.badDay) + EA.t(' · ladang durian dibayar ikut hari', ' · the durian farm is paid by the day'), go: '#field-harvest/work' });
+    else out.push({ n: 1, ok: true, bm: pl.people.length + ' orang · semua ada baris gaji', en: pl.people.length + ' people · every one has a pay line', sub: payCountText(pl), pay: pl });
     // 2 · harvest lots collected to the ramp, or explained
     var cut = 0, col = 0;
     lines.forEach(function (l) { if (l.task_code === EA.lists.HARVEST) cut += num(l.bunches); });
@@ -162,6 +221,9 @@
           return '<li class="dc-it ' + (x.ok ? (x.drop ? 'dc-drop' : 'dc-ok') : 'dc-bad') + '">' + (x.go && !x.ok ? '<button type="button" class="link-btn dc-go" data-go="' + esc(x.go) + '">' : '<span>') +
             '<b>' + (x.ok ? '✓' : '!') + ' ' + esc(EA.t(x.bm, x.en)) + '</b>' + (x.sub ? '<small>' + esc(x.sub) + '</small>' : '') + (x.go && !x.ok ? '</button>' : '</span>') + '</li>';
         }).join('') + '</ol>';
+      // v1.51: the day's pay lines, by job (what the checkroll will be given), shown once every worker has his line.
+      var c1 = ck.find(function (x) { return x.n === 1 && x.pay; });
+      if (c1) html += payCard(c1.pay);
       // Field backlog reason (check 2) when fruit stays in the field.
       if (ck.some(function (x) { return x.note === 'field'; }) || String(d.fieldNote || '').trim()) {
         html += '<div class="field"><label><span class="bm">Sebab buah belum ke ramp</span><span class="en">Why the fruit is not at the ramp</span></label>' +
@@ -181,6 +243,17 @@
     // The office's list of open days (and the start date) is asked for once a minute at most; the screen redraws when it arrives.
     var o = EA.local.get(K.office + ctx.estate, null);
     if (EA.fh.refreshDayClose && navigator.onLine && (!o || Date.now() - (o.at || 0) > 60000)) EA.fh.refreshDayClose(ctx.estate).then(function (j) { if (j && el && /\/close$/.test(location.hash)) render(el, ctx); });
+  }
+
+  function payCard(pl) {
+    var away = pl.people.filter(function (p) { return ['S', 'L', 'X'].indexOf(p.letter) >= 0; });
+    return '<div class="card dc-pay"><h2>' + EA.t('Gaji hari ini', 'Today\'s pay lines') + '</h2><p class="hint">' + EA.t('Huruf sama dengan checkroll. Kadar dan RM di pejabat.', 'Same letters as the checkroll. Rates and RM stay in the office.') + '</p>' +
+      '<table class="dc-paytab">' + pl.jobs.map(function (j) {
+        var tot = j.unit === 'Ha' ? j.total.toFixed(2) : j.total, amt = j.kind === 'ticket' ? EA.t('ikut tiket', 'from the ticket') : j.kind === 'bunches' ? tot + ' tandan' : j.bags ? j.bags + ' beg' : tot + ' ' + j.unit, under = j.kind === 'bunches' ? EA.t('MT ikut tiket', 'MT from the ticket') : j.bags ? tot + ' ' + j.unit : '';
+        return '<tr><td><span class="dc-k dc-k' + (j.letter === 'P' ? 'P' : 'D') + '">' + (j.kind !== 'day' ? 'P' : j.total === j.n ? '1' : j.total === j.n / 2 ? '½' : '1/½') + '</span></td><td>' + esc(shortName(j.task)) + (j.block ? ' · ' + esc(/^\d+$/.test(j.block) ? 'B' + j.block : j.block) : '') + '<small>' + j.n + EA.t(' orang', ' people') + '</small></td><td class="n">' + esc(amt) + (under ? '<small>' + esc(under) + '</small>' : '') + '</td></tr>';
+      }).join('') + away.map(function (p) {
+        return '<tr><td><span class="dc-k dc-kX">' + p.letter + '</span></td><td colspan="2">' + esc(person(p.w)) + ' · ' + ({ S: EA.t('sakit', 'sick'), L: EA.t('cuti', 'leave'), X: EA.t('tidak hadir', 'absent') })[p.letter] + '</td></tr>';
+      }).join('') + '</table><p class="hint">' + esc(payCountText(pl)) + '</p></div>';
   }
 
   function wire() {
@@ -223,6 +296,7 @@
     var s = { id: rec.id, estate: estate, date: c.date, chit: c.chit, at: at.slice(11), by: user.code, byName: user.name, present: present, total: total, bunches: bunches, auto: !!opts.auto,
       jobsDone: jobs.filter(function (j) { return j.status === 'done'; }).length, jobs: jobs.length, lorries: lorries, rain: keepRain ? rainLabel(rain) + ' · ' + lostLabel(rain.lost) : '', rainJobs: keepRain ? rain.jobs : [],
       // v1.50.1 (Yu Chen, 5 Nov): who was away, by name and mark, for the day summary.
+      pay: (function () { var c1 = ck.find(function (x) { return x.n === 1 && x.pay; }); return c1 ? payCountText(c1.pay) : ''; })(),
       away: (c.rows || []).filter(function (r) { return r.status !== 'removed' && r.muster !== 'H'; }).map(function (r) { return person(r.worker_id) + ' (' + r.muster + ')'; }),
       notDone: jobs.filter(function (j) { return j.status === 'not_done'; }).map(function (j) { return { job: shortName(j.task_code) + (j.block ? ' Blk ' + j.block : ''), why: j.reason || '' }; }), note: d.note || '', fieldNote: d.fieldNote || '' };
     var list = closes().filter(function (x) { return !(x.estate === s.estate && x.date === s.date); }); list.push(s); EA.local.set(K.saved, list);
@@ -249,6 +323,7 @@
     var L = ['*TUTUP HARI ' + (est ? est.company + ' ' : '') + s.estate + '*', ui().dayBm[dd.getDay()] + ' ' + dd.getDate() + '/' + (dd.getMonth() + 1) + '/' + dd.getFullYear(), ''];
     L.push('Pekerja: ' + s.present + '/' + s.total + ' hadir');
     if (s.away && s.away.length) L.push('Tidak hadir: ' + s.away.join(', '));
+    if (s.pay) L.push('Gaji: ' + s.pay);
     L.push('Tuaian: ' + s.bunches + ' tandan' + (s.lorries ? ' · ' + s.lorries + ' lori keluar' : ' · tiada lori'));
     L.push('Kerja: ' + s.jobsDone + '/' + s.jobs + ' siap');
     (s.notDone || []).forEach(function (j) { L.push('  • ' + j.job + ' BELUM SIAP' + (j.why ? ' — ' + j.why : '')); });

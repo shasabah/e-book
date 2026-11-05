@@ -2,7 +2,7 @@
 // - A worker on the estate list but on no chit stops the close (check 1 red, opens the chit screen).
 // - A durian farm worker saved the old way (pruning, 0 Ha) stops the close: the durian farm is paid by the day.
 // - With ½ day for him: check 1 green with the checkroll letters (P, 1, ½, S, L, X), the pay card lists each job,
-//   and the WhatsApp summary carries "Kod kerja: …".
+//   and the WhatsApp summary carries the letters on the Pekerja line.
 // - Sunday is a rest day: workers not on the chit are not missing.
 // - Kerja: a job on the durian block (RP on DR) is keyed as 1 / ½ day, not Ha.
 // Rule 8: made-up workers only.
@@ -67,13 +67,13 @@ const { chromium } = require('playwright');
   // ½ day for him
   await p.evaluate(() => { const w = JSON.parse(localStorage.getItem('fh.work')); w[0].rec.lines[3].qty = '0.5'; w[0].rec.lines[3].unit = 'day'; localStorage.setItem('fh.work', JSON.stringify(w)); });
   await go(); txt = await p.innerText('#room');
-  check('all pay lines: 5 people, letters P 3 · ½ 1 · X 1, close allowed', !(await p.$eval('#dc-close', x => x.disabled)) && /5 orang · semua ada kod kerja/.test(txt) && /P 3 · ½ 1 · X 1/.test(txt), txt.slice(0, 400));
+  check('all pay lines: 5 people, letters P 3 · ½ 1 · X 1, close allowed', !(await p.$eval('#dc-close', x => x.disabled)) && /5 orang · semua ada kerja hari ini/.test(txt) && /P 3 · ½ 1 · X 1/.test(txt), txt.slice(0, 400));
   const card = await p.innerText('.dc-pay').catch(() => '');
   check('pay card: harvest 230 tandan (MT from the ticket), spray 1.44 Ha, durian 0.5 hari, Eko tidak hadir', /230 tandan/.test(card) && /MT ikut tiket/.test(card) && /1\.44 Ha/.test(card) && /0\.5 hari/.test(card) && /Eko Rahim · tidak hadir/.test(card), card.slice(0, 400));
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v61-pay-lines.png', fullPage: true });
   await p.click('#dc-close'); await p.waitForTimeout(400);
   const sheet = await p.innerText('#sheet-back').catch(() => '');
-  check('WhatsApp summary carries the pay letters', /Kod kerja: P 3 · ½ 1 · X 1/.test(sheet) && /Tidak hadir: Eko Rahim \(T\)/.test(sheet), sheet.slice(0, 300));
+  check('WhatsApp summary carries the pay letters', /Pekerja: 4\/5 hadir · P 3 · ½ 1 · X 1/.test(sheet) && /Tidak hadir: Eko Rahim \(T\)/.test(sheet), sheet.slice(0, 300));
   check('one FH_DAYCLOSE row saved', posted.filter(x => x.tab === 'FH_DAYCLOSE').length === 1);
   // Sunday: only those who came are on the chit; nobody else is missing
   const sunTxt = await p.evaluate((sun) => {

@@ -27,6 +27,10 @@ const { chromium } = require('playwright');
   const t2 = await p.evaluate(() => EA.roomViews['field-harvest'].chitText({ chit: 'MC-T', date: '2026-11-04', estate: 'SSGT', rev: 1, confirmedAt: '06:18', keyedName: 'Staf',
     rows: [{ worker_id: 'W1', muster: 'H', task_code: 'HA', block: '02', lots: '', mandor: '' }], jobs: [], alerts: [], backlog: { field: [], fieldTotal: 0, ramp: { bunches: 0 } } }));
   check('the block shows as B02 in the table', /\nB02 Harvester/.test(t2), t2.split('```')[1]);
+  const sum = await p.evaluate(() => EA.fh.dayclose.summaryText({ estate: 'SSGT', date: '2026-11-04', chit: 'MC-T', at: '20:55', by: 'S', byName: 'Staf', present: 20, total: 21, bunches: 553, lorries: 0, jobsDone: 9, jobs: 9, notDone: [], away: ['Pekerja Satu (T)'], rain: '', rainJobs: [] }));
+  check('day-close summary names who was away', /Pekerja: 20\/21 hadir\nTidak hadir: Pekerja Satu \(T\)/.test(sum), sum);
+  const old = await p.evaluate(() => EA.fh.dayclose.summaryText({ estate: 'SSGT', date: '2026-11-04', chit: 'MC-T', at: '20:55', by: 'S', present: 21, total: 21, bunches: 0, lorries: 0, jobsDone: 1, jobs: 1, notDone: [], rain: '', rainJobs: [] }));
+  check('an older close with no away list still prints', !/Tidak hadir/.test(old) && /Pekerja: 21\/21/.test(old));
   check('no page errors', errs.length === 0, errs.join(' | '));
   await b.close();
 })();

@@ -1698,7 +1698,8 @@
     var est = EA.lists.estate(c.estate);
     function pad(t, n) { t = String(t); return t.length >= n ? t.slice(0, n) : t + new Array(n - t.length + 1).join(' '); }
     function num(v) { return v ? String(v) : '-'; }
-    function row(blk, name, o) { return pad(blk, 4) + pad(name, 17) + pad(num(o.mdr), 4) + pad(num(o.m), 3) + pad(num(o.f), 3) + s.tot(o); }
+    // v1.50.1 (Yu Chen, 5 Nov, option A): a block number reads as a block: 02 → B02 (DR, the durian farm, stays DR).
+    function row(blk, name, o) { return pad(/^\d+$/.test(String(blk)) ? 'B' + blk : blk, 4) + pad(name, 17) + pad(num(o.mdr), 4) + pad(num(o.m), 3) + pad(num(o.f), 3) + s.tot(o); }
     function short(code) { return (EA.lists.chitNames && EA.lists.chitNames[code]) || jobNameEn(code); }
     var AWAY_EN = { T: 'Absent', S: 'Sick', C: 'On Leave', L: 'Labour Day', X: 'Transfer' };
     var L = [];

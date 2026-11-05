@@ -830,3 +830,5 @@ div.td-it { cursor: default; }
 .dc-kX { background: #eeeeee; color: #555; }
 .dc-paytab td small { display: block; color: var(--muted); font-size: .8rem; }
 .dc-paytab td:first-child { width: 2.6em; }
+.wk-closed { margin: 8px 0 0; color: var(--ok); }
+.wk-close-wait { border-color: var(--bad, #b3261e); color: var(--bad, #b3261e); }

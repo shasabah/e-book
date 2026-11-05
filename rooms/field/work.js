@@ -420,7 +420,7 @@
     var mach = EA.lists.MACHINE_JOBS.indexOf(j.task) >= 0;
     var spm = EA.lists.splitMach(ctx.estate, j.lots);
     var lotsText = mach ? EA.t('Jentera ', 'Machine ') + spm.mach.map(function (m) { var x = EA.lists.machinesFor(ctx.estate).find(function (y) { return y.id === m; }); return x ? EA.t(x.bm, x.en) : m; }).join(', ') + (spm.lots.length ? ' · ' + EA.t('Petak ', 'Lots ') + spm.lots.join(', ') : '')
-      : j.lots.length ? EA.t('Petak ', 'Lot ') + j.lots.join(', ') + ' · ' + jobTotals(j).planHa.toFixed(2) + ' Ha' : '';
+      : j.lots.length ? EA.t('Petak ', 'Lot ') + j.lots.join(', ') + (isDurianBlock(j.block) ? EA.t(' · ikut hari', ' · by the day') : ' · ' + jobTotals(j).planHa.toFixed(2) + ' Ha') : '';
     var lines = j.people.map(function (w) {
       var wl = draft.lines[w] || [];
       if (auto(j)) {

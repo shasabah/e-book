@@ -134,7 +134,7 @@
     else if (pl.missing.length) out.push({ n: 1, ok: false, bm: pl.missing.length + ' orang dalam senarai tiada dalam chit', en: pl.missing.length + ' on the list but not on the chit', sub: names(pl.missing) + EA.t(' · betulkan chit: hadir dengan kerja, atau S / C / T', ' · fix the chit: present with a job, or S / C / T'), go: '#field-harvest' });
     else if (pl.noLine.length) out.push({ n: 1, ok: false, bm: pl.noLine.length + ' orang hadir tiada baris kerja', en: pl.noLine.length + ' present with no work line', sub: names(pl.noLine), go: '#field-harvest/work' });
     else if (pl.badDay.length) out.push({ n: 1, ok: false, bm: pl.badDay.length + ' orang kerja harian tanpa 1 / ½ hari', en: pl.badDay.length + ' day workers without 1 / ½ day', sub: names(pl.badDay) + EA.t(' · ladang durian dibayar ikut hari', ' · the durian farm is paid by the day'), go: '#field-harvest/work' });
-    else out.push({ n: 1, ok: true, bm: pl.people.length + ' orang · semua ada kod kerja', en: pl.people.length + ' people · every one has a work code', sub: payCountText(pl), pay: pl });
+    else out.push({ n: 1, ok: true, bm: pl.people.length + ' orang · semua ada kerja hari ini', en: pl.people.length + ' people · every one has work done today', sub: payCountText(pl), pay: pl });
     // 2 · harvest lots collected to the ramp, or explained
     var cut = 0, col = 0;
     lines.forEach(function (l) { if (l.task_code === EA.lists.HARVEST) cut += num(l.bunches); });
@@ -247,7 +247,7 @@
 
   function payCard(pl) {
     var away = pl.people.filter(function (p) { return ['S', 'L', 'X'].indexOf(p.letter) >= 0; });
-    return '<div class="card dc-pay"><h2>' + EA.t('Kod kerja hari ini', 'Today\'s work codes') + '</h2><p class="hint">' + EA.t('Setiap pekerja satu kod, sama dengan checkroll. Ini rekod kerja, belum bayaran.', 'One code per worker, the same as the checkroll. A record of work, not pay yet.') + '</p>' +
+    return '<div class="card dc-pay"><h2>' + EA.t('Kerja hari ini', 'Work done today') + '</h2><p class="hint">' + EA.t('Satu huruf setiap pekerja, sama dengan checkroll.', 'One letter per worker, as in the checkroll.') + '</p>' +
       '<table class="dc-paytab">' + pl.jobs.map(function (j) {
         var tot = j.unit === 'Ha' ? j.total.toFixed(2) : j.total, amt = j.kind === 'ticket' ? EA.t('ikut tiket', 'from the ticket') : j.kind === 'bunches' ? tot + ' tandan' : j.bags ? j.bags + ' beg' : tot + ' ' + j.unit, under = j.kind === 'bunches' ? EA.t('MT ikut tiket', 'MT from the ticket') : j.bags ? tot + ' ' + j.unit : '';
         return '<tr><td><span class="dc-k dc-k' + (j.letter === 'P' ? 'P' : 'D') + '">' + (j.kind !== 'day' ? 'P' : j.total === j.n ? '1' : j.total === j.n / 2 ? '½' : '1/½') + '</span></td><td>' + esc(shortName(j.task)) + (j.block ? ' · ' + esc(/^\d+$/.test(j.block) ? 'B' + j.block : j.block) : '') + '<small>' + j.n + EA.t(' orang', ' people') + '</small></td><td class="n">' + esc(amt) + (under ? '<small>' + esc(under) + '</small>' : '') + '</td></tr>';
@@ -321,9 +321,8 @@
   function summaryText(s) {
     var dd = new Date(s.date + 'T00:00:00'), est = EA.lists.estate(s.estate);
     var L = ['*TUTUP HARI ' + (est ? est.company + ' ' : '') + s.estate + '*', ui().dayBm[dd.getDay()] + ' ' + dd.getDate() + '/' + (dd.getMonth() + 1) + '/' + dd.getFullYear(), ''];
-    L.push('Pekerja: ' + s.present + '/' + s.total + ' hadir');
+    L.push('Pekerja: ' + s.present + '/' + s.total + ' hadir' + (s.pay ? ' · ' + s.pay : ''));
     if (s.away && s.away.length) L.push('Tidak hadir: ' + s.away.join(', '));
-    if (s.pay) L.push('Kod kerja: ' + s.pay);
     L.push('Tuaian: ' + s.bunches + ' tandan' + (s.lorries ? ' · ' + s.lorries + ' lori keluar' : ' · tiada lori'));
     L.push('Kerja: ' + s.jobsDone + '/' + s.jobs + ' siap');
     (s.notDone || []).forEach(function (j) { L.push('  • ' + j.job + ' BELUM SIAP' + (j.why ? ' — ' + j.why : '')); });

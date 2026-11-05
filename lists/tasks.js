@@ -199,7 +199,11 @@ EA.lists.otherJobs = { SSGT: ['LFR', 'DEC', 'BU', 'SS', 'BS', 'LS', 'OS', 'OPF',
 EA.lists.isOtherJob = function (estate, code) { var o = EA.lists.otherJobs[estate]; return !o || o.indexOf(code) >= 0; };
 // v1.36 (Yu Chen, 25 Oct): the shortcut buttons show only the jobs keyed every day; the other main jobs
 // (rounds and occasional work) fold under one button, so the list stays short.
-EA.lists.dailyJobs = { SSGT: ['HA', 'ITF', 'LFF', 'LF', 'DF', 'MDR', 'CA', 'WM'] };
+// v1.51.2 (Yu Chen, 5 Nov): CPS and MAN join the top row for the rounds season. Both are keyed most days
+// in Nov-Dec (the 2 Nov plan: CPS 4 rounds, manuring round 4), so folding them away cost a tap every day.
+// They stay main jobs either way; this only moves which button they sit on. Taken off the row when the
+// rounds are done. moreJobsFor() takes them out of the folded list by itself.
+EA.lists.dailyJobs = { SSGT: ['HA', 'ITF', 'LFF', 'LF', 'CPS', 'MAN', 'DF', 'MDR', 'CA', 'WM'] };
 EA.lists.quickJobs = EA.lists.dailyJobs;
 EA.lists.quickJobsFor = function (estate) { return EA.lists.dailyJobs[estate] || EA.lists.mainJobs[estate] || ['HA', 'LF', 'ITF', 'MAN', 'CPS', 'RP', 'SL', 'WM', 'CA', 'RMH']; };
 // The three operator codes show as one button "OP · Operator jentera"; the phone then asks what the work is for.

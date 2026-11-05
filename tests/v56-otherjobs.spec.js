@@ -35,7 +35,9 @@ const { chromium } = require('playwright');
   const keep = ['LFR', 'DEC', 'BU', 'SS', 'BS', 'LS', 'OS', 'OPF', 'SP', 'RMF', 'RMM', 'GFR', 'GMR', 'RPC', 'CSR', 'CSB', 'RS', 'MC', 'ITLM', 'CPT', 'LG/UL'];
   check('Sugut other-work list: only the 21 kept jobs', opts.length === 21 && keep.every(c => opts.indexOf(c) >= 0), opts.join(','));
   check('dropped jobs are gone (DCO, FC, CO, MT)', ['DCO', 'FC', 'CO', 'MT'].every(c => opts.indexOf(c) < 0));
-  check('main jobs are not in this list (CPS, MAN stay buttons)', opts.indexOf('CPS') < 0 && opts.indexOf('MAN') < 0 && !!(await p.$('#jb-more [data-quick="MAN"]')) && !!(await p.$('#jb-more [data-quick="CPS"]')));
+  // CPS and MAN are main jobs, so they are buttons, never an approval request. v1.51.1 moved them from the
+  // folded button to the top row, so look for the button anywhere in the picker, not in one row.
+  check('main jobs are not in this list (CPS, MAN stay buttons)', opts.indexOf('CPS') < 0 && opts.indexOf('MAN') < 0 && !!(await p.$('[data-quick="MAN"]')) && !!(await p.$('[data-quick="CPS"]')));
   await p.evaluate(() => EA.ui.closeSheet && EA.ui.closeSheet()); await p.waitForTimeout(200);
   // an old DCO line (keyed before 1.45) still opens and shows its own code
   await p.evaluate(() => { const all = JSON.parse(localStorage.getItem('fh.draft2') || '{}'); const d = all.SSGT; d.jobs = [{ key: 'j1', task: 'DCO', block: '01', lots: [], mandor: '', ask: 'lama' }]; d.nextJob = 2; localStorage.setItem('fh.draft2', JSON.stringify(all)); });

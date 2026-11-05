@@ -51,7 +51,12 @@ const { chromium } = require('playwright');
   await goRoom();
   await p.click('#fh-addjob'); await p.waitForSelector('#jb-more');
   const names = await p.textContent('#jb-more summary .jb-more-names');
-  check('the folded button lists its jobs by name (Membaja seen without opening)', /Membaja/.test(names) && !(await p.$eval('#jb-more', d => d.open)), names);
+  // v1.44 (27 Oct): the folded button names its jobs, so none of them is hidden behind a tap.
+  // v1.51.1 (5 Nov): Membaja moved to the top row, so it is found without opening anything at all;
+  // the folded button still names what is left (Tebas, Cantas biasa, …).
+  const topRow = await p.$$eval('#jb-quick [data-quick]', a => a.map(x => x.dataset.quick));
+  check('Membaja is seen without opening anything (now a button on the top row)', topRow.indexOf('MAN') >= 0, topRow.join(' '));
+  check('the folded button lists its jobs by name (Tebas seen without opening)', /Tebas/.test(names) && !(await p.$eval('#jb-more', d => d.open)), names);
   await p.evaluate(() => EA.ui.closeSheet && EA.ui.closeSheet()); await p.waitForTimeout(200);
   await p.evaluate(() => { const all = JSON.parse(localStorage.getItem('fh.draft2') || '{}'); const d = all.SSGT; d.jobs = [{ key: 'j1', task: 'DCO', block: '01', lots: [], mandor: '', ask: 'ujian' }]; d.nextJob = 2; localStorage.setItem('fh.draft2', JSON.stringify(all)); });
   await goRoom(); await p.click('[data-edit="j1"]'); await p.waitForSelector('#jb-more');

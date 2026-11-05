@@ -479,6 +479,8 @@
 
   function wireTop() {
     $('#wk-back').onclick = function () { location.hash = ''; };
+    var wc = $('#wk-close');
+    if (wc) wc.onclick = function () { EA.local.set('fh.daypick', wc.dataset.date); location.hash = '#field-harvest/close'; };
     var sel = $('#wk-chit');
     if (sel) sel.onchange = function () { EA.local.set('fh.workchit', this.value); render(el, ctx); };
     var fix = $('#wk-fix');
@@ -944,7 +946,15 @@
       '<span class="en">' + s.rec.jobs.length + EA.t(' kerja · ', ' jobs · ') + (s.rec.jobs.length - notDone) + EA.t(' siap · ', ' done · ') + notDone + EA.t(' belum siap', ' not done') + '</span></div>' +
       '<div class="acts"><span class="pill ' + (waiting ? 'wait">' + EA.t('Menunggu', 'Waiting') : 'ok">' + EA.t('Dihantar', 'Sent')) + '</span>' +
       '<button type="button" class="btn btn-ghost" id="wk-view">VIEW<small>Lihat</small></button>' +
-      (canKey(ctx.user) ? '<button type="button" class="btn btn-ghost" id="wk-fix">CORRECT<small>Betulkan</small></button>' : '') + '</div></div></section>';
+      (canKey(ctx.user) ? '<button type="button" class="btn btn-ghost" id="wk-fix">CORRECT<small>Betulkan</small></button>' : '') + '</div></div>' + closeRow(s) + '</section>';
+  }
+  // v1.51.1: the day close sits on the saved day's card, so it is always one tap away (not only in the sheet after SAVE).
+  function closeRow(s) {
+    var st = EA.fh.dayclose && EA.fh.dayclose.cardState ? EA.fh.dayclose.cardState(s.estate, ctx.user, s.date) : { state: 'none' };
+    if (st.state === 'closed') return '<p class="wk-closed"><b>✓ ' + EA.t('Hari ditutup', 'Day closed') + (st.at ? ' · ' + esc(st.at) : '') + '</b></p>';
+    if (st.state === 'ready') return '<div class="actions"><button type="button" class="btn btn-ok" id="wk-close" data-date="' + esc(s.date) + '">TUTUP HARI<small>' + EA.t('Semua lengkap · tutup hari ini', 'All complete · close this day') + '</small></button></div>';
+    if (st.state === 'missing') return '<div class="actions"><button type="button" class="btn btn-ghost wk-close-wait" id="wk-close" data-date="' + esc(s.date) + '">TUTUP HARI<small>' + st.bad + EA.t(' perkara belum lengkap · lihat', ' things not complete · see') + '</small></button></div>';
+    return '';
   }
 
   function showReport(s) {

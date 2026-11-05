@@ -71,10 +71,21 @@ const { chromium } = require('playwright');
   const card = await p.innerText('.dc-pay').catch(() => '');
   check('pay card: harvest 230 tandan (MT from the ticket), spray 1.44 Ha, durian 0.5 hari, Eko tidak hadir', /230 tandan/.test(card) && /MT ikut tiket/.test(card) && /1\.44 Ha/.test(card) && /0\.5 hari/.test(card) && /Eko Rahim · tidak hadir/.test(card), card.slice(0, 400));
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v61-pay-lines.png', fullPage: true });
+  // v1.51.1: the saved day's card on Kerja carries TUTUP HARI (not only the sheet after SAVE)
+  await p.evaluate(() => { localStorage.setItem('fh.workchit', JSON.stringify('CH-SSGT-P13-1')); location.hash = ''; }); await p.waitForTimeout(100);
+  await p.evaluate(() => { location.hash = 'field-harvest/work'; }); await p.waitForSelector('#wk-saved');
+  const btn = await p.$eval('#wk-close', b => b.innerText).catch(() => '');
+  check('Kerja: the saved day shows TUTUP HARI · all complete', /TUTUP HARI/i.test(btn) && /(Semua lengkap|All complete)/i.test(btn), btn);
+  await p.click('#wk-close'); await p.waitForSelector('#dc-close'); await p.waitForTimeout(200);
+  check('TUTUP HARI on the card opens the close screen for that day', /field-harvest\/close$/.test(await p.evaluate(() => location.hash)));
   await p.click('#dc-close'); await p.waitForTimeout(400);
   const sheet = await p.innerText('#sheet-back').catch(() => '');
   check('WhatsApp summary carries the pay letters', /Pekerja: 4\/5 hadir · P 3 · ½ 1 · X 1/.test(sheet) && /Tidak hadir: Eko Rahim \(T\)/.test(sheet), sheet.slice(0, 300));
   check('one FH_DAYCLOSE row saved', posted.filter(x => x.tab === 'FH_DAYCLOSE').length === 1);
+  await p.evaluate(() => { const bk = document.querySelector('#ds-back'); if (bk) bk.click(); location.hash = ''; }); await p.waitForTimeout(150);
+  await p.evaluate(() => { location.hash = 'field-harvest/work'; }); await p.waitForSelector('#wk-saved');
+  const closedTxt = await p.innerText('#wk-saved');
+  check('after the close the card says the day is closed, no button', /(Hari ditutup|Day closed)/.test(closedTxt) && !(await p.$('#wk-close')), closedTxt.slice(0, 200));
   // Sunday: only those who came are on the chit; nobody else is missing
   const sunTxt = await p.evaluate((sun) => {
     const c = { chit: 'CH-SSGT-P13-SUN', date: sun, estate: 'SSGT', rows: [{ id: 's1', worker_id: 'W-SSGT-004', muster: 'H', task_code: 'DF', block: 'DR', lots: 'A' }], jobs: [] };

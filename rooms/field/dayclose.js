@@ -418,5 +418,17 @@
     return out;
   };
 
-  EA.fh.dayclose = { render: render, summaryText: summaryText, checks: checks, rainCheck: rainCheck, rainFromWork: rainFromWork, closeChit: closeChit, closeState: closeState };
+  // v1.51.1 (Yu Chen, 5 Nov 22:36: "why no closing function"): the saved day's card on Kerja carries the close.
+  // 'closed', 'ready', 'missing' (with how many things), or 'none' (before the start date, or not the staff).
+  function cardState(estate, user, date) {
+    if (!canClose(user)) return { state: 'none' };
+    var keep = ctx; ctx = Object.assign({}, ctx || {}, { estate: estate, user: user });
+    try {
+      var l = closedLocal(estate, date), st = officeState(estate, date);
+      if ((l && st !== 'reopened' && st !== 'fixing') || st === 'closed') return { state: 'closed', at: l ? l.at : '' };
+      var cs = closeState(estate, user, date);
+      return { state: cs.state, bad: cs.bad ? cs.bad.length : 0 };
+    } finally { ctx = keep; }
+  }
+  EA.fh.dayclose = { render: render, summaryText: summaryText, checks: checks, rainCheck: rainCheck, rainFromWork: rainFromWork, closeChit: closeChit, closeState: closeState, cardState: cardState };
 })();

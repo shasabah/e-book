@@ -110,9 +110,10 @@ const { chromium } = require('playwright');
   await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForSelector('#fh-addjob'); await p.waitForTimeout(600);
   await p.click('#fh-addjob'); await p.waitForSelector('#jb-task');
   const quick = await p.$$eval('#jb-quick [data-quick]', a => a.map(x => x.dataset.quick));
-  check('phone: the shortcut buttons are the 8 daily jobs (HA, ITF, LFF, LF, DF, MDR, CA, WM)', quick.join(' ') === 'HA ITF LFF LF DF MDR CA WM', quick.join(' '));
+  // v1.51.1 (Yu Chen, 5 Nov): CPS and MAN join the row for the rounds season.
+  check('phone: the shortcut buttons are the daily jobs plus CPS and MAN (HA, ITF, LFF, LF, CPS, MAN, DF, MDR, CA, WM)', quick.join(' ') === 'HA ITF LFF LF CPS MAN DF MDR CA WM', quick.join(' '));
   const more = await p.$$eval('#jb-more [data-quick]', a => a.map(x => x.dataset.quick));
-  check('phone: the other main jobs fold under "Kerja pusingan & lain" (closed): CPS VOPS MAN SL RP AP OP ETF', more.join(' ') === 'CPS VOPS MAN SL RP AP OP ETF' && !(await p.$eval('#jb-more', d => d.open)), more.join(' '));
+  check('phone: the rest of the main jobs fold under "Kerja pusingan & lain" (closed): VOPS SL RP AP OP ETF', more.join(' ') === 'VOPS SL RP AP OP ETF' && !(await p.$eval('#jb-more', d => d.open)), more.join(' '));
   const others = await p.$$eval('#jb-task option', a => a.map(x => x.value).filter(Boolean));
   // v1.45: Sugut keeps only 21 other jobs (ticked by Yu Chen, 27 Oct); RMH and MT are off Sugut's list.
   check('phone: "Kerja lain" lists only Sugut\'s other jobs (21, incl. DEC SP OPF RMF)', others.length === 21 && ['RMF', 'DEC', 'SP', 'OPF'].every(c => others.includes(c)) && !others.includes('HA') && !others.includes('OPR') && !others.includes('MT') && !others.includes('RMH'), String(others.length));

@@ -81,7 +81,7 @@ const { chromium } = require('playwright');
   await p.click('[data-room="field-harvest"]'); await p.waitForTimeout(1500);
   await p.click('#fh-addjob'); await p.waitForSelector('#jb-quick');
   const chips = await p.$$eval('#jb-quick [data-quick]', a => a.map(x => x.dataset.quick).join(','));
-  check('Tambah kerja: the usual Sugut jobs are buttons at the top', chips === 'HA,ITF,LFF,LF,DF,MDR,CA,WM', chips);   // v1.36: the daily shortcuts
+  check('Tambah kerja: the usual Sugut jobs are buttons at the top', chips === 'HA,ITF,LFF,LF,CPS,MAN,DF,MDR,CA,WM', chips);   // v1.36 daily shortcuts; v1.51.1 adds CPS and MAN for the rounds season
   await p.click('.jb-quick [data-quick="WM"]');
   check('general/repair job: no block and no lots, says "no block needed"', await p.isHidden('#jb-where') && await p.isVisible('#jb-noblock') && (await p.getAttribute('.jb-quick [data-quick="WM"]', 'aria-pressed')) === 'true');
   await p.click('#jb-save'); await p.waitForTimeout(300);

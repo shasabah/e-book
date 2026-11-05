@@ -24,6 +24,9 @@ const { chromium } = require('playwright');
   check('tickets with the same reason on one line, short flags', lines.includes('• Gred kilang 2 tiket: 111 tolak 77 · 222 penalti 1.04% → Buah bermalam'), lines.filter(l => /Gred/.test(l)).join(' | '));
   check('an alert already on an earlier chit is only counted', lines.includes('_(+1 masih terbuka: tiket 333)_'));
   check('no sub-headings under a section (Cutting, Field to ramp)', !/Cutting|Field to ramp/.test(txt) && /1\. Harvesting\n\s+Harvester/.test(txt), txt.split('```')[1]);
+  const t2 = await p.evaluate(() => EA.roomViews['field-harvest'].chitText({ chit: 'MC-T', date: '2026-11-04', estate: 'SSGT', rev: 1, confirmedAt: '06:18', keyedName: 'Staf',
+    rows: [{ worker_id: 'W1', muster: 'H', task_code: 'HA', block: '02', lots: '', mandor: '' }], jobs: [], alerts: [], backlog: { field: [], fieldTotal: 0, ramp: { bunches: 0 } } }));
+  check('the block shows as B02 in the table', /\nB02 Harvester/.test(t2), t2.split('```')[1]);
   check('no page errors', errs.length === 0, errs.join(' | '));
   await b.close();
 })();

@@ -838,3 +838,6 @@ div.td-it { cursor: default; }
 .esok>b{font-size:1.05rem}.esok>span{color:var(--muted,#666);font-size:.9rem}
 .esok .btn{width:100%;text-align:left}
 .plain-row{margin:-6px 0 12px}.plain-row .btn{width:100%}
+/* v1.51.3 Records: a working day with nothing keyed */
+.rk-r.rk-miss { cursor: default; }
+.rk-r.rk-miss b { color: var(--wait); }

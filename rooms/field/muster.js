@@ -1683,12 +1683,9 @@
     L.push(pad('Blk', 4) + pad('Job', 17) + pad('Mdr', 4) + pad('M', 3) + pad('F', 3) + 'Tot');
     s.sections.forEach(function (x) {
       L.push(x.s.code + '. ' + x.s.en);
-      var lp = '';
-      x.lines.forEach(function (l) {
-        var pt = x.s.parts && x.s.parts.length > 1 ? EA.lists.partOf(l.task) : null;
-        if (pt && pt.en !== lp) { lp = pt.en; L.push('  ' + pt.en); }
-        L.push(row(l.block || '', short(l.task), l));
-      });
+      // v1.50.2 (Yu Chen, 5 Nov): no sub-headings under a section on the chit (Cutting, Field to ramp, Manual,
+      // Chemical, Manuring …): the job names already say it. The lines keep their order.
+      x.lines.forEach(function (l) { L.push(row(l.block || '', short(l.task), l)); });
     });
     L.push(row('', 'Total working', s.worked));
     AWAY.forEach(function (k) { if (s.tot(s.away[k])) L.push(row('', AWAY_EN[k], s.away[k])); });

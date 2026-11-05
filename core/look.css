@@ -820,3 +820,13 @@ div.td-it { cursor: default; }
   .pr-or td.mC, .pr-or td.mL { background: #e6eefb !important; color: #1f55a8; font-weight: 700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .pr-or td.im { font-style: italic; }
 }
+/* v1.51 day close: the day's pay lines, same letters as the checkroll */
+.dc-paytab { width: 100%; border-collapse: collapse; font-size: .92rem; }
+.dc-paytab td { padding: 5px 4px; border-bottom: 1px solid var(--line, #e6e0d2); vertical-align: top; }
+.dc-paytab td.n { text-align: right; white-space: nowrap; }
+.dc-k { display: inline-block; min-width: 2.1em; text-align: center; font-weight: 800; border-radius: 6px; padding: 0 4px; font-size: .85rem; }
+.dc-kP { background: var(--ok-soft, #e1f3e6); color: var(--ok, #1f7a45); }
+.dc-kD { background: #e2ecf8; color: #1f5fa8; }
+.dc-kX { background: #eeeeee; color: #555; }
+.dc-paytab td small { display: block; color: var(--muted); font-size: .8rem; }
+.dc-paytab td:first-child { width: 2.6em; }

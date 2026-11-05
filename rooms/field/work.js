@@ -40,9 +40,12 @@
   //   day     — full or half day
   //   hour    — hours (machines)
   //   ticket  — nothing keyed: paid from the mill ticket tonnes
-  function kind(code) {
+  // v1.51 (Yu Chen, 5 Nov): every job at the durian farm is paid by the day (1, ½ or 0), whatever its code.
+  function isDurianBlock(block) { var d = EA.lists.durian && ctx && EA.lists.durian[ctx.estate]; return !!(d && block && String(block) === d.block); }
+  function kind(code, block) {
     var t = task(code);
     if (!t) return 'day';
+    if (isDurianBlock(block)) return 'day';
     if (code === EA.lists.HARVEST) return 'bunches';
     // Crop jobs (loaders) are paid from the mill ticket tonnes.
     if (t.unit === 'MT') return 'ticket';
@@ -50,8 +53,8 @@
     if (t.unit === 'hour') return 'hour';
     return 'qty';
   }
-  function unitLabel(code) {
-    var k = kind(code), t = task(code);
+  function unitLabel(code, block) {
+    var k = kind(code, block), t = task(code);
     return k === 'bunches' ? 'tandan' : k === 'day' ? 'hari' : k === 'hour' ? 'jam' : k === 'ticket' ? 'MT' : (t.unit === 'bag' ? 'beg' : t.unit === 'palm' ? 'pokok' : t.unit === 'seedling' ? 'anak benih' : t.unit);
   }
 
@@ -135,7 +138,7 @@
     var mine = ownLots();
     jobsOf(c).forEach(function (j) {
       j.people.forEach(function (w) {
-        var k = kind(j.task);
+        var k = kind(j.task, j.block);
         // A harvester keeps his own lot: the one he cut last time, when it is on today's job.
         var own = k === 'bunches' && mine[w] && j.lots.indexOf(mine[w]) >= 0 ? mine[w] : '';
         // v1.34.1: a day-paid job (e.g. the farm tractor ITF) covers all its lots in the day: they all start chosen.
@@ -146,7 +149,7 @@
       d.status[j.key] = { done: '', reason: '' };
       // Ha jobs (CPS, manuring, slashing): the morning's lots start as done (100%);
       // the staff changes only a lot that was not finished.
-      if (kind(j.task) === 'qty' && task(j.task) && task(j.task).unit === 'Ha' && j.lots.length) {
+      if (kind(j.task, j.block) === 'qty' && task(j.task) && task(j.task).unit === 'Ha' && j.lots.length) {
         d.prog[j.key] = {}; j.lots.forEach(function (l) { d.prog[j.key][l] = '100'; });
         // v1.41: one person, or one lot: nothing to choose. A gang on several lots: each person taps his own.
         d.who[j.key] = j.people.length === 1 || j.lots.length === 1 ? allWho(j, d) : {};
@@ -212,7 +215,7 @@
   // Staff do not remember lot sizes; they know how much of a lot is done.
   // Ha = lot size (from the map) x %; each person on the job gets an equal share.
   // "Set per person" switches to keying each person's Ha by hand.
-  function isHa(j) { return kind(j.task) === 'qty' && task(j.task) && task(j.task).unit === 'Ha'; }
+  function isHa(j) { return kind(j.task, j.block) === 'qty' && task(j.task) && task(j.task).unit === 'Ha'; }
   function auto(j) { return isHa(j) && !draft.manual[j.key]; }
   function progLots(j) {
     var p = draft.prog[j.key] || {}, out = j.lots.slice();
@@ -284,7 +287,7 @@
 
   // ---------- totals and flags ----------
   function jobTotals(j) {
-    var k = kind(j.task), qty = 0, bunches = 0, byLot = {}, flags = [];
+    var k = kind(j.task, j.block), qty = 0, bunches = 0, byLot = {}, flags = [];
     j.people.forEach(function (w) {
       var pb = 0;
       (draft.lines[w] || []).forEach(function (l) {
@@ -412,7 +415,7 @@
     return '<div class="wline"><label class="inline-label">' + EA.t('Beg baja ', 'Bags ') + '<input class="qty" inputmode="numeric" data-pbag="' + j.key + '|' + w + '" value="' + esc(pbags(j)[w] || '') + '"></label></div>';
   }
   function jobCard(j) {
-    var k = kind(j.task), sec = EA.lists.sectionOf(j.task), st = draft.status[j.key] || { done: '', reason: '' };
+    var k = kind(j.task, j.block), sec = EA.lists.sectionOf(j.task), st = draft.status[j.key] || { done: '', reason: '' };
     if (auto(j)) shareOut(j);
     var mach = EA.lists.MACHINE_JOBS.indexOf(j.task) >= 0;
     var spm = EA.lists.splitMach(ctx.estate, j.lots);
@@ -443,7 +446,7 @@
             j.lots.map(function (n) { return '<option' + (n === l.lot ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select>' : (j.lots[0] ? '<span class="mono">' + esc(j.lots[0]) + '</span>' : '');
           var input = k === 'day'
             ? '<div class="seg"><button type="button" data-w="' + w + '" data-i="' + i + '" data-day="1" aria-pressed="' + (l.qty === '1') + '">1</button><button type="button" data-w="' + w + '" data-i="' + i + '" data-day="0.5" aria-pressed="' + (l.qty === '0.5') + '">½</button></div> hari'
-            : '<input class="qty" inputmode="decimal" data-w="' + w + '" data-i="' + i + '" data-f="' + (k === 'bunches' ? 'bunches' : 'qty') + '" value="' + esc(k === 'bunches' ? l.bunches : l.qty) + '" placeholder="0"> ' + esc(unitLabel(j.task));
+            : '<input class="qty" inputmode="decimal" data-w="' + w + '" data-i="' + i + '" data-f="' + (k === 'bunches' ? 'bunches' : 'qty') + '" value="' + esc(k === 'bunches' ? l.bunches : l.qty) + '" placeholder="0"> ' + esc(unitLabel(j.task, j.block));
           var meter = isOp(j) ? '<div class="wline"><label class="inline-label">' + EA.t('Meter jam mula ', 'Hour meter start ') + '<input class="qty" inputmode="decimal" data-w="' + w + '" data-i="' + i + '" data-f="ms" value="' + esc(l.ms || '') + '"></label>' +
             '<label class="inline-label">' + EA.t(' tamat ', ' end ') + '<input class="qty" inputmode="decimal" data-w="' + w + '" data-i="' + i + '" data-f="me" value="' + esc(l.me || '') + '"></label>' +
             '<span class="mono" data-hrs="' + w + '|' + i + '">= ' + hoursOf(l) + EA.t(' jam', ' hours') + '</span></div>' : '';
@@ -463,7 +466,7 @@
         '<div class="wline"><span class="hint">' + (auto(j) ? EA.t('Tekan petak yang dibuat oleh setiap orang. Petak yang dikongsi dibahagi antara mereka.', 'Tap the lots each person worked. A shared lot is split among them.') : EA.t('Ha diisi seorang-seorang.', 'Ha keyed per person.')) + '</span>' +
         (auto(j) && j.people.length > 1 ? '<button type="button" class="btn btn-ghost" data-allwho="' + j.key + '">SAME FOR ALL<small>Sama semua petak</small></button>' : '') +
         '<button type="button" class="btn btn-ghost" data-manual="' + j.key + '">' + (auto(j) ? 'KEY HA<small>Isi Ha sendiri</small>' : 'BY LOT<small>Ikut petak</small>') + '</button></div>' : '') +
-      (k !== 'ticket' && k !== 'day' && !auto(j) && !isHa(j) ? '<div class="wline"><span class="hint">' + EA.t('Isi sama untuk semua yang kosong:', 'Fill the same for everyone empty:') + '</span><input class="qty" inputmode="decimal" data-fill="' + j.key + '" placeholder="0"> ' + esc(unitLabel(j.task)) + '<button type="button" class="btn btn-ghost" data-fillgo="' + j.key + '">FILL<small>Isi</small></button></div>' : '') +
+      (k !== 'ticket' && k !== 'day' && !auto(j) && !isHa(j) ? '<div class="wline"><span class="hint">' + EA.t('Isi sama untuk semua yang kosong:', 'Fill the same for everyone empty:') + '</span><input class="qty" inputmode="decimal" data-fill="' + j.key + '" placeholder="0"> ' + esc(unitLabel(j.task, j.block)) + '<button type="button" class="btn btn-ghost" data-fillgo="' + j.key + '">FILL<small>Isi</small></button></div>' : '') +
       '<div class="rows">' + lines + '</div>' +
       '<p class="hint" data-tot="' + j.key + '"></p><div data-flags="' + j.key + '"></div>' +
       (isHa(j) ? '<p class="hint" data-hastat="' + j.key + '"></p>' : '<div class="field"><span class="inline"><span class="bm">Kerja ini</span> · <span class="en">This job</span></span>' +
@@ -512,7 +515,7 @@
     });
     el.querySelectorAll('[data-alllots],[data-onelot]').forEach(function (b) {
       b.onclick = function () {
-        var j = jobs.find(function (x) { return x.people.indexOf(b.dataset.w) >= 0 && kind(x.task) === 'day'; });
+        var j = jobs.find(function (x) { return x.people.indexOf(b.dataset.w) >= 0 && kind(x.task, x.block) === 'day'; });
         var l = draft.lines[b.dataset.w][Number(b.dataset.i)], on = String(l.lot || '').split(' ').filter(Boolean);
         if (b.dataset.alllots) on = on.length === j.lots.length ? [] : j.lots.slice();
         else { var at = on.indexOf(b.dataset.onelot); if (at >= 0) on.splice(at, 1); else on.push(b.dataset.onelot); }
@@ -530,7 +533,7 @@
       b.onclick = function () {
         var key = b.dataset.fillgo, v = el.querySelector('[data-fill="' + key + '"]').value.replace(/[^\d.,]/g, '');
         if (!v) return;
-        var j = jobs.find(function (x) { return x.key === key; }), f = kind(j.task) === 'bunches' ? 'bunches' : 'qty';
+        var j = jobs.find(function (x) { return x.key === key; }), f = kind(j.task, j.block) === 'bunches' ? 'bunches' : 'qty';
         j.people.forEach(function (w) { draft.lines[w].forEach(function (l) { if (!l[f]) l[f] = v; }); });
         keepDraft(); render(el, ctx);
       };
@@ -611,12 +614,12 @@
       syncHaStatus(j);
       var hs = el.querySelector('[data-hastat="' + j.key + '"]'), st0 = draft.status[j.key] || {};
       if (hs) hs.innerHTML = '<b>' + (st0.done === 'Y' ? EA.t('Kerja ini SIAP (semua petak siap)', 'Job DONE (every lot finished)') : st0.done === 'N' ? EA.t('Kerja ini BELUM SIAP', 'Job NOT DONE') + '</b> · ' + esc(st0.reason) + '<b>' : EA.t('Pilih SIAP / BELUM SIAP bagi setiap petak', 'Mark each lot')) + '</b>';
-      var t = jobTotals(j), k = kind(j.task);
+      var t = jobTotals(j), k = kind(j.task, j.block);
       var orang = EA.t(' orang · ', ' people · ');
       var line = k === 'bunches' ? j.people.length + orang + t.bunches + EA.t(' tandan · purata ', ' bunches · average ') + (j.people.length ? Math.round(t.bunches / j.people.length) : 0) + EA.t(' seorang', ' each')
         : k === 'day' ? j.people.length + orang + t.qty + EA.t(' hari', ' days')
         : k === 'ticket' ? j.people.length + orang + EA.t('tan ikut tiket kilang', 'tonnes per mill ticket')
-        : j.people.length + orang + t.qty + ' ' + unitLabel(j.task) + (task(j.task).unit === 'Ha' && t.planHa ? EA.t(' daripada ', ' of ') + t.planHa.toFixed(2) + EA.t(' Ha dirancang', ' Ha planned') : '');
+        : j.people.length + orang + t.qty + ' ' + unitLabel(j.task, j.block) + (task(j.task).unit === 'Ha' && t.planHa ? EA.t(' daripada ', ' of ') + t.planHa.toFixed(2) + EA.t(' Ha dirancang', ' Ha planned') : '');
       if (t.bags != null) line += ' · ' + t.bags + EA.t(' beg', ' bags');
       if (isOp(j)) line += ' · ' + t.hours + EA.t(' jam', ' hours');
       if (t.target && t.actual != null) line += ' · ' + EA.t('sasaran ', 'target ') + t.target.total + ' ' + t.tunit;
@@ -633,7 +636,7 @@
     var p = [];
     jobs.forEach(syncHaStatus);
     jobs.forEach(function (j) {
-      var k = kind(j.task), st = draft.status[j.key] || {};
+      var k = kind(j.task, j.block), st = draft.status[j.key] || {};
       if (auto(j)) {
         var pg = draft.prog[j.key] || {}, lw = lotWhy(j);
         var unset = progLots(j).filter(function (l) { return String(pg[l] == null ? '' : pg[l]) === ''; });
@@ -692,7 +695,7 @@
     // v1.27 A · Semak sebelum simpan: a harvester's bunches far too few or far too many on a lot.
     var cks = [];
     jobs.forEach(function (j) {
-      if (kind(j.task) !== 'bunches') return;
+      if (kind(j.task, j.block) !== 'bunches') return;
       j.people.forEach(function (w) {
         (draft.lines[w] || []).forEach(function (l) {
           var b = num(l.bunches);
@@ -730,13 +733,13 @@
     var jobs = jobsOf(chit), lines = [], jobLines = [];
     jobs.forEach(syncHaStatus);
     jobs.forEach(function (j) {
-      var k = kind(j.task), t = jobTotals(j), st = draft.status[j.key] || {};
+      var k = kind(j.task, j.block), t = jobTotals(j), st = draft.status[j.key] || {};
       j.people.forEach(function (w) {
         if (k === 'ticket') { lines.push({ worker_id: w, task_code: j.task, block: j.block, lot: j.lots.join(' '), qty: '', unit: 'MT', bunches: '', bags: '', machine: '', meter_start: '', meter_end: '', hours: '' }); return; }
         (draft.lines[w] || []).forEach(function (l, i) {
           var op = isOp(j);
           lines.push({ worker_id: w, task_code: j.task, block: j.block, lot: l.lot || j.lots[0] || '', qty: k === 'bunches' ? '' : String(num(l.qty)),
-                       unit: k === 'bunches' ? 'bunch' : (task(j.task).unit), bunches: k === 'bunches' ? String(num(l.bunches)) : '',
+                       unit: k === 'bunches' ? 'bunch' : k === 'day' ? 'day' : (task(j.task).unit), bunches: k === 'bunches' ? String(num(l.bunches)) : '',
                        // v1.41: the person's bags go on his first lot line only (never counted twice).
                        bags: isBagJob(j) && i === 0 && String(pbags(j)[w] || '') !== '' ? String(num(pbags(j)[w])) : '',
                        machine: op ? machOf(j) : '', meter_start: op && String(l.ms || '') !== '' ? String(num(l.ms)) : '', meter_end: op && String(l.me || '') !== '' ? String(num(l.me)) : '', hours: op ? String(hoursOf(l)) : '' });
@@ -883,11 +886,11 @@
     rec.jobs.forEach(function (j) {
       var sec = EA.lists.sectionOf(j.task_code);
       if (sec.code !== lastSec) { L.push(''); L.push('*' + sec.code + ' · ' + String(sec.bm).toUpperCase() + '* · ' + sec.en); L.push(''); lastSec = sec.code; lastDetail = false; }
-      var k = kind(j.task_code), what;
+      var k = kind(j.task_code, j.block), what;
       if (k === 'bunches') what = j.bunches + ' tandan (purata ' + Math.round(num(j.bunches) / (j.workers || 1)) + ')';
       else if (k === 'ticket') what = 'tan ikut tiket';
       else if (k === 'day') what = j.qty + ' hari' + (num(j.hours) > 0 ? ' · ' + j.hours + ' jam' : '') + (j.task_code === 'ITF' ? ' (+ tan ikut tiket)' : '');
-      else what = j.qty + ' ' + unitLabel(j.task_code) + (j.plan_ha ? ' / ' + num(j.plan_ha).toFixed(2) + ' Ha' : '');
+      else what = j.qty + ' ' + unitLabel(j.task_code, j.block) + (j.plan_ha ? ' / ' + num(j.plan_ha).toFixed(2) + ' Ha' : '');
       var icon = j.status === 'done' ? '✅' : j.status === 'not_done' ? '⏳' : '❔';
       var D = [], lots = reportLots(j.progress), flags = String(j.flags || '').split('; ').filter(Boolean);
       if (lots.notDone.length) {

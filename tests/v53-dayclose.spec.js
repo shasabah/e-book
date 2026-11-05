@@ -45,11 +45,11 @@ const { chromium } = require('playwright');
   let txt = await p.innerText('#room');
   check('no work keyed: TUTUP HARI is off; checks 1 and 4 are red', await p.$eval('#dc-close', b => b.disabled) && /Kerja harian belum dikunci/.test(txt) && /belum dijawab/.test(txt), txt.slice(0, 200));
   check('a red line opens the Kerja screen', await p.$eval('.dc-bad .dc-go', b => b.dataset.go) === '#field-harvest/work');
-  // key the work: harvesters 120 + 110 bunches, CPS not done (rain), durian worker has no line (counts as complete)
+  // key the work: harvesters 120 + 110 bunches, CPS not done (rain), durian worker 1 day (v1.51: every durian job is by the day)
   await p.evaluate((yd) => {
     localStorage.setItem('fh.work', JSON.stringify([{ chit: 'CH-SSGT-P13-1', date: yd, estate: 'SSGT', rev: 1, chitRev: 1, lines: {}, status: {}, rec: { chit: 'CH-SSGT-P13-1', date: yd, estate: 'SSGT', at: '17:00',
       lines: [{ id: 'w1', worker_id: 'H1', task_code: 'HA', block: '01', lot: '1-13', qty: '', unit: 'bunch', bunches: '120' }, { id: 'w2', worker_id: 'H2', task_code: 'HA', block: '01', lot: '1-14', qty: '', unit: 'bunch', bunches: '110' },
-              { id: 'w3', worker_id: 'S1', task_code: 'CPS', block: '02', lot: '2-1', qty: '1.5', unit: 'Ha', bunches: '' }],
+              { id: 'w3', worker_id: 'S1', task_code: 'CPS', block: '02', lot: '2-1', qty: '1.5', unit: 'Ha', bunches: '' }, { id: 'w4', worker_id: 'D1', task_code: 'DF', block: 'DR', lot: 'DR-A', qty: '1', unit: 'day', bunches: '' }],
       jobs: [{ id: 'j1', key: 'j1', task_code: 'HA', block: '01', lots: '1-13 1-14', workers: 2, bunches: '230', status: 'done', reason: '' },
              { id: 'j2', key: 'j2', task_code: 'CPS', block: '02', lots: '2-1 2-2', workers: 1, qty: '1.5', unit: 'Ha', status: 'not_done', reason: '2-2 Hujan (kerja berhenti, ½ hari) · sambung esok' }] },
       prog: { j2: { '2-1': '100', '2-2': '0' } }, lotwhy: { j2: { '2-2': { why: 'rain', rain: 'HENTI', lost: 0.5, until: yd } } } }]));
@@ -58,7 +58,7 @@ const { chromium } = require('playwright');
   }, yd);
   await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(100); await p.evaluate(() => { location.hash = 'field-harvest/close'; }); await p.waitForSelector('#dc-close'); await p.waitForTimeout(200);
   txt = await p.innerText('#room');
-  check('work keyed: 4 working (durian worker counts, no line needed), 230 bunches at the ramp, 1 lorry with DN, 1/2 jobs done · button on', !(await p.$eval('#dc-close', b => b.disabled)) && /4 orang bekerja, 0 tidak hadir/.test(txt) && /230 tandan dituai · semua ke ramp/.test(txt) && /1 lori keluar, semua ada DN/.test(txt) && /1\/2 kerja siap/.test(txt), txt.slice(0, 400));
+  check('work keyed: 4 pay lines (v1.51: the durian worker is 1 day), 230 bunches at the ramp, 1 lorry with DN, 1/2 jobs done · button on', !(await p.$eval('#dc-close', b => b.disabled)) && /4 orang · semua ada baris gaji/.test(txt) && /230 tandan dituai · semua ke ramp/.test(txt) && /1 lori keluar, semua ada DN/.test(txt) && /1\/2 kerja siap/.test(txt), txt.slice(0, 400));
   check('rain read from the lot in Kerja: kerja berhenti · ½ hari · CPS (1 lot); no rain questions on the screen', /kerja berhenti · ½ hari · Circle Spraying \(1 petak\)/.test(txt) && !(await p.$('[data-when]')), txt.slice(0, 500));
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v53-dayclose.png' });
   await p.click('#dc-close'); await p.waitForTimeout(400);

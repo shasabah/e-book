@@ -25,6 +25,7 @@
   function $(sel) { return el.querySelector(sel); }
   function num(v) { var n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isFinite(n) ? n : 0; }
   function niceDate(iso) { var d = new Date(iso + 'T00:00:00'); return ui().dayBm[d.getDay()] + ' ' + d.getDate() + ' ' + ui().monBm[d.getMonth()]; }
+  function addDays(date, n) { var d = new Date(date + 'T00:00:00'); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function task(code) { return EA.lists.task(code); }
   function shortName(code) { return (EA.lists.chitNames && EA.lists.chitNames[code]) || (task(code) ? task(code).en : code); }
   function person(id) { var w = EA.lists.worker(id); return w ? w.name : id; }
@@ -335,18 +336,45 @@
     L.push('E-Book ' + s.chit);
     return L.join('\n');
   }
+  // v1.52 (Yu Chen, 6 Nov, Brief_Esok): the daily habit is close today, plan tomorrow. After a close the summary
+  // offers RANCANG ESOK: the next day, and when that is a rest day (Sunday or a listed holiday) the next working
+  // day as well, so Saturday's close plans Monday if nobody works Sunday. The button sets fh.planGo and opens the
+  // chit screen, which fills the plan from today's chit. Only the one who can close is offered it, and only for
+  // today's close (a summary opened later from a past day just shows the text).
+  function restDay(date) { return new Date(date + 'T00:00:00').getDay() === 0 || !!(EA.lists && EA.lists.holidays && EA.lists.holidays.indexOf(date) >= 0); }
+  function esokDays() {
+    var out = [], d = EA.today(), i;
+    for (i = 1; i <= 3; i++) { d = addDays(EA.today(), i); out.push(d); if (!restDay(d)) break; }
+    return out;
+  }
+  function esokLabel(d) {
+    var have = EA.fh.plans ? EA.fh.plans().some(function (p) { return p.estate === ctx.estate && p.date === d && !p.cancelled; }) : false;
+    // Button text follows the EN<small>BM</small> rule (core/lang.js): a Bahasa phone shows the small part, so the day
+    // must be in both parts or the staff sees only the hint.
+    var dEn = (function () { var x = new Date(d + 'T00:00:00'); return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][x.getDay()] + ' ' + x.getDate() + '/' + (x.getMonth() + 1); })();
+    var hintBm = restDay(d) ? 'hari rehat, hanya jika ada kerja · perlu lulus Pengurus' : have ? 'sudah dirancang, ubah' : 'isi dari hari ini, ubah yang berbeza';
+    var hintEn = restDay(d) ? 'rest day, only if there is work · needs approval' : have ? 'already planned, change' : 'filled from today, change what differs';
+    return '<button type="button" class="btn" data-esok="' + d + '">' + (have ? 'CHANGE PLAN ' : 'PLAN ') + dEn + ' · ' + hintEn +
+      '<small>' + (have ? 'UBAH RANCANGAN ' : 'RANCANG ') + esc(niceDate(d).toUpperCase()) + ' · ' + hintBm + '</small></button>';
+  }
   function showSummary(date, estate) {
     estate = estate || (ctx && ctx.estate);
     var s = closes().find(function (x) { return x.estate === estate && x.date === date; });
     if (!s) return;
     var t = summaryText(s);
-    ui().openSheet('<h2 id="sheet-title">' + EA.t('Ringkasan hari', 'Day summary') + '</h2><pre class="chit">' + esc(t) + '</pre>' +
-      '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="ds-back">‹ BACK<small>‹ BALIK</small></button>' +
+    var offer = ctx && ctx.user && canClose(ctx.user) && date === EA.today() && EA.fh.plans;
+    var esok = offer ? '<div class="esok"><b>' + EA.t('Rancang esok?', 'Plan tomorrow?') + '</b><span>' + EA.t('Pagi esok hanya tanda siapa tidak hadir.', 'Tomorrow morning only mark who is absent.') + '</span>' +
+      esokDays().map(esokLabel).join('') + '</div>' : '';
+    ui().openSheet('<h2 id="sheet-title">' + EA.t('Ringkasan hari', 'Day summary') + '</h2><pre class="chit">' + esc(t) + '</pre>' + esok +
+      '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="ds-back">' + (offer ? 'LATER<small>NANTI · tak rancang sekarang' : '‹ BACK<small>‹ BALIK') + '</small></button>' +
       '<a class="btn" id="ds-wa" href="https://wa.me/?text=' + encodeURIComponent(t) + '" target="_blank" rel="noopener">WHATSAPP<small>Hantar ke kumpulan Ebook</small></a>' +
       '<button class="btn btn-ok" type="button" id="ds-copy">COPY<small>Salin</small></button></div>',
       function (sh) {
         sh.querySelector('#ds-back').onclick = ui().closeSheet;
         sh.querySelector('#ds-copy').onclick = function () { EA.fh.copyText(t); };
+        sh.querySelectorAll('[data-esok]').forEach(function (b) {
+          b.onclick = function () { EA.local.set('fh.planGo', { estate: estate, date: b.dataset.esok }); ui().closeSheet(); location.hash = 'field-harvest'; };
+        });
       });
   }
 
@@ -430,5 +458,5 @@
       return { state: cs.state, bad: cs.bad ? cs.bad.length : 0 };
     } finally { ctx = keep; }
   }
-  EA.fh.dayclose = { render: render, summaryText: summaryText, checks: checks, rainCheck: rainCheck, rainFromWork: rainFromWork, closeChit: closeChit, closeState: closeState, cardState: cardState };
+  EA.fh.dayclose = { render: render, summaryText: summaryText, showSummary: showSummary, checks: checks, rainCheck: rainCheck, rainFromWork: rainFromWork, closeChit: closeChit, closeState: closeState, cardState: cardState };
 })();

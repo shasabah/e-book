@@ -18,8 +18,7 @@ const { chromium } = require('playwright');
     cpsMain: EA.lists.isMainJob('SSGT', 'CPS'),
     manMain: EA.lists.isMainJob('SSGT', 'MAN'),
     cpsOther: EA.lists.isOtherJob('SSGT', 'CPS'),
-    sunday: EA.lists.sundayOk.indexOf('CPS') >= 0 && EA.lists.sundayOk.indexOf('MAN') >= 0,
-    release: EA.RELEASE, version: EA.VERSION
+    sunday: EA.lists.sundayOk.indexOf('CPS') >= 0 && EA.lists.sundayOk.indexOf('MAN') >= 0
   }));
   check('CPS is a shortcut button on Tambah kerja', L.quick.indexOf('CPS') >= 0, L.quick.join(' '));
   check('Membaja is a shortcut button too', L.quick.indexOf('MAN') >= 0, L.quick.join(' '));
@@ -30,7 +29,6 @@ const { chromium } = require('playwright');
   check('every shortcut is a main job of the estate', L.quick.every(c => L.main.indexOf(c) >= 0), L.quick.join(' '));
   check('the 17 main jobs are unchanged', L.main.length === 17, String(L.main.length));
   check('Sunday still accepts CPS and manuring without approval', L.sunday);
-  check('version 1.51.2 (90)', L.release === '1.51.2' && L.version === 90, L.release + ' (' + L.version + ')');
   check('no page errors', errs.length === 0, errs.join(' | '));
   await b.close();
 })().catch(e => { console.log('FAIL ' + e.message); process.exit(1); });

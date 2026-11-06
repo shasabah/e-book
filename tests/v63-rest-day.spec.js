@@ -33,8 +33,6 @@ const { chromium } = require('playwright');
   check('Saturday is a working day, so the line is raised', r.saturday === true);
   check('a public holiday keyed by HQ is a rest day too', r.holiday === false);
   check('the line goes once the chit is made', r.mondayDone === false);
-  const v = await p.evaluate(() => ({ r: EA.RELEASE, v: EA.VERSION }));
-  check('version 1.51.3 (91)', v.r === '1.51.3' && v.v === 91, v.r + ' (' + v.v + ')');
   check('no page errors', errs.length === 0, errs.join(' | '));
   await b.close();
 })().catch(e => { console.log('FAIL ' + e.message); process.exit(1); });

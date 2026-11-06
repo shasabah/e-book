@@ -22,7 +22,14 @@ window.EA = window.EA || {};
         out.push({ id: 'PL:' + p.plan, p: 0, ic: '!', bm: lbl + ': sahkan kehadiran & kerja', en: lbl + ': confirm attendance & work', sub: EA.t('Rancangan semasa cuti · buat sebelum chit hari ini', 'Planned while on leave · do it before today\'s chit'), go: '#field-harvest' });
       });
       var planToday = ((EA.fh && EA.fh.plans ? EA.fh.plans() : []) || []).some(function (p) { return p.estate === est && p.date === today && !p.cancelled; });
-      if (!has && !planToday) out.push({ id: 'CH', p: 1, ic: '!', bm: 'Chit muster hari ini belum dibuat', en: 'Today\'s muster chit is not made yet', sub: EA.t('Buat sebelum kerja mula', 'Make it before work starts'), go: '#field-harvest' });
+      // v1.51.3 (Yu Chen, 6 Nov): a rest day raises no "chit not made". Sunday and a public holiday are not
+      // working days, so the line used to arrive every Sunday morning when nothing was wrong — and an alert that
+      // cries every week teaches the staff to stop reading the box. Sunday work that was planned and approved
+      // still asks for its chit, because planToday is true for it. Public holidays come from the same list the
+      // day close uses (EA.lists.holidays); it is empty until HQ keys the calendar, and this starts working by
+      // itself on the day she does. Same rule as dayclose.js: rest day = Sunday or a listed holiday.
+      var rest = new Date(today + 'T00:00:00').getDay() === 0 || !!(EA.lists && EA.lists.holidays && EA.lists.holidays.indexOf(today) >= 0);
+      if (!has && !planToday && !rest) out.push({ id: 'CH', p: 1, ic: '!', bm: 'Chit muster hari ini belum dibuat', en: 'Today\'s muster chit is not made yet', sub: EA.t('Buat sebelum kerja mula', 'Make it before work starts'), go: '#field-harvest' });
     }
     // v1.43 TUTUP HARI: a past day with a chit on this phone and no close (works with no signal; the office sends the same id).
     if (u.role === 'Staff' && EA.fh && EA.fh.openDays) {

@@ -1734,17 +1734,36 @@
     // v1.17: an old chit keyed with rain still shows it; new chits have none (rain is in the Sugut DMS).
     if (c.rain_mm !== '' && c.rain_mm !== undefined && c.rain_mm !== null) L.push('Hujan semalam: ' + (Number(c.rain_mm) || 0).toFixed(2) + ' mm' + (c.rain_time ? ' (' + c.rain_time + ')' : ''));
     backlogLines(c.backlog).forEach(function (x) { L.push(x); });
-    if (c.alerts && c.alerts.length) {
+    // v1.51.4 (Yu Chen, 6 Nov): mill grading leaves the WhatsApp chit. The money on that ticket is already gone
+    // and nothing done that morning gets it back, so it is not a thing to settle today — it belongs to the
+    // Saturday meeting, beside the month's grading trend. The alert itself is untouched: the staff still sees it
+    // on the chit screen and still explains it there, and the office still keeps every line. Only the WhatsApp
+    // text stops carrying it, so what the group reads each morning is work that can still be done today.
+    var waAlerts = (c.alerts || []).filter(function (a) { return a.kind !== 'grading'; });
+    if (waAlerts.length) {
       L.push('*⚠ AMARAN · ALERT*');
-      alertLines(c.alerts).forEach(function (x) { L.push(x); });
+      alertLines(waAlerts).forEach(function (x) { L.push(x); });
     }
     L.push('```');
     L.push(pad('Blk', 4) + pad('Job', 17) + pad('Mdr', 4) + pad('M', 3) + pad('F', 3) + 'Tot');
+    // v1.51.4 (Yu Chen, 6 Nov): one line per job and block, not one per worker. Each harvester keeps his own lot,
+    // so six men harvesting Blk 01 and Blk 03 used to print six identical "Harvester" lines. The lots are already
+    // listed under the table, so nothing is lost by adding the men up: "B01 Harvester 3". On a full day of eight
+    // harvesters that is two lines instead of eight. The chit screen and the office records are untouched.
+    function merged(lines) {
+      var out = [], by = {};
+      lines.forEach(function (l) {
+        var k = l.task + '|' + (l.block || '');
+        if (!by[k]) { by[k] = { key: k, task: l.task, block: l.block, mandor: l.mandor, mdr: 0, m: 0, f: 0 }; out.push(by[k]); }
+        by[k].mdr += l.mdr; by[k].m += l.m; by[k].f += l.f;
+      });
+      return out;
+    }
     s.sections.forEach(function (x) {
       L.push(x.s.code + '. ' + x.s.en);
       // v1.50.2 (Yu Chen, 5 Nov): no sub-headings under a section on the chit (Cutting, Field to ramp, Manual,
       // Chemical, Manuring …): the job names already say it. The lines keep their order.
-      x.lines.forEach(function (l) { L.push(row(l.block || '', short(l.task), l)); });
+      merged(x.lines).forEach(function (l) { L.push(row(l.block || '', short(l.task), l)); });
     });
     L.push(row('', 'Total working', s.worked));
     AWAY.forEach(function (k) { if (s.tot(s.away[k])) L.push(row('', AWAY_EN[k], s.away[k])); });

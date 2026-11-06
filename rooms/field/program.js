@@ -174,8 +174,12 @@
   function blockLine(estate, code, b, k, text, right, states, items, foot, allStates, canTick) {
     var id = code + '.' + b, on = !!open[id], hasMap = !!shapesFor(estate, b), map = hasMap && open['map.' + id] !== false;
     var t = tick[id], ticking = !!t;
-    var h = '<button type="button" class="pg-bl" data-pg="' + esc(id) + '" aria-expanded="' + on + '">' + dot(k) + '<span>' + text + '</span><em>' + right + (items.length || ticking ? (on ? ' ‹' : ' ›') : '') + '</em></button>';
-    if (!on || (!items.length && !ticking)) return h;
+    // v1.52.2 (Yu Chen, 6 Nov: "manuring already tick but the CPS cannot tick"): a block with nothing to act on
+    // (every CPS lot still green, e.g. Blk 02-04 from the estate status estimate) had no lots to open, so SEMAK PETAK
+    // could not be reached there. When the staff may tick, the block always opens.
+    var opens = items.length || ticking || canTick;
+    var h = '<button type="button" class="pg-bl" data-pg="' + esc(id) + '" aria-expanded="' + on + '">' + dot(k) + '<span>' + text + '</span><em>' + right + (opens ? (on ? ' ‹' : ' ›') : '') + '</em></button>';
+    if (!on || !opens) return h;
     // SEMAK PETAK: every lot of the block, coloured by what the tick would save (green done, grey not done).
     var shown = items, st = states;
     if (ticking) {

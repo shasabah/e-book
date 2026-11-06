@@ -167,6 +167,15 @@ const OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30'
   const two = cpsTicks.find(x => x.f.lot === '1-5') || { f: {} };
   const want2 = await p.evaluate(() => { const d = new Date(); d.setMonth(d.getMonth() - 2); return d.toISOString().slice(0, 7); });
   check('a CPS tick carries the month chosen in "Racun bila?", so the 60-day clock starts from it', cpsTicks.length === n01 && two.f.task_code === 'CPS' && (two.f.done_on || '').slice(0, 7) === want2, JSON.stringify(two.f) + ' want ' + want2);
+  // v1.52.2: a CPS block where every lot is still green (nothing to spray yet) still opens, so its lots can be ticked
+  await p.evaluate(() => { const d = new Date(); d.setDate(d.getDate() - 10); EA.lists.cpsLastRound.SSGT['03'] = d.toISOString().slice(0, 10); });
+  await p.click('[data-pg="CPS.01"]'); await p.waitForTimeout(200); await p.click('[data-pg="CPS.01"]'); await p.waitForTimeout(200); await p.click('[data-pg="CPS.01"]'); await p.waitForTimeout(200);
+  const b03 = await p.innerText('#pg-box');
+  await p.click('[data-pg="CPS.03"]'); await p.waitForTimeout(300);
+  check('CPS block with every lot green ("tunggu") still opens and offers SEMAK PETAK', /Blk 03 · tunggu/.test(b03) && !!(await p.$('[data-pgtick="CPS.03"]')), (b03.match(/Blk 03 ·[^\n]*/) || [''])[0]);
+  await p.click('[data-pgtick="CPS.03"]'); await p.waitForTimeout(300);
+  check('…and its lots can be ticked there', (await p.$$('.pg-ticking [data-pglot^="CPS.03|"]')).length > 5);
+  await p.click('[data-pgcancel="CPS.03"]'); await p.waitForTimeout(200);
   // only the staff and the Owner may tick
   const asPengurus = await p.evaluate(() => {
     const u = EA.currentUser(), real = EA.currentUser;

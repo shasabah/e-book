@@ -29,7 +29,11 @@ window.EA = window.EA || {};
       // day close uses (EA.lists.holidays); it is empty until HQ keys the calendar, and this starts working by
       // itself on the day she does. Same rule as dayclose.js: rest day = Sunday or a listed holiday.
       var rest = new Date(today + 'T00:00:00').getDay() === 0 || !!(EA.lists && EA.lists.holidays && EA.lists.holidays.indexOf(today) >= 0);
-      if (!has && !planToday && !rest) out.push({ id: 'CH', p: 1, ic: '!', bm: 'Chit muster hari ini belum dibuat', en: 'Today\'s muster chit is not made yet', sub: EA.t('Buat sebelum kerja mula', 'Make it before work starts'), go: '#field-harvest' });
+      // v1.52 (Brief_Esok): with the daily habit every day has a plan, so a plan for today must not silence this
+      // line — it changes it. No chit and a plan: "sahkan siapa hadir". No chit and no plan: as before. A planned
+      // rest day (Sunday work approved) asks the same, because that day has a plan.
+      if (!has && planToday) out.push({ id: 'CH', p: 1, ic: '!', bm: 'Chit hari ini dirancang semalam · sahkan siapa hadir', en: 'Today\'s chit was planned last night · confirm who came', sub: EA.t('Tanda siapa tidak hadir, kemudian SAHKAN', 'Mark who is absent, then CONFIRM'), go: '#field-harvest' });
+      else if (!has && !rest) out.push({ id: 'CH', p: 1, ic: '!', bm: 'Chit muster hari ini belum dibuat', en: 'Today\'s muster chit is not made yet', sub: EA.t('Buat sebelum kerja mula', 'Make it before work starts'), go: '#field-harvest' });
     }
     // v1.43 TUTUP HARI: a past day with a chit on this phone and no close (works with no signal; the office sends the same id).
     if (u.role === 'Staff' && EA.fh && EA.fh.openDays) {

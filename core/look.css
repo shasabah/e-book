@@ -832,3 +832,9 @@ div.td-it { cursor: default; }
 .dc-paytab td:first-child { width: 2.6em; }
 .wk-closed { margin: 8px 0 0; color: var(--ok); }
 .wk-close-wait { border-color: var(--bad, #b3261e); color: var(--bad, #b3261e); }
+
+/* v1.52 Rancang esok — the offer on the day summary after a close */
+.esok{margin:12px 0 4px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--cream,#fbf8f1);display:grid;gap:8px}
+.esok>b{font-size:1.05rem}.esok>span{color:var(--muted,#666);font-size:.9rem}
+.esok .btn{width:100%;text-align:left}
+.plain-row{margin:-6px 0 12px}.plain-row .btn{width:100%}

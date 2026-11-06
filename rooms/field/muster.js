@@ -39,8 +39,9 @@
     var d = all[ctx.estate];
     // v1.32: a correction of a past chit (asked by the clerk) stays a draft while that chit is within 3 days.
     // v1.40: a plan for a leave day (date ahead) or the confirmation of one (date back, up to 3 days) stays a draft too.
+    // v1.52: the same-day confirmation of last night's plan (mode confirm, date today) is a draft too.
     var keep = d && ((d.date === EA.today() && !d.mode) || (d.fixAsk && d.date >= EA.dayAgo(3)) ||
-      (d.mode === 'plan' && d.date > EA.today()) || (d.mode === 'confirm' && d.date < EA.today() && d.date >= EA.dayAgo(PLAN_BACK)));
+      (d.mode === 'plan' && d.date > EA.today()) || (d.mode === 'confirm' && d.date <= EA.today() && d.date >= EA.dayAgo(PLAN_BACK)));
     if (!keep) return blankDraft();
     // A draft saved by an older version may lack newer parts (e.g. alert notes): fill them in.
     var b = blankDraft(); Object.keys(b).forEach(function (k) { if (d[k] == null) d[k] = b[k]; });
@@ -663,6 +664,27 @@
       var pend = pendingPlans();
       if (pend.length) { renderPending(head, pend); return; }
     }
+    // v1.52 (Yu Chen, 6 Nov, Brief_Esok): the day summary after a close offers RANCANG ESOK. It lands here with
+    // fh.planGo set: open a plan for that day and fill it from today's chit the way copy-yesterday does (finished
+    // lots dropped, BELUM SIAP lots kept, everyone who worked marked H). The staff changes what differs and saves.
+    var pg = EA.local.get('fh.planGo', null);
+    if (pg && pg.estate === ctx.estate && !draft.mode && !draft.fixAsk && canKey(ctx.user) && !viewOnly(ctx.user)) {
+      EA.local.del('fh.planGo');
+      if (pg.date > EA.today() && !chitsOn(pg.date).length) {
+        startPlan(pg.date, planOn(pg.date));
+        if (!planOn(pg.date)) copyLast();
+        return;
+      }
+    }
+    // v1.52: the daily habit — close today, plan tomorrow, confirm in the morning. When last night's plan is for
+    // today and no chit exists yet, the chit opens from it by itself, in confirm mode: everyone planned is already
+    // marked present, so the only work is to mark who is absent. The plan is not the muster until SAHKAN is pressed;
+    // nothing counts for pay before that (26 Oct rule). CHIT BIASA in the band drops the plan and starts fresh.
+    if (!draft.mode && !draft.fixAsk && !draft.replacing && !draft.newChit && !draft.jobs.length && !Object.keys(draft.marks).length &&
+        !todaysChits().length && canKey(ctx.user) && !viewOnly(ctx.user)) {
+      var ptd = planOn(EA.today());
+      if (ptd) { startConfirm(ptd); return; }
+    }
     // v1.46 TUTUP HARI (Yu Chen, 27 Oct): at the morning chit a day gone by that is complete is closed by the app;
     // a day still incomplete is shown here (and to the Pengurus), the chit still opens: work never waits.
     if (!draft.mode && EA.fh.autoCloseOld) {
@@ -688,8 +710,13 @@
     var mode = draft.mode || '';
     el.innerHTML = head +
       (mode === 'plan' ? '<p class="plan-band"><b>' + EA.t('RANCANGAN · ', 'PLAN · ') + esc(dayDm(draft.date)) + '</b>' +
-        '<span>' + EA.t('Untuk hari staf cuti. Belum muster sebenar: tidak dikira untuk gaji sehingga disahkan bila balik.', 'For a day the staff is on leave. Not the real muster: nothing counts for pay until it is confirmed on return.') + '</span></p>' : '') +
-      (mode === 'confirm' ? '<p class="plan-band due"><b>' + EA.t('SAHKAN · ', 'CONFIRM · ') + esc(dayDm(draft.date)) + '</b>' +
+        '<span>' + EA.t('Belum muster sebenar: tidak dikira untuk gaji sehingga disahkan pada hari itu.', 'Not the real muster: nothing counts for pay until it is confirmed on the day.') + '</span></p>' : '') +
+      // v1.52: a same-day confirmation (last night's plan for today) asks who is absent, not "confirm?"; a confirmation
+      // of a day gone by (the staff was on leave) keeps the paper-muster wording.
+      (mode === 'confirm' && draft.date === EA.today() ? '<p class="plan-band due" id="fh-sameday"><b>' + EA.t('SIAPA TIDAK HADIR? · ', 'WHO IS ABSENT? · ') + esc(dayDm(draft.date)) + '</b>' +
+        '<span>' + EA.t('Dirancang semalam. Tanda siapa tidak hadir (T, S, C), ubah apa yang berbeza, kemudian SAHKAN. Belum dikira sehingga disahkan.', 'Planned last night. Mark who is absent (T, S, C), change what differs, then CONFIRM. Nothing counts until confirmed.') + '</span></p>' +
+        '<p class="plain-row"><button type="button" class="btn btn-ghost" id="fh-plain">PLAIN CHIT · drop the plan, start from nothing<small>CHIT BIASA · buang rancangan, buat dari kosong</small></button></p>' : '') +
+      (mode === 'confirm' && draft.date !== EA.today() ? '<p class="plan-band due"><b>' + EA.t('SAHKAN · ', 'CONFIRM · ') + esc(dayDm(draft.date)) + '</b>' +
         '<span>' + EA.t('Dari rancangan. Ikut kertas muster hari itu: ubah hanya yang berbeza, kemudian SAHKAN.', 'From the plan. Follow that day\'s paper muster: change only what was different, then CONFIRM.') + '</span></p>' : '') +
       (d.getDay() === 0 ? '<p class="warn"><span class="bm">Hari Ahad: kerja perlu kelulusan Penolong Pengurus sebelum dikira untuk gaji.</span><span class="en">Sunday: work needs the Assistant Manager\'s approval before it counts for pay.</span></p>' : '') +
       (draft.fixAsk ? '<p class="warn"><b>' + EA.t('Membetulkan chit ', 'Fixing the chit of ') + esc(niceDate(draft.date)) + EA.t(' atas permintaan ', ' as asked by ') + esc(draft.fixAsk.by) + ':</b> "' + esc(draft.fixAsk.note) + '"</p>' : '') +
@@ -697,7 +724,7 @@
 
       (mode ? '' : backlogCard(ctx.estate) + '<div id="fh-alert-slot">' + alertSection() + '</div>') +
       '<section class="card" aria-labelledby="fh-s1"><h2 id="fh-s1"><span class="step">1</span><span class="inline">' +
-        (mode === 'plan' ? '<span class="bm">Kerja dirancang</span> · <span class="en">Planned jobs</span>' : mode === 'confirm' ? '<span class="bm">Kerja hari itu</span> · <span class="en">That day\'s jobs</span>'
+        (mode === 'plan' ? '<span class="bm">Kerja dirancang</span> · <span class="en">Planned jobs</span>' : mode === 'confirm' && draft.date !== EA.today() ? '<span class="bm">Kerja hari itu</span> · <span class="en">That day\'s jobs</span>'
           : '<span class="bm">Kerja hari ini</span> · <span class="en">Today\'s jobs</span>') + '</span></h2>' +
       '<p class="hint">' + esc(ui().dayBm[d.getDay()] + ', ' + d.getDate() + ' ' + ui().monBm[d.getMonth()] + ' ' + d.getFullYear()) + ' · ' + esc(ctx.estate) + '</p>' +
       (lastChit() && !draft.jobs.length ? '<div class="list-line copy-last"><div><b>Sama seperti chit ' + esc(niceDate(lastChit().date)) + '?</b>' +
@@ -780,7 +807,7 @@
   function plansCard(withButton) {
     if (!canKey(ctx.user) || viewOnly(ctx.user)) return '';
     var list = futurePlans();
-    return '<section class="card" id="fh-plans" aria-labelledby="fh-pl"><h2 id="fh-pl"><span class="inline"><span class="bm">Rancangan hari cuti</span> · <span class="en">Plans for leave days</span></span></h2>' +
+    return '<section class="card" id="fh-plans" aria-labelledby="fh-pl"><h2 id="fh-pl"><span class="inline"><span class="bm">Rancangan esok &amp; hari cuti</span> · <span class="en">Plans for tomorrow &amp; leave days</span></span></h2>' +
       (list.length ? list.map(function (p) {
         var s = summary(p.rows), waiting = p.rows.some(function (r) { return EA.isWaiting(r.id); });
         return '<div class="list-line"><div><b>' + esc(dayDm(p.date)) + '</b> · ' + s.tot(s.worked) + EA.t(' orang dirancang', ' people planned') +
@@ -789,8 +816,8 @@
           '<button type="button" class="btn btn-ghost" data-pview="' + esc(p.plan) + '">VIEW<small>Lihat</small></button>' +
           (p.date > EA.today() ? '<button type="button" class="btn btn-ghost" data-pedit="' + esc(p.plan) + '">CHANGE<small>Ubah</small></button>' : '') +
           '<button type="button" class="btn btn-ghost" data-pdel="' + esc(p.plan) + '">CANCEL<small>Batal</small></button></div></div>';
-      }).join('') : '<p class="hint">' + EA.t('Staf akan cuti? Rancang kerja hari itu sebelum cuti; sahkan bila balik.', 'Going on leave? Plan that day\'s work before; confirm it on return.') + '</p>') +
-      '<button type="button" class="btn btn-ghost" id="fh-plan">PLAN ANOTHER DAY<small>Rancang hari lain (staf cuti)</small></button></section>';
+      }).join('') : '<p class="hint">' + EA.t('Lepas tutup hari, rancang esok; pagi hanya tanda siapa tidak hadir. Staf akan cuti? Rancang hari itu di sini; sahkan bila balik.', 'After the day close, plan tomorrow; in the morning only mark who is absent. Going on leave? Plan that day here; confirm it on return.') + '</p>') +
+      '<button type="button" class="btn btn-ghost" id="fh-plan">PLAN ANOTHER DAY<small>Rancang hari lain</small></button></section>';
   }
   function wirePlans() {
     if ($('#fh-plan')) $('#fh-plan').onclick = planPicker;
@@ -1424,6 +1451,11 @@
       c0 = buildChit(notSaved, EA.ui.hhmm(new Date()), ctx.user.code);
       if (isConfirm() && c0.planDiff.length) why = { label: ['Kenapa berbeza dari rancangan? (' + c0.planDiff.length + ')', 'Why different from the plan?'], val: draft.planNote || '' };
     }
+    // v1.52: a same-day confirmation does not demand a typed reason — the absence mark (T, S, C) is the reason, and
+    // a reason typed every morning for every absentee is the kind of box that gets "ok" typed into it. The field is
+    // still offered. A confirmation of a day gone by (leave, reconstructed from paper) keeps the reason required.
+    var sameDay = isConfirm() && draft.date === EA.today();
+    if (why && sameDay) why.label = ['Catatan (pilihan): kenapa berbeza? (' + c0.planDiff.length + ')', 'Note (optional): why different?'];
     var preview = chitText(c0);
     ui().openSheet('<h2 id="sheet-title"><span class="bm">' + (isPlan() ? 'Semak rancangan ini' : isConfirm() ? 'Sahkan chit ' + esc(dayDm(draft.date)) : 'Semak chit ini') + '</span>' +
         '<span class="en">' + (isPlan() ? 'Check this plan, then save' : isConfirm() ? 'Confirm this chit' : 'Check this chit, then save') + '</span></h2>' +
@@ -1440,7 +1472,7 @@
         s.querySelector('#cf-ok').onclick = function () {
           if (why) {
             var v = s.querySelector('#cf-why').value.replace(/\s+/g, ' ').trim();
-            if (v.length < 3) { ui().toast(EA.t('Tulis sebab dulu', 'Write the reason first'), 'bad'); s.querySelector('#cf-why').focus(); return; }
+            if (v.length < 3 && !sameDay) { ui().toast(EA.t('Tulis sebab dulu', 'Write the reason first'), 'bad'); s.querySelector('#cf-why').focus(); return; }
             if (isPlan()) draft.reason = v; else draft.planNote = v;
           }
           draft.checker = ctx.user.code; keepDraft(); ui().closeSheet();
@@ -1724,7 +1756,9 @@
       if (d.getDay() === 0) L.push('⚠ Hari Ahad: perlu lulus Penolong Pengurus' + (c.reason ? ' · sebab: ' + c.reason : ''));
     }
     if (c.fromPlan) {
-      L.push('✅ _DISAHKAN ' + (c.confirmedOn ? dayDm(c.confirmedOn) + ' ' : '') + c.confirmedAt + (pa.length > 10 ? ' · dirancang ' + dayDm(pa.slice(0, 10)) : '') + ' (staf cuti)_');
+      // v1.52: a chit confirmed on its own day from last night's plan says so; "(staf cuti)" is only for a day gone by.
+      var sameDayWa = c.confirmedOn === c.date;
+      L.push('✅ _DISAHKAN ' + (c.confirmedOn && !sameDayWa ? dayDm(c.confirmedOn) + ' ' : '') + c.confirmedAt + (pa.length > 10 && !sameDayWa ? ' · dirancang ' + dayDm(pa.slice(0, 10)) : '') + (sameDayWa ? ' (dirancang semalam)' : ' (staf cuti)') + '_');
       var df = c.planDiff || [];
       L.push('*Beza dari rancangan · Plan vs actual*');
       if (!df.length) L.push('• Sama seperti rancangan · as planned');
@@ -1854,6 +1888,14 @@
 
   function wireCommon() {
     $('#fh-back').onclick = function () { location.hash = ''; };
+    // v1.52: CHIT BIASA — drop today's plan and start the chit from nothing. The plan is cancelled with a trail
+    // (its rows go to the office as removed, reason "chit biasa"), so the Pengurus can see it was set aside.
+    var pb = $('#fh-plain');
+    if (pb) pb.onclick = function () {
+      var p = plans().find(function (x) { return x.plan === draft.fromPlan; });
+      draft = blankDraft(); keepDraft();
+      if (p) cancelPlan(p, 'chit biasa'); else render(el, ctx);
+    };
     wireList();
   }
   function wireList() {

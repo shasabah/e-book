@@ -841,3 +841,10 @@ div.td-it { cursor: default; }
 /* v1.51.3 Records: a working day with nothing keyed */
 .rk-r.rk-miss { cursor: default; }
 .rk-r.rk-miss b { color: var(--wait); }
+/* v1.52.3: Membaja / CPS lot already done this round */
+.dc-warn > span, .dc-warn > button { background: var(--wait-soft, #fff1d6); }
+.dc-warn b { color: #8a5200; }
+.jb-repeat { border: 2px solid var(--wait, #c77700); background: var(--wait-soft, #fff1d6); margin: 6px 0 10px; padding: 10px; }
+.jb-repeat b { display: block; margin-bottom: 4px; }
+.jb-repeat .picks { margin: 6px 0; }
+.pick.lot-round[aria-pressed="true"] { background: var(--wait-soft, #fff1d6); border-color: var(--wait, #c77700); color: #7a4a00; }

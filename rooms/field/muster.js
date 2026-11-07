@@ -217,11 +217,65 @@
     ((b && b.field) || []).forEach(function (x) { if (upTo && !(x.since && String(x.since).slice(0, 10) <= upTo)) return; if (x.block) n[x.block] = (n[x.block] || 0) + x.bunches; });
     return Object.keys(n).sort(function (a, c) { return n[c] - n[a]; })[0] || '';
   }
+  // ---------- v1.52.3 (Yu Chen, 7 Nov: "staff sometime confuse and keep select those task that already complete") ----------
+  // Membaja and CPS go round the lots once a round. A lot already done this round shows grey with its date, and picking it
+  // again asks once, with a reason (Blk 01: 1-1 to 1-12 were keyed 2-3 times, 27 Oct to 3 Nov).
+  var ROUND_JOBS = { MAN: 1, CPS: 1 };
+  var REPEAT_WHY = [['Baja tambahan', 'Extra dose'], ['Sambung · belum siap', 'Carry on · not finished'], ['Ulang · tak cukup', 'Redo · not enough'], ['Salah rekod', 'Wrong record']];
+  function dm2(d) { return String(d).slice(8, 10) + '/' + String(d).slice(5, 7); }
+  // Lots of this job and block done this round before the chit's day: the office's lot records (daily work after the round
+  // started, and the SEMAK PETAK ticks), plus lots this phone saved as siap and has not sent yet. CPS: sprayed under 60 days.
+  function roundDone(estate, code, block, upTo) {
+    if (!ROUND_JOBS[code] || !block) return {};
+    upTo = upTo || EA.today();
+    var out = {}, data = EA.local.get('fh.prog.' + estate + '.' + upTo.slice(0, 7), null) || EA.local.get('fh.prog.' + estate + '.' + EA.today().slice(0, 7), null);
+    var lj = (data && data.lotJobs && data.lotJobs[code]) || {}, again = (EA.fh.program && EA.fh.program.CPS_RULE && EA.fh.program.CPS_RULE.again) || 60;
+    (EA.lists.lotsFor(estate, block) || []).forEach(function (l) {
+      var d = String(lj[l.lot] || '').slice(0, 10);
+      if (!d || d >= upTo) return;
+      if (code === 'CPS' && Math.round((new Date(upTo + 'T00:00:00Z') - new Date(d + 'T00:00:00Z')) / 864e5) >= again) return;
+      out[l.lot] = d;
+    });
+    chits().forEach(function (c) {
+      if (c.estate !== estate || c.date >= upTo) return;
+      (lotsDoneOn(c)[code + '|' + block] || []).forEach(function (l) { if (!out[l] || c.date > out[l]) out[l] = c.date; });
+      // a lot on yesterday's chit that the day's work did not finish is carried on, not repeated
+      var w = (EA.local.get('fh.work', []) || []).find(function (x) { return x.chit === c.chit; });
+      ((w && w.rec && w.rec.jobs) || []).forEach(function (j) {
+        if (j.task_code !== code || String(j.block || '') !== block) return;
+        String(j.progress || '').split(', ').forEach(function (x) { var m = x.match(/^([\w\-\/]+) (\d+)%$/); if (m && Number(m[2]) < 100 && out[m[1]] === c.date) delete out[m[1]]; });
+      });
+    });
+    return out;
+  }
+  // The chit's Membaja / CPS lots that were already done this round before its day, with the reason given (for TUTUP HARI).
+  // v1.52.3: the chit's own note names the lots picked again this round and why, so the office and Samsir see it.
+  function repeatNote(c) {
+    var x = [];
+    (c.jobs || []).forEach(function (j) { Object.keys(j.repeat || {}).forEach(function (l) { x.push(j.task + ' ' + l + ' (' + j.repeat[l] + ')'); }); });
+    return x.length ? ' · Ulang pusingan: ' + x.join(', ') : '';
+  }
+  function roundRepeats(estate, c) {
+    var out = [];
+    (c.jobs || []).forEach(function (j) {
+      if (!ROUND_JOBS[j.task]) return;
+      var done = roundDone(estate, j.task, j.block, c.date);
+      (j.lots || []).forEach(function (l) { if (done[l]) out.push({ task: j.task, block: j.block, lot: l, on: done[l], why: (j.repeat || {})[l] || '' }); });
+    });
+    return out;
+  }
   function lotPicks(block, chosen, code) {
     if (!block) return '<p class="hint">' + EA.t('Pilih blok dahulu.', 'Choose a block first.') + '</p>';
     var last = EA.lists.lotRound[code] ? lotLast(code) : {}, ready = [];
     var crop = COLLECT_JOBS.indexOf(code) >= 0 ? collectLots(block) : null;
+    var done = ROUND_JOBS[code] ? roundDone(ctx.estate, code, block, draft.date) : {}, nDone = 0;
     var html = EA.lists.lotsFor(ctx.estate, block).map(function (l) {
+      if (done[l.lot]) {
+        nDone++;
+        var why = (lotPicks.repeat || {})[l.lot];
+        return '<button type="button" class="pick lot-done lot-round" data-lot="' + l.lot + '" data-done="' + done[l.lot] + '" aria-pressed="' + (chosen.indexOf(l.lot) >= 0) + '"><b>' + esc(l.label || l.lot) + '</b><small>' +
+          (chosen.indexOf(l.lot) >= 0 && why ? esc(why) : EA.t('siap ', 'done ') + dm2(done[l.lot])) + '</small></button>';
+      }
       if (crop && crop[l.lot]) return '<button type="button" class="pick lot-due" data-lot="' + l.lot + '" aria-pressed="' + (chosen.indexOf(l.lot) >= 0) + '"><b>' + esc(l.label || l.lot) + '</b><small>' + esc(crop[l.lot]) + '</small></button>';
       var st = lotState(code, l.lot, last);
       if (st && st.cls !== 'lot-done') ready.push(l.lot);
@@ -239,6 +293,12 @@
         '<p class="hint lot-key"><i class="k-done"></i>' + EA.t('Baru siap', 'Done lately') + ' <i class="k-due"></i>' + EA.t('Sedia ' + r.ready + '–' + r.late + ' hari', 'Ready ' + r.ready + '–' + r.late + ' days') +
         ' <i class="k-late"></i>' + EA.t('Lewat >' + r.late + ' hari', 'Late >' + r.late + ' days') + '</p>';
     }
+    if (ROUND_JOBS[code] && nDone) top += '<p class="hint lot-key"><i class="k-done"></i>' + EA.t(nDone + ' petak sudah siap pusingan ini (kelabu, dengan tarikh). Pilih yang lain.', nDone + ' lots already done this round (grey, with the date). Pick the others.') + '</p>';
+    var ask = lotPicks.ask && done[lotPicks.ask] ? lotPicks.ask : '';
+    if (ask) top = '<div class="card jb-repeat" id="jb-repeat"><b>' + EA.t('Petak ' + ask + ' sudah ' + (code === 'CPS' ? 'diracun' : 'dibaja') + ' ' + dm2(done[ask]), 'Lot ' + ask + ' was already ' + (code === 'CPS' ? 'sprayed' : 'manured') + ' on ' + dm2(done[ask])) + '</b>' +
+      '<p class="hint">' + EA.t('Pusingan ini sudah siap untuk petak ini. Pilih juga? Pilih sebab:', 'This round is done for this lot. Pick it anyway? Choose why:') + '</p>' +
+      '<div class="picks">' + REPEAT_WHY.map(function (w, i) { return '<button type="button" class="pick" data-why="' + i + '"><b>' + esc(EA.t(w[0], w[1])) + '</b></button>'; }).join('') + '</div>' +
+      '<button type="button" class="btn btn-ghost" id="jb-repeat-no">NO · CANCEL<small>Tidak · batal</small></button></div>' + top;
     return top + '<div class="picks">' + html + '</div>';
   }
 
@@ -915,13 +975,15 @@
         var lots = r.lots ? r.lots.split(' ') : [], done = fin[r.task_code + '|' + (r.block || '')] || [];
         var tk = EA.lists.task && EA.lists.task(r.task_code), unitHa = !!(tk && tk.unit === 'Ha');
         if (unitHa && done.length) { var left = lots.filter(function (l) { return done.indexOf(l) < 0; }); dropped += lots.length - left.length; lots = left; }
+        // v1.52.3: Membaja / CPS also drop every lot already done this round, not only yesterday's
+        if (ROUND_JOBS[r.task_code]) { var rd = roundDone(ctx.estate, r.task_code, r.block || '', draft.date), left2 = lots.filter(function (l) { return !rd[l]; }); dropped += lots.length - left2.length; lots = left2; }
         j = { key: 'j' + (draft.nextJob++), task: r.task_code, block: r.block, lots: lots, mandor: r.mandor, from: r.lots || '' }; draft.jobs.push(j);
       }
       draft.marks[r.worker_id] = 'H'; draft.jobOf[r.worker_id] = j.key;
     });
     draft.jobs.forEach(function (j) { delete j.from; });
     keepDraft(); render(el, ctx);
-    ui().toast(dropped ? EA.t('Disalin. Petak yang sudah siap semalam dibuang (' + dropped + '). Pilih petak hari ini', 'Copied. Lots finished yesterday taken off (' + dropped + '). Choose today\'s lots')
+    ui().toast(dropped ? EA.t('Disalin. Petak yang sudah siap dibuang (' + dropped + '). Pilih petak hari ini', 'Copied. Lots already done taken off (' + dropped + '). Choose today\'s lots')
       : EA.t('Disalin. Ubah petak dan yang berbeza', 'Copied. Change the lots and anything different'));
   }
   function draftRows() {
@@ -1086,7 +1148,7 @@
   // Add or change one job.
   function editJob(key) {
     var j0 = key ? job(key) : null;
-    var pick = j0 ? { task: j0.task, block: j0.block, lots: j0.lots.slice(), mandor: j0.mandor, ask: j0.ask || '' } : { task: '', block: '', lots: [], mandor: '', ask: '' };
+    var pick = j0 ? { task: j0.task, block: j0.block, lots: j0.lots.slice(), mandor: j0.mandor, ask: j0.ask || '', repeat: Object.assign({}, j0.repeat || {}) } : { task: '', block: '', lots: [], mandor: '', ask: '', repeat: {} };
     var hasMain = !!EA.lists.mainJobs[ctx.estate];
     var used = key ? draftRows().filter(function (r) { return r.muster === 'H' && jobFor(r.worker_id) === j0; }).length : 0;
     ui().openSheet(
@@ -1158,21 +1220,37 @@
           }
           var pr = s.querySelector('#jb-pair'); if (pr) pr.hidden = !(pick.task === 'ITF' && !key);
           s.querySelector('#jb-block').innerHTML = blockOptions(pick.block, !needs, pick.task);
+          if (ROUND_JOBS[pick.task] && !EA.local.get('fh.prog.' + ctx.estate + '.' + EA.today().slice(0, 7), null) && !fill.asked && EA.fh.program && EA.fh.program.refresh) {
+            fill.asked = true; EA.fh.program.refresh(ctx.estate, EA.today().slice(0, 7), function () { if (document.body.contains(s)) fill(); });
+          }
+          lotPicks.repeat = pick.repeat; lotPicks.ask = pick.askLot || '';
           s.querySelector('#jb-lots').innerHTML = lotPicks(pick.block, pick.lots, pick.task);
+          lotPicks.repeat = null; lotPicks.ask = '';
           var sg = s.querySelector('#jb-suggest');
           if (sg) sg.onclick = function () { sg.dataset.lots.split(' ').forEach(function (l) { if (pick.lots.indexOf(l) < 0) pick.lots.push(l); }); fill(); };
-          s.querySelectorAll('#jb-lots .pick').forEach(function (b) {
+          s.querySelectorAll('#jb-lots .picks:not(#jb-repeat .picks) .pick[data-lot]').forEach(function (b) {
             b.onclick = function () {
               var i = pick.lots.indexOf(b.dataset.lot);
-              if (i >= 0) pick.lots.splice(i, 1); else pick.lots.push(b.dataset.lot);
+              // v1.52.3: a lot already done this round asks once (with a reason) before it is picked
+              if (i < 0 && b.dataset.done) { pick.askLot = b.dataset.lot; fill(); var rp = s.querySelector('#jb-repeat'); if (rp && rp.scrollIntoView) rp.scrollIntoView({ block: 'center' }); return; }
+              if (i >= 0) { pick.lots.splice(i, 1); delete pick.repeat[b.dataset.lot]; if (b.dataset.done) { fill(); return; } } else pick.lots.push(b.dataset.lot);
               b.setAttribute('aria-pressed', i < 0);
             };
           });
+          s.querySelectorAll('#jb-repeat [data-why]').forEach(function (b) {
+            b.onclick = function () {
+              var lot = pick.askLot; if (!lot) return;
+              pick.repeat[lot] = REPEAT_WHY[Number(b.dataset.why)][0];
+              if (pick.lots.indexOf(lot) < 0) pick.lots.push(lot);
+              pick.askLot = ''; fill();
+            };
+          });
+          var rn = s.querySelector('#jb-repeat-no'); if (rn) rn.onclick = function () { pick.askLot = ''; fill(); };
         }
         fill();
         s.querySelector('#jb-task').onchange = function () { pick.task = this.value; fill(); };
         s.querySelectorAll('.jb-quick [data-quick]').forEach(function (b) { b.onclick = function () { pick.task = b.dataset.quick === 'OP' ? (EA.lists.OP_JOBS.indexOf(pick.task) >= 0 ? pick.task : 'OPH') : b.dataset.quick; fill(); }; });
-        s.querySelector('#jb-block').onchange = function () { pick.block = this.value; pick.lots = []; fill(); };
+        s.querySelector('#jb-block').onchange = function () { pick.block = this.value; pick.lots = []; pick.repeat = {}; pick.askLot = ''; fill(); };
         s.querySelector('#jb-mdr').onchange = function () { pick.mandor = this.value; };
         s.querySelector('#jb-why').oninput = function () { pick.ask = this.value; };
         s.querySelector('#jb-cancel').onclick = ui().closeSheet;
@@ -1192,8 +1270,9 @@
           pick.lots = sortLots(pick.lots);
           var same = draft.jobs.find(function (x) { return x.key !== key && x.task === pick.task && x.block === pick.block && x.lots.join(' ') === pick.lots.join(' '); });
           if (same) { ui().toast(EA.t('Kerja ini sudah ada', 'This job is already on the chit'), 'bad'); return; }
-          if (j0) { j0.task = pick.task; j0.block = pick.block; j0.lots = pick.lots; j0.mandor = pick.mandor; if (pick.ask) j0.ask = pick.ask; else delete j0.ask; }
-          else { var nj = { key: 'j' + (draft.nextJob++), task: pick.task, block: pick.block, lots: pick.lots, mandor: pick.mandor }; if (pick.ask) nj.ask = pick.ask; draft.jobs.push(nj);
+          var rep = {}; pick.lots.forEach(function (l) { if (pick.repeat[l]) rep[l] = pick.repeat[l]; });
+          if (j0) { j0.task = pick.task; j0.block = pick.block; j0.lots = pick.lots; j0.mandor = pick.mandor; if (pick.ask) j0.ask = pick.ask; else delete j0.ask; if (Object.keys(rep).length) j0.repeat = rep; else delete j0.repeat; }
+          else { var nj = { key: 'j' + (draft.nextJob++), task: pick.task, block: pick.block, lots: pick.lots, mandor: pick.mandor }; if (pick.ask) nj.ask = pick.ask; if (Object.keys(rep).length) nj.repeat = rep; draft.jobs.push(nj);
                  if (pick.mandor && !draft.marks[pick.mandor]) draft.marks[pick.mandor] = 'H';
                  var ld = s.querySelector('#jb-ld') && pick.task === 'ITF' ? s.querySelector('#jb-ld').value : '';
                  if (ld) {        // the loader partner: an LFF job on the same lots
@@ -1642,7 +1721,8 @@
       c.chitRowId = EA.save(TAB_CHIT, ROOM, ctx.estate, { date: c.date, chit: c.chit, rain_mm: c.rain_mm, rain_time: c.rain_time,
         working: s.tot(s.worked), not_working: s.tot(s.notw), grand_total: s.tot(s.grand),
         confirmed_by: c.checker, confirmed_at: stamp,
-        note: c.fromPlan ? ('Dari rancangan ' + c.fromPlan + ' (' + c.planAt + ') · disahkan ' + EA.today() + (c.planDiff.length ? ' · beza ' + c.planDiff.length + ': ' + c.planNote : ' · sama')).slice(0, 300) : (old && old.fromPlan ? 'Dari rancangan ' + old.fromPlan : '') },
+        note: ((c.fromPlan ? ('Dari rancangan ' + c.fromPlan + ' (' + c.planAt + ') · disahkan ' + EA.today() + (c.planDiff.length ? ' · beza ' + c.planDiff.length + ': ' + c.planNote : ' · sama')) : (old && old.fromPlan ? 'Dari rancangan ' + old.fromPlan : '')) +
+          repeatNote(c)).slice(0, 300) },
         old && old.chitRowId ? old.chitRowId : '').id;
       // v1.32: the clerk asked for this fix: tell the office it is done, with what changed.
       if (fixAsk && old) {
@@ -1933,6 +2013,7 @@
   EA.fh = EA.fh || {};
   EA.fh.viewOnly = viewOnly;
   EA.fh.allChits = chits;
+  EA.fh.roundRepeats = roundRepeats;
   EA.fh.summary = summary;
   EA.fh.tabs = tabs;
   EA.fh.copyText = copyText;

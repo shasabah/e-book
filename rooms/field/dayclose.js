@@ -162,6 +162,11 @@
     var ids = lines.map(function (l) { return l.id; }).concat(jobs.map(function (j) { return j.id; })).filter(Boolean);
     var waiting = ids.filter(function (i) { return EA.isWaiting(i); }).length;
     out.push({ n: 6, ok: true, bm: waiting ? waiting + ' rekod menunggu · dihantar bersama penutupan' : 'Semua rekod dihantar', en: waiting ? waiting + ' records waiting · sent with the close' : 'All records sent', sub: '', soft: true });
+    // 7 · v1.52.3: Membaja / CPS lots already done this round keyed again. It never stops the close; it shows the lots
+    // and the reason picked on the chit, so a repeat is seen the same day (Blk 01, 27 Oct–3 Nov).
+    var rep = EA.fh.roundRepeats ? EA.fh.roundRepeats(estate, c) : [];
+    if (rep.length) out.push({ n: 7, ok: true, warn: true, soft: true, bm: rep.length + ' petak sudah siap pusingan ini dikunci lagi', en: rep.length + ' lots already done this round keyed again',
+      sub: rep.map(function (x) { return x.task + ' ' + x.lot + ' (' + EA.t('siap ', 'done ') + x.on.slice(8, 10) + '/' + x.on.slice(5, 7) + (x.why ? ' · ' + x.why : EA.t(' · tiada sebab', ' · no reason')) + ')'; }).join(' · ') });
     return out;
   }
   // Which jobs fell short today (BELUM SIAP, or a flag such as under target).
@@ -219,8 +224,8 @@
       if (day.reopened) html += '<p class="warn"><b>' + EA.t('Dibuka semula · ', 'Reopened · ') + esc(niceDate(day.date)) + '</b> <span class="bm">Kerani minta pembetulan. Selepas pembetulan dikunci, tutup hari ini semula.</span></p>';
       html += '<div class="card"><h2>' + esc(niceDate(day.date)) + ' · ' + EA.t('Semakan sebelum tutup', 'Checks before closing') + '</h2>' +
         '<ol class="dc-list">' + ck.map(function (x) {
-          return '<li class="dc-it ' + (x.ok ? (x.drop ? 'dc-drop' : 'dc-ok') : 'dc-bad') + '">' + (x.go && !x.ok ? '<button type="button" class="link-btn dc-go" data-go="' + esc(x.go) + '">' : '<span>') +
-            '<b>' + (x.ok ? '✓' : '!') + ' ' + esc(EA.t(x.bm, x.en)) + '</b>' + (x.sub ? '<small>' + esc(x.sub) + '</small>' : '') + (x.go && !x.ok ? '</button>' : '</span>') + '</li>';
+          return '<li class="dc-it ' + (x.ok ? (x.warn ? 'dc-warn' : x.drop ? 'dc-drop' : 'dc-ok') : 'dc-bad') + '">' + (x.go && !x.ok ? '<button type="button" class="link-btn dc-go" data-go="' + esc(x.go) + '">' : '<span>') +
+            '<b>' + (x.warn ? '⚠' : x.ok ? '✓' : '!') + ' ' + esc(EA.t(x.bm, x.en)) + '</b>' + (x.sub ? '<small>' + esc(x.sub) + '</small>' : '') + (x.go && !x.ok ? '</button>' : '</span>') + '</li>';
         }).join('') + '</ol>';
       // v1.51: the day's work codes (Yu Chen, 5 Nov: closing settles the work, not yet the pay), by job (what the checkroll will be given), shown once every worker has his line.
       var c1 = ck.find(function (x) { return x.n === 1 && x.pay; });

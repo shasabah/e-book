@@ -716,20 +716,52 @@
         });
       });
     });
+    // v1.54 (Yu Chen, 11 Nov 2026): a harvester under 80% of the day's target needs a reason before the work
+    // saves (this replaces the "very few bunches, right?" question; "1 tandan" on a rain day was keyed 7 times,
+    // 6–10 Nov). Target 1.5 MT a day turned into bunches by the month's ABW (or the estate's usual bunch weight).
+    var lows = [], abwKg = (EA.fh.abwNow && EA.fh.abwNow(ctx.estate)) || 0, tgt = EA.lists.target && EA.lists.target(EA.lists.HARVEST, ctx.estate);
+    if (abwKg && tgt && tgt.unit === 'MT') {
+      var needB = Math.round(tgt.per * 1000 / abwKg), minB = Math.ceil(needB * 0.8);
+      jobs.forEach(function (j) {
+        if (j.task !== EA.lists.HARVEST || kind(j.task, j.block) !== 'bunches') return;
+        j.people.forEach(function (w) {
+          var b = (draft.lines[w] || []).reduce(function (a, l) { return a + num(l.bunches); }, 0);
+          if (b > 0 && b < minB) lows.push({ w: w, b: b, need: needB, min: minB });
+        });
+      });
+    }
+    draft.low = draft.low || {};
+    Object.keys(draft.low).forEach(function (w) { if (!lows.some(function (x) { return x.w === w; })) delete draft.low[w]; });
+    if (lows.length) cks = cks.filter(function (c) { return !lows.some(function (x) { return x.w === c.ref; }) || !/terlalu sedikit|very few/.test(c.bm); });
     draft.checks = cks;
     // v1.1: the staff saves directly (no mandor confirmation on the phone for now).
     ui().openSheet('<h2 id="sheet-title"><span class="bm">Semak kerja hari ini</span><span class="en">Check today\'s work, then save</span></h2>' +
       (cks.length ? '<h3 class="ck-h">' + EA.t('Semak dulu · betul?', 'Check first · right?') + '</h3>' + cks.map(function (c) { return '<div class="ck-warn"><b>' + esc(c.bm) + '</b>' + EA.t('Jika betul, simpan. Kerani akan semak.', 'If right, save. The clerk will check.') + '</div>'; }).join('') : '') +
+      (lows.length ? '<h3 class="ck-h">' + EA.t('Bawah 80% sasaran · pilih sebab', 'Under 80% of target · pick a reason') + '</h3>' +
+        '<p class="hint">' + EA.t('Sasaran ' + lows[0].need + ' tandan sehari (1.5 tan). Kunci tandan sebenar, walaupun buah belum keluar. Jangan letak 1.', 'Target ' + lows[0].need + ' bunches a day (1.5 MT). Key the real bunches, even if the fruit is not out yet. Never 1.') + '</p>' +
+        lows.map(function (x) { return '<div class="ck-warn wk-low" data-loww="' + esc(x.w) + '"><b>' + esc(person(x.w)) + ': ' + x.b + ' / ' + x.need + EA.t(' tandan', ' bunches') + '</b>' +
+          '<div class="picks">' + LOW_WHY.map(function (y, i) { return '<button type="button" class="pick" data-low="' + esc(x.w) + '" data-why="' + i + '" aria-pressed="' + (draft.low[x.w] === y[0]) + '"><b>' + EA.t(y[0], y[1]) + '</b></button>'; }).join('') + '</div></div>'; }).join('') : '') +
       (red.length ? '<div class="msg"><span class="bm">Perhatian: ' + esc(red.join('; ')) + '</span><span class="en">These go into the report for the Assistant Manager and HQ to see. If the map size of a lot is wrong, tell HQ.</span></div>' : '') +
       '<pre class="chit">' + esc(reportText(buildRecord('(belum disimpan)', EA.ui.hhmm(new Date()), ctx.user.code))) + '</pre>' +
       '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="wc-back">‹ CHANGE<small>‹ UBAH</small></button>' +
       '<button class="btn btn-ok" type="button" id="wc-ok">SAVE<small>Simpan</small></button></div>',
       function (s) {
         s.querySelector('#wc-back').onclick = ui().closeSheet;
-        s.querySelector('#wc-ok').onclick = function () { draft.checker = ctx.user.code; keepDraft(); ui().closeSheet(); save(jobs); };
+        var okb = s.querySelector('#wc-ok');
+        function lowReady() { okb.disabled = lows.some(function (x) { return !draft.low[x.w]; }); }
+        s.querySelectorAll('[data-low]').forEach(function (bt) {
+          bt.onclick = function () {
+            draft.low[bt.dataset.low] = LOW_WHY[Number(bt.dataset.why)][0]; keepDraft();
+            s.querySelectorAll('[data-low="' + bt.dataset.low + '"]').forEach(function (o) { o.setAttribute('aria-pressed', o === bt); });
+            lowReady();
+          };
+        });
+        lowReady();
+        okb.onclick = function () { if (okb.disabled) return; draft.checker = ctx.user.code; keepDraft(); ui().closeSheet(); save(jobs); };
       });
   }
 
+  var LOW_WHY = [['Hujan', 'Rain'], ['Buah kurang di petak', 'Little fruit on the lot'], ['Sakit · balik awal', 'Sick · left early'], ['Penuai baru', 'New harvester'], ['Kerja lain separuh hari', 'Other work half the day']];
   // One record of the day's work: lines per person per lot, and one line per job.
   function buildRecord(label, at, checker) {
     var jobs = jobsOf(chit), lines = [], jobLines = [];
@@ -740,7 +772,7 @@
         if (k === 'ticket') { lines.push({ worker_id: w, task_code: j.task, block: j.block, lot: j.lots.join(' '), qty: '', unit: 'MT', bunches: '', bags: '', machine: '', meter_start: '', meter_end: '', hours: '' }); return; }
         (draft.lines[w] || []).forEach(function (l, i) {
           var op = isOp(j);
-          lines.push({ worker_id: w, task_code: j.task, block: j.block, lot: l.lot || j.lots[0] || '', qty: k === 'bunches' ? '' : String(num(l.qty)),
+          lines.push({ worker_id: w, task_code: j.task, block: j.block, lot: l.lot || j.lots[0] || '', note: j.task === EA.lists.HARVEST && draft.low && draft.low[w] ? 'Bawah 80% sasaran: ' + draft.low[w] : '', qty: k === 'bunches' ? '' : String(num(l.qty)),
                        unit: k === 'bunches' ? 'bunch' : k === 'day' ? 'day' : (task(j.task).unit), bunches: k === 'bunches' ? String(num(l.bunches)) : '',
                        // v1.41: the person's bags go on his first lot line only (never counted twice).
                        bags: isBagJob(j) && i === 0 && String(pbags(j)[w] || '') !== '' ? String(num(pbags(j)[w])) : '',
@@ -770,10 +802,10 @@
       if (old) old.rec.lines.forEach(function (l) { oldLines[l.worker_id + '|' + l.task_code + '|' + l.lot] = l; });
       rec.lines.forEach(function (l) {
         var key = l.worker_id + '|' + l.task_code + '|' + l.lot, o = oldLines[key];
-        var same = o && o.qty === l.qty && o.bunches === l.bunches && ['bags', 'machine', 'meter_start', 'meter_end', 'hours'].every(function (f) { return String(o[f] || '') === String(l[f] || ''); });
+        var same = o && o.qty === l.qty && o.bunches === l.bunches && ['bags', 'machine', 'meter_start', 'meter_end', 'hours', 'note'].every(function (f) { return String(o[f] || '') === String(l[f] || ''); });
         if (same) { l.id = o.id; delete oldLines[key]; return; }
         l.id = EA.save(TAB, ROOM, ctx.estate, { date: rec.date, chit: rec.chit, worker_id: l.worker_id, task_code: l.task_code, block: l.block, lot: l.lot,
-          qty: l.qty, unit: l.unit, bunches: l.bunches, confirmed_by: rec.checker, confirmed_at: stamp, note: '',
+          qty: l.qty, unit: l.unit, bunches: l.bunches, confirmed_by: rec.checker, confirmed_at: stamp, note: l.note || '',
           bags: l.bags, machine: l.machine, meter_start: l.meter_start, meter_end: l.meter_end, hours: l.hours }, o ? o.id : '').id;
         // v1.3: the line's earlier versions (id and bunches), so a lorry that already took the old
         // line still counts against the corrected one (no lot counted twice).

@@ -559,8 +559,30 @@
   }
   function backlogLines(b) {
     if (!b) return [];
-    var L = (b.rain && b.rain.from ? ['Hujan · Rain: ' + rainText(b.rain)] : []).concat(b.tonnage ? ['Tan bulan ini · Month to date: ' + tonnageText(b.tonnage)] : []).concat(['Baki ladang · Field: ' + (b.fieldTotal || 0) + ' tandan' + (b.field && b.field.length ? ' (' + b.field.map(function (x) { return x.lot + ' ' + x.bunches; }).join(', ') + ')' : ''),
+    var L = (b.rain && b.rain.from ? ['Hujan · Rain: ' + rainText(b.rain)] : []).concat(b.tonnage ? ['Tan bulan ini · Month to date: ' + tonnageText(b.tonnage)] : []).concat(['Baki ladang · Field: ' + (b.fieldTotal || 0) + ' tandan' + (b.estate ? tanTxt(b.estate, b.fieldTotal || 0) : '') + (b.field && b.field.length ? ' (' + b.field.map(function (x) { return x.lot + ' ' + x.bunches; }).join(', ') + ')' : ''),
              'Baki ramp · Ramp: ' + ((b.ramp && b.ramp.bunches) || 0) + ' tandan' + (b.ramp && b.ramp.bunches ? ' (' + rampText(b.ramp) + ')' : '')]);
+    return L;
+  }
+  // v1.54 (Yu Chen, 11 Nov 2026): fruit in the field. Harvested on day D, it must be at the ramp by the end of day
+  // D+1 (Sunday counts; counted by the day of harvest). Shown with estimated tonnes (bunches × the month's ABW,
+  // or the estate's usual bunch weight until this month has a ticket) and who owns it. No RM.
+  function abwNow(estate) {
+    var b = getBacklog(estate), a = b ? abwOf(b.tonnage) : 0;
+    return a || ((EA.lists.abwUsual || {})[estate] || 0);
+  }
+  function tanTxt(estate, n) { var a = abwNow(estate), m = a ? Math.round(n * a / 100) / 10 : 0; return m ? ' ≈ ' + m.toFixed(1) + ' tan' : ''; }
+  function fieldParts(estate, b) {
+    var t = EA.today(), y = (function () { var d = new Date(); d.setDate(d.getDate() - 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })();
+    var f = (b && b.field) || [], sum = function (xs) { return xs.reduce(function (a, x) { return a + Number(x.bunches || 0); }, 0); };
+    var late = f.filter(function (x) { return x.since && x.since < y; }), due = f.filter(function (x) { return x.since === y; }), now = f.filter(function (x) { return !x.since || x.since >= t; });
+    var first = late.map(function (x) { return x.since; }).sort()[0] || '';
+    return { late: sum(late), due: sum(due), now: sum(now), first: first, days: first ? Math.round((new Date(t + 'T00:00:00') - new Date(first + 'T00:00:00')) / 864e5) : 0 };
+  }
+  // One or two short lines for the chit (screen and WhatsApp).
+  function fieldLines(estate, b) {
+    var q = fieldParts(estate, b), L = [];
+    if (q.late) L.push('⚠ LEBIH TEMPOH: ' + q.late + ' tandan' + tanTxt(estate, q.late) + ' di ladang sejak ' + shortDate(q.first) + ' (' + q.days + ' hari) · Staf bertugas + Pengurus');
+    if (q.due) L.push('Dituai semalam: ' + q.due + ' tandan' + tanTxt(estate, q.due) + ' · mesti ke ramp hari ini · angkat dahulu');
     return L;
   }
   function backlogCard(estate) {
@@ -573,7 +595,8 @@
         (t.tickets ? esc(tonnageDetail(t)) : EA.t('Belum ada tiket bulan ini', 'No tickets this month yet')) + '</span>' +
         (Object.keys(t.blocks || {}).length ? '<span class="en">' + Object.keys(t.blocks).sort().map(function (k) { return 'Blk ' + esc(k) + ' ' + Number(t.blocks[k]).toFixed(2); }).join(' · ') + '</span>' : '') +
         '<span class="en">' + EA.t('Bajet akan datang bila bajet 2027 dimuatkan', 'Budget to date comes when the 2027 budget is loaded') + '</span></div></div>' : '') +
-      '<div class="list-line"><div><b>' + EA.t('Ladang: ', 'Field: ') + (b.fieldTotal || 0) + EA.t(' tandan', ' bunches') + '</b><span class="en">' +
+      fieldLines(estate, b).map(function (x) { return '<div class="list-line fld-' + (/^⚠/.test(x) ? 'late' : 'due') + '"><div><b>' + esc(x) + '</b></div></div>'; }).join('') +
+      '<div class="list-line"><div><b>' + EA.t('Ladang: ', 'Field: ') + (b.fieldTotal || 0) + EA.t(' tandan', ' bunches') + esc(tanTxt(estate, b.fieldTotal || 0)) + '</b><span class="en">' +
         (b.field && b.field.length ? b.field.map(function (x) { return EA.t('Petak ', 'Lot ') + esc(x.lot) + ': ' + x.bunches + EA.t(' (sejak ', ' (since ') + shortDate(x.since) + ')'; }).join(' · ') : EA.t('Tiada baki', 'None left')) + '</span></div></div>' +
       '<div class="list-line"><div><b>Ramp: ' + ((b.ramp && b.ramp.bunches) || 0) + EA.t(' tandan', ' bunches') + '</b><span class="en">' +
         (b.ramp && b.ramp.bunches ? EA.t('Belum dihantar ke kilang: ', 'Not yet sent to the mill: ') + esc(rampText(b.ramp)) : EA.t('Kosong', 'Empty')) + '</span></div></div>' +
@@ -1848,6 +1871,7 @@
     // v1.17: an old chit keyed with rain still shows it; new chits have none (rain is in the Sugut DMS).
     if (c.rain_mm !== '' && c.rain_mm !== undefined && c.rain_mm !== null) L.push('Hujan semalam: ' + (Number(c.rain_mm) || 0).toFixed(2) + ' mm' + (c.rain_time ? ' (' + c.rain_time + ')' : ''));
     backlogLines(c.backlog).forEach(function (x) { L.push(x); });
+    fieldLines(c.estate, c.backlog).forEach(function (x) { L.push(/^⚠/.test(x) ? '*' + x + '*' : x); });   // v1.54: the day-after-harvest rule
     // v1.51.4 (Yu Chen, 6 Nov): mill grading leaves the WhatsApp chit. The money on that ticket is already gone
     // and nothing done that morning gets it back, so it is not a thing to settle today — it belongs to the
     // Saturday meeting, beside the month's grading trend. The alert itself is untouched: the staff still sees it
@@ -2021,6 +2045,7 @@
   EA.fh.refreshBacklog = refreshBacklog;
   EA.fh.backlogCard = backlogCard;
   EA.fh.abwOf = abwOf;
+  EA.fh.abwNow = abwNow; EA.fh.fieldLines = fieldLines;
   EA.fh.tonnageText = tonnageText;
   EA.fh.localTonnage = localTonnage;
   EA.fh.wireBacklog = wireBacklog;

@@ -2033,6 +2033,13 @@ function seedMills() {
 // explanation. Each line: { id, p (1 red, 2 amber, 3 blue, 4 green), ic, bm, en, sub, go (screen) }.
 // Lines the phone knows better by itself (today's chit, records not sent) are added on the phone.
 var ROUND_LATE_DAYS = 15;
+var TICKET_BY = '10:00';       // v1.54: the ticket is keyed by 10:00 am the day after the lorry (Yu Chen, 11 Nov 2026)
+// The day a lorry's ticket is due: the next day; Saturday's lorry on Monday (the clerk does not work Sunday).
+function ticketDue_(d) {
+  var p = String(d).slice(0, 10).split('-'), x = new Date(Date.UTC(Number(p[0]), Number(p[1]) - 1, Number(p[2])));
+  x.setUTCDate(x.getUTCDate() + (x.getUTCDay() === 6 ? 2 : 1));
+  return x.toISOString().slice(0, 10);
+}
 var LORRY_MT = 8;             // v1.33: a full Sugut lorry (Yu Chen, 22 Oct 2026)        // lists/tasks.js: a lot is ready again after 10 days, late after 15
 var EXPLAIN_KINDS = { grading: 1, ramp: 1, field: 1, jobask: 1, sunask: 1 };   // v1.41 sunask: Sunday work outside crop / manuring / CPS, approved by SDK (HQ)   // v1.36 jobask: other work outside the main jobs (LULUS / TOLAK)
 function dayDiff_(a, b) { return Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 864e5); }
@@ -2144,12 +2151,27 @@ function todo_(user, req) {
     }
     if (r === 'Owner' && rp.bunches && days >= 2) add({ id: 'RO:' + rp.since, p: 1, ic: '!', bm: 'Tersangkut: buah ' + days + ' hari di ramp', en: 'Stuck: fruit ' + days + ' days on the ramp',
       sub: rp.bunches + ' tandan' + mtTxt + ' sejak ' + shortD_(rp.since) + ' · Encik Samsir', go: '' });
-    // Cut but not carried to the ramp (the loader's collection not keyed): the ramp count is wrong until it is.
+    // v1.54 (Yu Chen, 11 Nov 2026): harvested fruit must be at the ramp by the end of the day after harvest, rain
+    // or not; Sunday counts (calendar days). Counted by the day of harvest, not the keying time. Day after harvest:
+    // the staff's line, with the deadline. Past that: red for the staff and the Pengurus's line by name (he gives
+    // the direction). One more day: the Owner. Tonnes are an estimate (bunches × the last tickets' ABW); no RM.
+    // Replaces the 6 Nov rule ("older than 2 days or over 4 tan"). Closes only when the fruit is keyed to the ramp.
     var fld = (b.field || []).filter(function (x) { return x.since && x.since < today; });
-    if (r === 'Staff' && fld.length) {
-      var nb = fld.reduce(function (a, x) { return a + x.bunches; }, 0), first = fld.map(function (x) { return x.since; }).sort()[0];
-      add({ id: 'FC:' + first, p: 2, ic: 'LR', bm: nb + ' tandan dituai belum dikutip ke ramp', en: nb + ' bunches cut, not yet carried to the ramp',
-        sub: 'Sejak ' + shortD_(first) + ' · tekan di sini → Semua ke ramp', go: '#field-harvest/collect' });
+    if (fld.length) {
+      var fsum = function (xs) { return xs.reduce(function (a, x) { return a + Number(x.bunches || 0); }, 0); };
+      var ftan = function (n) { var m = abw ? Math.round(n * abw / 100) / 10 : 0; return m ? ' ≈ ' + m.toFixed(1) + ' tan' : ''; };
+      var fblk = function (xs) { var o = {}; xs.forEach(function (x) { var k = x.block || ('0' + String(x.lot).split('-')[0]).slice(-2); o[k] = (o[k] || 0) + Number(x.bunches || 0); });
+        return Object.keys(o).sort().map(function (k) { return 'Blk ' + k + ' ' + o[k]; }).join(', '); };
+      var fdue = fld.filter(function (x) { return x.since === yday; }), flate = fld.filter(function (x) { return x.since < yday; });
+      var f1 = flate.map(function (x) { return x.since; }).sort()[0], fdays = f1 ? dayDiff_(f1, today) : 0;
+      if (r === 'Staff' && flate.length) add({ id: 'FO:' + f1, p: 1, ic: '!', bm: 'LEBIH TEMPOH: ' + fsum(flate) + ' tandan' + ftan(fsum(flate)) + ' masih di ladang', en: 'OVERDUE: ' + fsum(flate) + ' bunches' + ftan(fsum(flate)) + ' still in the field',
+        sub: 'Dituai ' + shortD_(f1) + ' · ' + fdays + ' hari · ' + fblk(flate) + ' · angkat sekarang · Encik Samsir sudah nampak', go: '#field-harvest/collect' });
+      if (r === 'Staff' && fdue.length) add({ id: 'FC:' + yday, p: 1, ic: 'LR', bm: fsum(fdue) + ' tandan' + ftan(fsum(fdue)) + ' dituai semalam · mesti ke ramp hari ini', en: fsum(fdue) + ' bunches' + ftan(fsum(fdue)) + ' harvested yesterday · must reach the ramp today',
+        sub: fblk(fdue) + ' · traktor angkat dahulu · tekan di sini → Semua ke ramp', go: '#field-harvest/collect' });
+      if (r === 'Manager' && flate.length) add({ id: 'FM:' + f1, p: 1, ic: '!', bm: 'Buah di ladang lebih tempoh · ' + fsum(flate) + ' tandan' + ftan(fsum(flate)), en: 'Fruit in the field past its deadline · ' + fsum(flate) + ' bunches' + ftan(fsum(flate)),
+        sub: 'Dituai ' + shortD_(f1) + ' · ' + fdays + ' hari · ' + fblk(flate) + ' · beri arahan kepada Staf', go: '' });
+      if (r === 'Owner' && flate.length && fdays >= 3) add({ id: 'FW:' + f1, p: 1, ic: '!', bm: 'Tersangkut: buah ' + fdays + ' hari di ladang', en: 'Stuck: fruit ' + fdays + ' days in the field',
+        sub: fsum(flate) + ' tandan' + ftan(fsum(flate)) + ' · dituai ' + shortD_(f1) + ' · ' + fblk(flate) + ' · Ferezelly, Encik Samsir', go: '' });
     }
     return b;
   }
@@ -2215,10 +2237,6 @@ function todo_(user, req) {
       add({ id: 'JR:' + a.id, p: 2, ic: 'KJ', bm: 'Kerja lain ditolak: ' + String(a.detail || '').replace(/^Kerja lain: /, ''), en: 'Other work rejected', sub: shortD_(a.date) + ' · ' + a.direction + ' · ' + (a.direction_by || '') + ' · selesaikan gaji hujung bulan', go: '' });
     });
     (ungraded_(est).tickets || []).forEach(function (t) { add({ id: 'UG:' + t.ticket_no, p: 3, ic: 'TK', bm: 'Tiket ' + t.ticket_no + ' belum ada gred', en: 'Ticket ' + t.ticket_no + ' has no grading', sub: shortD_(t.date) + ' · ' + t.mill, go: '#field-harvest/ticket' }); });
-    (openTrips(est).trips || []).forEach(function (t) {
-      if (String(t.date) >= today) return;
-      add({ id: 'DN:' + t.trip, p: 3, ic: 'DN', bm: 'DN ' + (t.dn || '—') + ' belum ada tiket kilang', en: 'DN ' + (t.dn || '—') + ' has no mill ticket', sub: 'Lori ' + shortD_(t.date) + ' · ' + t.mill + ' · ' + t.bunches + ' tandan', go: '#field-harvest/ticket' });
-    });
     rampOld();
     var ck = alerts.filter(function (a) { return a.kind === 'check' && String(a.date) >= yday; });
     if (ck.length) add({ id: 'CK:' + today, p: 1, ic: '!', bm: ck.length + ' amaran "Semak dulu" disimpan juga', en: ck.length + ' "check first" warnings saved anyway',
@@ -2236,6 +2254,25 @@ function todo_(user, req) {
     });
     rampOld();
     roundLate();
+  }
+  // v1.54 (Yu Chen, 11 Nov 2026): the weighbridge ticket is keyed by 10:00 am on the day after the lorry went
+  // (the aim is 8:00; 2 hours allowed while the rule is new). Saturday's lorry is due Monday 10:00. Until then it
+  // is the clerk's line; past it, red for the clerk, the Pengurus sees it (the driver's photographs), HQ sees it
+  // (Wawa keys when Ria is on leave), and 2 days past the deadline it reaches the Owner.
+  if (r === 'Clerk' || r === 'HQ' || r === 'Manager' || r === 'Owner') {
+    var hm = String(Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'HH:mm')).slice(-5);
+    (openTrips(est).trips || []).forEach(function (t) {
+      var d = String(t.date).slice(0, 10);
+      if (d >= today) return;
+      var due = ticketDue_(d), late = today > due || (today === due && hm >= TICKET_BY), what = 'Lori ' + shortD_(d) + ' · ' + t.mill + ' · ' + t.bunches + ' tandan';
+      if (r === 'Clerk') add(late
+        ? { id: 'DN:' + t.trip, p: 1, ic: '!', bm: 'LEWAT: tiket DN ' + (t.dn || '—') + ' belum dikunci', en: 'LATE: the ticket for DN ' + (t.dn || '—') + ' is not keyed', sub: what + ' · had ' + TICKET_BY + ' pagi ' + shortD_(due) + ' · tiada gambar pemandu? beritahu Encik Samsir', go: '#field-harvest/ticket' }
+        : { id: 'DN:' + t.trip, p: 2, ic: 'DN', bm: 'DN ' + (t.dn || '—') + ': kunci tiket sebelum ' + TICKET_BY + ' pagi' + (due > today ? ' ' + shortD_(due) : ''), en: 'DN ' + (t.dn || '—') + ': key the ticket before ' + TICKET_BY + ' am', sub: what, go: '#field-harvest/ticket' });
+      if (!late) return;
+      if (r === 'HQ') add({ id: 'DN:' + t.trip, p: 2, ic: 'DN', bm: 'Tiket DN ' + (t.dn || '—') + ' lewat · kunci jika kerani bercuti', en: 'The ticket for DN ' + (t.dn || '—') + ' is late · key it if the clerk is on leave', sub: what + ' · had ' + TICKET_BY + ' pagi ' + shortD_(due), go: '#field-harvest/ticket' });
+      if (r === 'Manager') add({ id: 'DN:' + t.trip, p: 2, ic: 'DN', bm: 'Tiket DN ' + (t.dn || '—') + ' belum dikunci · semak gambar pemandu', en: 'The ticket for DN ' + (t.dn || '—') + ' is not keyed · check the driver\'s photographs', sub: what + ' · had ' + TICKET_BY + ' pagi ' + shortD_(due), go: '' });
+      if (r === 'Owner' && dayDiff_(due, today) >= 2) add({ id: 'DN:' + t.trip, p: 1, ic: '!', bm: 'Tersangkut: tiket DN ' + (t.dn || '—') + ' belum dikunci', en: 'Stuck: the ticket for DN ' + (t.dn || '—') + ' is not keyed', sub: what + ' · ' + dayDiff_(due, today) + ' hari lepas had', go: '#field-harvest/ticket' });
+    });
   }
   // v1.41 (Yu Chen, 26 Oct): Sunday work other than crop, manuring and CPS is approved by SDK (Christy or Wawa,
   // to be named); until they have logins the Owner sees and answers it too.

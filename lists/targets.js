@@ -35,3 +35,7 @@ EA.lists.manTarget = function (estate, dose) {
   var t = EA.lists.manTargets[estate] || EA.lists.manTargets.mgmt;
   return dose <= 0.25 ? t.borate : dose >= 2 ? t.big : t.small;
 };
+
+// v1.54: the estate's usual bunch weight (kg), used only for an estimate of tonnes when this month has no ticket
+// with bunches yet (Sugut, October 2026: 19.4 kg). The month's own ABW from tickets is used once there is one.
+EA.lists.abwUsual = { SSGT: 19 };

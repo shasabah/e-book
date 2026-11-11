@@ -581,6 +581,53 @@
     return '<section class="card" id="fh-backlog" data-estate="' + esc(estate) + '" aria-labelledby="fh-bl"><div class="room-top"><h2 id="fh-bl" class="grow"><span class="inline"><span class="bm">Tan & baki buah</span> · <span class="en">Tonnes and crop backlog</span></span></h2>' +
       '<button type="button" class="btn btn-ghost" data-refresh-backlog="1">REFRESH<small>Kemas kini</small></button></div>' + body + '</section>';
   }
+  // ---------- v1.55 Jentera: which machine has somebody on it today ----------
+  // Yu Chen, 11 Nov 2026: nobody was aware Sugut has had no backhoe and no excavator operator. Nothing new is
+  // keyed here — the office works the card out from the jobs already on the chit (Brief_Jentera.md §4). A kind
+  // with one unit is named by its reg no; with more than one, by the kind and how many have somebody on them,
+  // because ITF and ETF do not yet say which unit was taken.
+  function machWords(m) {
+    if (m.state === 'jalan') return m.units > 1 ? EA.t('Semua ' + m.units + ' unit ada pemandu', 'All ' + m.units + ' units have a driver')
+      : EA.t('Ada pemandu hari ini', 'Has a driver today');
+    if (m.state === 'bengkel') return EA.t('Di bengkel hari ini', 'In the workshop today');
+    if (m.state === 'sebahagian') return m.onToday + EA.t(' dari ', ' of ') + m.units + EA.t(' unit ada pemandu', ' units have a driver');
+    if (!m.since) return EA.t('Belum pernah ada pemandu', 'Has never had a driver');
+    return EA.t('Tiada pemandu · ', 'No driver · ') + m.days + EA.t(' hari kerja', ' working days');
+  }
+  function machPill(m) { return m.state === 'jalan' ? 'ok' : m.state === 'tiada' && (m.days >= 3 || !m.since) ? 'bad' : 'wait'; }
+  function machPillWord(m) {
+    return m.state === 'jalan' ? 'JALAN' : m.state === 'bengkel' ? 'BENGKEL' : m.state === 'sebahagian' ? 'SEBAHAGIAN' : 'TIADA PEMANDU';
+  }
+  function machTitle(m) { return m.kind + (m.reg ? ' · ' + m.reg : m.units > 1 ? ' · ' + m.units + ' unit' : ''); }
+  // Only what is not normal goes in the WhatsApp chit; everything running is one line (Brief_Jentera.md §3).
+  function machLines(b) {
+    var mm = b && b.machines && b.machines.lines;
+    if (!mm || !mm.length) return [];
+    var bad = mm.filter(function (m) { return m.state !== 'jalan'; });
+    var L = ['*Jentera · Machines*'];
+    if (!bad.length) return L.concat(['✅ Semua jalan · all running']);
+    bad.forEach(function (m) {
+      L.push((machPill(m) === 'bad' ? '⚠ ' : '• ') + machTitle(m) + ' — ' + machWords(m) + (m.since ? ' (' + EA.t('kerja akhir ', 'last worked ') + shortDate(m.since) + ')' : ''));
+    });
+    var okN = mm.length - bad.length;
+    if (okN) L.push('✅ ' + okN + EA.t(' lagi jalan', ' more running'));
+    return L;
+  }
+  function jenteraCard(estate) {
+    var b = getBacklog(estate), mm = b && b.machines && b.machines.lines;
+    if (!mm) return '';                                   // list not loaded, or no signal yet: no card at all
+    var body = !mm.length ? '<p class="hint">' + EA.t('Tiada jentera disenaraikan untuk estet ini.', 'No machines listed for this estate.') + '</p>' :
+      mm.map(function (m) {
+        return '<div class="list-line"><div><b>' + esc(machTitle(m)) + '</b>' +
+          '<span class="en">' + esc(machWords(m)) + (m.model ? ' · ' + esc(m.model) : '') +
+          (m.fromOther ? EA.t(' · dari estet lain', ' · from another estate') : '') + '</span></div>' +
+          '<div class="acts"><span class="pill ' + machPill(m) + '">' + EA.t(machPillWord(m), machPillWord(m)) + '</span></div></div>';
+      }).join('') +
+      '<p class="hint">' + EA.t('Dikira dari kerja yang sudah dikunci. Tiada apa-apa untuk dikunci di sini.',
+        'Worked out from the jobs already keyed. Nothing to key here.') + '</p>';
+    return '<section class="card" id="fh-jentera" aria-labelledby="fh-jt"><h2 id="fh-jt"><span class="inline"><span class="bm">Jentera</span> · <span class="en">Machines</span></span></h2>' + body + '</section>';
+  }
+
   function wireBacklog(container, estate) {
     container.querySelectorAll('[data-refresh-backlog]').forEach(function (b) {
       b.onclick = async function () {
@@ -597,6 +644,10 @@
     var estate = card.dataset.estate;
     card.outerHTML = backlogCard(estate);
     wireBacklog(document, estate);
+    // v1.55: the Jentera card is worked out by the same office answer, so it is redrawn with it.
+    var jc = document.getElementById('fh-jentera');
+    if (jc) jc.outerHTML = jenteraCard(estate);
+    else { var bc = document.getElementById('fh-backlog'); if (bc) bc.insertAdjacentHTML('afterend', jenteraCard(estate)); }
     var slot = document.getElementById('fh-alert-slot');
     if (slot && el && ctx && draft) { slot.innerHTML = alertSection(); wireAlerts(); }
   });
@@ -760,7 +811,7 @@
       el.innerHTML = head +
         '<p class="msg ok-msg"><span class="bm">Chit hari ini sudah disimpan. Tekan VIEW untuk lihat, atau CORRECT untuk betulkan.</span>' +
         '<span class="en">Today\'s chit is saved. Tap VIEW to see it, or CORRECT to fix it.</span></p>' +
-        todayCard() + plansCard(true) + backlogCard(ctx.estate) +
+        todayCard() + plansCard(true) + backlogCard(ctx.estate) + jenteraCard(ctx.estate) +
         '<button type="button" class="btn btn-ghost" id="fh-new">+ NEW CHIT<small>Chit baru (' + EA.t('jarang perlu', 'rarely needed') + ')</small></button>';
       $('#fh-new').onclick = function () { draft.newChit = true; keepDraft(); render(el, ctx); };
       wireCommon(); wirePlans(); wireBacklog(el, ctx.estate); refreshBacklog(ctx.estate);
@@ -782,7 +833,7 @@
       (draft.fixAsk ? '<p class="warn"><b>' + EA.t('Membetulkan chit ', 'Fixing the chit of ') + esc(niceDate(draft.date)) + EA.t(' atas permintaan ', ' as asked by ') + esc(draft.fixAsk.by) + ':</b> "' + esc(draft.fixAsk.note) + '"</p>' : '') +
       (draft.replacing && !draft.fixAsk ? '<p class="warn"><span class="bm">Membetulkan chit ' + esc(draft.replacing) + '. Chit lama kekal; yang baru menggantikannya.</span><span class="en">Correcting chit ' + esc(draft.replacing) + '. The old one stays on record; this one replaces it.</span></p>' : '') +
 
-      (mode ? '' : backlogCard(ctx.estate) + '<div id="fh-alert-slot">' + alertSection() + '</div>') +
+      (mode ? '' : backlogCard(ctx.estate) + jenteraCard(ctx.estate) + '<div id="fh-alert-slot">' + alertSection() + '</div>') +
       '<section class="card" aria-labelledby="fh-s1"><h2 id="fh-s1"><span class="step">1</span><span class="inline">' +
         (mode === 'plan' ? '<span class="bm">Kerja dirancang</span> · <span class="en">Planned jobs</span>' : mode === 'confirm' && draft.date !== EA.today() ? '<span class="bm">Kerja hari itu</span> · <span class="en">That day\'s jobs</span>'
           : '<span class="bm">Kerja hari ini</span> · <span class="en">Today\'s jobs</span>') + '</span></h2>' +
@@ -1848,6 +1899,7 @@
     // v1.17: an old chit keyed with rain still shows it; new chits have none (rain is in the Sugut DMS).
     if (c.rain_mm !== '' && c.rain_mm !== undefined && c.rain_mm !== null) L.push('Hujan semalam: ' + (Number(c.rain_mm) || 0).toFixed(2) + ' mm' + (c.rain_time ? ' (' + c.rain_time + ')' : ''));
     backlogLines(c.backlog).forEach(function (x) { L.push(x); });
+    machLines(c.backlog).forEach(function (x) { L.push(x); });
     // v1.51.4 (Yu Chen, 6 Nov): mill grading leaves the WhatsApp chit. The money on that ticket is already gone
     // and nothing done that morning gets it back, so it is not a thing to settle today — it belongs to the
     // Saturday meeting, beside the month's grading trend. The alert itself is untouched: the staff still sees it

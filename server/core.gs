@@ -303,6 +303,8 @@ function doWrite_(user, req) {
   // Pentadbir (v1.16): the Owner's admin page; its reading parts are answered above.
   if (/^admin/.test(String(req.action))) return reply(adminAction_(user, req));
   // Users and PIN screen (v1.9): the Owner only.
+  // Tukar PIN saya for everyone (v1.53): any real user changes his own PIN.
+  if (req.action === 'myPin') return reply(myPin_(user, req));
   if (/^user/.test(String(req.action)) || req.action === 'testOff') return reply(usersAction_(user, req));
   if (/^worker/.test(String(req.action))) return reply(workersAction_(user, req));
   if (/^mill/.test(String(req.action))) return reply(millsAction_(user, req));
@@ -1126,10 +1128,42 @@ function logUser_(by, action, u, detail) {
 
 function forgetCache_(hash) { if (hash) CacheService.getScriptCache().remove('u:' + hash); }
 
+// v1.53 (Yu Chen, 11 Nov 2026): the Owner can see the PINs again on Pengguna & PIN, so he does not have to
+// make a new one every time someone forgets. Each PIN made or changed from now on is also kept readable in
+// the script's own store (Script Properties), never in a sheet, so a person who can open the sheets cannot read
+// them. PINs made before this version were only ever kept scrambled and cannot be shown.
+function keepPin_(code, pin) { try { PropertiesService.getScriptProperties().setProperty('pin.' + code, String(pin)); } catch (e) {} }
+function pinOf_(code, all) { var v = all['pin.' + code]; return v ? String(v) : ''; }
+
 function cleanEstates_(v) {
   var list = (Array.isArray(v) ? v : String(v || '').split(',')).map(function (s) { return String(s).trim(); }).filter(String);
   var out = ESTATES.filter(function (e) { return list.indexOf(e) >= 0; });
   return out.length === list.length && out.length ? out : null;
+}
+
+// Tukar PIN saya (v1.53, Yu Chen 11 Nov 2026): every real user may choose his own 6-digit PIN, typed twice on
+// the phone. Same rules as the Owner's own PIN: not an easy one, not one someone else has (same answer for both,
+// so nobody learns another person's PIN). Test PINs cannot be changed. One USERS_LOG line.
+function myPin_(user, req) {
+  if (isTestCode_(user.user_code)) return { ok: false, error: 'test_user' };
+  var mine = String(req.pin || '');
+  if (!/^\d{6}$/.test(mine)) return { ok: false, error: 'bad_pin' };
+  if (weakPin_(mine)) return { ok: false, error: 'pick_another' };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (e) { return { ok: false, error: 'busy' }; }
+  try {
+    var U = readUsers_(), t = U.list.find(function (u) { return u.user_code === String(user.user_code); });
+    if (!t || t.status !== 'active') return { ok: false, error: 'no_user' };
+    var h = hashKey(mine);
+    if (h === String(t.key_hash)) return { ok: false, error: 'same_pin' };
+    if (usedHashes_(U.list)[h]) return { ok: false, error: 'pick_another' };
+    var oldH = String(t.key_hash);
+    U.sh.getRange(t.row, U.head.indexOf('key_hash') + 1).setValue(h);
+    forgetCache_(oldH);
+    keepPin_(t.user_code, mine);
+    logUser_(user, 'own_pin_set', t, 'Tukar PIN saya');
+    return { ok: true };
+  } finally { lock.releaseLock(); }
 }
 
 function usersAction_(user, req) {
@@ -1139,6 +1173,18 @@ function usersAction_(user, req) {
     var L = readUsers_().list, tm = isTestCode_(user.user_code), ho = realOwner_(L);
     if (tm && ho) return { ok: false, error: 'test_user' };
     return { ok: true, users: usersOut_(L), me: String(user.user_code), firstOwner: tm && !ho };
+  }
+  // LIHAT PIN (v1.53): the Owner types his own PIN again, so a phone left open does not show everyone's PIN.
+  if (req.action === 'userPins') {
+    if (isTestCode_(user.user_code)) return { ok: false, error: 'test_user' };
+    var LP = readUsers_().list, meP = LP.find(function (u) { return u.user_code === String(user.user_code); });
+    if (!meP || hashKey(String(req.pin || '')) !== String(meP.key_hash)) { logUser_(user, 'pins_wrong', meP || user, ''); return { ok: false, error: 'wrong_pin' }; }
+    var all = PropertiesService.getScriptProperties().getProperties();
+    var rows = LP.filter(function (u) { return u.status === 'active' && !isTestCode_(u.user_code); }).map(function (u) {
+      return { code: u.user_code, name: String(u.name), role: String(u.role), estates: estatesNow_(u), practice: isPracticeCode_(u.user_code), pin: pinOf_(u.user_code, all) };
+    });
+    logUser_(user, 'pins_viewed', meP, rows.filter(function (r) { return r.pin; }).length + ' PIN');
+    return { ok: true, pins: rows };
   }
   var lock = LockService.getScriptLock();
   try { lock.waitLock(15000); } catch (e) { return { ok: false, error: 'busy' }; }
@@ -1177,6 +1223,7 @@ function usersAction_(user, req) {
         return { user_code: code, name: plain(name), role: req.role, estates: est.join(','), key_hash: hashKey(pin), status: 'active', added_at: plain(now), phones: phone, position: pos }[c];
       }).map(function (v) { return v === undefined ? '' : v; });
       sh.appendRow(row);
+      keepPin_(code, pin);
       logUser_(user, 'add', { user_code: code, name: name }, (prac ? 'Latihan · ' : '') + (pos ? pos + ' · ' : '') + req.role + ' · ' + est.join(',') + ' · ' + phone);
       return out({ pin: pin, code: code, name: name, phone: phone });
     }
@@ -1193,6 +1240,7 @@ function usersAction_(user, req) {
       var p2 = newPin_(list), old = String(t.key_hash);
       sh.getRange(t.row, col('key_hash')).setValue(hashKey(p2));
       forgetCache_(old);
+      keepPin_(t.user_code, p2);
       logUser_(user, 'new_pin', t, self ? 'own PIN' : '');
       return out({ pin: p2, code: t.user_code, name: String(t.name), self: !!self, phones: phonesOf_(t) });
     }
@@ -1209,6 +1257,7 @@ function usersAction_(user, req) {
       var oldH = String(t.key_hash);
       sh.getRange(t.row, col('key_hash')).setValue(h);
       forgetCache_(oldH);
+      keepPin_(t.user_code, mine);
       logUser_(user, 'own_pin_set', t, '');
       return out({ self: true });
     }

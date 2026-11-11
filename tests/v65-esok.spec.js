@@ -27,8 +27,10 @@ const { chromium } = require('playwright');
   await p.goto('http://localhost:8765/index.html');
   const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   const addDays = (s, n) => { const d = new Date(s + 'T00:00:00'); d.setDate(d.getDate() + n); return iso(d); };
-  // Work on a fixed Friday so the "tomorrow" cases are known: Fri 6 Nov → Sat 7 Nov (working day).
-  const T0 = '2026-11-06', T1 = addDays(T0, 1);
+  // Work on a Friday so the "tomorrow" cases are known: Friday → Saturday (working day). The next Friday from the
+  // real date (1.53: a fixed 6 Nov stopped working once it was more than 3 days back, as plans open only 3 days).
+  const fri = (() => { const d = new Date(); d.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7)); return iso(d); })();
+  const T0 = fri, T1 = addDays(T0, 1);
   const names = ['Ali Bin Kassim', 'Badu Bin Sani', 'Catur Bin Rahim', 'Dani Bin Musa', 'Eko Bin Salim'];
   const people = [1, 2, 3, 4, 5].map(i => ({ id: 'W-SSGT-00' + i, name: names[i - 1], estate: 'SSGT', gang: i <= 3 ? 'Tuai · Harvest' : 'Racun · Spray', sex: 'M' }));
   const R = (i, task, block, lots) => ({ id: 'm' + i, worker_id: 'W-SSGT-00' + i, muster: 'H', task_code: task, block, lots, mandor: '' });

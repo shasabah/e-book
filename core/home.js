@@ -356,6 +356,50 @@
     else if (r.sent) toast(r.sent + EA.t(' dihantar', ' sent') + (r.test ? EA.t(' (ujian)', ' (test)') : ''));
   };
 
+  // v1.53 Tukar PIN saya for everyone (Yu Chen, 11 Nov 2026): tap your own name at the top. Needs signal.
+  // The office refuses an easy PIN or one someone else has, with the same answer for both. This phone
+  // switches to the new PIN at once; another phone of the same person needs the new PIN once.
+  var MYPIN_ERR = {
+    bad_pin: ['Taip 6 nombor.', 'Type 6 numbers.'], not_same: ['Dua PIN tidak sama.', 'The two PINs are not the same.'],
+    pick_another: ['Pilih PIN lain. Jangan nombor mudah.', 'Pick another PIN. Not an easy one.'], same_pin: ['Itu PIN anda sekarang.', 'That is your PIN now.'],
+    offline: ['Tiada isyarat. Cuba lagi bila ada isyarat.', 'No signal. Try again when there is signal.'], nolink: ['Pautan hantar belum ditetapkan.', 'The sending link is not set.'],
+    test_user: ['PIN ujian tidak boleh ditukar.', 'A test PIN cannot be changed.'], busy: ['Pejabat sibuk. Cuba lagi sebentar.', 'The office is busy. Try again in a moment.'],
+    slow: ['Google lambat. Cuba lagi sebentar.', 'Google is slow. Try again in a moment.']
+  };
+  function myPinText(e) { var m = MYPIN_ERR[e] || ['Pejabat menolak: ' + e, 'Office refused: ' + e]; return EA.t(m[0], m[1]); }
+  function myPinSheet() {
+    var u = EA.currentUser();
+    if (!u || testUser()) return;
+    var inp = function (id, label) {
+      return '<div class="field"><label for="' + id + '">' + label + '</label><input id="' + id + '" class="key-input" type="password" inputmode="numeric" autocomplete="new-password" maxlength="6" placeholder="······"></div>';
+    };
+    openSheet('<h2 id="sheet-title"><span class="bm">Tukar PIN saya</span><span class="en">Change my PIN</span></h2>' +
+      '<p><b>' + EA.ui.esc(u.name) + '</b></p>' +
+      inp('my-1', EA.t('PIN baru (6 nombor)', 'New PIN (6 numbers)')) + inp('my-2', EA.t('Taip sekali lagi', 'Type it again')) +
+      '<p class="hint">' + EA.t('Jangan nombor mudah seperti 123456, 111111 atau 112233. Telefon ini terus guna PIN baru. Perlu isyarat.', 'Not an easy one like 123456, 111111 or 112233. This phone switches to the new PIN. Needs signal.') + '</p>' +
+      '<p class="msg" id="my-err" hidden></p>' +
+      '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="my-back">‹ BACK<small>‹ BALIK</small></button>' +
+      '<button class="btn btn-main" type="button" id="my-ok">SAVE PIN<small>Simpan PIN</small></button></div>',
+      function (s) {
+        var a = s.querySelector('#my-1'), b = s.querySelector('#my-2'), m = s.querySelector('#my-err');
+        [a, b].forEach(function (x) { x.oninput = function () { x.value = x.value.replace(/\D/g, '').slice(0, 6); m.hidden = true; }; });
+        function err(e) { m.textContent = myPinText(e); m.hidden = false; }
+        s.querySelector('#my-back').onclick = closeSheet;
+        s.querySelector('#my-ok').onclick = async function () {
+          if (!/^\d{6}$/.test(a.value)) return err('bad_pin');
+          if (a.value !== b.value) return err('not_same');
+          this.disabled = true;
+          var pin = a.value, j = await EA.askFull('myPin', { pin: pin });
+          if (!j || !j.ok) { this.disabled = false; return err((j && j.error) || 'busy'); }
+          EA.setMyPin(pin); a.value = b.value = '';
+          closeSheet(); toast(EA.t('PIN anda sudah ditukar', 'Your PIN is changed'));
+        };
+      });
+  }
+  $('who-name').onclick = myPinSheet;
+  $('who-name').setAttribute('role', 'button'); $('who-name').setAttribute('tabindex', '0');
+  $('who-name').title = 'Tukar PIN saya · Change my PIN';
+
   $('logout').onclick = function () {
     var n = EA.waitingMine();
     if (!n) { EA.logout(); render(); return; }

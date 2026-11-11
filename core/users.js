@@ -2,6 +2,8 @@
 // Who may log in; add a user (the office makes a random PIN, shown here once, with copy and
 // WhatsApp); a new PIN; change role or estates; switch off and on; switch off the test PINs.
 // The office keeps only a scrambled PIN and writes one USERS_LOG line per change. Nothing is deleted.
+// v1.53 (Yu Chen, 11 Nov 2026): LIHAT PIN shows the Owner every PIN made or changed from 1.53 on, after he
+// types his own PIN again; older PINs were only ever kept scrambled ("buat PIN baru sekali").
 window.EA = window.EA || {};
 EA.roomViews = EA.roomViews || {};
 (function () {
@@ -25,6 +27,7 @@ EA.roomViews = EA.roomViews || {};
     offline: ['Tiada isyarat. Cuba lagi bila ada isyarat.', 'No signal. Try again when there is signal.'],
     busy: ['Pejabat sibuk. Cuba lagi sebentar.', 'The office is busy. Try again in a moment.'],
     not_allowed: ['Hanya Pemilik boleh buka skrin ini.', 'Only the Owner can open this screen.'],
+    wrong_pin: ['PIN anda salah. Cuba lagi.', 'Your PIN is wrong. Try again.'],
     test_user: ['PIN ujian tidak boleh urus pengguna lagi. Masuk dengan PIN anda sendiri.', 'A test PIN cannot manage users any more. Log in with your own PIN.'],
     first_owner_only: ['Buat PIN Pemilik anda sendiri dahulu.', 'Make your own Owner PIN first.'],
     bad_name: ['Tulis nama (2 hingga 40 huruf).', 'Write a name (2 to 40 letters).'],
@@ -108,6 +111,7 @@ EA.roomViews = EA.roomViews || {};
         '<button class="btn btn-main" type="button" id="us-first">MAKE MY OWNER PIN<small>Buat PIN Pemilik saya</small></button></div>';
     } else {
       h += '<button class="btn us-add" type="button" id="us-add">+ ADD USER<small>+ Tambah pengguna</small></button>';
+      h += '<button class="btn btn-ghost us-pins" type="button" id="us-pins">SHOW PINS<small>Lihat PIN</small></button>';
     }
     // Active real users, grouped: all estates first, then by first estate; then the switched-off ones.
     var groups = {}, order = [];
@@ -163,6 +167,7 @@ EA.roomViews = EA.roomViews || {};
     var a = el.querySelector('#us-add'); if (a) a.onclick = function () { form = { mode: 'add', name: '', role: 'Staff', estates: [ctx.estate] }; draw(); window.scrollTo(0, 0); };
     var f = el.querySelector('#us-first'); if (f) f.onclick = function () { form = { mode: 'add', name: ctx.user.name && !/ujian|test/i.test(ctx.user.name) ? ctx.user.name : '', role: 'Owner', estates: ALL.slice(), firstOwner: true }; draw(); };
     var t = el.querySelector('#us-testoff'); if (t) t.onclick = testOffSheet;
+    var pn = el.querySelector('#us-pins'); if (pn) pn.onclick = pinsAsk;
     el.querySelectorAll('[data-user]').forEach(function (x) { x.onclick = function () { personSheet(x.dataset.user); }; });
   }
 
@@ -471,6 +476,44 @@ EA.roomViews = EA.roomViews || {};
           ui().closeSheet(); draw(); ui().toast(EA.t('PIN anda sudah ditukar', 'Your PIN is changed'));
         };
       });
+  }
+  // ---------- v1.53 LIHAT PIN ----------
+  // The Owner types his own PIN again; the list shows only in this sheet and is forgotten when it closes.
+  function pinsAsk() {
+    ui().openSheet('<h2 id="sheet-title">' + EA.t('Lihat PIN', 'Show PINs') + '</h2>' +
+      '<p>' + EA.t('Taip PIN anda sendiri dahulu.', 'Type your own PIN first.') + '</p>' +
+      '<div class="field"><input id="pv-pin" class="key-input" type="password" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="······" aria-label="PIN"></div>' +
+      '<p class="msg" id="pv-err" hidden></p>' +
+      '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="pv-back">‹ BACK<small>‹ BALIK</small></button>' +
+      '<button class="btn btn-main" type="button" id="pv-ok">SHOW<small>Lihat</small></button></div>',
+      function (s) {
+        var a = s.querySelector('#pv-pin'), m = s.querySelector('#pv-err');
+        a.oninput = function () { a.value = a.value.replace(/\D/g, '').slice(0, 6); m.hidden = true; };
+        s.querySelector('#pv-back').onclick = ui().closeSheet;
+        s.querySelector('#pv-ok').onclick = async function () {
+          if (!/^\d{6}$/.test(a.value)) { m.textContent = errText('bad_pin'); m.hidden = false; return; }
+          this.disabled = true;
+          var j = await EA.askFull('userPins', { pin: a.value });
+          a.value = '';
+          if (!j || !j.ok) { this.disabled = false; m.textContent = errText((j && j.error) || 'busy'); m.hidden = false; return; }
+          pinsList(j.pins || []);
+        };
+      });
+  }
+  function pinsList(rows) {
+    var real = rows.filter(function (r) { return !r.practice; }), prac = rows.filter(function (r) { return r.practice; });
+    var line = function (r) {
+      return '<div class="hrow pv-row"><div><b>' + esc(r.name) + '</b><span class="s">' + esc(roleName(r.role)) + ' · ' + esc((r.estates || []).join(', ')) + ' · ' + esc(r.code) + '</span></div>' +
+        (r.pin ? '<span class="mono pv-pin">' + esc(r.pin) + '</span>' : '<span class="pv-none">' + EA.t('PIN lama', 'old PIN') + '</span>') + '</div>';
+    };
+    var none = rows.filter(function (r) { return !r.pin; }).length;
+    ui().openSheet('<h2 id="sheet-title">' + EA.t('PIN pengguna', 'Users\' PINs') + '</h2>' +
+      real.map(line).join('') +
+      (prac.length ? '<h3>' + EA.t('Pengguna latihan', 'Practice users') + '</h3>' + prac.map(line).join('') : '') +
+      (none ? '<p class="hint">' + EA.t('"PIN lama" dibuat sebelum versi 1.53 dan tidak boleh dilihat. Tekan nama orang itu → PIN BARU sekali, kemudian ia ada di sini.', '"old PIN" was made before version 1.53 and cannot be shown. Tap that person → NEW PIN once; after that it shows here.') + '</p>' : '') +
+      '<p class="warn">' + EA.t('Hantar PIN kepada orang itu sahaja, jangan ke grup. Senarai ini hilang bila ditutup.', 'Send a PIN to that person only, never to a group. This list is gone once closed.') + '</p>' +
+      '<div class="actions"><button class="btn btn-main" type="button" id="pv-close">CLOSE<small>Tutup</small></button></div>',
+      function (s) { s.querySelector('#pv-close').onclick = ui().closeSheet; });
   }
   function confirmOff(u) {
     var why = '';

@@ -848,3 +848,9 @@ div.td-it { cursor: default; }
 .jb-repeat b { display: block; margin-bottom: 4px; }
 .jb-repeat .picks { margin: 6px 0; }
 .pick.lot-round[aria-pressed="true"] { background: var(--wait-soft, #fff1d6); border-color: var(--wait, #c77700); color: #7a4a00; }
+/* v1.53: tap your own name to change your PIN; the Owner's PIN list */
+#who-name { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.us-pins { margin-top: 8px; }
+.pv-row { align-items: center; }
+.pv-pin { font-size: 1.15em; font-weight: 800; letter-spacing: .12em; }
+.pv-none { font-size: .85em; opacity: .65; }

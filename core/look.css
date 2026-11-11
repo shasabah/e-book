@@ -854,3 +854,7 @@ div.td-it { cursor: default; }
 .pv-row { align-items: center; }
 .pv-pin { font-size: 1.15em; font-weight: 800; letter-spacing: .12em; }
 .pv-none { font-size: .85em; opacity: .65; }
+/* v1.54: fruit in the field past or at its deadline; a harvester under 80% of target */
+.list-line.fld-late b { color: var(--bad); }
+.list-line.fld-due b { color: #8a5200; }
+.wk-low .picks { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }

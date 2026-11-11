@@ -105,6 +105,12 @@ var ROOM_TABS = {
   // v1.29 shared list: mills and collecting centres per estate (kind: mill or cc). Added only when a request
   // is approved (MILL_LOG), or by seedMills once. active N = no longer used (never deleted).
   LIST_MILLS: ['name', 'kind', 'location', 'note', 'active'],
+  // v1.55 shared Foundation list (Brief_Jentera.md, 11 Nov 2026): the estates' vehicles and machines, one line per
+  // unit. Keyed by HQ or the Owner; Liew (parts and contractors) only looks. on_chit Y = it shows on the morning
+  // chit's JENTERA card (tractors, backhoe, excavator, lorry); pickups and cars are N. owner_co is the company that
+  // owns the unit, which is not always the company of the estate it works at. status disposed = sold or written off
+  // (never deleted). Loaded once by seedMachines from "List of vehicles & machineries 28.05.2026.xlsx".
+  LIST_MACHINES: ['reg_no', 'kind', 'model', 'year', 'home_estate', 'owner_co', 'on_chit', 'note'],
   // v1.29 one line per step of a new mill request. kind: request, checked, approved, rejected; ref = the request line.
   MILL_LOG: ['ref', 'name', 'mill_kind', 'location', 'kind', 'note'],
   // v1.43 TUTUP HARI (room DCL, Brief "Rancangan & Prestasi" §4–5): one row per day close. kind: close (the staff
@@ -698,7 +704,7 @@ function backlog(estate) {
   var b = calcBacklog(cut, col, dis, Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd'));
   return { ok: true, estate: estate, at: Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'),
            field: b.field, fieldTotal: b.fieldTotal, ramp: b.ramp, checks: b.checks, grading: gradingAlerts_(estate, now), tonnage: tonnageMtd_(estate, now),
-           rain: dmsRain_(estate, now) };
+           rain: dmsRain_(estate, now), machines: machines_(estate, now) };
 }
 
 // v1.48 (Yu Chen, 29 Oct 2026: "staff key rainfall in the DMS daily, but the chit can't link"): the morning chit
@@ -2770,6 +2776,173 @@ function seedProgrammeInto_() {
     var row = { id: 'PG-' + est + '-2026-' + (i + 1), date: now.slice(0, 10), company: ESTATE_COMPANY[est] || '', estate: est, keyed_by: 'SEED', keyed_at: now, phone: '', status: 'active', replaces: '',
       received_at: now, year: '2026', task_code: x[0], block: x[1], month: x[2], round: x[3], ha: ha[x[1]], dose: x[4], note: 'SPLT.SSGT BUDGET COSTING 2026' };
     sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); })); n++;
+  });
+  return n;
+}
+
+// ── v1.55 JENTERA on the morning chit ───────────────────────────────────────────────────────────────────────────
+// Yu Chen, 11 Nov 2026: "no one aware sugut have no backhole and excavator driver". Nothing new is keyed. Whether
+// a machine had somebody on it is already in the day's own records: the morning chit (FH_MUSTER) carries each
+// worker's job, and a machine job keeps its machine inside its lots (v1.36). So the card is worked out, not keyed.
+// ITF is the farm tractor and ETF the lorry (one worker on that job = one unit in use); LFF is the loader who
+// rides the tractor the ITF line already counts, so it is left out or two men would look like two tractors.
+// A workshop day (MH, VMC, MT) names the machine too, but that machine is being worked on, not working: it shows
+// BENGKEL and does not reset the standing clock. Brief_Jentera.md §4.
+var MACH_WORK_BY_TASK = { ITF: 'FARMTRACTOR', ETF: 'LORRY' };
+var MACH_SHOP_TASKS = { MH: 1, VMC: 1, MT: 1 };
+var MACH_KIND_ID = { traktor: 'FARMTRACTOR', backhoe: 'BACKHOE', excavator: 'EXCAVATOR', lori: 'LORRY', genset: 'GENSET' };
+var MACH_KIND_BM = { FARMTRACTOR: 'Traktor ladang', BACKHOE: 'Backhoe', EXCAVATOR: 'Excavator', LORRY: 'Lori', GENSET: 'Genset' };
+var MACH_CHAIN = { FARMTRACTOR: 1, LORRY: 1 };      // the FFB chain: fruit stops moving the day one of these stands
+
+function machDay_(v) { return v instanceof Date ? Utilities.formatDate(v, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd') : String(v || '').slice(0, 10); }
+
+// Working days from one day to another, Sundays left out: a machine standing on a Sunday is not a gap.
+function machDaysSince_(from, to) {
+  if (!from || from >= to) return 0;
+  var d = new Date(from + 'T00:00:00'), end = new Date(to + 'T00:00:00'), n = 0, guard = 0;
+  while (d < end && guard++ < 400) { d.setDate(d.getDate() + 1); if (d.getDay() !== 0) n++; }
+  return n;
+}
+
+// The machine ids a record names: its task's own machine, plus any machine id sitting in its lots.
+function machOfRow_(r) {
+  var out = [], t = String(r.task_code || '').toUpperCase();
+  if (MACH_WORK_BY_TASK[t]) out.push(MACH_WORK_BY_TASK[t]);
+  var lots = r.lots === undefined || r.lots === '' ? r.lot : r.lots;
+  String(lots === undefined || lots === null ? '' : lots).split(/[\s,]+/).forEach(function (x) {
+    var k = String(x || '').toUpperCase();
+    if (MACH_KIND_BM[k] && out.indexOf(k) < 0) out.push(k);
+  });
+  return out;
+}
+
+// One line per kind of machine at this estate: who is on it today, and how many working days since anyone was.
+// A kind with more than one unit is reported at kind level ("2 unit · 1 ada pemandu"), because ITF and ETF do not
+// yet say which unit was used; a kind with exactly one unit is named by its reg no.
+function machines_(estate, now) {
+  var all = null;
+  try { all = readRows_('LIST_MACHINES', null).standing; } catch (e) { return null; }
+  if (!all || !all.length) return null;                 // list not loaded yet: no card, rather than a wrong one
+  var today = Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd');
+  var units = {}, order = [];
+  all.forEach(function (r) {
+    if (String(r.on_chit).toUpperCase() === 'N') return;
+    if (String(r.status) === 'disposed') return;
+    var id = MACH_KIND_ID[String(r.kind || '').toLowerCase()];
+    if (!id || String(r.home_estate || r.estate || '') !== estate) return;
+    if (!units[id]) { units[id] = []; order.push(id); }
+    units[id].push({ reg: String(r.reg_no || ''), model: String(r.model || ''), year: String(r.year || ''), co: String(r.owner_co || '') });
+  });
+  var lastDay = {}, onToday = {}, shopToday = {};
+  ['FH_MUSTER', 'FH_JOBDAY', 'FH_WORK'].forEach(function (tab) {
+    var rs = null;
+    try { rs = standingRows_(tab, estate); } catch (e) { return; }
+    rs.forEach(function (r) {
+      if (!live_(r)) return;
+      var d = machDay_(r.date), shop = !!MACH_SHOP_TASKS[String(r.task_code || '').toUpperCase()];
+      if (!d || d > today) return;
+      machOfRow_(r).forEach(function (id) {
+        if (shop) { if (d === today) shopToday[id] = 1; return; }
+        if (!lastDay[id] || d > lastDay[id]) lastDay[id] = d;
+        if (d !== today) return;
+        if (!onToday[id]) onToday[id] = {};
+        // ITF and ETF: one worker on that job = one unit. A machine named in the lots can only have one operator.
+        onToday[id][MACH_WORK_BY_TASK[String(r.task_code || '').toUpperCase()] === id ? 'w:' + (r.worker_id || r.id) : 'm:' + id] = 1;
+      });
+    });
+  });
+  // A kind worked here but we own none of it: it came from another estate (Sugut uses Paitan's lorry).
+  Object.keys(onToday).concat(Object.keys(shopToday)).forEach(function (id) { if (!units[id]) { units[id] = []; order.push(id); } });
+  Object.keys(lastDay).forEach(function (id) { if (!units[id] && MACH_CHAIN[id]) { units[id] = []; order.push(id); } });
+  var lines = [];
+  order.forEach(function (id) {
+    var u = units[id] || [], have = u.length, onN = Object.keys(onToday[id] || {}).length, state;
+    if (have && onN > have) onN = have;
+    if (shopToday[id] && !onN) state = 'bengkel';
+    else if (onN > 0 && (have <= 1 || onN >= have)) state = 'jalan';
+    else if (onN > 0) state = 'sebahagian';
+    else state = 'tiada';
+    lines.push({ id: id, kind: MACH_KIND_BM[id] || id, units: have, onToday: onN, state: state,
+      days: state === 'jalan' ? 0 : machDaysSince_(lastDay[id] || '', today), since: lastDay[id] || '',
+      reg: have === 1 ? u[0].reg : '', model: have === 1 ? u[0].model : '',
+      regs: u.map(function (x) { return x.reg; }), fromOther: have === 0, chain: !!MACH_CHAIN[id] });
+  });
+  lines.sort(function (a, b) { return (b.chain ? 1 : 0) - (a.chain ? 1 : 0) || (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0); });
+  return { at: today, lines: lines };
+}
+
+// Run once from the editor. The 44 units of "List of vehicles & machineries 28.05.2026.xlsx" (dated 28.05.2026).
+// Age is not loaded: the file counts it to 2026 and goes stale, so only the year is kept and the app works out the
+// age (Rule Book: no formulas in the sheet). A unit already in the list is left alone, so this is safe to re-run.
+var MACHINES_TEXT_ = [
+  'SMD6293|pacuan|Toyota Fortuner 2.8 VRZ|2021|SDK|SPLT|N',
+  'SS6293P|pacuan|Toyota Fortuner 2.5G AT|2011|SDK|SPLT|N',
+  'SML6293|pacuan|Toyota Hilux Double Cab 2.8G AT|2023|SDK|PJSB|N',
+  'SMV6293|pacuan|Toyota Hilux Double Cab 2.4G AT|2026|SDK|PJSB|N',
+  'SU6293H|pacuan|Toyota Hilux Double Cab 2.4E AT|2022|MELU|SPLT|N',
+  'SS2797L|lori|Nissan MK210 6 TON|2008|MELU|SPLT|Y',
+  'SS6586X|lori|Hino 500 GH1JMPA 8 TON|2016|MELU|SPLT|Y',
+  'SD4721M|backhoe|JCB Backhoe 3DX|2016|MELU|SPLT|Y',
+  'SS5209W|traktor|New Holland TD5.90|2014|MELU|SPLT|Y',
+  'SAA7001V|traktor|New Holland TS90|2008|MELU|SPLT|Y',
+  'SMU4742|traktor|Kubota M9540DT|2025|MELU|SPLT|Y',
+  'SAB9398E|excavator|Hitachi ZX120|2010|MELU|SPLT|Y',
+  'SS6293V|pacuan|Toyota Hilux Double Cab 2.5G AT|2014|SSGT|SPLT|N',
+  'SMQ6237|traktor|Kinta SB100|2025|SSGT|SPLT|Y',
+  'SD4867U|traktor|Kinta SB90 904|2022|SSGT|SPLT|Y',
+  'SD3894R|backhoe|JCB Backhoe 3DX|2021|SSGT|SPLT|Y',
+  'SAA9052R|excavator|Hitachi EX120|2003|SSGT|SPLT|Y',
+  'SK6293C|pacuan|Toyota Hilux Double Cab 2.4E AT|2022|PTAN|PJSB|N',
+  'SJQ6259|lori|Howo Sinotruck TX371|2026|PTAN|SPLT|Y',
+  'SS7825X|traktor|New Holland TD5.90|2016|PTAN|PJSB|Y',
+  'SAB5190V|traktor|New Holland TS6110|2013|PTAN|SPLT|Y',
+  'SJN8096|traktor|Kubota M9540DT|2025|PTAN|SPLT|Y',
+  'SAB946D|traktor|New Holland TS6000|2010|TKRS|PJSB|Y',
+  'SD7232M|backhoe|JCB Backhoe 3DX|2017|PTAN|SPLT|Y',
+  'SAB2582K|excavator|Hitachi UH045-7|2008|PTAN|SPLT|Y',
+  'SJQ6947|excavator|Kubota U50-5S mini|2026|PTAN|SPLT|Y',
+  'SMP6293|pacuan|Toyota Hilux Double Cab 2.4E AT|2024|KWNN|PJSB|N',
+  'SAC6293C|pacuan|Toyota Hilux Double Cab 2.4G AT|2016|KWNN|PJSB|N',
+  'BJS6293|pacuan|Toyota Hilux Double Cab 2.5G AT|2007|KWNN|PJSB|N',
+  'SSA4785A|lori|Hino 500 10 TON|2018|KWNN|PJSB|Y',
+  'SMB9857|lori|Hino 500 10 TON|2020|KWNN|PJSB|Y',
+  'SMG5058|lori|Nissan RJ 10 TON|2022|KWNN|PJSB|Y',
+  'SD7231M|backhoe|JCB Backhoe 3DX No.2|2017|KWNN|PJSB|Y',
+  'SD9738L|backhoe|JCB Backhoe 3DX No.1|2015|KWNN|PJSB|Y',
+  'SAB4299F|excavator|Hitachi ZX120|2007|KWNN|PJSB|Y',
+  'SAB2179T|excavator|Hitachi UH045-7|2010|KWNN|PJSB|Y',
+  'SM7652|excavator|Hitachi Z48U-5A|2018|KWNN|PJSB|Y',
+  'SS5289W|traktor|New Holland TD5.90 No.1|2015|KWNN|PJSB|Y',
+  'SS6423X|traktor|New Holland TD5.90 No.2|2015|KWNN|PJSB|Y',
+  'SD3807M|traktor|New Holland TD5.90 No.3|2016|KWNN|PJSB|Y',
+  'SS714T|traktor|New Holland TS6000 No.4|2012|KWNN|PJSB|Y',
+  'SAB5320G|traktor|New Holland TS6000 No.3|2010|KWNN|PJSB|Y',
+  'ST5476X|traktor|New Holland TS6110|2016|KWNN|PJSB|Y',
+  'SYW6820|traktor|Kubota M9540DT|2022|KWNN|PJSB|Y'
+].join('\n');
+
+function seedMachines() {
+  var was = PRACTICE_, n = 0;
+  try {
+    [false, true].forEach(function (pr) { PRACTICE_ = pr; BOOK_ = null; ROWS_MEMO_ = null; n += machinesInto_(MACHINES_TEXT_); });
+  } finally { PRACTICE_ = was; BOOK_ = null; ROWS_MEMO_ = null; }
+  Logger.log('seedMachines: ' + n + ' added (live and practice sheets)');
+  return n;
+}
+function machinesInto_(text) {
+  var have = {}, n = 0, now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
+  readRows_('LIST_MACHINES', null).all.forEach(function (r) { have[String(r.reg_no).toUpperCase()] = 1; });
+  var sh = roomTab_(book_(), 'LIST_MACHINES'), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  String(text || '').split(/\n/).forEach(function (line) {
+    var p = line.split('|');
+    if (p.length < 7) return;
+    var reg = p[0].trim().toUpperCase();
+    if (!reg || have[reg]) return;
+    var est = p[4].trim();
+    var row = { id: 'FLT-' + est + '-' + reg, date: '2026-05-28', company: ESTATE_COMPANY[est] || '', estate: est, keyed_by: 'SEED', keyed_at: now, phone: '',
+      status: 'active', replaces: '', received_at: now, reg_no: reg, kind: p[1].trim(), model: p[2].trim(), year: p[3].trim(),
+      home_estate: est, owner_co: p[5].trim(), on_chit: p[6].trim().toUpperCase(), note: 'Senarai kenderaan & jentera 28.05.2026' };
+    sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); })); n++; have[reg] = 1;
   });
   return n;
 }

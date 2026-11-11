@@ -78,7 +78,8 @@ check('the clerk expects a ticket', (x => x && x.p === 4 && /Lori dijangka/.test
 check('1 day: not yet stuck for the Owner', !line(own, 'RO'));
 // cut 2 days ago, not carried to the ramp
 addRow('FH_WORK', { date: ago(2), task_code: 'HA', block: '04', lot: '4-2', worker_id: 'W4', bunches: 80 });
-check('cut but not carried to the ramp: the staff is asked to key "Kutip ke ramp"', (x => x && /belum dikutip ke ramp/.test(x.bm) && /80/.test(x.bm))(line(f, 'FC')));
+// v1.54: harvested 2 days ago is past the day-after-harvest deadline, so it is the red OVERDUE line
+check('harvested 2 days ago, not carried to the ramp: the staff sees it OVERDUE, to carry now', (x => x && x.p === 1 && /LEBIH TEMPOH: 80 tandan/.test(x.bm) && /#field-harvest\/collect/.test(x.go))(line(f, 'FO')));
 addRow('FH_COLLECT', { date: ago(2), block: '04', lot: '4-2', bunches: 80, cleared: 'Y' });
 check('carried: the "kutip" line goes', !line(f, 'FC'));
 check('fruit 2 days on the ramp: the Owner sees it stuck', (x => x && x.p === 1 && /2 hari di ramp/.test(x.bm))(line(own, 'RO')));

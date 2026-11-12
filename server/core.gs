@@ -318,6 +318,8 @@ function doWrite_(user, req) {
   if (req.action === 'todoDirect') return reply(todoDirect_(user, req));
   if (req.action === 'chitAsk') return reply(chitAsk_(user, req));
   if (req.action === 'lateAnswer') return reply(lateAnswer_(user, req));
+  if (req.action === 'mgrAnswer') return reply(mgrAnswer_(user, req));
+  if (req.action === 'helpDone') return reply(helpDone_(user, req));
   return reply({ ok: false, error: 'unknown_action' });
 }
 
@@ -1534,7 +1536,7 @@ function adminSummary_(user) {
     c.noTicket = noTicket; c.corrections = corr; c.late = late; c.chitDays = chitDays;
     c.below = below; c.belowDate = lastWork ? lastWork.date : '';
     var b = backlog(e); c.field = b.fieldTotal || 0; c.ramp = (b.ramp && b.ramp.bunches) || 0;
-    var al = readRows_('FH_ALERT', e).standing.filter(function (r) { return String(r.date).slice(0, 7) === month && r.kind !== 'absent3' && r.kind !== 'fixask' && r.kind !== 'fixdone' && r.kind !== 'jobask' && r.kind !== 'sunask' && r.kind !== 'answer'; });
+    var al = readRows_('FH_ALERT', e).standing.filter(function (r) { return String(r.date).slice(0, 7) === month && r.kind !== 'absent3' && r.kind !== 'fixask' && r.kind !== 'fixdone' && r.kind !== 'jobask' && r.kind !== 'sunask' && r.kind !== 'answer' && r.kind !== 'manswer' && r.kind !== 'mhelp' && r.kind !== 'mhelpdone'; });
     c.alerts = al.length; c.alertsOpen = al.filter(function (r) { return !String(r.staff_note || '').trim(); }).length;
     return c;
   });
@@ -2050,6 +2052,7 @@ function ticketDue_(d) {
 }
 var LORRY_MT = 8;             // v1.33: a full Sugut lorry (Yu Chen, 22 Oct 2026)        // lists/tasks.js: a lot is ready again after 10 days, late after 15
 var EXPLAIN_KINDS = { grading: 1, ramp: 1, field: 1, jobask: 1, sunask: 1 };   // v1.41 sunask: Sunday work outside crop / manuring / CPS, approved by SDK (HQ)   // v1.36 jobask: other work outside the main jobs (LULUS / TOLAK)
+function dayAdd_(d, n) { var p = String(d).slice(0, 10).split('-'), x = new Date(Date.UTC(Number(p[0]), Number(p[1]) - 1, Number(p[2]) + n)); return x.toISOString().slice(0, 10); }
 function dayDiff_(a, b) { return Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 864e5); }
 function shortD_(iso) { return String(iso || '').slice(8, 10) + '/' + String(iso || '').slice(5, 7); }
 // v1.40 E · Rancang & sahkan: the leave-day plans of an estate (standing FH_PLAN rows by plan), each with
@@ -2149,7 +2152,7 @@ function todo_(user, req) {
     var full = mt >= LORRY_MT, old = rp.bunches && rp.since && rp.since < today, days = rp.since ? dayDiff_(rp.since, today) : 0;
     var blk = (rp.blocks || []).map(function (x) { return 'Blk ' + x.block + ' ' + x.bunches; }).join(', ');
     if (rp.bunches && (full || old)) {
-      if (r === 'Staff') add({ id: 'RP:' + rp.since, p: 1, ic: 'LR', bm: full ? 'Ramp penuh' + mtTxt + ' · panggil lori' : 'Buah di ramp sejak ' + shortD_(rp.since) + ' · panggil lori sekarang',
+      if (r === 'Staff') add({ id: 'RP:' + rp.since, p: 1, ls: old ? dayAdd_(rp.since, 1) : today, ic: 'LR', bm: full ? 'Ramp penuh' + mtTxt + ' · panggil lori' : 'Buah di ramp sejak ' + shortD_(rp.since) + ' · panggil lori sekarang',
         en: full ? 'Ramp full · call the lorry' : 'Fruit on the ramp since ' + shortD_(rp.since) + ' · call the lorry now',
         sub: rp.bunches + ' tandan' + mtTxt + (blk ? ' (' + blk + ')' : '') + (full ? '' : ' · kurang ' + LORRY_MT + ' tan: tanya Encik Samsir'), go: '#field-harvest/collect' });
       if (r === 'Manager') add({ id: 'RP:' + rp.since, p: full ? 2 : 1, ic: 'LR', bm: full ? 'Ramp penuh' + mtTxt + ' · Staf panggil lori' : 'Putuskan: hantar lori separuh penuh?',
@@ -2172,7 +2175,7 @@ function todo_(user, req) {
         return Object.keys(o).sort().map(function (k) { return 'Blk ' + k + ' ' + o[k]; }).join(', '); };
       var fdue = fld.filter(function (x) { return x.since === yday; }), flate = fld.filter(function (x) { return x.since < yday; });
       var f1 = flate.map(function (x) { return x.since; }).sort()[0], fdays = f1 ? dayDiff_(f1, today) : 0;
-      if (r === 'Staff' && flate.length) add({ id: 'FO:' + f1, p: 1, ic: '!', bm: 'LEBIH TEMPOH: ' + fsum(flate) + ' tandan' + ftan(fsum(flate)) + ' masih di ladang', en: 'OVERDUE: ' + fsum(flate) + ' bunches' + ftan(fsum(flate)) + ' still in the field',
+      if (r === 'Staff' && flate.length) add({ id: 'FO:' + f1, p: 1, ls: dayAdd_(f1, 2), ic: '!', bm: 'LEBIH TEMPOH: ' + fsum(flate) + ' tandan' + ftan(fsum(flate)) + ' masih di ladang', en: 'OVERDUE: ' + fsum(flate) + ' bunches' + ftan(fsum(flate)) + ' still in the field',
         sub: 'Dituai ' + shortD_(f1) + ' · ' + fdays + ' hari · ' + fblk(flate) + ' · angkat sekarang · Encik Samsir sudah nampak', go: '#field-harvest/collect' });
       if (r === 'Staff' && fdue.length) add({ id: 'FC:' + yday, p: 1, ic: 'LR', bm: fsum(fdue) + ' tandan' + ftan(fsum(fdue)) + ' dituai semalam · mesti ke ramp hari ini', en: fsum(fdue) + ' bunches' + ftan(fsum(fdue)) + ' harvested yesterday · must reach the ramp today',
         sub: fblk(fdue) + ' · traktor angkat dahulu · tekan di sini → Semua ke ramp', go: '#field-harvest/collect' });
@@ -2190,7 +2193,7 @@ function todo_(user, req) {
     fixes.forEach(function (x) {
       if (x.done || String(x.ask.date) < daysAgo_(FIX_DAYS)) return;
       var by = un[x.ask.keyed_by] || 'Kerani';
-      add({ id: 'FA:' + x.ask.id, p: 1, ic: '!', bm: by + ' minta betulkan chit ' + shortD_(x.ask.date), en: by + ' asks you to fix the chit of ' + shortD_(x.ask.date),
+      add({ id: 'FA:' + x.ask.id, p: 1, ls: dayAdd_(String(x.ask.keyed_at || x.ask.date).slice(0, 10), 1), ic: '!', bm: by + ' minta betulkan chit ' + shortD_(x.ask.date), en: by + ' asks you to fix the chit of ' + shortD_(x.ask.date),
         sub: '"' + x.ask.detail + '"', go: 'fix', fix: { chit: String(x.ask.chit), ref: x.ask.id, note: String(x.ask.detail), by: by, date: String(x.ask.date) } });
     });
     var bl = rampOld();
@@ -2277,7 +2280,7 @@ function todo_(user, req) {
       if (d >= today) return;
       var due = ticketDue_(d), late = today > due || (today === due && hm >= TICKET_BY), what = 'Lori ' + shortD_(d) + ' · ' + t.mill + ' · ' + t.bunches + ' tandan';
       if (r === 'Clerk') add(late
-        ? { id: 'DN:' + t.trip, p: 1, ic: '!', bm: 'LEWAT: tiket DN ' + (t.dn || '—') + ' belum dikunci', en: 'LATE: the ticket for DN ' + (t.dn || '—') + ' is not keyed', sub: what + ' · had ' + TICKET_BY + ' pagi ' + shortD_(due) + ' · tiada gambar pemandu? beritahu Encik Samsir', go: '#field-harvest/ticket' }
+        ? { id: 'DN:' + t.trip, p: 1, ls: due, ic: '!', bm: 'LEWAT: tiket DN ' + (t.dn || '—') + ' belum dikunci', en: 'LATE: the ticket for DN ' + (t.dn || '—') + ' is not keyed', sub: what + ' · had ' + TICKET_BY + ' pagi ' + shortD_(due) + ' · tiada gambar pemandu? beritahu Encik Samsir', go: '#field-harvest/ticket' }
         : { id: 'DN:' + t.trip, p: 2, ic: 'DN', bm: 'DN ' + (t.dn || '—') + ': kunci tiket sebelum ' + TICKET_BY + ' pagi' + (due > today ? ' ' + shortD_(due) : ''), en: 'DN ' + (t.dn || '—') + ': key the ticket before ' + TICKET_BY + ' am', sub: what, go: '#field-harvest/ticket' });
       if (!late) return;
       if (r === 'HQ') add({ id: 'DN:' + t.trip, p: 2, ic: 'DN', bm: 'Tiket DN ' + (t.dn || '—') + ' lewat · kunci jika kerani bercuti', en: 'The ticket for DN ' + (t.dn || '—') + ' is late · key it if the clerk is on leave', sub: what + ' · had ' + TICKET_BY + ' pagi ' + shortD_(due), go: '#field-harvest/ticket' });
@@ -2356,7 +2359,7 @@ function todo_(user, req) {
     var lastChit = dcAll.map(function (x) { return x.date; }).sort().pop() || '';
     dcl.forEach(function (x) {
       var age = dayDiff_(x.date, today), reop = x.state === 'reopened' || x.state === 'fixing';
-      if (r === 'Staff') add({ id: 'TH:' + x.date, p: 1, ic: 'TH', bm: (reop ? 'Hari ' + shortD_(x.date) + ' dibuka semula · tutup semula' : 'Hari ' + shortD_(x.date) + ' belum ditutup') + ' · TUTUP HARI',
+      if (r === 'Staff') add({ id: 'TH:' + x.date, p: 1, ls: dayAdd_(x.date, 1), ic: 'TH', bm: (reop ? 'Hari ' + shortD_(x.date) + ' dibuka semula · tutup semula' : 'Hari ' + shortD_(x.date) + ' belum ditutup') + ' · TUTUP HARI',
         en: reop ? 'Day ' + shortD_(x.date) + ' reopened · close it again' : 'Day ' + shortD_(x.date) + ' not closed', sub: (age === 1 ? 'Semalam' : age + ' hari lalu') + ' · semak kerja, ramp, lori, hujan, lalu tekan TUTUP HARI', go: '#field-harvest/close' });
       if (r === 'Manager' && (lastChit > x.date || age >= 1)) add({ id: 'TH:' + x.date, p: age >= 2 ? 1 : 2, ic: 'TH', bm: 'Hari ' + shortD_(x.date) + ' belum ditutup oleh Staf', en: 'Day ' + shortD_(x.date) + ' not closed by the staff',
         sub: (reop ? 'Dibuka semula untuk pembetulan · ' : '') + age + ' hari · chit berikutnya sudah dibuat' + (age >= 2 ? ' · Pemilik diberitahu' : ''), go: '' });
@@ -2378,18 +2381,38 @@ function todo_(user, req) {
       i.st = !a ? 'new' : String(a.due) > nowTxt ? 'doing' : 'missed';
       if (a) i.ans = { why: String(a.staff_note), due: String(a.due), at: String(a.keyed_at), n: ansBy[i.id].length };
     });
-    // The Pengurus: a promise missed, or the clerk's "the driver has not sent the photographs", is his by name.
-    if (r === 'Manager' && !req._sub) {
-      ['Staff', 'Clerk'].forEach(function (role) {
-        var sub = [];
-        try { sub = todo_({ user_code: 'ANS-' + role, role: role, estates: [est] }, { estate: est, _sub: 1 }).items || []; } catch (e) {}
-        sub.forEach(function (i) {
-          if (!i.ans) return;
-          var photo = /gambar/i.test(i.ans.why), missed = i.st === 'missed' || (ansBy[i.id] || []).some(function (a) { return String(a.due) <= nowTxt; });
-          if (!missed && !photo) return;
-          add({ id: 'MJ:' + i.id, p: 1, ic: '!', bm: (missed ? 'Janji terlepas: ' : 'Perlu Pengurus: ') + String(i.bm).replace(/ · TUTUP HARI$/, ''), en: (missed ? 'Promise missed: ' : 'Needs the manager: ') + (i.en || i.bm),
-            sub: (role === 'Staff' ? 'Staf' : 'Kerani') + ' jawab: ' + i.ans.why + ' · janji ' + dueTxt_(i.ans.due), go: '' });
-        });
+    // The Pengurus. Before a line is his: a promise missed, or the clerk's "the driver has not sent the
+    // photographs", shows as MJ (1.57). v1.58 (Brief_Amaran 0.9, Yu Chen 12 Nov "ok"): from 5:00 petang the line
+    // itself is his (MG) until the work is done, answered only with his three buttons; his older line for the
+    // same thing (RP, TH, DN, FM, MJ) is folded into it.
+    if ((r === 'Manager' || r === 'Owner' || r === 'HQ') && !req._sub) {
+      var LL = lateLines_(est, alerts);
+      if (r === 'Manager') LL.items.forEach(function (l) {
+        var staffTxt = (l.role === 'Staff' ? 'Staf' : 'Kerani') + (l.st === 'doing' ? ' jawab: ' + l.ans : l.st === 'missed' ? ' · janji terlepas: ' + l.ans : l.kind === 'CH' ? '' : ' belum jawab');
+        if (l.mg) {
+          var dup = { }; dup[l.id] = 1; dup['MJ:' + l.id] = 1; if (l.kind === 'FO') dup['FM:' + l.id.slice(3)] = 1;
+          items = items.filter(function (i) { return !dup[i.id]; });
+          var quiet = l.mst === 'doing' || l.mst === 'help';
+          items.push({ id: 'MG:' + l.id, p: quiet ? 3 : 1, ic: quiet ? 'PG' : '!', bm: (quiet ? 'Dalam tindakan anda: ' : 'Kini tanggungjawab anda: ') + l.bm, en: (quiet ? 'In your hands: ' : 'Now yours: ') + (l.en || l.bm),
+            sub: [l.who + ' · ' + staffTxt, l.mans ? 'Anda: ' + l.mans : ''].filter(String).join(' · '), go: 'mgr', ref: l.id, mst: l.mst, need: MGR_NEED, days: MGR_DAYS, fix: l.fix });
+        } else if (l.st === 'missed' || (l.ans && /gambar/i.test(l.ans)) || l.missedBefore) {
+          add({ id: 'MJ:' + l.id, p: 1, ic: '!', bm: (l.st === 'missed' || l.missedBefore ? 'Janji terlepas: ' : 'Perlu Pengurus: ') + l.bm, en: (l.st === 'missed' || l.missedBefore ? 'Promise missed: ' : 'Needs the manager: ') + (l.en || l.bm),
+            sub: (l.role === 'Staff' ? 'Staf' : 'Kerani') + ' jawab: ' + l.ans, go: '' });
+        }
+      });
+      // The Owner: the next morning with nothing from the Pengurus, his own date missed, or help a day old at HQ.
+      if (r === 'Owner') LL.items.forEach(function (l) {
+        if (!l.ow) return;
+        var old = { TH: 'TO:', RP: 'RO:', FO: 'FW:', DN: 'DN:' }[l.kind], oid = old ? old + l.id.slice(3) : '';
+        items = items.filter(function (i) { return i.id !== oid; });
+        items.push({ id: 'OW:' + l.id, p: 1, ic: '!', bm: 'Tersangkut: ' + l.bm, en: 'Stuck: ' + (l.en || l.bm),
+          sub: l.who + (l.ans ? ': ' + l.ans : l.kind === 'CH' ? '' : ': belum jawab') + ' · ' + LL.manager + ': ' + (l.mans || 'belum jawab'), go: '' });
+      });
+      // HQ (and the Owner, who can do every step): the Pengurus's help requests still waiting, while the line is open.
+      if (r === 'HQ' || r === 'Owner') LL.items.forEach(function (l) {
+        if (l.mst !== 'help') return;
+        items.push({ id: 'HP:' + l.helpId, p: 1, ic: 'IP', bm: 'Pengurus minta bantuan: ' + l.helpNeed, en: 'The manager asks for help: ' + l.helpNeed,
+          sub: l.bm + ' · "' + l.helpNote + '" · ' + LL.manager + ' ' + shortD_(l.helpAt) + (/^Alat ganti/.test(l.helpNeed) ? ' · untuk Liew' : ''), go: 'help', ref: l.helpId });
       });
     }
   } catch (e) {}
@@ -2461,50 +2484,143 @@ var LATE_FIX = {
   FA: 'Buka E-Book → Perlu tindakan → betulkan chit itu',
   DN: 'Buka E-Book → Tiket → kunci tiket. Tiada gambar pemandu? Beritahu Pengurus'
 };
-function late_(user, req) {
-  if (user.role !== 'HQ' && user.role !== 'Owner') return { ok: false, error: 'not_allowed' };
-  var live = (switches_().live || {})['field-harvest'] || [], today = todayKL_();
-  var hm = String(Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'HH:mm')).slice(-5);
+// The late lines of one estate, each with its owner, his answer, and where it stands with the Pengurus.
+// One place, so HQ's list, the Pengurus's lines and the Owner's can never disagree.
+var MGR_DAYS = 3;              // the Pengurus may promise at most 3 days ahead (the staff: 1 day)
+var MGR_NEED = [['Lori / pengangkutan', 'Lorry / transport'], ['Alat ganti / jentera', 'Spare part / machine'], ['Pekerja', 'Workers'], ['Lain-lain', 'Other']];
+function lateLines_(est, alerts) {
+  var today = todayKL_(), now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), hm = now.slice(11, 16);
   var dow = new Date(today + 'T00:00:00Z').getUTCDay(), users = [];
   try { users = readUsers_().list.filter(function (u) { return u.status === 'active' && !isTestCode_(u.user_code) && !isPracticeCode_(u.user_code); }); } catch (e) {}
-  function who(role, est) {
+  function who(role) {
     var n = users.filter(function (u) { return String(u.role) === role && estatesNow_(u).indexOf(est) >= 0; }).map(function (u) { return String(u.name).replace(/^'/, ''); });
     return n.length ? n.join(', ') : { Staff: 'Staf bertugas', Clerk: 'Kerani', Manager: 'Pengurus' }[role];
   }
-  var estates = [];
+  var items = [], staff = who('Staff'), clerk = who('Clerk'), mgr = who('Manager');
+  alerts = alerts || standingRows_('FH_ALERT', est);
+  var ansBy = answers_(alerts), mBy = {}, doneHelp = {};
+  alerts.forEach(function (a) {
+    if ((a.kind === 'manswer' || a.kind === 'mhelp') && a.ref) (mBy[a.ref] = mBy[a.ref] || []).push(a);
+    if (a.kind === 'mhelpdone' && a.ref) doneHelp[a.ref] = a;
+  });
+  Object.keys(mBy).forEach(function (k) { mBy[k].sort(function (x, y) { return String(x.received_at || x.keyed_at) < String(y.received_at || y.keyed_at) ? 1 : -1; }); });
+  // 1.56.1: say a thing once. The line drops the button name and "panggil lori" (Cara selesai says it); the
+  // day-close detail keeps only how old it is; a full ramp says how many full lorries it holds.
+  function push(kind, role, i) {
+    var bm = String(i.bm || ''), sub = String(i.sub || ''), fix = LATE_FIX[kind] || '';
+    if (kind === 'TH') { bm = bm.replace(/ · TUTUP HARI$/, ''); sub = sub.split(' · ')[0]; }
+    if (kind === 'RP') {
+      bm = bm.replace(/ · panggil lori( sekarang)?$/, '');
+      var mt = /~?([\d.]+) tan/.exec(bm + ' ' + sub), n = mt ? Math.floor(Number(mt[1]) / 8) : 0;
+      if (n >= 1) fix = 'Panggil lori hari ini: cukup untuk ' + n + ' lori penuh. Lori sudah pergi? Buka E-Book → Ramp → kunci DN';
+    }
+    var l = { id: i.id, kind: kind, role: role, who: role === 'Staff' ? staff : clerk, bm: bm, en: i.en || i.bm, sub: sub, fix: fix,
+      st: kind === 'CH' ? '' : (i.st || 'new'), ans: i.ans ? i.ans.why + ' · janji ' + dueTxt_(i.ans.due) : '',
+      missedBefore: (ansBy[i.id] || []).some(function (a) { return String(a.due) <= now; }) };
+    // v1.58 From 5:00 petang of the day it became late, the line is the Pengurus's. On a Sunday only the fruit
+    // lines pass to him (fruit spoils); the others wait for Monday.
+    var ls = String(i.ls || today);
+    if (kind !== 'FO' && kind !== 'RP' && new Date(ls + 'T00:00:00Z').getUTCDay() === 0) ls = dayAdd_(ls, 1);
+    l.mgAt = ls + ' ' + MGR_FROM; l.mg = now >= l.mgAt;
+    var m = (mBy[i.id] || [])[0];
+    l.mst = ''; l.mans = '';
+    if (l.mg) {
+      if (!m) l.mst = 'new';
+      else if (m.kind === 'manswer') { l.mst = String(m.due) > now ? 'doing' : 'missed'; l.mans = (l.mst === 'missed' ? 'janji terlepas · ' : '') + 'akan selesai ' + shortD_(String(m.due).slice(0, 10)) + ' · ' + m.staff_note; }
+      else {
+        var hd = doneHelp[m.id]; l.helpId = m.id; l.helpNeed = String(m.detail); l.helpNote = String(m.staff_note); l.helpAt = String(m.keyed_at).slice(0, 10);
+        l.mst = hd ? 'helped' : 'help';
+        l.mans = 'minta bantuan Ibu Pejabat (' + l.helpNeed + ')' + (hd ? ' · Ibu Pejabat: ' + hd.staff_note : ' · menunggu Ibu Pejabat');
+      }
+      var nextDay = today > l.mgAt.slice(0, 10);
+      l.ow = l.mst === 'missed' || ((l.mst === 'new' || l.mst === 'helped') && nextDay) || (l.mst === 'help' && l.helpAt < today);
+    }
+    items.push(l);
+  }
+  var fake = function (role) { return { user_code: 'LATE-' + role, role: role, estates: [est] }; };
+  var st = [], ck = [];
+  try { st = todo_(fake('Staff'), { estate: est, _sub: 1 }).items || []; } catch (e) {}
+  try { ck = todo_(fake('Clerk'), { estate: est, _sub: 1 }).items || []; } catch (e) {}
+  // today's chit: a working day (Monday to Saturday), past 6:30, and no chit keyed for today
+  var hasChit = false, days = [];
+  try { days = dayCloseRead_(est).days || []; hasChit = days.some(function (x) { return x.date === today; }); } catch (e) {}
+  var chit = dow === 0 ? 'rest' : hasChit ? 'ok' : hm < CHIT_BY ? 'wait' : 'no';
+  if (chit === 'no') push('CH', 'Staff', { id: 'CH:' + today, ls: today, bm: 'Chit muster hari ini belum dibuat', en: 'Today\'s muster chit is not made', sub: 'Had ' + CHIT_BY + ' pagi · sekarang ' + hm });
+  st.forEach(function (i) { var m = /^(TH|FO|RP|FA):/.exec(String(i.id)); if (m && i.p === 1) push(m[1], 'Staff', i); });
+  ck.forEach(function (i) { if (/^DN:/.test(String(i.id)) && i.p === 1) push('DN', 'Clerk', i); });
+  return { items: items, chit: chit, staff: staff, clerk: clerk, manager: mgr };
+}
+function late_(user, req) {
+  if (user.role !== 'HQ' && user.role !== 'Owner') return { ok: false, error: 'not_allowed' };
+  var live = (switches_().live || {})['field-harvest'] || [], estates = [];
   (user.estates || []).forEach(function (est) {
     if (live.indexOf(est) < 0) return;
-    var items = [], staff = who('Staff', est), clerk = who('Clerk', est), mgr = who('Manager', est);
-    // 1.56.1 (Yu Chen, 12 Nov, from the first real list): say a thing once. The line drops the button name and
-    // "panggil lori" (Cara selesai says it); the day-close detail keeps only how old it is; a full ramp says how
-    // many full lorries it holds instead of the under-8-tan advice.
-    function push(kind, role, i) {
-      var bm = String(i.bm || ''), sub = String(i.sub || ''), fix = LATE_FIX[kind] || '';
-      if (kind === 'TH') { bm = bm.replace(/ · TUTUP HARI$/, ''); sub = sub.split(' · ')[0]; }
-      if (kind === 'RP') {
-        bm = bm.replace(/ · panggil lori( sekarang)?$/, '');
-        var mt = /~?([\d.]+) tan/.exec(bm + ' ' + sub), n = mt ? Math.floor(Number(mt[1]) / 8) : 0;
-        if (n >= 1) fix = 'Panggil lori hari ini: cukup untuk ' + n + ' lori penuh. Lori sudah pergi? Buka E-Book → Ramp → kunci DN';
-      }
-      items.push({ id: i.id, kind: kind, role: role, who: role === 'Staff' ? staff : clerk, bm: bm, en: i.en || i.bm, sub: sub, fix: fix,
-        st: kind === 'CH' ? '' : (i.st || 'new'), ans: i.ans ? i.ans.why + ' · janji ' + dueTxt_(i.ans.due) : '' });   // v1.57: his own answer, beside the line
-    }
-    var fake = function (role) { return { user_code: 'LATE-' + role, role: role, estates: [est] }; };
-    var st = [], ck = [];
-    try { st = todo_(fake('Staff'), { estate: est }).items || []; } catch (e) {}
-    try { ck = todo_(fake('Clerk'), { estate: est }).items || []; } catch (e) {}
-    // today's chit: a working day (Monday to Saturday), past 6:30, and no chit keyed for today
-    var hasChit = false, days = [];
-    try { days = dayCloseRead_(est).days || []; hasChit = days.some(function (x) { return x.date === today; }); } catch (e) {}
-    var chit = dow === 0 ? 'rest' : hasChit ? 'ok' : hm < CHIT_BY ? 'wait' : 'no';
-    if (chit === 'no') push('CH', 'Staff', { id: 'CH:' + today, bm: 'Chit muster hari ini belum dibuat', en: 'Today\'s muster chit is not made', sub: 'Had ' + CHIT_BY + ' pagi · sekarang ' + hm });
-    st.forEach(function (i) { var m = /^(TH|FO|RP|FA):/.exec(String(i.id)); if (m && i.p === 1) push(m[1], 'Staff', i); });
-    ck.forEach(function (i) { if (/^DN:/.test(String(i.id)) && i.p === 1) push('DN', 'Clerk', i); });
+    var L = lateLines_(est), items = L.items;
     var has = function (k) { return items.some(function (x) { return x.kind === k; }); };
-    estates.push({ estate: est, staff: staff, clerk: clerk, manager: mgr, withManager: hm >= MGR_FROM && items.length > 0,
-      board: { chit: chit, close: has('TH') ? 'no' : 'ok', ticket: has('DN') ? 'no' : 'ok', fruit: has('FO') || has('RP') ? 'no' : 'ok' }, items: items });
+    estates.push({ estate: est, staff: L.staff, clerk: L.clerk, manager: L.manager, withManager: items.some(function (x) { return x.mg; }),
+      board: { chit: L.chit, close: has('TH') ? 'no' : 'ok', ticket: has('DN') ? 'no' : 'ok', fruit: has('FO') || has('RP') ? 'no' : 'ok' }, items: items });
   });
-  return { ok: true, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), today: today, estates: estates };
+  return { ok: true, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), today: todayKL_(), estates: estates };
+}
+// v1.58 The Pengurus answers a line that is his, with one of three buttons (Brief_Amaran 0.9):
+// done — nothing is written: the office looks again, and refuses if the work is not done;
+// by   — a date at most MGR_DAYS ahead and a reason: one FH_ALERT row, kind manswer (due = that day 5:00 petang);
+// help — what he needs and a few words: one row, kind mhelp (detail = the need, staff_note = his words).
+function mgrAnswer_(user, req) {
+  CLOSED_MEMO_ = null;
+  if (user.role !== 'Manager' && user.role !== 'Owner') return { ok: false, error: 'not_allowed' };
+  var est = String(req.estate || ''), ref = String(req.ref || ''), mode = String(req.mode || '');
+  if (user.estates.indexOf(est) < 0) return { ok: false, error: 'not_your_estate' };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (e) { return { ok: false, error: 'busy' }; }
+  try {
+    ROWS_MEMO_ = null;
+    var l = lateLines_(est).items.filter(function (x) { return x.id === ref; })[0];
+    if (mode === 'done') return l ? { ok: false, error: 'not_done', what: l.bm + (l.sub ? ' · ' + l.sub : '') } : Object.assign(todo_(user, { estate: est }), { done: 'done' });
+    if (!l || !l.mg) return { ok: false, error: 'nothing_waiting' };
+    var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), today = now.slice(0, 10);
+    var row = { id: 'MA-' + est + '-' + now.replace(/\D/g, '') + '-' + Math.random().toString(36).slice(2, 6), date: today, company: ESTATE_COMPANY[est] || '', estate: est,
+      keyed_by: user.user_code, keyed_at: now, phone: String(req.phone || ''), status: 'active', replaces: '', received_at: now,
+      chit: '', block: '', lot: '', direction: '', direction_by: '', ref: ref, due: '' };
+    var why = String(req.why || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+    if (why.length < 3) return { ok: false, error: 'need_reason' };
+    if (mode === 'by') {
+      var d = String(req.date || '');
+      if (!/^\d{4}-\d\d-\d\d$/.test(d) || d <= today || d > dayAdd_(today, MGR_DAYS)) return { ok: false, error: 'need_when' };
+      row.kind = 'manswer'; row.detail = l.bm.slice(0, 200); row.staff_note = why; row.due = d + ' ' + MGR_FROM;
+    } else if (mode === 'help') {
+      var need = (MGR_NEED[Number(req.need)] || [])[0];
+      if (!need || req.need === '' || req.need == null) return { ok: false, error: 'need_what' };
+      if (l.mst === 'help') return { ok: false, error: 'already' };
+      row.kind = 'mhelp'; row.detail = need; row.staff_note = why;
+    } else return { ok: false, error: 'bad_entry' };
+    var ss = book_(), sh = roomTab_(ss, 'FH_ALERT'), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    sh.appendRow(head.map(function (k) { return plain(row[k] === undefined ? '' : row[k]); }));
+    return Object.assign(todo_(user, { estate: est }), { done: mode });
+  } finally { lock.releaseLock(); }
+}
+// HQ (or the Owner) has arranged what the Pengurus asked for: one row, kind mhelpdone (ref = the request).
+function helpDone_(user, req) {
+  CLOSED_MEMO_ = null;
+  if (user.role !== 'HQ' && user.role !== 'Owner') return { ok: false, error: 'not_allowed' };
+  var est = String(req.estate || ''), ref = String(req.ref || ''), note = String(req.note || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+  if (user.estates.indexOf(est) < 0) return { ok: false, error: 'not_your_estate' };
+  if (note.length < 3) return { ok: false, error: 'need_reason' };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (e) { return { ok: false, error: 'busy' }; }
+  try {
+    ROWS_MEMO_ = null;
+    var al = standingRows_('FH_ALERT', est), h = al.filter(function (a) { return a.kind === 'mhelp' && a.id === ref; })[0];
+    if (!h) return { ok: false, error: 'nothing_waiting' };
+    if (al.some(function (a) { return a.kind === 'mhelpdone' && a.ref === ref; })) return { ok: false, error: 'already' };
+    var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
+    var row = { id: 'HD-' + est + '-' + now.replace(/\D/g, '') + '-' + Math.random().toString(36).slice(2, 6), date: now.slice(0, 10), company: ESTATE_COMPANY[est] || '', estate: est,
+      keyed_by: user.user_code, keyed_at: now, phone: String(req.phone || ''), status: 'active', replaces: '', received_at: now,
+      chit: '', kind: 'mhelpdone', block: '', lot: '', detail: String(h.detail), staff_note: note, direction: '', direction_by: '', ref: ref, due: '' };
+    var ss = book_(), sh = roomTab_(ss, 'FH_ALERT'), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    sh.appendRow(head.map(function (k) { return plain(row[k] === undefined ? '' : row[k]); }));
+    return Object.assign(todo_(user, { estate: est }), { done: 'help' });
+  } finally { lock.releaseLock(); }
 }
 // The Pengurus (or the Owner) gives direction on a staff explanation: a new alert line replaces the old one.
 function todoDirect_(user, req) {

@@ -63,7 +63,7 @@ check('practice and switched-off users are never named', !/Latihan|Lama/.test(JS
 check('each line says how to fix it', e.items.every(i => i.fix && i.fix.length > 10) && /KUNCI HARI/.test(one(e, 'TH').fix) && /Tiket/.test(one(e, 'DN').fix), e.items.map(i => i.fix).join(' | '));
 check('fruit line keeps the bunches, tonnes and days the staff sees', /LEBIH TEMPOH: 80 tandan ≈ 1\.6 tan/.test(one(e, 'FO').bm) && /3 hari/.test(one(e, 'FO').sub), one(e, 'FO').bm);
 check('the board: chit no, close no, ticket no, fruit no', e.board.chit === 'no' && e.board.close === 'no' && e.board.ticket === 'no' && e.board.fruit === 'no', JSON.stringify(e.board));
-check('the manager is named; before 5:00 petang the lines are not yet his', e.manager === 'Pengurus Contoh' && e.withManager === false, e.manager + ' ' + e.withManager);
+check('the manager is named; today\'s lines are not yet his before 5:00 petang, lines late since before today already are (1.58)', e.manager === 'Pengurus Contoh' && one(e, 'CH').mg === false && one(e, 'TH').mg === false && one(e, 'FO').mg === true && one(e, 'DN').mg === true && e.withManager === true, e.items.map(i => i.kind + '=' + i.mg).join(' '));
 check('the Owner gets the same list', kinds(late(env, 'Owner').estates[0]) === 'CH DN FO TH');
 check('the estate\'s own people are refused (Staff, Clerk, Manager)', ['Staff', 'Clerk', 'Manager'].every(r => late(env, r).error === 'not_allowed'));
 check('an HQ login without the estate gets nothing', late(env, 'HQ', ['MELU']).estates.length === 0);

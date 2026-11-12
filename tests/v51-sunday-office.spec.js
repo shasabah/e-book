@@ -1,5 +1,6 @@
-// E-Book test (1.41) F · Sunday work (office): work other than crop, manuring and CPS on a Sunday is approved by SDK (HQ),
-// not the Pengurus; the Owner sees and may answer it too until HQ has logins; the staff and clerk see the answer. Made-up names only.
+// E-Book test (1.41, changed 1.55.1) F · Sunday work (office): work other than crop, manuring and CPS on a Sunday is approved
+// by the Pengurus before the day (Yu Chen, 5 Nov and 12 Nov 2026); SDK (HQ) is told — it sees every ask and answer but has no
+// button; the Owner may answer too; the staff and clerk see the answer. Made-up names only.
 const check = (name, ok, detail) => { console.log((ok ? 'PASS ' : 'FAIL ') + name + (detail ? ' — ' + detail : '')); if (!ok) process.exitCode = 1; };
 const fs = require('fs'); const vm = require('vm'); const crypto = require('crypto');
 const code = fs.readFileSync(require('path').resolve(__dirname, '..', 'server', 'core.gs'), 'utf8');
@@ -63,16 +64,18 @@ let n = 0;
 const addRow = (tab, o) => { const sh = ctx.roomTab_(L, tab); const head = sh.rows[0]; const now = today + ' 07:00';
   const row = Object.assign({ id: 'T-' + tab + '-' + (++n), date: today, company: 'SPLT', estate: 'SSGT', keyed_by: 'STF', keyed_at: now, phone: 'P01', status: 'active', replaces: '', received_at: now }, o);
   sh.rows.push(head.map(c => row[c] === undefined ? '' : row[c])); return row; };
-addRow('FH_ALERT', { id: 'SA1', date: today, keyed_by: f.code || 'STF', chit: 'MC-S', kind: 'sunask', detail: 'Kerja hari Ahad: 2 orang · CA', staff_note: 'Kerja hari Ahad perlu lulus SDK', ref: 'MC-S' });
-const h1 = as(hq, 'todo').items.find(x => x.id === 'SA:SA1');
-check('office: SDK (HQ) gets the Sunday work with LULUS / TOLAK', h1 && h1.go === 'jobok' && h1.ref === 'SA1' && /Kerja hari Ahad: 2 orang/.test(h1.bm) && /LULUS \/ TOLAK/.test(h1.sub), JSON.stringify(h1));
-check('office: the Owner sees it too (until HQ has logins)', as(own, 'todo').items.some(x => x.id === 'SA:SA1'));
-const m1 = as(mg, 'todo');
-check('office: the Pengurus does not get it (neither as approval nor "Beri arahan")', !m1.items.some(x => /SA1/.test(x.id)));
-check('office: the Pengurus cannot answer Sunday work', as(mg, 'todoDirect', { ref: 'SA1', direction: 'LULUS' }).error === 'not_allowed');
+addRow('FH_ALERT', { id: 'SA1', date: today, keyed_by: f.code || 'STF', chit: 'MC-S', kind: 'sunask', detail: 'Kerja hari Ahad: 2 orang · CA', staff_note: 'Kerja hari Ahad perlu lulus Pengurus', ref: 'MC-S' });
+const m1 = as(mg, 'todo').items.find(x => x.id === 'SA:SA1');
+check('office: the Pengurus gets the Sunday work with LULUS / TOLAK', m1 && m1.go === 'jobok' && m1.ref === 'SA1' && /Kerja hari Ahad: 2 orang/.test(m1.bm) && /LULUS \/ TOLAK/.test(m1.sub), JSON.stringify(m1));
+check('office: the Owner sees it too and may answer', as(own, 'todo').items.some(x => x.id === 'SA:SA1'));
+const h1 = as(hq, 'todo').items;
+check('office: SDK (HQ) is told — a line to read, no button', h1.some(x => x.id === 'SI:SA1' && !x.go && /Menunggu Pengurus/.test(x.bm)) && !h1.some(x => x.id === 'SA:SA1'), JSON.stringify(h1.map(x => x.id)));
+check('office: SDK cannot answer Sunday work', as(hq, 'todoDirect', { ref: 'SA1', direction: 'LULUS' }).error === 'not_allowed');
 addRow('FH_ALERT', { id: 'JX1', date: today, chit: 'MC-S', kind: 'jobask', detail: 'Kerja lain: VMC Cuci · 1 orang', staff_note: 'kotor', ref: 'MC-S' });
 check('office: SDK cannot answer the Pengurus\'s other work', as(hq, 'todoDirect', { ref: 'JX1', direction: 'LULUS' }).error === 'not_allowed');
-const d = as(hq, 'todoDirect', { ref: 'SA1', direction: 'TOLAK: Bukan kerja penting' });
-check('office: SDK rejects with why', d.ok && !d.items.some(x => x.id === 'SA:SA1'), JSON.stringify(d).slice(0, 200));
+const d = as(mg, 'todoDirect', { ref: 'SA1', direction: 'TOLAK: Bukan kerja penting' });
+check('office: the Pengurus rejects with why', d.ok && !d.items.some(x => x.id === 'SA:SA1'), JSON.stringify(d).slice(0, 200));
+const h2 = as(hq, 'todo').items;
+check('office: SDK sees the answer (Ditolak, with why and who)', h2.some(x => /^SR:/.test(x.id) && /^Ditolak/.test(x.bm) && /Bukan kerja penting/.test(x.sub)) && !h2.some(x => x.id === 'SI:SA1'), JSON.stringify(h2.map(x => x.id + ' ' + x.bm)));
 check('office: the staff sees the answer', as(f, 'todo').items.some(x => /^DR:/.test(x.id) && /TOLAK/.test(x.bm) && /hari Ahad/.test(x.bm)));
 check('office: the clerk sees the rejection (pay)', as(ck, 'todo').items.some(x => x.id.startsWith('JR:') && /hari Ahad/.test(x.bm)));

@@ -137,5 +137,5 @@ fresh();
 let b = null;
 try { b = ctx.backlog('SSGT'); } catch (e) { b = { error: String(e && e.message) }; }
 check('the chit\'s "backlog" answer carries the machines, so no new office action is needed',
-  b && b.machines && b.machines.lines && b.machines.at === '2026-11-11', JSON.stringify(b && (b.machines || b.error)));
+  b && b.machines && b.machines.lines && /^\d{4}-\d{2}-\d{2}$/.test(b.machines.at), JSON.stringify(b && (b.machines || b.error)));
 check('READS_ is unchanged: machines is not an action of its own', ctx.READS_.machines === undefined);

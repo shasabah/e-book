@@ -1768,7 +1768,7 @@
       });
       // v1.41 F (Yu Chen, 26 Oct): on a Sunday only crop work and the important piece-rated jobs go ahead freely
       // (EA.lists.sundayOk: harvesting and its crop chain, manuring, CPS). Other work sends one request to SDK
-      // (kind "sunask", LULUS / TOLAK by Christy or Wawa, to be named), again only if those people change in a correction.
+      // (kind "sunask", LULUS / TOLAK by the Pengurus, SDK told (v1.55.1)), again only if those people change in a correction.
       // Switched off 26 Oct (Yu Chen): Sunday work will be asked BEFORE the work (by Saturday) and approved by the
       // Pengurus; building that after the month-end freeze. Until then Sunday work is agreed in the WhatsApp group.
       if (EA.lists.sundayAskOnChit && new Date(c.date + 'T00:00:00').getDay() === 0) {
@@ -1780,7 +1780,7 @@
           if (oS && oS.ask === askS) c.jobAsks.push(oS);
           else {
             var idS = EA.save(TAB_ALERT, ROOM, ctx.estate, { date: c.date, chit: c.chit, kind: 'sunask', block: '', lot: '',
-              detail: 'Kerja hari Ahad: ' + offRows.length + ' orang · ' + codes.join(', '), staff_note: 'Kerja hari Ahad perlu lulus SDK', direction: '', direction_by: '', ref: c.chit }, oS ? oS.id : '').id;
+              detail: 'Kerja hari Ahad: ' + offRows.length + ' orang · ' + codes.join(', '), staff_note: 'Kerja hari Ahad perlu lulus Pengurus', direction: '', direction_by: '', ref: c.chit }, oS ? oS.id : '').id;
             c.jobAsks.push({ key: 'SUNDAY', ask: askS, id: idS });
           }
         }

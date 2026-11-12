@@ -78,7 +78,7 @@ var ROOM_TABS = {
   FH_TICKET_BLOCK: ['ticket_no', 'block', 'bunches', 'mt'],
   // source: 'dn' = lots from the delivery note; 'ticket' (or empty, before v19) = lots ticked on the ticket.
   FH_TICKET_HARV: ['ticket_no', 'work_id', 'date_cut', 'block', 'lot', 'worker_id', 'bunches', 'abw_kg', 'mt', 'source'],
-  FH_ALERT: ['chit', 'kind', 'block', 'lot', 'detail', 'staff_note', 'direction', 'direction_by', 'ref'],
+  FH_ALERT: ['chit', 'kind', 'block', 'lot', 'detail', 'staff_note', 'direction', 'direction_by', 'ref', 'due'],   // v1.57 due: the promised time of an answer (kind "answer")
   // Shared list: people (owned by HR). Name, job, worker code, gender and gang only; never IC,
   // passport, date of birth, bank or pay (Rule 8). Written only by the Owner or HQ (v1.1).
   LIST_PEOPLE: ['worker_id', 'name', 'job', 'gang', 'sex', 'mandor', 'active'],
@@ -317,6 +317,7 @@ function doWrite_(user, req) {
   if (/^mill/.test(String(req.action))) return reply(millsAction_(user, req));
   if (req.action === 'todoDirect') return reply(todoDirect_(user, req));
   if (req.action === 'chitAsk') return reply(chitAsk_(user, req));
+  if (req.action === 'lateAnswer') return reply(lateAnswer_(user, req));
   return reply({ ok: false, error: 'unknown_action' });
 }
 
@@ -1533,7 +1534,7 @@ function adminSummary_(user) {
     c.noTicket = noTicket; c.corrections = corr; c.late = late; c.chitDays = chitDays;
     c.below = below; c.belowDate = lastWork ? lastWork.date : '';
     var b = backlog(e); c.field = b.fieldTotal || 0; c.ramp = (b.ramp && b.ramp.bunches) || 0;
-    var al = readRows_('FH_ALERT', e).standing.filter(function (r) { return String(r.date).slice(0, 7) === month && r.kind !== 'absent3' && r.kind !== 'fixask' && r.kind !== 'fixdone' && r.kind !== 'jobask' && r.kind !== 'sunask'; });
+    var al = readRows_('FH_ALERT', e).standing.filter(function (r) { return String(r.date).slice(0, 7) === month && r.kind !== 'absent3' && r.kind !== 'fixask' && r.kind !== 'fixdone' && r.kind !== 'jobask' && r.kind !== 'sunask' && r.kind !== 'answer'; });
     c.alerts = al.length; c.alertsOpen = al.filter(function (r) { return !String(r.staff_note || '').trim(); }).length;
     return c;
   });
@@ -2362,8 +2363,85 @@ function todo_(user, req) {
       if (r === 'Owner' && age >= 2) add({ id: 'TO:' + x.date, p: 1, ic: '!', bm: 'Tersangkut: hari ' + shortD_(x.date) + ' belum ditutup (' + age + ' hari)', en: 'Stuck: day ' + shortD_(x.date) + ' not closed', sub: 'Staf belum TUTUP HARI · Pengurus sudah diberitahu', go: '' });
     });
   } catch (e) {}
+  var nowTxt = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
+  // v1.57 The app asks first (Brief_Amaran 0.7 step 1; Yu Chen, 12 Nov 2026 "ok"). A red line of the staff or the
+  // clerk carries the reasons to choose from (ask) and its state: new (Baru, not answered), doing (Dalam tindakan,
+  // answered and the promised time not yet past), missed (the promised time is past and the work is still not
+  // done). An answer never closes a line: only the real work does, and then the line is simply not here.
+  try {
+    var ansBy = answers_(alerts);
+    if (r === 'Staff' || r === 'Clerk') items.forEach(function (i) {
+      var k = String(i.id).split(':')[0];
+      if (i.p !== 1 || !ANS_WHY[k] || (r === 'Clerk') !== (k === 'DN')) return;
+      i.ask = ANS_WHY[k];
+      var a = (ansBy[i.id] || [])[0];
+      i.st = !a ? 'new' : String(a.due) > nowTxt ? 'doing' : 'missed';
+      if (a) i.ans = { why: String(a.staff_note), due: String(a.due), at: String(a.keyed_at), n: ansBy[i.id].length };
+    });
+    // The Pengurus: a promise missed, or the clerk's "the driver has not sent the photographs", is his by name.
+    if (r === 'Manager' && !req._sub) {
+      ['Staff', 'Clerk'].forEach(function (role) {
+        var sub = [];
+        try { sub = todo_({ user_code: 'ANS-' + role, role: role, estates: [est] }, { estate: est, _sub: 1 }).items || []; } catch (e) {}
+        sub.forEach(function (i) {
+          if (!i.ans) return;
+          var photo = /gambar/i.test(i.ans.why), missed = i.st === 'missed' || (ansBy[i.id] || []).some(function (a) { return String(a.due) <= nowTxt; });
+          if (!missed && !photo) return;
+          add({ id: 'MJ:' + i.id, p: 1, ic: '!', bm: (missed ? 'Janji terlepas: ' : 'Perlu Pengurus: ') + String(i.bm).replace(/ · TUTUP HARI$/, ''), en: (missed ? 'Promise missed: ' : 'Needs the manager: ') + (i.en || i.bm),
+            sub: (role === 'Staff' ? 'Staf' : 'Kerani') + ' jawab: ' + i.ans.why + ' · janji ' + dueTxt_(i.ans.due), go: '' });
+        });
+      });
+    }
+  } catch (e) {}
   items.sort(function (a, b) { return a.p - b.p; });
-  return { ok: true, estate: est, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), items: items };
+  return { ok: true, estate: est, at: nowTxt, items: items };
+}
+// v1.57 The reasons a late line can be answered with, per kind of line (kept here, in the office, so a reason is
+// added without a new app). Each is [Bahasa Malaysia, English]; the last one, Lain-lain, asks for a few words.
+var ANS_WHY = {
+  RP: [['Lori belum datang', 'The lorry has not come'], ['Lori rosak', 'The lorry broke down'], ['Jalan rosak / hujan', 'Road damaged / rain'], ['Lori sudah pergi, belum kunci', 'The lorry went, not keyed yet'], ['Lain-lain', 'Other']],
+  FO: [['Hujan', 'Rain'], ['Traktor rosak', 'The tractor broke down'], ['Tiada pemandu / pemuat', 'No driver / loader'], ['Jalan rosak', 'Road damaged'], ['Lain-lain', 'Other']],
+  TH: [['Belum sempat', 'No time yet'], ['Kerja belum lengkap', 'The work is not complete'], ['Tunggu pembetulan chit', 'Waiting for a chit correction'], ['Tiada line', 'No signal'], ['Lain-lain', 'Other']],
+  FA: [['Belum sempat', 'No time yet'], ['Perlu semak buku / kertas dulu', 'Must check the book / paper first'], ['Tiada line', 'No signal'], ['Lain-lain', 'Other']],
+  DN: [['Pemandu belum hantar gambar', 'The driver has not sent the photographs'], ['Tiket tidak jelas / salah', 'The ticket is unclear / wrong'], ['Belum sempat', 'No time yet'], ['Tiada line', 'No signal'], ['Lain-lain', 'Other']]
+};
+// A promise is at most one day (6 Nov): this afternoon, tomorrow morning, tomorrow afternoon.
+var ANS_BY = { pm0: [0, '17:00'], am1: [1, '10:00'], pm1: [1, '17:00'] };
+function dueTxt_(due) { return shortD_(String(due).slice(0, 10)) + (String(due).slice(11, 16) <= '12:00' ? ' pagi' : ' petang'); }
+// The answers that stand, by the line they answer, newest first.
+function answers_(alerts) {
+  var by = {};
+  alerts.forEach(function (a) { if (a.kind === 'answer' && a.ref) (by[a.ref] = by[a.ref] || []).push(a); });
+  Object.keys(by).forEach(function (k) { by[k].sort(function (x, y) { return String(x.received_at || x.keyed_at) < String(y.received_at || y.keyed_at) ? 1 : -1; }); });
+  return by;
+}
+// The person answers his own late line: what happened and by when. One new FH_ALERT row, kind "answer"
+// (ref = the line, staff_note = the reason, due = the promised time, detail = the line as he saw it). Nothing is
+// changed or deleted; a second answer after a missed promise is one more row, and the first stays in the record.
+function lateAnswer_(user, req) {
+  CLOSED_MEMO_ = null;
+  if (user.role !== 'Staff' && user.role !== 'Clerk') return { ok: false, error: 'not_allowed' };
+  var est = String(req.estate || ''), ref = String(req.ref || ''), why = String(req.why || '').replace(/\s+/g, ' ').trim().slice(0, 120), by = ANS_BY[String(req.by || '')];
+  if (user.estates.indexOf(est) < 0) return { ok: false, error: 'not_your_estate' };
+  if (why.length < 3) return { ok: false, error: 'need_reason' };
+  if (!by) return { ok: false, error: 'need_when' };
+  var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
+  var due = (by[0] ? Utilities.formatDate(new Date(Date.now() + 86400000), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd') : now.slice(0, 10)) + ' ' + by[1];
+  if (due <= now) return { ok: false, error: 'need_when' };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (e) { return { ok: false, error: 'busy' }; }
+  try {
+    ROWS_MEMO_ = null;
+    var it = (todo_(user, { estate: est }).items || []).filter(function (i) { return i.id === ref && i.ask; })[0];
+    if (!it) return { ok: false, error: 'nothing_waiting' };
+    if (it.st === 'doing') return { ok: false, error: 'already' };
+    var ss = book_(), sh = roomTab_(ss, 'FH_ALERT'), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    var row = { id: 'AN-' + est + '-' + now.replace(/\D/g, '') + '-' + Math.random().toString(36).slice(2, 6), date: now.slice(0, 10), company: ESTATE_COMPANY[est] || '', estate: est,
+      keyed_by: user.user_code, keyed_at: now, phone: String(req.phone || ''), status: 'active', replaces: '', received_at: now,
+      chit: '', kind: 'answer', block: '', lot: '', detail: String(it.bm).slice(0, 200), staff_note: why, direction: '', direction_by: '', ref: ref, due: due };
+    sh.appendRow(head.map(function (k) { return plain(row[k] === undefined ? '' : row[k]); }));
+    return Object.assign(todo_(user, { estate: est }), { done: 'answer' });
+  } finally { lock.releaseLock(); }
 }
 // v1.56 Susulan harian · the daily follow-up list (Yu Chen, 12 Nov 2026: "I need Wawa help to chasing for report";
 // Brief_Amaran 0.7). One read for HQ and the Owner: for each estate where Field & Harvest is open, everything
@@ -2408,7 +2486,8 @@ function late_(user, req) {
         var mt = /~?([\d.]+) tan/.exec(bm + ' ' + sub), n = mt ? Math.floor(Number(mt[1]) / 8) : 0;
         if (n >= 1) fix = 'Panggil lori hari ini: cukup untuk ' + n + ' lori penuh. Lori sudah pergi? Buka E-Book → Ramp → kunci DN';
       }
-      items.push({ id: i.id, kind: kind, role: role, who: role === 'Staff' ? staff : clerk, bm: bm, en: i.en || i.bm, sub: sub, fix: fix });
+      items.push({ id: i.id, kind: kind, role: role, who: role === 'Staff' ? staff : clerk, bm: bm, en: i.en || i.bm, sub: sub, fix: fix,
+        st: kind === 'CH' ? '' : (i.st || 'new'), ans: i.ans ? i.ans.why + ' · janji ' + dueTxt_(i.ans.due) : '' });   // v1.57: his own answer, beside the line
     }
     var fake = function (role) { return { user_code: 'LATE-' + role, role: role, estates: [est] }; };
     var st = [], ck = [];

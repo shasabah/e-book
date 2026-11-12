@@ -257,7 +257,7 @@ EA.lists.cpsLastRound = { SSGT: { '01': '2026-10-15', '02': '2026-09-15', '03': 
 EA.lists.harvestMtDay = 1.5;
 EA.lists.abwKg = 12;
 // v1.41 (Yu Chen, 26 Oct): work allowed on a Sunday without asking: harvesting and the crop chain (FFB), and the
-// important piece-rated jobs manuring and CPS. Everything else on a Sunday needs SDK's approval (Christy or Wawa, to be named).
+// important piece-rated jobs manuring and CPS. Everything else on a Sunday needs the Pengurus's approval before the day; SDK is told (v1.55.1).
 EA.lists.sundayOk = ['HA', 'LF', 'FC', 'ITF', 'LFF', 'LFR', 'OPH', 'ETF', 'MAN', 'CPS'];
 // The request sent from a Sunday chit (after the work) is off: Sunday work is to be approved before it starts.
 EA.lists.sundayAskOnChit = false;

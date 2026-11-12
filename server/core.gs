@@ -48,7 +48,7 @@ function beforeLive_(user, row, tab) {
 var USERS_TAB = 'USERS';
 var USER_COLS = ['user_code', 'name', 'role', 'estates', 'key_hash', 'status', 'added_at', 'phones', 'position', 'move_estates', 'move_date', 'phone_names'];
 // v1.15: job titles as on the organisation chart (for reading only; the role is the app access).
-var POSITIONS = ['Trainee Field Staff', 'Field Staff', 'Senior Staff', 'Estate Clerk', 'Assistant Manager', 'Senior Assistant Manager', 'Mandor', 'Storekeeper', 'Account & Finance Executive', 'AGM', 'GM'];
+var POSITIONS = ['Trainee Field Staff', 'Field Staff', 'Senior Staff', 'Estate Clerk', 'Assistant Manager', 'Senior Assistant Manager', 'Mandor', 'Storekeeper', 'Account & Finance Executive', 'Operation Clerk', 'AGM', 'GM'];   // v1.55.1: Operation Clerk (HQ) for Wawa
 var ROLES = ['Owner', 'HQ', 'Staff', 'Clerk', 'Mandor', 'Store', 'Worker', 'Manager'];
 var ESTATES = ['SDK', 'MELU', 'SSGT', 'PTAN', 'TKRS', 'KWNN'];
 var ESTATE_COMPANY = { SDK: 'SPLT', MELU: 'SPLT', SSGT: 'SPLT', PTAN: 'SPLT', TKRS: 'SPLT', KWNN: 'PJSB' };
@@ -2254,7 +2254,10 @@ function todo_(user, req) {
       add({ id: 'AP:' + q.worker, p: q.kind === 'absconded' ? 1 : 2, ic: 'PK', bm: w + ': ' + q.name, en: 'To approve: ' + q.name, sub: 'Sebab: ' + q.note + ' · LULUS / TOLAK', go: '#workers' });
     });
     explained.forEach(function (a) {
-      if (a.direction || a.kind === 'sunask') return;   // v1.41: Sunday work is approved by SDK, not the Pengurus
+      if (a.direction) return;
+      // v1.55.1 (Yu Chen, 12 Nov 2026): Sunday and holiday work outside crop / manuring / CPS is approved by the
+      // Pengurus before the day (decided 26 Oct and 5 Nov); SDK (HQ) is told and sees every ask and answer.
+      if (a.kind === 'sunask') { add({ id: 'SA:' + a.id, p: 2, ic: 'AH', bm: a.detail, en: 'Sunday work to approve', sub: shortD_(a.date) + ' · ' + (un[a.keyed_by] || '') + ' · ' + String(a.staff_note).slice(0, 90) + ' · LULUS / TOLAK', go: 'jobok', ref: a.id }); return; }
       if (a.kind === 'jobask') { add({ id: 'JA:' + a.id, p: 2, ic: 'KJ', bm: a.detail, en: 'Other work to approve', sub: shortD_(a.date) + ' · ' + (un[a.keyed_by] || '') + ' · sebab: ' + String(a.staff_note).slice(0, 90) + ' · LULUS / TOLAK', go: 'jobok', ref: a.id }); return; }
       add({ id: 'DI:' + a.id, p: 2, ic: 'AR', bm: 'Beri arahan: ' + String(a.detail || '').slice(0, 60), en: 'Give direction on the staff\'s explanation', sub: 'Staf: ' + String(a.staff_note).slice(0, 90), go: 'direct', ref: a.id });
     });
@@ -2282,13 +2285,27 @@ function todo_(user, req) {
   }
   // v1.41 (Yu Chen, 26 Oct): Sunday work other than crop, manuring and CPS is approved by SDK (Christy or Wawa,
   // to be named); until they have logins the Owner sees and answers it too.
-  if (r === 'HQ' || r === 'Owner') {
+  // v1.55.1: the Owner can still answer Sunday work himself; SDK (HQ) is told: every ask waiting for the
+  // Pengurus, and every answer of the last 3 days, as lines to read (no button).
+  if (r === 'Owner') {
     explained.forEach(function (a) {
       if (a.kind !== 'sunask' || a.direction) return;
       add({ id: 'SA:' + a.id, p: 2, ic: 'AH', bm: a.detail, en: 'Sunday work to approve', sub: shortD_(a.date) + ' · ' + (un[a.keyed_by] || '') + ' · ' + String(a.staff_note).slice(0, 90) + ' · LULUS / TOLAK', go: 'jobok', ref: a.id });
     });
   }
-  if (r === 'Owner') {
+  if (r === 'HQ') {
+    explained.forEach(function (a) {
+      if (a.kind !== 'sunask' || a.direction) return;
+      add({ id: 'SI:' + a.id, p: 3, ic: 'AH', bm: 'Menunggu Pengurus: ' + a.detail, en: 'Sunday work waiting for the manager', sub: shortD_(a.date) + ' · ' + (un[a.keyed_by] || '') + ' · ' + String(a.staff_note).slice(0, 90) + ' · untuk makluman SDK', go: '' });
+    });
+    alerts.forEach(function (a) {
+      if (a.kind !== 'sunask' || !a.direction || String(a.keyed_at).slice(0, 10) < daysAgo_(3)) return;
+      add({ id: 'SR:' + a.id, p: 4, ic: 'AH', bm: (/^TOLAK/.test(a.direction) ? 'Ditolak' : 'Lulus') + ': ' + a.detail, en: 'Sunday work answered', sub: shortD_(a.date) + ' · ' + a.direction + ' · ' + (a.direction_by || '') + ' · untuk makluman SDK', go: '' });
+    });
+  }
+  if (r === 'Owner' || r === 'HQ') {
+    // v1.55.1 (Yu Chen, 12 Nov 2026): SDK's own steps reach SDK (Wawa, Operation Clerk) once she has a login;
+    // the Owner keeps seeing them and can still do every step.
     var wo = workersRead_(user, { estate: est });
     (wo.hq || []).forEach(function (q) { add({ id: 'HQ:' + q.ref, p: 2, ic: 'PK', bm: 'SELESAI: ' + q.name + ' (' + ({ new: 'baru', resigned: 'berhenti', absconded: 'lari' }[q.kind] || q.kind) + ')', en: 'SDK done: ' + q.name,
       sub: 'Lulus ' + (q.approved ? q.approved.by + ' ' + shortD_(q.approved.at) : '') + ' · tugas SDK', go: '#workers' }); });
@@ -2296,9 +2313,12 @@ function todo_(user, req) {
     try {
       (millsRead_(user, { estate: est }).requests || []).forEach(function (q) {
         if (q.state !== 'request' && q.state !== 'checked') return;
+        if (r === 'HQ' && !millRole_(user, q.state === 'request' ? 'check' : 'approve')) return;
         add({ id: 'ML:' + q.ref, p: 2, ic: 'KL', bm: 'Kilang baru: ' + q.name, en: 'New mill: ' + q.name, sub: 'Sebab: ' + q.note + ' · ' + (q.state === 'request' ? 'SEMAK' : 'LULUS · BUKA'), go: '#mills' });
       });
     } catch (e) {}
+  }
+  if (r === 'Owner') {
     (wo.pending || []).forEach(function (q) {
       if (dayDiff_(String(q.at).slice(0, 10), today) < 2) return;
       add({ id: 'ST:' + q.worker, p: 1, ic: '!', bm: 'Tersangkut: ' + q.name + ' menunggu Pengurus', en: 'Stuck: waiting for the manager', sub: 'Sejak ' + shortD_(q.at) + ' (' + dayDiff_(String(q.at).slice(0, 10), today) + ' hari)', go: '#workers' });
@@ -2356,8 +2376,8 @@ function todoDirect_(user, req) {
     ROWS_MEMO_ = null;
     var a = standingRows_('FH_ALERT', est).find(function (x) { return x.id === id; });
     if (!a || !EXPLAIN_KINDS[a.kind]) return { ok: false, error: 'nothing_waiting' };
-    // v1.41: SDK (HQ) answers only Sunday work; the Pengurus answers everything else but not Sunday work.
-    if ((user.role === 'HQ') !== (a.kind === 'sunask') && user.role !== 'Owner') return { ok: false, error: 'not_allowed' };
+    // v1.55.1: the Pengurus answers Sunday work too (approved before the day, 5 Nov); SDK (HQ) only sees it.
+    if (user.role === 'HQ') return { ok: false, error: 'not_allowed' };
     if (a.direction) return { ok: false, error: 'already' };
     var ss = book_(), sh = roomTab_(ss, 'FH_ALERT'), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
     var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), un = '';

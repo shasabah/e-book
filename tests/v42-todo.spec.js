@@ -112,6 +112,12 @@ as(ck, 'millAsk', { name: 'Kilang Contoh', type: 'mill', note: 'Penuh' });
 const o3 = as(own, 'todo');
 check('Owner: name fix and new mill', ids(o3).includes('FX') && ids(o3).includes('ML'));
 check('Owner: all phones sent lately → no phone line', !ids(o3).includes('PH'));
+// v1.55.1 (12 Nov 2026): SDK's own steps reach SDK once Wawa (Operation Clerk) has an HQ login; the Owner keeps them too.
+const h3 = as(hq, 'todo');
+check('HQ: SELESAI, name fix and SEMAK new mill on SDK\'s own list', ids(h3).includes('HQ') && ids(h3).includes('FX') && ids(h3).includes('ML'), ids(h3).join(','));
+check('HQ: not the Owner\'s stuck lines', !ids(h3).includes('ST') && !ids(h3).includes('PH'));
+const opc = post({ key: OWN, action: 'userAdd', name: 'Operasi Contoh', role: 'HQ', position: 'Operation Clerk', estates: ['SDK', 'SSGT'], phone: 'P01' });
+check('position Operation Clerk is accepted (HQ access)', opc.ok !== false && !!opc.pin, JSON.stringify(opc).slice(0, 160));
 props['seen:' + f.phone] = JSON.stringify({ u: ctx.adminPhones_().phones.find(x => x.phone === f.phone).code, at: ago(4) + ' 08:00', v: '57', w: '3' });
 Object.keys(cache).filter(k => /^seenq/.test(k)).forEach(k => delete cache[k]);
 check('Owner: a staff phone not sent for 4 days shows', (j => j.items.some(x => x.id.startsWith('PH:') && /Staf Contoh/.test(x.sub)))(as(own, 'todo')));

@@ -171,6 +171,8 @@ window.EA = window.EA || {};
         var x = t.items[Number(b.dataset.i)];
         if (x.go === 'send') { if (EA.send) EA.send(); return; }
         if (x.go === 'direct') return directSheet(u, est, x);
+        if (x.go === 'mgr') return mgrSheet(u, est, x);     // v1.58: the Pengurus's three buttons
+        if (x.go === 'help') return helpSheet(u, est, x);   // v1.58: HQ arranges what the Pengurus asked for
         if (x.go === 'jobok') return jobSheet(u, est, x);
         if (x.go === 'fix') { EA.local.set('fh.fixGo', Object.assign({ estate: est }, x.fix)); location.hash = 'field-harvest'; return; }
         location.hash = x.go.replace(/^#/, '');
@@ -202,6 +204,72 @@ window.EA = window.EA || {};
           var w = s.querySelector('#td-why').value.replace(/\s+/g, ' ').trim();
           if (w.length < 3) { m.textContent = EA.t('Tulis sebab ditolak.', 'Write why it is rejected.'); m.hidden = false; return; }
           send('TOLAK: ' + w, this);
+        };
+      });
+  }
+  // v1.58 The manager's three buttons (Brief_Amaran 0.9; Yu Chen, 12 Nov 2026). From 5:00 petang a late line is
+  // the Pengurus's until the work is done. He answers with one of three buttons, never a typed "ok":
+  // SELESAI (the office checks the real work), AKAN SELESAI PADA (a date at most 3 days ahead, and why),
+  // PERLU BANTUAN IBU PEJABAT (what he needs, and a few words; HQ presses DIURUSKAN).
+  function mgrSheet(u, est, x) {
+    var days = [], n, base = new Date(EA.today() + 'T00:00:00');
+    for (n = 1; n <= (x.days || 3); n++) { var d = new Date(base.getTime() + n * 86400000); days.push({ iso: d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2), lbl: EA.ui.dayBm[d.getDay()].slice(0, 3) + ' ' + d.getDate() + '/' + (d.getMonth() + 1) }); }
+    EA.ui.openSheet('<h2 id="sheet-title">' + EA.t('Tanggungjawab anda', 'Yours now') + '</h2><p><b>' + esc(EA.t(x.bm, x.en || x.bm).replace(/^[^:]+: /, '')) + '</b></p>' +
+      (x.sub ? '<p class="hint">' + esc(x.sub) + '</p>' : '') + (x.fix ? '<p class="hint">' + EA.t('Cara selesai: ', 'How to fix: ') + esc(x.fix) + '</p>' : '') +
+      '<div class="mg-3"><button class="btn btn-ok" type="button" id="mg-done">DONE<small>SELESAI</small></button>' +
+      '<button class="btn btn-main" type="button" id="mg-by">WILL BE DONE ON…<small>AKAN SELESAI PADA…</small></button>' +
+      '<button class="btn btn-wait" type="button" id="mg-help">NEED HQ\'S HELP<small>PERLU BANTUAN IBU PEJABAT</small></button></div>' +
+      '<div id="mg-bybox" hidden><p class="aq-q">' + EA.t('Bila selesai? (paling lama ' + (x.days || 3) + ' hari)', 'When? (at most ' + (x.days || 3) + ' days)') + '</p><div class="seg2 mg-days">' + days.map(function (d) { return '<button type="button" data-d="' + d.iso + '">' + esc(d.lbl) + '</button>'; }).join('') + '</div></div>' +
+      '<div id="mg-helpbox" hidden><p class="aq-q">' + EA.t('Apa yang anda perlu?', 'What do you need?') + '</p><div class="seg2 aq-why mg-need">' + (x.need || []).map(function (a, k) { return '<button type="button" data-k="' + k + '">' + esc(EA.t(a[0], a[1] || a[0])) + '</button>'; }).join('') + '</div></div>' +
+      '<div class="field" id="mg-whybox" hidden><label for="mg-why" id="mg-whyl"></label><textarea id="mg-why" class="text-input" rows="2" maxlength="160"></textarea>' +
+      '<div class="actions"><button class="btn btn-main" type="button" id="mg-send">SEND<small>HANTAR</small></button></div></div>' +
+      '<p class="msg" id="mg-err" hidden></p>',
+      function (s) {
+        var m = s.querySelector('#mg-err'), mode = '', date = '', need = '', busy = false;
+        function say(t) { m.textContent = t; m.hidden = false; }
+        function show(md) {
+          mode = md; m.hidden = true;
+          s.querySelector('#mg-bybox').hidden = md !== 'by'; s.querySelector('#mg-helpbox').hidden = md !== 'help'; s.querySelector('#mg-whybox').hidden = false;
+          s.querySelector('#mg-whyl').textContent = (md === 'by' ? EA.t('Sebab / apa yang akan dibuat', 'Why / what will be done') : EA.t('Terangkan ringkas apa yang perlu', 'Say briefly what is needed')) + ' *';
+        }
+        async function send(extra, btn) {
+          if (busy) return; busy = true; if (btn) btn.disabled = true;
+          var j = await EA.askFull('mgrAnswer', Object.assign({ estate: est, ref: x.ref }, extra));
+          busy = false; if (btn) btn.disabled = false;
+          if (!j || !j.ok) {
+            if (j && j.error === 'not_done') return say(EA.t('Belum selesai: ', 'Not done yet: ') + (j.what || '') + EA.t(' · Baris ini hilang sendiri bila kerja siap.', ' · This line goes by itself when the work is done.'));
+            if (j && j.error === 'nothing_waiting') { EA.ui.closeSheet(); EA.local.set(CACHE + est, null); if (EA.renderHome) EA.renderHome(); return; }
+            return say(j && (j.error === 'offline' || j.error === 'nolink') ? EA.t('Tiada line. Cuba lagi bila ada isyarat.', 'No signal. Try again when there is signal.') : EA.t('Tidak dihantar: ', 'Not sent: ') + ((j && j.error) || 'busy'));
+          }
+          keep(u, j); EA.ui.closeSheet(); if (EA.renderHome) EA.renderHome();
+          EA.ui.toast(extra.mode === 'done' ? EA.t('Selesai · baris ditutup', 'Done · line closed') : extra.mode === 'by' ? EA.t('Dicatat · app akan ingatkan pada tarikh itu', 'Noted · the app holds you to that date') : EA.t('Dihantar ke Ibu Pejabat', 'Sent to HQ'));
+        }
+        s.querySelector('#mg-done').onclick = function () { send({ mode: 'done' }, this); };
+        s.querySelector('#mg-by').onclick = function () { show('by'); };
+        s.querySelector('#mg-help').onclick = function () { show('help'); };
+        s.querySelectorAll('.mg-days button').forEach(function (b) { b.onclick = function () { s.querySelectorAll('.mg-days button').forEach(function (o) { o.classList.toggle('on', o === b); }); date = b.dataset.d; }; });
+        s.querySelectorAll('.mg-need button').forEach(function (b) { b.onclick = function () { s.querySelectorAll('.mg-need button').forEach(function (o) { o.classList.toggle('on', o === b); }); need = b.dataset.k; }; });
+        s.querySelector('#mg-send').onclick = function () {
+          var why = s.querySelector('#mg-why').value.replace(/\s+/g, ' ').trim();
+          if (mode === 'by' && !date) return say(EA.t('Pilih tarikh dulu.', 'Choose the date first.'));
+          if (mode === 'help' && need === '') return say(EA.t('Pilih apa yang anda perlu dulu.', 'Choose what you need first.'));
+          if (why.length < 3) return say(EA.t('Tulis sebab (sekurang-kurangnya 3 huruf).', 'Write why (at least 3 letters).'));
+          send(mode === 'by' ? { mode: 'by', date: date, why: why } : { mode: 'help', need: Number(need), why: why }, this);
+        };
+      });
+  }
+  function helpSheet(u, est, x) {
+    EA.ui.openSheet('<h2 id="sheet-title">' + EA.t('Bantuan untuk Pengurus', 'Help for the manager') + '</h2><p><b>' + esc(EA.t(x.bm, x.en || x.bm)) + '</b></p><p class="hint">' + esc(x.sub) + '</p>' +
+      '<div class="field"><label for="hp-note">' + EA.t('Apa yang sudah diuruskan (cth. lori dihantar esok 8 pagi)', 'What has been arranged (e.g. lorry sent tomorrow 8 am)') + ' *</label><textarea id="hp-note" class="text-input" rows="2" maxlength="160"></textarea></div>' +
+      '<p class="msg" id="hp-err" hidden></p><div class="actions"><button class="btn btn-ok" type="button" id="hp-ok">ARRANGED<small>DIURUSKAN</small></button></div>',
+      function (s) {
+        s.querySelector('#hp-ok').onclick = async function () {
+          var note = s.querySelector('#hp-note').value.replace(/\s+/g, ' ').trim(), m = s.querySelector('#hp-err');
+          if (note.length < 3) { m.textContent = EA.t('Tulis apa yang sudah diuruskan.', 'Write what has been arranged.'); m.hidden = false; return; }
+          this.disabled = true;
+          var j = await EA.askFull('helpDone', { estate: est, ref: x.ref, note: note });
+          if (!j || !j.ok) { this.disabled = false; m.textContent = EA.t('Tidak dihantar: ', 'Not sent: ') + ((j && j.error) || 'busy'); m.hidden = false; return; }
+          keep(u, j); EA.ui.closeSheet(); if (EA.renderHome) EA.renderHome(); EA.ui.toast(EA.t('Dihantar · Pengurus akan nampak', 'Sent · the manager will see it'));
         };
       });
   }

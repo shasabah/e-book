@@ -83,20 +83,20 @@ check('the Pengurus has no "promise missed" line yet', !(todo(env, 'Manager').it
 NOW = at(DAY(0), '17:05');
 s = todo(env, 'Staff');
 check('past the promised time the line is missed, and can be answered again', it(s, FO).st === 'missed');
-let m = (todo(env, 'Manager').items || []).filter(i => i.id === 'MJ:' + FO)[0];
-check('the Pengurus gets "Janji terlepas" with the staff\'s answer', !!m && m.p === 1 && /^Janji terlepas: LEBIH TEMPOH/.test(m.bm) && /Staf jawab: Traktor rosak · janji 12\/11 petang/.test(m.sub), JSON.stringify(m));
+let m = (todo(env, 'Manager').items || []).filter(i => i.id === 'MG:' + FO)[0];
+check('the Pengurus\'s line carries "janji terlepas" with the staff\'s answer', !!m && m.p === 1 && /^Kini tanggungjawab anda: LEBIH TEMPOH/.test(m.bm) && /janji terlepas: Traktor rosak · janji 12\/11 petang/.test(m.sub), JSON.stringify(m));
 check('"this afternoon" is refused after 5:00 petang', ans(env, 'Staff', FO, 'Traktor rosak', 'pm0').error === 'need_when');
 j = ans(env, 'Staff', FO, 'Traktor masih rosak', 'am1');
 check('the second answer is one more row; the first stays', j.ok && it(j, FO).st === 'doing' && it(j, FO).ans.n === 2 && it(j, FO).ans.due === DAY(-1) + ' 10:00' && env.tabs.FH_ALERT.rows.filter(r => r[head.indexOf('kind')] === 'answer').length === 2, JSON.stringify(it(j, FO)));
-check('the Pengurus keeps the missed promise even after the new answer', (todo(env, 'Manager').items || []).some(i => i.id === 'MJ:' + FO));
+check('the line stays the Pengurus\'s after the new answer, showing it', /Staf jawab: Traktor masih rosak/.test(((todo(env, 'Manager').items || []).filter(i => i.id === 'MG:' + FO)[0] || {}).sub || ''));
 
 // ---------- the clerk: the driver has not sent the photographs ----------
 j = ans(env, 'Clerk', DN, 'Pemandu belum hantar gambar', 'am1');
-m = (todo(env, 'Manager').items || []).filter(i => i.id === 'MJ:' + DN)[0];
-check('the clerk\'s "driver has not sent the photographs" goes to the Pengurus at once', j.ok && !!m && /^Perlu Pengurus: LEWAT: tiket DN 8002/.test(m.bm) && /Kerani jawab: Pemandu belum hantar gambar/.test(m.sub), JSON.stringify(m));
+m = (todo(env, 'Manager').items || []).filter(i => i.id === 'MG:' + DN)[0];
+check('the clerk\'s "driver has not sent the photographs" is on the Pengurus\'s line', j.ok && !!m && /tiket DN 8002/.test(m.bm) && /Kerani jawab: Pemandu belum hantar gambar/.test(m.sub), JSON.stringify(m));
 
 // ---------- the work is done: the line and its answer go by themselves ----------
 env.tabs.FH_COLLECT.rows.push(R('c2', DAY(0), ['01', '1-2', '80', 'Y', '', '', '']));
-check('fruit keyed to the ramp: the line is gone for the staff and the Pengurus', !it(todo(env, 'Staff'), FO) && !(todo(env, 'Manager').items || []).some(i => i.id === 'MJ:' + FO));
+check('fruit keyed to the ramp: the line is gone for the staff and the Pengurus', !it(todo(env, 'Staff'), FO) && !(todo(env, 'Manager').items || []).some(i => i.id === 'MG:' + FO || i.id === 'MJ:' + FO));
 check('the answers stay in the record', env.tabs.FH_ALERT.rows.filter(r => r[head.indexOf('kind')] === 'answer').length === 3);
 check('lateAnswer is not a read (it writes)', !env.ctx.READS_.lateAnswer);

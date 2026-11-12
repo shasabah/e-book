@@ -878,3 +878,5 @@ div.td-it { cursor: default; }
 .aq-q { margin: 12px 0 2px; font-weight: 700; }
 .lt-it small.lt-an { color: #2e7d4f; font-weight: 600; } .lt-it small.lt-an.n { color: #b3261e; }
 .aq-why button { flex: 1 1 46%; border-radius: 14px; min-height: 48px; } .aq-by button { min-height: 48px; }
+/* v1.58 The manager's three buttons */
+.mg-3 { display: grid; gap: 8px; margin: 12px 0; } .mg-3 .btn { width: 100%; }

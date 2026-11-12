@@ -82,6 +82,8 @@ window.EA = window.EA || {};
     return '<small class="td-st n">' + EA.t('Baru · belum dijawab', 'New · not answered') + '</small>';
   }
   function toAsk(u, est) { var t = EA.todoItems(u, est); return t ? t.items.filter(function (x) { return x.ask && x.st !== 'doing'; }) : []; }
+  var shownNow = false;
+  function markAsked(u) { try { EA.local.set('ea.asked', { code: u.code, day: EA.today() }); } catch (e) {} }
   EA.askLate = function (u, est) {
     var list = toAsk(u, est), k = 0;
     if (!list.length) return;
@@ -102,7 +104,8 @@ window.EA = window.EA || {};
           var m = s.querySelector('#aq-err'), ob = s.querySelector('#aq-obox'), busy = false;
           function say(t) { m.textContent = t; m.hidden = false; }
           var fx = s.querySelector('#aq-fix');
-          if (fx) fx.onclick = function () { EA.ui.closeSheet(); location.hash = x.go.replace(/^#/, ''); };
+          if (fx) fx.onclick = function () { markAsked(u); EA.ui.closeSheet(); location.hash = x.go.replace(/^#/, ''); };
+          s.querySelector('#sheet-x').addEventListener('click', function () { markAsked(u); });
           async function send() {
             if (busy) return;
             var other = ob.hidden ? '' : s.querySelector('#aq-other').value.replace(/\s+/g, ' ').trim();
@@ -117,7 +120,7 @@ window.EA = window.EA || {};
               s.querySelectorAll('.aq-by button').forEach(function (b) { b.classList.remove('on'); }); by = '';
               return say(j && (j.error === 'offline' || j.error === 'nolink') ? EA.t('Tiada line. Jawab kemudian dari Perlu tindakan.', 'No signal. Answer later from Needs action.') : EA.t('Tidak dihantar: ', 'Not sent: ') + ((j && j.error) || 'busy'));
             }
-            keep(u, j); k++; step();
+            markAsked(u); keep(u, j); k++; step();
           }
           s.querySelectorAll('.aq-why button').forEach(function (b) {
             b.onclick = function () {
@@ -140,8 +143,10 @@ window.EA = window.EA || {};
     if (!c || Date.now() - c.at > 3 * 60000) return;
     if (mark && mark.code === u.code && mark.day === today) return;
     var sb = document.getElementById('sheet-back'); if (sb && !sb.hidden) return;   // another box is open: never on top of it
-    if (!toAsk(u, est).length) return;
-    EA.local.set('ea.asked', { code: u.code, day: today });
+    if (shownNow || !toAsk(u, est).length) return;
+    // The day is marked only once he has touched the questions (answered, ‹ BALIK, or the fix button): if the app
+    // reloads itself under him (a new version), the questions come back instead of being lost for the day.
+    shownNow = true;
     EA.askLate(u, est);
   };
   EA.renderTodo = function (box, u, est) {

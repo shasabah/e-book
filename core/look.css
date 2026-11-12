@@ -621,6 +621,20 @@ div.td-it { cursor: default; }
 .td-go { color: #1f5aa6; font-weight: 700; font-size: 1.2rem; }
 .td-done { margin: 12px 0; background: #e8f4ec; color: #2e7d4f; border-radius: 14px; padding: 10px; font-weight: 700; text-align: center; }
 
+/* v1.56 Susulan harian (HQ and the Owner) */
+.lt { border-color: #1f5aa6; } .lt h2 { color: #1f5aa6; } .lt h2 small { font-weight: 400; font-size: .76rem; color: var(--muted, #888); }
+.lt-es { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; border-top: 1px solid var(--line, #eee); padding: 8px 2px; font-size: .92rem; }
+.lt-es small { flex-basis: 100%; color: var(--muted, #888); font-size: .78rem; }
+.lt-bd { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.lt-bx { font-size: .72rem; font-weight: 700; border-radius: 999px; padding: 2px 8px; background: #e8f4ec; color: #2e7d4f; white-space: nowrap; }
+.lt-bx.no { background: #fbe3e1; color: #b3261e; } .lt-bx.wait, .lt-bx.rest { background: #eee; color: #666; }
+.lt-card { border: 1px solid var(--line, #ddd); border-radius: 12px; padding: 10px 12px; margin: 10px 0; }
+.lt-card h3 { margin: 0 0 6px; font-size: 1rem; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.lt-it { border-top: 1px solid var(--line, #eee); padding: 7px 0; font-size: .9rem; }
+.lt-it small { display: block; color: var(--muted, #888); font-size: .78rem; } .lt-it small.lt-fx { color: #1f5aa6; }
+.lt-mg { margin: 0 0 6px; padding: 6px 8px; border-radius: 8px; background: #fff1d6; color: #7a4a00; font-size: .85rem; }
+.lt-wa { width: 100%; margin-top: 8px; }
+
 /* v1.33.1 Ke ramp & lori */
 .cl-q { margin: 14px 0 4px; font-size: 1rem; }
 #cl-all { width: 100%; margin: 4px 0 10px; }

@@ -247,12 +247,12 @@ function doPost_(e) {
 // answer is never older than the last change.
 // Every action answered in doRead_ must be listed here, or it is sent to doWrite_ and
 // comes back 'unknown_action' (1.49.1: 'program' was missing since 1.47).
-var READS_ = { crop: 1, dayclose: 1, workers: 1, mills: 1, todo: 1, ungraded: 1, harvest: 1, trips: 1, people: 1, history: 1, backlog: 1, rounds: 1, program: 1, adminSummary: 1, adminPhones: 1, adminProblems: 1, adminSwitches: 1 };
+var READS_ = { crop: 1, dayclose: 1, workers: 1, mills: 1, todo: 1, ungraded: 1, harvest: 1, trips: 1, people: 1, history: 1, backlog: 1, rounds: 1, program: 1, adminSummary: 1, adminPhones: 1, adminProblems: 1, adminSwitches: 1, late: 1 };
 var READ_SECONDS = 60;
 function gen_() { return CacheService.getScriptCache().get('gen') || '0'; }
 function newGen_() { try { CacheService.getScriptCache().put('gen', String(Date.now()) + Math.floor(Math.random() * 1000), 21600); } catch (e) {} }
 function readCached_(user, req) {
-  var personal = req.action === 'people' || req.action === 'workers' || req.action === 'mills' || req.action === 'todo' || /^admin/.test(String(req.action));
+  var personal = req.action === 'people' || req.action === 'workers' || req.action === 'mills' || req.action === 'todo' || req.action === 'late' || /^admin/.test(String(req.action));
   var key = ['rd', PRACTICE_ ? 'L' : '', req.action, String(req.estate || ''), String(req.month || ''), personal ? user.user_code : '', gen_()].join('|').slice(0, 240);
   var c = CacheService.getScriptCache(), hit = null;
   try { hit = c.get(key); } catch (e) {}
@@ -269,6 +269,7 @@ function doRead_(user, req) {
   if (req.action === 'workers') return workersRead_(user, req);
   if (req.action === 'mills') return millsRead_(user, req);
   if (req.action === 'todo') return todo_(user, req);
+  if (req.action === 'late') return late_(user, req);
   if (req.action === 'people') {
     if (['Owner', 'HQ', 'Staff', 'Clerk', 'Manager'].indexOf(user.role) < 0) return { ok: false, error: 'not_allowed' };
     return people_(user);
@@ -2363,6 +2364,56 @@ function todo_(user, req) {
   } catch (e) {}
   items.sort(function (a, b) { return a.p - b.p; });
   return { ok: true, estate: est, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), items: items };
+}
+// v1.56 Susulan harian · the daily follow-up list (Yu Chen, 12 Nov 2026: "I need Wawa help to chasing for report";
+// Brief_Amaran 0.7). One read for HQ and the Owner: for each estate where Field & Harvest is open, everything
+// that is late today, each line with the name of the person who owns it and how to fix it, plus a four-box
+// board (chit, day closed, ticket, fruit out). Wawa sends it to the estate once a day and posts the board to
+// the group; nothing is keyed here and nothing is written. No rule is repeated: the lines are the red ones the
+// Staff and the Clerk already see on their own Perlu tindakan (todo_), so this list can never disagree with
+// what the estate sees. Added here only: today's chit not made, which the phone alone knew until now.
+// From 5:00 petang a line still open is the Pengurus's (marked; his three buttons are the next part).
+var CHIT_BY = '06:30';         // muster starts 6:00; the chit is late from 6:30 (Brief_Amaran 4, accepted 11 Nov)
+var MGR_FROM = '17:00';        // still open at 5:00 petang: the Pengurus's item (Brief_Amaran 0.7)
+var LATE_FIX = {
+  CH: 'Buka E-Book → Pagi → buat chit hari ini',
+  TH: 'Buka E-Book → Kerja → semak, lalu tekan KUNCI HARI',
+  FO: 'Angkat buah ke ramp → E-Book → Ramp → SEMUA KE RAMP. Belum boleh? Isi sebab dan bila selesai di Pagi',
+  RP: 'Panggil lori hari ini. Kurang 8 tan: tanya Pengurus',
+  FA: 'Buka E-Book → Perlu tindakan → betulkan chit itu',
+  DN: 'Buka E-Book → Tiket → kunci tiket. Tiada gambar pemandu? Beritahu Pengurus'
+};
+function late_(user, req) {
+  if (user.role !== 'HQ' && user.role !== 'Owner') return { ok: false, error: 'not_allowed' };
+  var live = (switches_().live || {})['field-harvest'] || [], today = todayKL_();
+  var hm = String(Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'HH:mm')).slice(-5);
+  var dow = new Date(today + 'T00:00:00Z').getUTCDay(), users = [];
+  try { users = readUsers_().list.filter(function (u) { return u.status === 'active' && !isTestCode_(u.user_code) && !isPracticeCode_(u.user_code); }); } catch (e) {}
+  function who(role, est) {
+    var n = users.filter(function (u) { return String(u.role) === role && estatesNow_(u).indexOf(est) >= 0; }).map(function (u) { return String(u.name).replace(/^'/, ''); });
+    return n.length ? n.join(', ') : { Staff: 'Staf bertugas', Clerk: 'Kerani', Manager: 'Pengurus' }[role];
+  }
+  var estates = [];
+  (user.estates || []).forEach(function (est) {
+    if (live.indexOf(est) < 0) return;
+    var items = [], staff = who('Staff', est), clerk = who('Clerk', est), mgr = who('Manager', est);
+    function push(kind, role, i) { items.push({ id: i.id, kind: kind, role: role, who: role === 'Staff' ? staff : clerk, bm: i.bm, en: i.en || i.bm, sub: i.sub || '', fix: LATE_FIX[kind] || '' }); }
+    var fake = function (role) { return { user_code: 'LATE-' + role, role: role, estates: [est] }; };
+    var st = [], ck = [];
+    try { st = todo_(fake('Staff'), { estate: est }).items || []; } catch (e) {}
+    try { ck = todo_(fake('Clerk'), { estate: est }).items || []; } catch (e) {}
+    // today's chit: a working day (Monday to Saturday), past 6:30, and no chit keyed for today
+    var hasChit = false, days = [];
+    try { days = dayCloseRead_(est).days || []; hasChit = days.some(function (x) { return x.date === today; }); } catch (e) {}
+    var chit = dow === 0 ? 'rest' : hasChit ? 'ok' : hm < CHIT_BY ? 'wait' : 'no';
+    if (chit === 'no') push('CH', 'Staff', { id: 'CH:' + today, bm: 'Chit muster hari ini belum dibuat', en: 'Today\'s muster chit is not made', sub: 'Had ' + CHIT_BY + ' pagi · sekarang ' + hm });
+    st.forEach(function (i) { var m = /^(TH|FO|RP|FA):/.exec(String(i.id)); if (m && i.p === 1) push(m[1], 'Staff', i); });
+    ck.forEach(function (i) { if (/^DN:/.test(String(i.id)) && i.p === 1) push('DN', 'Clerk', i); });
+    var has = function (k) { return items.some(function (x) { return x.kind === k; }); };
+    estates.push({ estate: est, staff: staff, clerk: clerk, manager: mgr, withManager: hm >= MGR_FROM && items.length > 0,
+      board: { chit: chit, close: has('TH') ? 'no' : 'ok', ticket: has('DN') ? 'no' : 'ok', fruit: has('FO') || has('RP') ? 'no' : 'ok' }, items: items });
+  });
+  return { ok: true, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), today: today, estates: estates };
 }
 // The Pengurus (or the Owner) gives direction on a staff explanation: a new alert line replaces the old one.
 function todoDirect_(user, req) {

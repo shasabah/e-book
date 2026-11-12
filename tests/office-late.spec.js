@@ -83,6 +83,14 @@ env.tabs.FH_TICKET.rows.push(R('t2', DAY(3), ['901', 'T2', 'BOU', '8002', '0.20'
 e = late(env, 'HQ').estates[0];
 check('ticket keyed: nothing is late, the board is all ok', e.items.length === 0 && Object.values(e.board).every(v => v === 'ok') && e.withManager === false, kinds(e) + ' ' + JSON.stringify(e.board));
 
+// ---------- 1.56.1: said once, and a full ramp says how many lorries ----------
+NOW = at(DAY(0), '10:30'); env = build(); e = late(env, 'HQ').estates[0];
+check('1.56.1 day not closed: the line has no button name, the detail only its age, the fix names KUNCI HARI', !/TUTUP HARI/.test(one(e, 'TH').bm) && one(e, 'TH').sub === 'Semalam' && /KUNCI HARI/.test(one(e, 'TH').fix), one(e, 'TH').bm + ' | ' + one(e, 'TH').sub);
+env.tabs.FH_WORK.rows.push(R('w9', DAY(2), ['c', 'H1', 'HA', '01', '1-3', '', 'bunch', '1000']));
+env.tabs.FH_COLLECT.rows.push(R('c9', DAY(2), ['01', '1-3', '1000', 'Y', '', '', '']));
+e = late(env, 'HQ').estates[0];
+check('1.56.1 full ramp: the line does not repeat "panggil lori"; the fix says how many full lorries, no under-8-tan advice', !!one(e, 'RP') && !/panggil lori/.test(one(e, 'RP').bm) && /cukup untuk \d+ lori penuh/.test(one(e, 'RP').fix) && !/Kurang 8 tan/.test(one(e, 'RP').fix) && /kunci DN/.test(one(e, 'RP').fix), one(e, 'RP') ? one(e, 'RP').bm + ' | ' + one(e, 'RP').fix : kinds(e));
+
 // ---------- the clock ----------
 NOW = at(DAY(0), '06:10'); env = build(); e = late(env, 'HQ').estates[0];
 check('6:10 pagi: the chit is not late yet (limit 6:30), board says wait', !one(e, 'CH') && e.board.chit === 'wait', kinds(e) + ' ' + e.board.chit);

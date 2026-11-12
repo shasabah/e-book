@@ -2397,7 +2397,19 @@ function late_(user, req) {
   (user.estates || []).forEach(function (est) {
     if (live.indexOf(est) < 0) return;
     var items = [], staff = who('Staff', est), clerk = who('Clerk', est), mgr = who('Manager', est);
-    function push(kind, role, i) { items.push({ id: i.id, kind: kind, role: role, who: role === 'Staff' ? staff : clerk, bm: i.bm, en: i.en || i.bm, sub: i.sub || '', fix: LATE_FIX[kind] || '' }); }
+    // 1.56.1 (Yu Chen, 12 Nov, from the first real list): say a thing once. The line drops the button name and
+    // "panggil lori" (Cara selesai says it); the day-close detail keeps only how old it is; a full ramp says how
+    // many full lorries it holds instead of the under-8-tan advice.
+    function push(kind, role, i) {
+      var bm = String(i.bm || ''), sub = String(i.sub || ''), fix = LATE_FIX[kind] || '';
+      if (kind === 'TH') { bm = bm.replace(/ · TUTUP HARI$/, ''); sub = sub.split(' · ')[0]; }
+      if (kind === 'RP') {
+        bm = bm.replace(/ · panggil lori( sekarang)?$/, '');
+        var mt = /~?([\d.]+) tan/.exec(bm + ' ' + sub), n = mt ? Math.floor(Number(mt[1]) / 8) : 0;
+        if (n >= 1) fix = 'Panggil lori hari ini: cukup untuk ' + n + ' lori penuh. Lori sudah pergi? Buka E-Book → Ramp → kunci DN';
+      }
+      items.push({ id: i.id, kind: kind, role: role, who: role === 'Staff' ? staff : clerk, bm: bm, en: i.en || i.bm, sub: sub, fix: fix });
+    }
     var fake = function (role) { return { user_code: 'LATE-' + role, role: role, estates: [est] }; };
     var st = [], ck = [];
     try { st = todo_(fake('Staff'), { estate: est }).items || []; } catch (e) {}

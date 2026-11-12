@@ -68,6 +68,7 @@ const LATE = { ok: true, at: '2026-11-12 10:30', today: '2026-11-12', estates: [
   s = await session({ code: 'OWN-ALL-01', name: 'Pemilik Contoh', role: 'Owner', estates: ['SSGT', 'MELU'] }, late5); p = s.p;
   check('Owner sees the card too; past 5:00 petang it says who has it now', /kini dengan Pengurus Contoh/.test(await p.textContent('#late')), await p.textContent('#late'));
   const t5 = await p.evaluate(d => EA.lateText(d.estates[0], d, EA.currentUser()), late5);
+  check('1.56.1 past 5:00 petang the message says the lines are now the manager\'s, not "at 5:00"', /Sudah lepas 5:00 petang: semua di atas kini tanggungjawab \*Pengurus Contoh\*/.test(t5) && !/Pukul 5:00 petang/.test(t5), t5.split('\n').slice(-3)[0]);
   check('a message sent by the Owner is signed YC Lee', /\nYC Lee$/.test(t5), t5.split('\n').slice(-1)[0]);
   check('board past 5:00 says who has the lines now', /kini dengan Pengurus Contoh/.test(await p.evaluate(d => EA.lateBoard(d), late5)));
   await s.cx.close();

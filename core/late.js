@@ -29,7 +29,9 @@ window.EA = window.EA || {};
       L.push('');
     });
     L.push('Sila selesaikan hari ini.');
-    L.push('Pukul 5:00 petang, yang belum selesai menjadi tanggungjawab *' + e.manager + '*. Esok pagi ia sampai kepada YC Lee.');
+    // 1.56.1: past 5:00 petang the lines are already the Pengurus's, so the message says "now", not "at 5:00"
+    L.push(e.withManager ? 'Sudah lepas 5:00 petang: semua di atas kini tanggungjawab *' + e.manager + '*. Esok pagi ia sampai kepada YC Lee.'
+      : 'Pukul 5:00 petang, yang belum selesai menjadi tanggungjawab *' + e.manager + '*. Esok pagi ia sampai kepada YC Lee.');
     L.push('');
     L.push(u && u.role === 'Owner' ? 'YC Lee' : ((u && u.name) || 'Ibu Pejabat') + ', bagi pihak YC Lee');
     return L.join('\n');

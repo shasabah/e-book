@@ -282,6 +282,7 @@
     if (EA.workersPeek) EA.workersPeek(u, estate);       // v1.25: approvals and flags waiting, for the Pekerja tile
     if (EA.millsPeek) EA.millsPeek(u, estate);           // v1.29: the estate's mill list, and requests waiting
     if (EA.renderTodo) { EA.renderTodo($('todo'), u, estate); EA.todoPeek(u, estate); }   // v1.31: Perlu tindakan
+    if (EA.askLateAuto) EA.askLateAuto(u, estate);                                        // v1.57: the app asks first, once a day
     if (EA.renderLate) { EA.renderLate($('late'), u); EA.latePeek(u); }                   // v1.56: Susulan harian (HQ and the Owner)
     // v1.16: fetch the trial switches from the office now and then (a phone may stay logged in for weeks).
     var sw = EA.switches();

@@ -52,7 +52,9 @@ window.EA = window.EA || {};
   EA.todoItems = function (u, est) {
     if (!u || !ROLES.test(u.role)) return null;
     var c = cached(u, est), items = localItems(u, est).concat(c ? c.items : []), seen = {};
-    items = items.filter(function (x) { if (seen[x.id]) return false; seen[x.id] = true; return true; });   // v1.43: the phone and the office may both know a line
+    // v1.43: the phone and the office may both know a line. v1.57: the office's copy carries the answer state
+    // (ask, st, ans), so it is laid over the phone's own copy of the same line.
+    items = items.filter(function (x) { var f = seen[x.id]; if (f) { if (x.ask) { f.ask = x.ask; f.st = x.st; f.ans = x.ans; } return false; } seen[x.id] = Object.assign({}, x); return true; }).map(function (x) { return seen[x.id]; });
     items.sort(function (a, b) { return a.p - b.p; });
     return { items: items, at: c ? c.at : 0 };
   };
@@ -67,6 +69,81 @@ window.EA = window.EA || {};
     });
   };
   var COLOR = { 1: 'r', 2: 'a', 3: 'b', 4: 'g' };
+  // v1.57 The app asks first (Brief_Amaran 0.7 step 1; Yu Chen, 12 Nov 2026). A late line of the Staff or the
+  // Clerk lives three ways: Baru (not answered), Dalam tindakan (answered: what happened and by when, at most one
+  // day), Selesai (only the real work closes it, and then the line is gone). The phone asks once a day, at the
+  // first opening with a fresh list, before anything else: two taps a line. It asks for an answer, never for the
+  // problem to be solved, so it can always be left with ‹ BALIK and the day's work is never held back.
+  function dueLbl(due) { var d = String(due || ''); return d.slice(8, 10) + '/' + d.slice(5, 7) + (d.slice(11, 16) <= '12:00' ? EA.t(' pagi', ' morning') : EA.t(' petang', ' afternoon')); }
+  function stTag(x) {
+    if (!x.ask) return '';
+    if (x.st === 'doing') return '<small class="td-st d">' + EA.t('Dalam tindakan · ', 'In hand · ') + esc(x.ans.why) + EA.t(' · janji ', ' · promised ') + esc(dueLbl(x.ans.due)) + '</small>';
+    if (x.st === 'missed') return '<small class="td-st m">' + EA.t('Janji terlepas · jawab semula', 'Promise missed · answer again') + '</small>';
+    return '<small class="td-st n">' + EA.t('Baru · belum dijawab', 'New · not answered') + '</small>';
+  }
+  function toAsk(u, est) { var t = EA.todoItems(u, est); return t ? t.items.filter(function (x) { return x.ask && x.st !== 'doing'; }) : []; }
+  EA.askLate = function (u, est) {
+    var list = toAsk(u, est), k = 0;
+    if (!list.length) return;
+    function step() {
+      if (k >= list.length) { EA.ui.closeSheet(); if (EA.renderHome) EA.renderHome(); EA.ui.toast(EA.t('Terima kasih · jawapan dihantar', 'Thank you · answers sent')); return; }
+      var x = list[k], why = '', by = '', hr = new Date().getHours();
+      var whens = [['pm0', 'Petang ini', 'This afternoon'], ['am1', 'Esok pagi', 'Tomorrow morning'], ['pm1', 'Esok petang', 'Tomorrow afternoon']].filter(function (w) { return w[0] !== 'pm0' || hr < 15; });
+      var fixLbl = /^TH:/.test(x.id) ? EA.t('KUNCI HARI SEKARANG', 'CLOSE THE DAY NOW') : EA.t('SELESAIKAN SEKARANG', 'FIX IT NOW');
+      EA.ui.openSheet('<h2 id="sheet-title">' + EA.t('Sebelum mula', 'Before you start') + ' · ' + (k + 1) + ' / ' + list.length + '</h2>' +
+        '<p><b>' + esc(EA.t(x.bm, x.en || x.bm)) + '</b></p>' + (x.sub ? '<p class="hint">' + esc(x.sub) + '</p>' : '') +
+        (x.st === 'missed' ? '<p class="msg">' + EA.t('Janji anda (', 'Your promise (') + esc(dueLbl(x.ans.due)) + EA.t(') sudah lepas. Jawab semula.', ') has passed. Answer again.') + '</p>' : '') +
+        (x.go && x.go.charAt(0) === '#' ? '<button class="btn btn-ok" type="button" id="aq-fix">' + fixLbl + '</button><p class="hint">' + EA.t('Belum boleh selesai sekarang? Jawab dua soalan ini:', 'Cannot fix it now? Answer these two:') + '</p>' : '') +
+        '<p class="aq-q">' + EA.t('1 · Apa berlaku?', '1 · What happened?') + '</p><div class="seg2 aq-why">' + x.ask.map(function (a, n) { return '<button type="button" data-n="' + n + '">' + esc(EA.t(a[0], a[1] || a[0])) + '</button>'; }).join('') + '</div>' +
+        '<div class="field" id="aq-obox" hidden><label for="aq-other">' + EA.t('Tulis sebab (ringkas)', 'Write why (short)') + ' *</label><input id="aq-other" class="text-input" maxlength="100"></div>' +
+        '<p class="aq-q">' + EA.t('2 · Bila selesai?', '2 · When will it be done?') + '</p><div class="seg2 aq-by">' + whens.map(function (w) { return '<button type="button" data-b="' + w[0] + '">' + EA.t(w[1], w[2]) + '</button>'; }).join('') + '</div>' +
+        '<p class="msg" id="aq-err" hidden></p>',
+        function (s) {
+          var m = s.querySelector('#aq-err'), ob = s.querySelector('#aq-obox'), busy = false;
+          function say(t) { m.textContent = t; m.hidden = false; }
+          var fx = s.querySelector('#aq-fix');
+          if (fx) fx.onclick = function () { EA.ui.closeSheet(); location.hash = x.go.replace(/^#/, ''); };
+          async function send() {
+            if (busy) return;
+            var other = ob.hidden ? '' : s.querySelector('#aq-other').value.replace(/\s+/g, ' ').trim();
+            if (!why) return say(EA.t('Pilih apa berlaku dulu.', 'Choose what happened first.'));
+            if (!ob.hidden && other.length < 3) return say(EA.t('Tulis sebab (sekurang-kurangnya 3 huruf).', 'Write why (at least 3 letters).'));
+            if (!by) return;
+            busy = true; m.hidden = true;
+            var j = await EA.askFull('lateAnswer', { estate: est, ref: x.id, why: ob.hidden ? why : other, by: by });
+            busy = false;
+            if (!j || !j.ok) {
+              if (j && (j.error === 'nothing_waiting' || j.error === 'already')) { k++; return step(); }   // done or answered meanwhile
+              s.querySelectorAll('.aq-by button').forEach(function (b) { b.classList.remove('on'); }); by = '';
+              return say(j && (j.error === 'offline' || j.error === 'nolink') ? EA.t('Tiada line. Jawab kemudian dari Perlu tindakan.', 'No signal. Answer later from Needs action.') : EA.t('Tidak dihantar: ', 'Not sent: ') + ((j && j.error) || 'busy'));
+            }
+            keep(u, j); k++; step();
+          }
+          s.querySelectorAll('.aq-why button').forEach(function (b) {
+            b.onclick = function () {
+              s.querySelectorAll('.aq-why button').forEach(function (o) { o.classList.toggle('on', o === b); });
+              var a = x.ask[Number(b.dataset.n)]; why = a[0]; ob.hidden = !/^Lain/.test(a[0]); m.hidden = true;
+              if (!ob.hidden) s.querySelector('#aq-other').focus(); else if (by) send();
+            };
+          });
+          s.querySelectorAll('.aq-by button').forEach(function (b) {
+            b.onclick = function () { s.querySelectorAll('.aq-by button').forEach(function (o) { o.classList.toggle('on', o === b); }); by = b.dataset.b; send(); };
+          });
+        });
+    }
+    step();
+  };
+  // Once a day for each person, and only on a list fresh from the office (so a line already done is never asked).
+  EA.askLateAuto = function (u, est) {
+    if (!u || (u.role !== 'Staff' && u.role !== 'Clerk') || location.hash || !navigator.onLine) return;
+    var c = cached(u, est), mark = EA.local.get('ea.asked', null), today = EA.today();
+    if (!c || Date.now() - c.at > 3 * 60000) return;
+    if (mark && mark.code === u.code && mark.day === today) return;
+    var sb = document.getElementById('sheet-back'); if (sb && !sb.hidden) return;   // another box is open: never on top of it
+    if (!toAsk(u, est).length) return;
+    EA.local.set('ea.asked', { code: u.code, day: today });
+    EA.askLate(u, est);
+  };
   EA.renderTodo = function (box, u, est) {
     if (!box) return;
     var t = EA.todoItems(u, est);
@@ -76,12 +153,14 @@ window.EA = window.EA || {};
       box.innerHTML = t.at ? '<div class="td-done">✓ ' + EA.t('Tiada tindakan sekarang', 'Nothing to do now') + '</div>' : '';
       return;
     }
+    var nAsk = t.items.filter(function (x) { return x.ask && x.st !== 'doing'; }).length;
     box.innerHTML = '<section class="td" aria-labelledby="td-h"><h2 id="td-h">' + EA.t('Perlu tindakan', 'Needs action') + ' (' + t.items.length + ')</h2>' +
       t.items.map(function (x, i) {
         var tap = !!x.go;
         return '<' + (tap ? 'button type="button"' : 'div') + ' class="td-it" data-i="' + i + '"><span class="td-ic ' + (COLOR[x.p] || 'b') + '">' + esc(x.ic || '!') + '</span>' +
-          '<span class="td-t">' + esc(EA.t(x.bm, x.en || x.bm)) + (x.sub ? '<small>' + esc(x.sub) + '</small>' : '') + '</span>' + (tap ? '<span class="td-go">›</span>' : '') + '</' + (tap ? 'button' : 'div') + '>';
-      }).join('') + '</section>';
+          '<span class="td-t">' + esc(EA.t(x.bm, x.en || x.bm)) + (x.sub ? '<small>' + esc(x.sub) + '</small>' : '') + stTag(x) + '</span>' + (tap ? '<span class="td-go">›</span>' : '') + '</' + (tap ? 'button' : 'div') + '>';
+      }).join('') + (nAsk ? '<div class="actions"><button class="btn btn-main" type="button" id="td-ans">ANSWER · ' + nAsk + '<small>JAWAB · ' + nAsk + '</small></button></div>' : '') + '</section>';
+    if (nAsk) box.querySelector('#td-ans').onclick = function () { EA.askLate(u, est); };
     box.querySelectorAll('button.td-it').forEach(function (b) {
       b.onclick = function () {
         var x = t.items[Number(b.dataset.i)];

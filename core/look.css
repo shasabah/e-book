@@ -872,3 +872,8 @@ div.td-it { cursor: default; }
 .list-line.fld-late b { color: var(--bad); }
 .list-line.fld-due b { color: #8a5200; }
 .wk-low .picks { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* v1.57 The app asks first: the state under a late line, and the two questions */
+.td-st { font-weight: 700; } .td-st.n, .td-st.m { color: #b3261e !important; } .td-st.d { color: #2e7d4f !important; }
+.aq-q { margin: 12px 0 2px; font-weight: 700; }
+.lt-it small.lt-an { color: #2e7d4f; font-weight: 600; } .lt-it small.lt-an.n { color: #b3261e; }

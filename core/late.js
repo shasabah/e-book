@@ -26,6 +26,7 @@ window.EA = window.EA || {};
       L.push('*' + (n + 1) + ' · ' + i.who + '* — ' + i.bm);
       if (i.sub) L.push('Butiran: ' + i.sub);
       if (i.fix) L.push('Cara selesai: ' + i.fix);
+      if (i.st) L.push(i.st === 'doing' ? 'Jawapan: ' + i.ans : i.st === 'missed' ? 'Janji terlepas: ' + i.ans : 'Belum dijawab');   // v1.57
       L.push('');
     });
     L.push('Sila selesaikan hari ini.');
@@ -92,7 +93,8 @@ window.EA = window.EA || {};
         return '<div class="lt-card"><h3>' + esc(estName(e.estate)) + ' ' + boardHtml(e) + '</h3>' +
           (e.withManager ? '<p class="lt-mg">' + EA.t('Lepas 5:00 petang · kini tanggungjawab ', 'Past 5:00 pm · now with ') + '<b>' + esc(e.manager) + '</b></p>' : '') +
           (e.items.length ? e.items.map(function (i) {
-            return '<div class="lt-it"><b>' + esc(i.who) + '</b> · ' + esc(EA.t(i.bm, i.en || i.bm)) + (i.sub ? '<small>' + esc(i.sub) + '</small>' : '') + (i.fix ? '<small class="lt-fx">' + EA.t('Cara selesai: ', 'How to fix: ') + esc(i.fix) + '</small>' : '') + '</div>';
+            return '<div class="lt-it"><b>' + esc(i.who) + '</b> · ' + esc(EA.t(i.bm, i.en || i.bm)) + (i.sub ? '<small>' + esc(i.sub) + '</small>' : '') + (i.fix ? '<small class="lt-fx">' + EA.t('Cara selesai: ', 'How to fix: ') + esc(i.fix) + '</small>' : '') +
+              (i.st ? '<small class="lt-an' + (i.st === 'doing' ? '' : ' n') + '">' + (i.st === 'doing' ? EA.t('Jawapan: ', 'Answer: ') + esc(i.ans) : i.st === 'missed' ? EA.t('Janji terlepas: ', 'Promise missed: ') + esc(i.ans) : EA.t('Belum dijawab', 'Not answered')) + '</small>' : '') + '</div>';
           }).join('') + '<button class="btn btn-ok lt-wa" type="button" data-k="' + k + '">WHATSAPP · ESTATE<small>Mesej kepada ' + esc(estName(e.estate)) + '</small></button>'
             : '<p class="td-done">✓ ' + EA.t('Semua ikut masa', 'All on time') + '</p>') + '</div>';
       }).join('') +

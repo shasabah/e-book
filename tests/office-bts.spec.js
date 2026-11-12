@@ -38,13 +38,15 @@ const by = (j, re) => (j.items || []).filter(i => re.test(i.id));
 const st = todo('Staff'), fo = by(st, /^FO:/)[0], fc = by(st, /^FC:/)[0];
 check('Staff: fruit harvested 3 days ago is OVERDUE, with bunches, tonnes and days', fo && fo.p === 1 && /LEBIH TEMPOH: 80 tandan ≈ 1\.6 tan/.test(fo.bm) && /3 hari/.test(fo.sub) && /Blk 01 80/.test(fo.sub), fo && (fo.bm + ' | ' + fo.sub));
 check('Staff: yesterday\'s fruit must reach the ramp today', fc && /40 tandan ≈ 0\.8 tan dituai semalam · mesti ke ramp hari ini/.test(fc.bm), fc && fc.bm);
-const mg = todo('Manager'), fm = by(mg, /^FM:/)[0];
-check('Pengurus: only the overdue fruit is his line, to give a direction', fm && fm.p === 1 && /lebih tempoh · 80 tandan/.test(fm.bm) && /beri arahan/.test(fm.sub) && !by(mg, /^FC:/).length, fm && fm.bm);
-const ow = todo('Owner'), fw = by(ow, /^FW:/)[0];
-check('Owner: fruit 3 days in the field reaches him', fw && /buah 3 hari di ladang/.test(fw.bm) && /80 tandan/.test(fw.sub), fw && fw.bm);
+// 1.58: fruit overdue since yesterday is the Pengurus's own line with his three buttons (it replaces the FM line)
+const mg = todo('Manager'), fm = by(mg, /^MG:FO:/)[0];
+check('Pengurus: only the overdue fruit is his line, with his three buttons (1.58)', fm && fm.p === 1 && /^Kini tanggungjawab anda: LEBIH TEMPOH: 80 tandan/.test(fm.bm) && /Staf belum jawab/.test(fm.sub) && fm.go === 'mgr' && !by(mg, /^FC:/).length && !by(mg, /^FM:/).length, fm && fm.bm);
+// 1.58: it reaches the Owner the morning after it became the Pengurus's, with both sides (it replaces the FW line)
+const ow = todo('Owner'), fw = by(ow, /^OW:FO:/)[0];
+check('Owner: overdue fruit the Pengurus has not answered reaches him, once (1.58)', fw && /^Tersangkut: LEBIH TEMPOH: 80 tandan/.test(fw.bm) && /belum jawab/.test(fw.sub) && !by(ow, /^FW:/).length, fw && fw.bm);
 // collected: every line goes
 tabs.FH_COLLECT.rows.push(R('c2', ago(0), ['01', '1-2', '80', 'Y', '', '', '']), R('c3', ago(0), ['01', '1-3', '40', 'Y', '', '', '']));
-check('once the fruit is keyed to the ramp the lines go (Staff, Pengurus, Owner)', !by(todo('Staff'), /^F[OC]:/).length && !by(todo('Manager'), /^FM:/).length && !by(todo('Owner'), /^FW:/).length);
+check('once the fruit is keyed to the ramp the lines go (Staff, Pengurus, Owner)', !by(todo('Staff'), /^F[OC]:/).length && !by(todo('Manager'), /^(FM:|MG:FO:)/).length && !by(todo('Owner'), /^(FW:|OW:FO:)/).length);
 
 // ---- the ticket by 10:00 am the day after the lorry ----
 check('ticket due: a Wednesday lorry is due Thursday; a Saturday lorry is due Monday', ctx.ticketDue_('2026-11-11') === '2026-11-12' && ctx.ticketDue_('2026-11-14') === '2026-11-16' && ctx.ticketDue_('2026-11-13') === '2026-11-14');
@@ -57,8 +59,8 @@ check('Clerk: the lorry with a ticket has no line', !by(ck, /^DN:T1/).length);
 const hq = todo('HQ'), h2 = by(hq, /^DN:T2/)[0];
 check('HQ (Wawa): sees the late ticket, to key when the clerk is on leave', h2 && /lewat · kunci jika kerani bercuti/.test(h2.bm), h2 && h2.bm);
 check('HQ: a ticket not yet late is not her line', t3late || !by(hq, /^DN:T3/).length);
-const m2 = by(todo('Manager'), /^DN:T2/)[0];
-check('Pengurus: the late ticket — check the driver\'s photographs', m2 && /semak gambar pemandu/.test(m2.bm), m2 && m2.bm);
-const o2 = by(todo('Owner'), /^DN:T2/)[0], past = ctx.dayDiff_(ctx.ticketDue_(ago(3)), ago(0));
-check('Owner: 2 days past the deadline it reaches him', past >= 2 ? (o2 && /Tersangkut: tiket DN 8002/.test(o2.bm)) : !o2, 'past ' + past + ' ' + (o2 && o2.bm));
+const m2 = by(todo('Manager'), /^(DN:T2|MG:DN:T2)/)[0];   // 1.58: his own line once it has passed to him (5:00 petang of the due day)
+check('Pengurus: the late ticket is on his list', m2 && /tiket DN 8002/.test(m2.bm) && by(todo('Manager'), /^(DN:T2|MG:DN:T2)/).length === 1, m2 && m2.bm);
+const o2 = by(todo('Owner'), /^(DN:T2|OW:DN:T2)/)[0], past = ctx.dayDiff_(ctx.ticketDue_(ago(3)), ago(0));
+check('Owner: 2 days past the deadline it has reached him, once (1.58: from the morning after it passed to the Pengurus)', (past >= 2 ? (o2 && /Tersangkut: .*tiket DN 8002/.test(o2.bm)) : true) && by(todo('Owner'), /^(DN:T2|OW:DN:T2)/).length <= 1, 'past ' + past + ' ' + (o2 && o2.bm));
 check('Staff: no ticket lines', !by(todo('Staff'), /^DN:/).length);

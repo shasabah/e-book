@@ -71,9 +71,9 @@ addRow('FH_COLLECT', { date: ago(1), block: '03', lot: '3-1', bunches: 100, clea
 const s0 = line(f, 'RP');
 check('no ABW yet: the line shows bunches only (no tonnes made up)', s0 && !/~/.test(s0.bm + s0.sub) && /100 tandan/.test(s0.sub), JSON.stringify(s0));
 addRow('FH_TICKET', { date: ago(5), ticket_no: 'T1', abw_kg: 18, nett_mt: 9 });
-const s2 = line(f, 'RP'), m2 = line(mg, 'RP');
+const s2 = line(f, 'RP'), m2 = line(mg, 'RP') || line(mg, 'MG:RP');   // 1.58: from 5:00 petang it is his own line (MG), carrying the same decision
 check('fruit from yesterday (1.8 t): the staff is told to call the lorry now, under 8 t ask the Pengurus', s2 && s2.p === 1 && /panggil lori sekarang/.test(s2.bm) && /1\.8 tan/.test(s2.sub) && /tanya Encik Samsir/.test(s2.sub), JSON.stringify(s2));
-check('under 8 t and over 24 hours: the Pengurus decides (red)', m2 && m2.p === 1 && /separuh penuh/.test(m2.bm), JSON.stringify(m2));
+check('under 8 t and over 24 hours: the Pengurus decides (red)', m2 && m2.p === 1 && /separuh penuh/.test(m2.bm + ' ' + m2.sub), JSON.stringify(m2));
 check('the clerk expects a ticket', (x => x && x.p === 4 && /Lori dijangka/.test(x.bm))(line(ck, 'RP')));
 check('1 day: not yet stuck for the Owner', !line(own, 'RO'));
 // cut 2 days ago, not carried to the ramp
@@ -82,13 +82,15 @@ addRow('FH_WORK', { date: ago(2), task_code: 'HA', block: '04', lot: '4-2', work
 check('harvested 2 days ago, not carried to the ramp: the staff sees it OVERDUE, to carry now', (x => x && x.p === 1 && /LEBIH TEMPOH: 80 tandan/.test(x.bm) && /#field-harvest\/collect/.test(x.go))(line(f, 'FO')));
 addRow('FH_COLLECT', { date: ago(2), block: '04', lot: '4-2', bunches: 80, cleared: 'Y' });
 check('carried: the "kutip" line goes', !line(f, 'FC'));
-check('fruit 2 days on the ramp: the Owner sees it stuck', (x => x && x.p === 1 && /2 hari di ramp/.test(x.bm))(line(own, 'RO')));
+// 1.58: the morning after it passed to the Pengurus with no answer, the Owner's line is OW (it replaces RO, never both)
+check('fruit 2 days on the ramp: the Owner sees it stuck, once', (x => x && x.p === 1 && /^Tersangkut: /.test(x.bm) && /2 hari di ramp|Buah di ramp sejak/.test(x.bm))(line(own, 'RO') || line(own, 'OW:RP')) && !(line(own, 'RO') && line(own, 'OW:RP')));
 // today: 500 more → (100 + 80 + 500) × 18 kg = 12.2 t → full
 addRow('FH_WORK', { date: today, task_code: 'HA', block: '01', lot: '1-1', worker_id: 'W1', bunches: 500 });
 addRow('FH_COLLECT', { date: today, block: '01', lot: '1-1', bunches: 500, cleared: 'Y' });
 const sf = line(f, 'RP');
 check('ramp full (12.2 t ≥ 8 t): the staff is told to call the lorry', sf && sf.p === 1 && /Ramp penuh/.test(sf.bm) && /12\.2 tan/.test(sf.bm), sf && sf.bm);
-check('ramp full: the Pengurus is told (no decision needed)', (x => x && x.p === 2 && /Staf panggil lori/.test(x.bm))(line(mg, 'RP')));
+// 1.58: before it passes to him he is only told (amber); once it is his (old fruit, or 5:00 petang) it is his red line
+check('ramp full: the Pengurus is told, or it is his own line once it has passed to him', (x => x && ((x.p === 2 && /Staf panggil lori/.test(x.bm)) || (x.p === 1 && /^Kini tanggungjawab anda: Ramp penuh/.test(x.bm))))(line(mg, 'RP') || line(mg, 'MG:RP')));
 // the lorry leaves with "ramp empty": the lines go
 addRow('FH_DISPATCH', { date: today, trip: 'TR1', block: '01', bunches: 680, ramp_cleared: 'Y', dn_no: '9001', mill: 'SKPOM' });
 const D = L.getSheetByName('FH_DISPATCH'); D.rows[D.rows.length - 1][D.rows[0].indexOf('keyed_at')] = today + ' 16:00';

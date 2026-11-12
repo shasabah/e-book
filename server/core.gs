@@ -2391,10 +2391,12 @@ function todo_(user, req) {
         var staffTxt = (l.role === 'Staff' ? 'Staf' : 'Kerani') + (l.st === 'doing' ? ' jawab: ' + l.ans : l.st === 'missed' ? ' · janji terlepas: ' + l.ans : l.kind === 'CH' ? '' : ' belum jawab');
         if (l.mg) {
           var dup = { }; dup[l.id] = 1; dup['MJ:' + l.id] = 1; if (l.kind === 'FO') dup['FM:' + l.id.slice(3)] = 1;
+          // the decision the Pengurus's own ramp line asked for (a half-full lorry, 22 Oct) stays on the folded line
+          var oldLine = items.filter(function (i) { return i.id === l.id; })[0], hint = oldLine && /^Putuskan/.test(oldLine.bm) ? oldLine.bm : '';
           items = items.filter(function (i) { return !dup[i.id]; });
           var quiet = l.mst === 'doing' || l.mst === 'help';
           items.push({ id: 'MG:' + l.id, p: quiet ? 3 : 1, ic: quiet ? 'PG' : '!', bm: (quiet ? 'Dalam tindakan anda: ' : 'Kini tanggungjawab anda: ') + l.bm, en: (quiet ? 'In your hands: ' : 'Now yours: ') + (l.en || l.bm),
-            sub: [l.who + ' · ' + staffTxt, l.mans ? 'Anda: ' + l.mans : ''].filter(String).join(' · '), go: 'mgr', ref: l.id, mst: l.mst, need: MGR_NEED, days: MGR_DAYS, fix: l.fix });
+            sub: [l.who + ' · ' + staffTxt, hint, l.mans ? 'Anda: ' + l.mans : ''].filter(String).join(' · '), go: 'mgr', ref: l.id, mst: l.mst, need: MGR_NEED, days: MGR_DAYS, fix: l.fix });
         } else if (l.st === 'missed' || (l.ans && /gambar/i.test(l.ans)) || l.missedBefore) {
           add({ id: 'MJ:' + l.id, p: 1, ic: '!', bm: (l.st === 'missed' || l.missedBefore ? 'Janji terlepas: ' : 'Perlu Pengurus: ') + l.bm, en: (l.st === 'missed' || l.missedBefore ? 'Promise missed: ' : 'Needs the manager: ') + (l.en || l.bm),
             sub: (l.role === 'Staff' ? 'Staf' : 'Kerani') + ' jawab: ' + l.ans, go: '' });

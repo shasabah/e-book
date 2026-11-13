@@ -65,7 +65,9 @@ var ROOM_TABS = {
   // v1.41 F · Kerja seorang-seorang: a person's own manuring bags (on his first lot line), and for operators the machine
   // and its hour meter at start and end of the day.
   FH_WORK:   ['chit', 'worker_id', 'task_code', 'block', 'lot', 'qty', 'unit', 'bunches', 'confirmed_by', 'confirmed_at', 'note', 'bags', 'machine', 'meter_start', 'meter_end', 'hours'],
-  FH_JOBDAY: ['chit', 'task_code', 'block', 'lots', 'workers', 'qty', 'unit', 'bunches', 'plan_ha', 'job_status', 'reason', 'flags', 'confirmed_by', 'confirmed_at', 'progress', 'bags', 'target', 'dose'],
+  // v1.60: 'note' was missing here, so every note written to a job day (the Data lama imports, the
+  // 29 Oct correction) was quietly dropped. The sheet grows the column by itself at the next write.
+  FH_JOBDAY: ['chit', 'task_code', 'block', 'lots', 'workers', 'qty', 'unit', 'bunches', 'plan_ha', 'job_status', 'reason', 'flags', 'confirmed_by', 'confirmed_at', 'progress', 'bags', 'target', 'dose', 'note'],
   FH_COLLECT: ['block', 'lot', 'bunches', 'cleared', 'tractor', 'loader', 'note'],
   FH_DISPATCH: ['bunches', 'lorry', 'mill', 'ramp_cleared', 'note', 'block', 'trip', 'dn_no', 'driver'],
   // The lots ticked on a delivery note: one row per harvester line on the lorry (v19).
@@ -3273,6 +3275,66 @@ function importOldCropInto_(est, data, names) {
   [mt, pt, wl, tt, tb, wt].forEach(flush_);
   ROWS_MEMO_ = null;
   return out;
+}
+/** v1.60 (Yu Chen, 13 Nov 2026: "check the task done . and import to the apps"): load the maintenance work Paitan
+ *  has already done in 2026, block by block and month by month, so PROGRAM shows plan against actual from the day
+ *  Paitan starts keying. From Christy's "Work Programme For Payroll" sheet inside SPLT.PTAN Analysis_Payroll.10.
+ *  October.261031 (Jan - Oct 2026), checked against the October payroll analysis in the same file, which agrees
+ *  line for line. The numbers are in server/ptan-work-2026.gs (PTAN_WORK_2026_); it holds land work only, no names
+ *  and no money. Every ringgit in those files stays out of E-Book (Rule 8: pay waits for the pilot).
+ *  Live sheet only, like the other old-data loads. Each row is keyed_by IMPORT and noted "Data lama", so it counts
+ *  in the rounds and in PROGRAM but never asks anybody to do anything. Nothing is deleted and a second run adds
+ *  nothing. Dated the last day of its month, because the sheet gives the month and not the day.
+ *  Not loaded, because E-Book has nowhere right to put them: road-side frond trimming (1,593 chains, still no job
+ *  code) and "road maintenance (stone)" 40, where the sheet does not say whether that is hectares or lorry loads. */
+function importPaitanWork2026() {
+  if (typeof PTAN_WORK_2026_ === 'undefined' || !PTAN_WORK_2026_) {
+    Logger.log('importPaitanWork2026: the data file ptan-work-2026.gs is not in this project');
+    return { ok: false, error: 'no_data_file' };
+  }
+  var was = PRACTICE_, out = null;
+  try {
+    PRACTICE_ = false; BOOK_ = null; ROWS_MEMO_ = null;
+    out = importWorkInto_('PTAN', PTAN_WORK_2026_, '2026');
+  } finally { PRACTICE_ = was; BOOK_ = null; ROWS_MEMO_ = null; }
+  Logger.log('importPaitanWork2026: ' + JSON.stringify(out) + ' (live sheet only)');
+  return out;
+}
+// One line:  R<row in the source sheet>|block|job code|unit|MM:quantity,...|what the sheet calls it
+function importWorkInto_(est, data, year) {
+  var out = { work: 0, same: 0 };
+  var ss = book_(), now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
+  var co = ESTATE_COMPANY[est] || '';
+  var sh = roomTab_(ss, 'FH_JOBDAY'), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0], rows = [];
+  var have = {};
+  standingRows_('FH_JOBDAY', est).forEach(function (r) { have[String(r.id)] = true; });
+  data.forEach(function (line) {
+    var p = String(line).split('|');
+    var src = p[0], block = p[1], code = p[2], unit = p[3], note = p[5] || '';
+    String(p[4]).split(',').forEach(function (x) {
+      var y = x.split(':'), mm = y[0], qty = Number(y[1]);
+      if (!(qty > 0)) return;
+      var id = 'IMP-' + est + '-WK-' + src + '-' + year + mm;
+      if (have[id]) { out.same++; return; }
+      have[id] = true;
+      var row = { id: id, date: monthEnd_(year + '-' + mm), company: co, estate: est, keyed_by: IMPORT_BY,
+        keyed_at: now, phone: '', status: 'active', replaces: '', received_at: now,
+        chit: '', task_code: code, block: block, lots: '', workers: '', qty: qty, unit: unit, bunches: '',
+        plan_ha: '', job_status: 'done', reason: '', flags: '', confirmed_by: '', confirmed_at: '', progress: '',
+        bags: '', target: '', dose: '',
+        note: 'Data lama: ' + note + ' \u00b7 sepanjang bulan, ikut Work Programme For Payroll (' + src + ')' };
+      rows.push(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); }));
+      out.work++;
+    });
+  });
+  if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, head.length).setValues(rows);
+  ROWS_MEMO_ = null;
+  return out;
+}
+// The last day of a month written yyyy-MM.
+function monthEnd_(ym) {
+  var p = String(ym).split('-'), d = new Date(Date.UTC(Number(p[0]), Number(p[1]), 0));
+  return p[0] + '-' + p[1] + '-' + ('0' + d.getUTCDate()).slice(-2);
 }
 function seedProgrammeInto_() {
   var ha = { '01': 33.20, '02': 33.93, '03': 31.18, '04': 32.34 }, A = ['01', '02'], B = ['03', '04'], ALL = A.concat(B), lines = [];

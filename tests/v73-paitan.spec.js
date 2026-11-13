@@ -40,7 +40,9 @@ const { chromium } = require('playwright');
     bha: EA.lists.blocksFor('PTAN').reduce((a, b) => a + b.ha, 0).toFixed(2), sb: EA.lists.blocksFor('SSGT').map(b => b.block + ':' + b.ha).join(' '),
     df: EA.lists.mainJobs.PTAN.indexOf('DF'), mj: EA.lists.mainJobs.PTAN.length, smj: EA.lists.mainJobs.SSGT.join(','),
     lot: JSON.stringify(EA.lists.lot('PTAN', '1-13')), slot: EA.lists.lot('SSGT', '1-13').ha, name: EA.lists.estate('PTAN').name,
-    gps: EA.lists.nearestLot('PTAN', 6.5, 117.3)
+    gps: EA.lists.nearestLot('PTAN', 6.5, 117.3),
+    here: (function () { var l = EA.lists.lot('PTAN', '2-9'); var n = EA.lists.nearestLot('PTAN', l.lat, l.lon); return n && n.lot.lot + '|' + n.metres; })(),
+    noCoord: EA.lists.lotsFor('PTAN').filter(function (l) { return !l.lat; }).map(function (l) { return l.lot; }).join(',')
   }));
   check('Paitan has 171 lots: 170 surveyed (184.14 Ha with 9Ac, 20,957 palms) and one for Block 9Ac', L.pt === 171 && L.ha === '184.14' && L.palms === 20957, JSON.stringify(L));
   check('five blocks with their lots: 01 43, 02 33, 03 40, 04 54, 9A 1; block Ha add to 184.14', L.blocks === '01:43 02:33 03:40 04:54 9A:1' && L.bha === '184.14', L.blocks + ' ' + L.bha);
@@ -48,7 +50,13 @@ const { chromium } = require('playwright');
   check('TKRS and 43 Acres are not loaded (they wait for the piece level)', L.tk === 0);
   check('Paitan\'s lot 1-13 is its own, not Sugut\'s', /"ha":0.26/.test(L.lot) && /"palms":36/.test(L.lot) && L.slot !== 0.26, L.lot + ' / ' + L.slot);
   check('main jobs as Sugut without durian', L.df < 0 && L.mj === 16);
-  check('the estate is named Paitan; no GPS suggestion without coordinates (never a wrong lot)', L.name === 'Paitan' && L.gps === null);
+  check('the estate is named Paitan', L.name === 'Paitan', L.name);
+  // v1.59: the lots have their own centre points now (from the survey shapefiles), so standing in a lot names that lot
+  check('standing in a lot, the nearest lot is that lot', L.here === '2-9|0', L.here);
+  // far away it still answers, so whoever asks must look at the metres: 12 km is not "you are in this lot"
+  check('far from the estate the answer carries the distance, so a wrong lot cannot pass as right',
+    !!L.gps && L.gps.metres > 10000, JSON.stringify(L.gps));
+  check('Block 9Ac has no coordinates, because it has no map: no guess', L.noCoord === '9A-1', L.noCoord);
 
   // ---------- the chit ----------
   await goRoom(p);

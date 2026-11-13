@@ -3066,3 +3066,58 @@ function machinesInto_(text) {
   });
   return n;
 }
+
+/** One-off (Yu Chen, 13 Nov 2026, 17:05): undo the Paitan worker import of that afternoon.
+ *  21 harvester names were imported with names only, no company worker codes, so E-Book made its own
+ *  (PTANB261101 to PTANB261121) and could not see the 22 people already on the Paitan list. Every one
+ *  arrived as a new hire, so 21 lines sat waiting for the Pengurus.
+ *  Checked by Wawa against the SDK worker file: 9 are men already on the list under their own codes
+ *  (HANCO and HANCO HERY are one man; ANALLUDDIN and AWALLUDDIN are one man), and 12 left the estate
+ *  before Paitan started on E-Book. None of the 21 is a new worker, so each gets a 'rejected' line —
+ *  the Pengurus's own answer to a new hire, keyed here by the Owner, who may do every step (22 Oct).
+ *  Nothing is deleted: the import lines stay in WORKER_LOG, and the men come off the muster
+ *  (workerStates_ turns a rejected new hire into 'refused', which onMuster_ leaves out).
+ *  Running it twice changes nothing: a man who is no longer pending is skipped. Returns what it did. */
+function undoPaitanImport13Nov() {
+  var EST = 'PTAN';
+  var SAME = {
+    PTANB261101: 'PTANSC251113 Laidah B. Mudin',
+    PTANB261103: 'PTANSC251109 Irman B. Lagembira',
+    PTANB261110: 'PTANSC260104 Mohd Kamil Mubarak B. Sapa',
+    PTANB261113: 'PTANSC260301 Zulfikar B.Jusman',
+    PTANB261116: 'PTANSC260602 Mohd Ramli B. Bako',
+    PTANB261117: 'PTANSC260603 Awalluddin B. Ramli',
+    PTANB261118: 'PTANSC260603 Awalluddin B. Ramli',
+    PTANB261119: 'PTANSC260704 Hanco Hery Radahati',
+    PTANB261120: 'PTANSC260704 Hanco Hery Radahati'
+  };
+  var GONE = ['PTANB261102', 'PTANB261104', 'PTANB261105', 'PTANB261106', 'PTANB261107', 'PTANB261108',
+              'PTANB261109', 'PTANB261111', 'PTANB261112', 'PTANB261114', 'PTANB261115', 'PTANB261121'];
+  var was = PRACTICE_, out = { same: 0, gone: 0, skipped: [] };
+  try {
+    PRACTICE_ = false; BOOK_ = null; ROWS_MEMO_ = null;
+    var ss = book_(), now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), today = todayKL_();
+    var st = workerStates_(EST), names = {}, seq = 0;
+    standingRows_('LIST_PEOPLE', EST).forEach(function (r) { names[String(r.worker_id)] = String(r.name); });
+    var sh = roomTab_(ss, 'WORKER_LOG'), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    function reject(w, why) {
+      var o = st[w];
+      if (!o || !o.pending || o.kind !== 'new') { out.skipped.push(w); return false; }
+      var row = Object.assign({ id: 'WK-' + EST + '-' + now.replace(/\D/g, '') + '-X' + (seq++), date: today,
+        company: ESTATE_COMPANY[EST] || '', estate: EST, keyed_by: 'OWN-ALL-01', keyed_at: now, phone: 'OFFICE',
+        status: 'active', replaces: '', received_at: now },
+        { worker_id: w, name: names[w] || '', kind: 'rejected', day: o.day || today, note: why,
+          answered_by: 'OWN-ALL-01', answered_at: now });
+      sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); }));
+      return true;
+    }
+    Object.keys(SAME).forEach(function (w) {
+      if (reject(w, 'Sama dengan ' + SAME[w] + '. Diimport 13/11 tanpa kod syarikat. Disemak Wawa (fail pekerja SDK). Satu pekerja, satu kod seumur hidup.')) out.same++;
+    });
+    GONE.forEach(function (w) {
+      if (reject(w, 'Sudah lari sebelum Paitan mula di E-Book; tiada rekod kerja di sini. Disemak Wawa (fail pekerja SDK). Rekod lari ada di fail pekerja SDK.')) out.gone++;
+    });
+  } finally { PRACTICE_ = was; BOOK_ = null; ROWS_MEMO_ = null; newGen_(); }
+  Logger.log('undoPaitanImport13Nov: ' + JSON.stringify(out));
+  return out;
+}

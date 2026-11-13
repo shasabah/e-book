@@ -51,7 +51,12 @@ check('every line is Paitan, company SPLT, keyed by SEED', pg.every(r => col(r, 
 const B = env.tabs.LIST_BUDGET.rows[0], bc = (r, k) => r[B.indexOf(k)];
 const bg = env.tabs.LIST_BUDGET.rows.slice(1).filter(r => bc(r, 'estate') === 'PTAN');
 check('the crop budget: 12 months, 2,831 MT for the year (Target 1)', out.budget === 12 && bg.length === 12 && bg.reduce((a, r) => a + Number(bc(r, 'budget_mt')), 0) === 2831, bg.length + ' ' + bg.reduce((a, r) => a + Number(bc(r, 'budget_mt')), 0));
-check('November 297 MT and December 275 MT, 19 harvest days', bg.filter(r => bc(r, 'month') === '2026-11')[0] && Number(bc(bg.filter(r => bc(r, 'month') === '2026-11')[0], 'budget_mt')) === 297 && Number(bc(bg.filter(r => bc(r, 'month') === '2026-12')[0], 'budget_mt')) === 275 && Number(bc(bg[0], 'work_days')) === 19);
+const nov = bg.filter(r => bc(r, 'month') === '2026-11')[0], dec = bg.filter(r => bc(r, 'month') === '2026-12')[0];
+check('November 297 MT and December 275 MT', Number(bc(nov, 'budget_mt')) === 297 && Number(bc(dec, 'budget_mt')) === 275);
+// the group's own harvest calendar, month by month: 313 days a year, Sundays mostly worked
+check('the harvest days follow the working calendar, month by month: Jan 27, Feb 23, Mar 25, Oct 28, Nov 27', bg.map(r => Number(bc(r, 'work_days'))).join() === '27,23,25,26,26,26,26,26,26,28,27,27' && bg.reduce((a, r) => a + Number(bc(r, 'work_days')), 0) === 313, bg.map(r => bc(r, 'work_days')).join());
+check('November pace is 297 over 27 days, about 11 tonnes a day', Math.round(297 / Number(bc(nov, 'work_days')) * 10) / 10 === 11);
+check('each budget line names both papers it came from', bg.every(r => /SPLT.PTAN BUDGET COSTING 2026/.test(bc(r, 'note')) && /Working Calendar-Harvesting/.test(bc(r, 'note'))));
 check('no ABW target is made up (the budget has none)', bg.every(r => String(bc(r, 'abw_kg')) === ''));
 const n2 = env.ctx.seedPaitan2026();
 check('running it a second time adds nothing', n2.programme === 0 && n2.budget === 0 && env.tabs.LIST_PROGRAMME.rows.slice(1).filter(r => col(r, 'estate') === 'PTAN').length === 85, JSON.stringify(n2));

@@ -2990,8 +2990,10 @@ function budgetInto_(est, want, days, note) {
   var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
   Object.keys(want).forEach(function (m) {
     if (have[m]) return;
+    // v1.58: days may be one number for every month, or a month → days map (Paitan's working calendar)
+    var wd = days && typeof days === 'object' ? days[m] : days;
     var row = { id: 'BG-' + est + '-' + m, date: now.slice(0, 10), company: ESTATE_COMPANY[est] || '', estate: est, keyed_by: 'OWNER-FIX', keyed_at: now, phone: '', status: 'active', replaces: '',
-      received_at: now, month: m, budget_mt: want[m], abw_kg: '', work_days: days, note: note };
+      received_at: now, month: m, budget_mt: want[m], abw_kg: '', work_days: wd === undefined ? '' : wd, note: note };
     sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); })); n++;
   });
   return n;
@@ -3082,7 +3084,7 @@ function seedPaitan2026() {
       PRACTICE_ = pr; BOOK_ = null; ROWS_MEMO_ = null;
       out.programme += seedPaitanProgrammeInto_();
       ROWS_MEMO_ = null;
-      out.budget += budgetInto_('PTAN', PTAN_CROP_2026_, PTAN_HARVEST_DAYS_, 'SPLT.PTAN BUDGET COSTING 2026 (Crop Projection, Target 1)');
+      out.budget += budgetInto_('PTAN', PTAN_CROP_2026_, PTAN_HARVEST_DAYS_, 'Target 1: SPLT.PTAN BUDGET COSTING 2026 · hari kerja tuai: 43AC SUMMARY BUDGET 2026 (Working Calendar-Harvesting)');
     });
   } finally { PRACTICE_ = was; BOOK_ = null; ROWS_MEMO_ = null; }
   Logger.log('seedPaitan2026: ' + JSON.stringify(out) + ' (live and practice sheets)');
@@ -3092,10 +3094,15 @@ function seedPaitan2026() {
 // that the month target comes from Target 1 of the budget only.
 var PTAN_CROP_2026_ = { '2026-01': 221, '2026-02': 193, '2026-03': 178, '2026-04': 221, '2026-05': 185, '2026-06': 193,
   '2026-07': 204, '2026-08': 276, '2026-09': 278, '2026-10': 310, '2026-11': 297, '2026-12': 275 };
-// The budget's own harvest working days ("Working Days (H)", 229 a year): its MT a day is worked out on these
-// (January 221 MT over 20 days = 11.05). The 27/23/25/26… line in the same workbook is the estate's total working
-// days (298 a year) for man-days, not harvest days.
-var PTAN_HARVEST_DAYS_ = 19;
+// The harvest working days, month by month, from the group's own working calendar ("43AC SUMMARY BUDGET 2026",
+// sheet "Working Calendar-Harvesting", for PTAN/TKRS/43 Acres, dated 25/10/2025): 313 days a year. That calendar
+// counts each month's Sundays, public holidays and off days from the dates themselves, so it is the true one.
+// Harvesting works most Sundays (January: only 1 Sunday off), which is why it has more days than the second
+// calendar in the same file, "Working Calendar-G&M" (298 a year, every Sunday off), used for maintenance man-days.
+// Note for HQ: the Crop Projection sheet inside SPLT.PTAN BUDGET COSTING 2026 works its MT a day on 19–20 days a
+// month instead, so the MT a day printed there is too high (November 15.63 instead of 11.0).
+var PTAN_HARVEST_DAYS_ = { '2026-01': 27, '2026-02': 23, '2026-03': 25, '2026-04': 26, '2026-05': 26, '2026-06': 26,
+  '2026-07': 26, '2026-08': 26, '2026-09': 26, '2026-10': 28, '2026-11': 27, '2026-12': 27 };
 function seedPaitanProgrammeInto_() {
   var ha = { '01': 39.97, '02': 36.18, '03': 47.71, '04': 56.64, '9A': 3.64 };
   var A = ['01', '02'], B = ['03', '04', '9A'], ALL = A.concat(B), lines = [];

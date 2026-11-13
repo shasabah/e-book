@@ -768,6 +768,8 @@ div.td-it { cursor: default; }
 .pg-tickact { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
 .pg-tickact .btn { flex: 1; min-height: 44px; }
 .pg-map.pg-tap path { cursor: pointer; }
+.pg-map .pg-n path { fill: none; stroke: #17301f; stroke-width: 1.2; stroke-linecap: round; opacity: .55; }
+.pg-map .pg-n text { font-size: 8px; opacity: .6; }
 .pg-lots button { font: inherit; font-size: 13px; padding: 3px 8px; border-radius: 8px; background: var(--paper); border: 1px solid var(--line); color: var(--ink); cursor: pointer; }
 .pg-lots button.g { background: var(--ok-soft, #e1f3e6); border-color: var(--ok); color: var(--ok); font-weight: 600; }
 .pg-lots button.x { color: var(--muted); }

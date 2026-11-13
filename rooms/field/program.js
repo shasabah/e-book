@@ -153,15 +153,23 @@
     var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, lat0 = lots.length ? lots[0].lat : 6, kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110574;
     lots.forEach(function (l) { each(l.lot, function (ring) { ring.forEach(function (p) { var x = p[0] * kx, y = -p[1] * ky; if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }); }); });
     if (minX === Infinity) return '';
+    // v1.59: a block much longer east-west than north-south (Paitan Blk 03 is 2.1 km by 0.5 km) would draw as a
+    // 90 px sliver on a phone, with the lot numbers on top of each other. It is turned a quarter turn so the long
+    // side runs down the screen, and a small arrow shows where north went. The lot shapes are not changed.
+    var turn = (maxX - minX) > (maxY - minY) * 1.6;
+    if (turn) { var a = minX, b = maxX; minX = minY; maxX = maxY; minY = -b; maxY = -a; }
     var W = 360, s = W / (maxX - minX), H = Math.round((maxY - minY) * s) + 8;
-    function X(lon) { return ((lon * kx - minX) * s + 4).toFixed(1); }
-    function Y(lat) { return ((-lat * ky - minY) * s + 4).toFixed(1); }
+    function X(lon, lat) { return ((turn ? -lat * ky : lon * kx) - minX) * s + 4; }
+    function Y(lon, lat) { return ((turn ? -lon * kx : -lat * ky) - minY) * s + 4; }
     lots.forEach(function (l) {
       var st = states[l.lot]; if (!st) return;
-      each(l.lot, function (ring) { rings.push('<path class="' + st.k + '"' + (tickId ? ' data-pglot="' + esc(tickId + '|' + l.lot) + '"' : '') + ' d="M' + ring.map(function (p) { return X(p[0]) + ',' + Y(p[1]); }).join('L') + 'Z"><title>' + esc(l.lot + ' · ' + f2(l.ha) + ' Ha' + (st.text ? ' · ' + st.text : '')) + '</title></path>'); });
+      each(l.lot, function (ring) { rings.push('<path class="' + st.k + '"' + (tickId ? ' data-pglot="' + esc(tickId + '|' + l.lot) + '"' : '') + ' d="M' + ring.map(function (p) { return X(p[0], p[1]).toFixed(1) + ',' + Y(p[0], p[1]).toFixed(1); }).join('L') + 'Z"><title>' + esc(l.lot + ' · ' + f2(l.ha) + ' Ha' + (st.text ? ' · ' + st.text : '')) + '</title></path>'); });
     });
-    lots.forEach(function (l) { if (sh[l.lot] && l.lat) rings.push('<text x="' + X(l.lon) + '" y="' + Y(l.lat) + '">' + esc(l.lot.split('-')[1]) + '</text>'); });
-    return '<svg class="pg-map' + (tickId ? ' pg-tap' : '') + '" viewBox="0 0 ' + (W + 8) + ' ' + H + '" role="img" aria-label="' + esc(EA.t('Peta Blk ', 'Map Blk ') + block) + '">' + rings.join('') + '</svg>';
+    lots.forEach(function (l) { if (sh[l.lot] && l.lat) rings.push('<text x="' + X(l.lon, l.lat).toFixed(1) + '" y="' + Y(l.lon, l.lat).toFixed(1) + '">' + esc(l.lot.split('-')[1]) + '</text>'); });
+    // A turned map says where north went. A map that is not turned has north up, like any map, and gets no arrow.
+    var nx = W - 10, ny = 16;
+    var mark = turn ? '<g class="pg-n"><path d="M' + nx + ',' + ny + 'h12M' + nx + ',' + ny + 'l5,-3.5M' + nx + ',' + ny + 'l5,3.5"/><text x="' + (nx + 6) + '" y="' + (ny + 11) + '">U</text></g>' : '';
+    return '<svg class="pg-map' + (tickId ? ' pg-tap' : '') + '" viewBox="0 0 ' + (W + 8) + ' ' + H + '" role="img" aria-label="' + esc(EA.t('Peta Blk ', 'Map Blk ') + block + (turn ? EA.t(' (diputar)', ' (turned)') : '')) + '">' + rings.join('') + mark + '</svg>';
   }
   function lotList(items, tickId) {
     return '<p class="pg-lots">' + items.map(function (x) {

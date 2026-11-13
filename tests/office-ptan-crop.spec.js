@@ -1,7 +1,7 @@
 // E-Book test (1.59) Paitan's 2026 crop history loaded from the two old books (Yu Chen, 13 Nov 2026: "load").
 // The lorries from the FFB delivery book and each harvester's own bunch count from the FFB bunches book, every
-// row marked "Data lama" and keyed_by IMPORT. The real names are not in the repository, so this test uses
-// made-up harvesters and drivers (Rule 8). Running it twice adds nothing, and Sugut is never touched.
+// row marked "Data lama" and keyed_by IMPORT. The data file on GitHub carries no names, only D1.. and H1..; the
+// names sit in the office project's own file. This test uses made-up harvesters and drivers (Rule 8). Running it twice adds nothing, and Sugut is never touched.
 const check = (name, ok, detail) => { console.log((ok ? 'PASS ' : 'FAIL ') + name + (detail ? ' — ' + detail : '')); if (!ok) process.exitCode = 1; };
 const fs = require('fs'), vm = require('vm');
 const code = fs.readFileSync(require('path').resolve(__dirname, '..', 'server', 'core.gs'), 'utf8');
@@ -53,20 +53,21 @@ function build() {
 const DATA = {
   tickets: [
     // plain one-block lorry
-    '0102|00030321|FOR|7662|SJN8096|Dollah|8.07|5.12|2.95|0|0|0|03:2.95|',
+    '0102|00030321|FOR|7662|SJN8096|D1|8.07|5.12|2.95|0|0|0|03:2.95|',
     // two blocks on one lorry, and rejects counted at the mill
-    '0524|464609|BOU|5251|SJQ6259|Rahmat|27.84|16.75|11.09|57|12|0|02:5,03:6.09|D2025-05-24',
+    '0524|464609|BOU|5251|SJQ6259|D2|27.84|16.75|11.09|57|12|0|02:5,03:6.09|D2025-05-24',
     // the block is written "1/2" in the book, so there is no split to load
-    '0806|466703|BOU|7472|SJQ6259|Rahmat|27.07|16.51|10.56|32|17|0||B1/2',
+    '0806|466703|BOU|7472|SJQ6259|D2|27.07|16.51|10.56|32|17|0||B1/2',
     // the book used the same ticket number twice on one day
-    '0106|00030424-2|SKCC|7675|SJN8096|Dollah|8.48|5.06|3.42|3|4|0|04:3.42|T00030424'
+    '0106|00030424-2|SKCC|7675|SJN8096|D1|8.48|5.06|3.42|3|4|0|04:3.42|T00030424'
   ],
   work: [
-    'Hamid bin Osman|01|2:70,3:100,5:106',
-    'Sulaiman bin Deraman|01|2:55,3:160',
-    'Sulaiman bin Deraman|05|2:88'
+    'H1|01|2:70,3:100,5:106',
+    'H2|01|2:55,3:160',
+    'H2|05|2:88'
   ]
 };
+const NAMES = { D1: 'Dollah', D2: 'Rahmat', H1: 'Hamid bin Osman', H2: 'Sulaiman bin Deraman' };
 const env = build(), ctx = env.ctx, tabs = env.tabs;
 const H = t => tabs[t].rows[0], col = (t, r, k) => r[H(t).indexOf(k)];
 const rows = (t, est) => tabs[t].rows.slice(1).filter(r => !est || col(t, r, 'estate') === est);
@@ -75,6 +76,17 @@ const rows = (t, est) => tabs[t].rows.slice(1).filter(r => !est || col(t, r, 'es
 const none = ctx.importPaitan2026();
 check('no data file: nothing is written and it says so', none && none.ok === false && none.error === 'no_data_file' && rows('FH_TICKET', 'PTAN').length === 0, JSON.stringify(none));
 
+ctx.PTAN_OLD_ = DATA;
+const noName = ctx.importPaitan2026();
+check('the data file without the name file: nothing is written and it says so',
+  noName && noName.ok === false && noName.error === 'no_name_file' && rows('FH_TICKET', 'PTAN').length === 0, JSON.stringify(noName));
+ctx.PTAN_OLD_NAMES_ = NAMES;
+// a code with no name stops the load before a single row is written
+let stopped = '';
+ctx.PTAN_OLD_ = { tickets: DATA.tickets, work: DATA.work.concat(['H9|02|3:10']) };
+try { ctx.importPaitan2026(); } catch (e) { stopped = String(e.message || e); }
+check('a code with no name stops the load before anything is written',
+  /no name for H9/.test(stopped) && rows('FH_TICKET', 'PTAN').length === 0, stopped || 'it did not stop');
 ctx.PTAN_OLD_ = DATA;
 const out = ctx.importPaitan2026();
 const tk = rows('FH_TICKET', 'PTAN'), tb = rows('FH_TICKET_BLOCK', 'PTAN'), wk = rows('FH_WORK', 'PTAN');

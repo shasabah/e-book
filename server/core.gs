@@ -3069,6 +3069,60 @@ function importOct2026Manuring() {
   Logger.log('importOct2026Manuring: ' + JSON.stringify(out));
   return out;
 }
+/** v1.58 (Yu Chen, 13 Nov 2026: "load it"): load Paitan's 2026 plan, so PROGRAM has something to show at the
+ *  Paitan team meeting on 14 Nov. Values only, from "SPLT.PTAN BUDGET COSTING 2026" (Christy): the maintenance
+ *  round plan per block and month, and the Target 1 crop budget per month with its own harvest working days.
+ *  Run once from the script editor (Owner). Nothing is deleted and running it twice adds nothing new.
+ *  Not loaded, the same two gaps as Sugut: road-side frond trimming (Feb, 2,095 chains) has no job code, and the
+ *  abandoned-palm programme (2,536 palms planned Jan–Mar, only 107 done) is a palm count, not a round. */
+function seedPaitan2026() {
+  var was = PRACTICE_, out = { programme: 0, budget: 0 };
+  try {
+    [false, true].forEach(function (pr) {
+      PRACTICE_ = pr; BOOK_ = null; ROWS_MEMO_ = null;
+      out.programme += seedPaitanProgrammeInto_();
+      ROWS_MEMO_ = null;
+      out.budget += budgetInto_('PTAN', PTAN_CROP_2026_, PTAN_HARVEST_DAYS_, 'SPLT.PTAN BUDGET COSTING 2026 (Crop Projection, Target 1)');
+    });
+  } finally { PRACTICE_ = was; BOOK_ = null; ROWS_MEMO_ = null; }
+  Logger.log('seedPaitan2026: ' + JSON.stringify(out) + ' (live and practice sheets)');
+  return out;
+}
+// Target 1 of the Crop Projection: 2,831 MT for the year. Target 2 (3,074 MT) is not loaded; the 21 Oct rule is
+// that the month target comes from Target 1 of the budget only.
+var PTAN_CROP_2026_ = { '2026-01': 221, '2026-02': 193, '2026-03': 178, '2026-04': 221, '2026-05': 185, '2026-06': 193,
+  '2026-07': 204, '2026-08': 276, '2026-09': 278, '2026-10': 310, '2026-11': 297, '2026-12': 275 };
+// The budget's own harvest working days ("Working Days (H)", 229 a year): its MT a day is worked out on these
+// (January 221 MT over 20 days = 11.05). The 27/23/25/26… line in the same workbook is the estate's total working
+// days (298 a year) for man-days, not harvest days.
+var PTAN_HARVEST_DAYS_ = 19;
+function seedPaitanProgrammeInto_() {
+  var ha = { '01': 39.97, '02': 36.18, '03': 47.71, '04': 56.64, '9A': 3.64 };
+  var A = ['01', '02'], B = ['03', '04', '9A'], ALL = A.concat(B), lines = [];
+  function put(task, blocks, months, rounds, dose) {
+    blocks.forEach(function (b) { months.forEach(function (m, i) { lines.push([task, b, '2026-' + m, rounds[i], dose ? dose[i] : '']); }); });
+  }
+  put('CPS', A, ['02', '05', '08', '11'], ['R1', 'R2', 'R3', 'R4']);
+  put('CPS', B, ['03', '06', '09', '11'], ['R1', 'R2', 'R3', 'R4']);
+  put('SL', A, ['01', '12'], ['R1', 'R2']);
+  put('SL', B, ['02', '12'], ['R1', 'R2']);
+  put('RP', ALL, ['01', '04', '07', '11'], ['R1', 'R2', 'R3', 'R4']);
+  put('LS', ALL, ['03'], ['R1']);                                   // lallang spraying, needs the Pengurus's approval
+  put('VOPS', ALL, ['04'], ['R1']);
+  put('MAN', A, ['03', '04', '06', '08', '10'], ['Bio-Organic', 'FMP', 'NKB', 'NKB', 'NK'], [5, 2.5, 2.5, 2.5, 2.5]);
+  put('MAN', B, ['03', '05', '07', '09', '10'], ['Bio-Organic', 'FMP', 'NKB', 'NKB', 'NK'], [5, 2.5, 2.5, 2.5, 2.5]);
+  var est = 'PTAN', ss = book_(), now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), n = 0, have = {};
+  ROWS_MEMO_ = null;
+  standingRows_('LIST_PROGRAMME', est).forEach(function (r) { have[[r.task_code, r.block, String(r.month).slice(0, 7)].join('|')] = true; });
+  var sh = roomTab_(ss, 'LIST_PROGRAMME'), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  lines.forEach(function (x, i) {
+    if (have[[x[0], x[1], x[2]].join('|')]) return;
+    var row = { id: 'PG-' + est + '-2026-' + (i + 1), date: now.slice(0, 10), company: ESTATE_COMPANY[est] || '', estate: est, keyed_by: 'SEED', keyed_at: now, phone: '', status: 'active', replaces: '',
+      received_at: now, year: '2026', task_code: x[0], block: x[1], month: x[2], round: x[3], ha: ha[x[1]], dose: x[4], note: 'SPLT.PTAN BUDGET COSTING 2026' };
+    sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); })); n++;
+  });
+  return n;
+}
 function seedProgrammeInto_() {
   var ha = { '01': 33.20, '02': 33.93, '03': 31.18, '04': 32.34 }, A = ['01', '02'], B = ['03', '04'], ALL = A.concat(B), lines = [];
   function put(task, blocks, months, rounds, dose) {

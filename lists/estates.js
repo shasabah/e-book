@@ -8,7 +8,7 @@ EA.lists.estates = [
   { code: 'SDK',  company: 'SPLT', name: 'Sandakan HQ' },
   { code: 'MELU', company: 'SPLT', name: 'Meliau' },
   { code: 'SSGT', company: 'SPLT', name: 'Sugut', ha: 130.65 },
-  { code: 'PTAN', company: 'SPLT', name: 'PTAN' },
+  { code: 'PTAN', company: 'SPLT', name: 'Paitan', ha: 184.14 },   // 13 Nov 2026: Paitan land only (blocks 01–04 + 9Ac)
   { code: 'TKRS', company: 'SPLT', name: 'TKRS' },
   { code: 'KWNN', company: 'PJSB', name: 'Kawananan' }
 ];
@@ -16,7 +16,13 @@ EA.lists.blocks = [
   { estate: 'SSGT', block: '01', name: 'Block 1', ha: 33.20 },
   { estate: 'SSGT', block: '02', name: 'Block 2', ha: 33.93 },
   { estate: 'SSGT', block: '03', name: 'Block 3', ha: 31.18 },
-  { estate: 'SSGT', block: '04', name: 'Block 4', ha: 32.34 }
+  { estate: 'SSGT', block: '04', name: 'Block 4', ha: 32.34 },
+  // Paitan, from Christy's 2022 survey sheets and SPLT.PTAN BUDGET COSTING 2026 (Brief_Data_Induk 2.1): 184.14 Ha
+  { estate: 'PTAN', block: '01', name: 'Block 1', ha: 39.97 },
+  { estate: 'PTAN', block: '02', name: 'Block 2', ha: 36.18 },
+  { estate: 'PTAN', block: '03', name: 'Block 3', ha: 47.71 },
+  { estate: 'PTAN', block: '04', name: 'Block 4', ha: 56.64 },
+  { estate: 'PTAN', block: '9A', name: 'Block 9Ac', ha: 3.64 }
 ];
 // Mills and collecting centres Sugut sends to (from the Sugut FFB tonnage file 2026).
 // v1.29: the real list is the office sheet's LIST_MILLS (core/mills.js keeps the phone's copy); this list is

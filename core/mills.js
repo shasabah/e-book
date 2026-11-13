@@ -67,6 +67,13 @@ EA.roomViews = EA.roomViews || {};
     return n;
   }
   // For the home tile: requests waiting for this person's step.
+  // v1.59 (Ria, 13 Nov 2026): a mill or centre that sends no grading sheet, only a grade letter. Set in the
+  // office list LIST_MILLS (no_grade = Y), so it changes without a new version. Its tickets are never chased.
+  EA.millNoGrade = function (est, name) {
+    var c = EA.local.get(CACHE + est, null), ms = (c && c.data && c.data.mills) || [];
+    var n = String(name || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    return ms.some(function (m) { return String(m.name || '').replace(/\s+/g, ' ').trim().toLowerCase() === n && m.no_grade; });
+  };
   EA.millsWaiting = function (u, est) {
     var c = EA.local.get(CACHE + est, null);
     if (!c || !u || c.code !== u.code || !c.data) return 0;
@@ -115,7 +122,7 @@ EA.roomViews = EA.roomViews || {};
       if (open.length) h += '<div class="card"><h2>' + EA.t('Permintaan menunggu', 'Requests waiting') + '</h2>' + open.map(function (q) { return reqCard(q, can); }).join('') + '</div>';
       h += '<div class="card"><h2>' + EA.t('Senarai kilang', 'Mill list') + '</h2>' + ((d.mills || []).length ? d.mills.map(function (m) {
         var t = TYPE[m.kind] || ['', ''];
-        return '<div class="hrow"><div><b>' + esc(m.name) + '</b><span class="s">' + esc(EA.t(t[0], t[1])) + (m.location ? ' · ' + esc(m.location) : '') + '</span></div></div>';
+        return '<div class="hrow"><div><b>' + esc(m.name) + '</b><span class="s">' + esc(EA.t(t[0], t[1])) + (m.location ? ' · ' + esc(m.location) : '') + (m.no_grade ? ' · ' + EA.t('tidak beri gred', 'sends no grading') : '') + '</span></div></div>';
       }).join('') : '<p class="hint">' + EA.t('Senarai di pejabat masih kosong. Telefon guna senarai lama.', 'The office list is still empty. Phones use the old list.') + '</p>') +
         '<p class="hint">' + EA.t('Kilang yang belum dibuka: Staf pilih "Lain-lain" pada lori.', 'A mill not yet open: the staff picks "Lain-lain" on the lorry.') + '</p></div>';
       if (done.length) h += '<div class="card"><h2>' + EA.t('Selesai, 2 bulan', 'Finished, last 2 months') + '</h2>' + done.map(function (q) { return reqCard(q, {}); }).join('') + '</div>';

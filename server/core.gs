@@ -104,7 +104,10 @@ var ROOM_TABS = {
   LIST_RATES: ['task_code', 'pay_unit', 'band', 'rate_rm', 'target_day', 'from_date', 'approved_by', 'note'],
   // v1.29 shared list: mills and collecting centres per estate (kind: mill or cc). Added only when a request
   // is approved (MILL_LOG), or by seedMills once. active N = no longer used (never deleted).
-  LIST_MILLS: ['name', 'kind', 'location', 'note', 'active'],
+  // v1.59 no_grade Y = this mill or centre sends no grading sheet, only a grade letter (Ria, 13 Nov 2026:
+  // Sinar Cahaya "tiada bagi rejected bunches or apa2 informtion grading bunchess, kecuali dlm ticket hanya tulis
+  // Grade A sahaja"). Its tickets are never chased for grading and stay out of the grading trend.
+  LIST_MILLS: ['name', 'kind', 'location', 'note', 'active', 'no_grade'],
   // v1.55 shared Foundation list (Brief_Jentera.md, 11 Nov 2026): the estates' vehicles and machines, one line per
   // unit. Keyed by HQ or the Owner; Liew (parts and contractors) only looks. on_chit Y = it shows on the morning
   // chit's JENTERA card (tractors, backhoe, excavator, lorry); pickups and cars are N. owner_co is the company that
@@ -822,11 +825,21 @@ function gradingAlerts_(estate, now) {
 }
 
 // Mill tickets of the last 30 days with no grading yet, for the clerk.
+function millName_(n) { return String(n || '').replace(/\s+/g, ' ').trim(); }
+// v1.59: a mill marked no_grade in LIST_MILLS sends no grading sheet, so its tickets are not waiting for one.
+// Returns { key: the mill's own name } — the key is the name folded for matching, the value the name as written.
+function noGradeMills_(estate) {
+  var o = {};
+  standingRows_('LIST_MILLS', estate).forEach(function (r) {
+    if (String(r.no_grade || '').toUpperCase() === 'Y') o[millName_(r.name).toLowerCase()] = millName_(r.name);
+  });
+  return o;
+}
 function ungraded_(estate) {
   var since = Utilities.formatDate(new Date(Date.now() - 30 * 864e5), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd');
-  var graded = {};
+  var graded = {}, ng = noGradeMills_(estate);
   standingRows_('FH_GRADING', estate).forEach(function (r) { graded[r.ticket_no] = true; });
-  return { ok: true, tickets: standingRows_('FH_TICKET', estate).filter(function (r) { return live_(r) && r.date >= since && !graded[r.ticket_no]; })
+  return { ok: true, noGrade: Object.keys(ng).map(function (k) { return ng[k]; }), tickets: standingRows_('FH_TICKET', estate).filter(function (r) { return live_(r) && r.date >= since && !graded[r.ticket_no] && !ng[millName_(String(r.mill || '')).toLowerCase()]; })
     .map(function (r) { return { ticket_no: r.ticket_no, date: r.date, mill: r.mill, nett_mt: Number(r.nett_mt) || 0, do_no: r.do_no }; }) };
 }
 
@@ -1934,13 +1947,12 @@ function millRole_(user, what) {
   if (what === 'approve') return r === 'Owner' || (r === 'HQ' && fin);
   return false;
 }
-function millName_(n) { return String(n || '').replace(/\s+/g, ' ').trim(); }
 function millsRead_(user, req) {
   if (!millRole_(user, 'see')) return { ok: false, error: 'not_allowed' };
   var est = String(req.estate || '');
   if (user.estates.indexOf(est) < 0) return { ok: false, error: 'not_your_estate' };
   var mills = standingRows_('LIST_MILLS', est).filter(function (r) { return String(r.active).toUpperCase() !== 'N'; })
-    .map(function (r) { return { name: String(r.name), kind: String(r.kind || ''), location: String(r.location || '') }; });
+    .map(function (r) { return { name: String(r.name), kind: String(r.kind || ''), location: String(r.location || ''), no_grade: String(r.no_grade || '').toUpperCase() === 'Y' }; });
   var out = { ok: true, estate: est, mills: mills };
   if (user.role === 'Staff') return out;
   var un = {};

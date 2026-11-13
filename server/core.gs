@@ -3130,6 +3130,139 @@ function seedPaitanProgrammeInto_() {
   });
   return n;
 }
+/** v1.59 (Yu Chen, 13 Nov 2026: "load"): load Paitan's 2026 crop history, so the estate's own year is in the book
+ *  before Ria keys her first lorry. Two papers of Christy's: the FFB delivery book (TONNAGE_PTAN: 380 lorries,
+ *  1,938.66 MT, 2 Jan - 12 Nov) and the FFB bunches book (SPLT.PTAN_FFB_BUNCHES, 11 Nov): each harvester's own
+ *  bunch count, day by day.
+ *  The numbers are NOT in this file and never go on GitHub, because the lorry drivers and the harvesters are real
+ *  people (standing rule: real worker names never on GitHub). They sit in a second script file in the office
+ *  project, "ptan-old-2026.gs", which sets PTAN_OLD_. Without that file this function does nothing.
+ *  Live sheet only, like the Sugut manuring import: the practice sheet is for training, not the estate's history.
+ *  Every row is keyed_by IMPORT and noted "Data lama", so it counts in the month total and in Rekod but never in
+ *  the ramp backlog, the lorry list or the ungraded tickets (the 21 Oct 2026 rule).
+ *  Run once from the editor. Running it twice adds nothing.
+ *  What the old books do not hold is left empty, never guessed:
+ *   - the block of a harvester's bunches: the bunches book writes the man, the day and the bunches, nothing else
+ *   - the bunch count and the ABW of a lorry: the delivery book weighs the load, it does not count bunches
+ *   - the block split of 4 lorries written "1/2", "2/3", "3/4" in the book
+ *   - May's harvester lines apart from 2-3 May: the rest of that month is blank in the book
+ *  Three dates and two ticket numbers are wrong in the book. The month sheet is taken as the true one and the
+ *  book's own wording is kept in the note, so nothing is quietly changed. */
+var OLD_MILLS_ = { FOR: ['Fortuna', 'mill'], BOU: ['Boustead (BOU)', 'mill'], SKCC: ['Sri Kamusan CC (SKCC)', 'cc'],
+  SC: ['Sinar C', 'cc'], SKPOM: ['SKPOM', 'mill'], 'FOR(LKS)': ['Fortuna (LKS)', 'cc'] };
+function importPaitan2026() {
+  if (typeof PTAN_OLD_ === 'undefined' || !PTAN_OLD_) {
+    Logger.log('importPaitan2026: the data file ptan-old-2026.gs is not in this project');
+    return { ok: false, error: 'no_data_file' };
+  }
+  var was = PRACTICE_, out = null;
+  try {
+    PRACTICE_ = false; BOOK_ = null; ROWS_MEMO_ = null;
+    out = importOldCropInto_('PTAN', PTAN_OLD_);
+  } finally { PRACTICE_ = was; BOOK_ = null; ROWS_MEMO_ = null; }
+  Logger.log('importPaitan2026: ' + JSON.stringify(out) + ' (live sheet only)');
+  return out;
+}
+// One lorry line:  MMDD|ticket|mill code|DO|lorry|driver|first MT|second MT|nett MT|unripe|empty|rotten|block:MT,block:MT|fix
+// One harvester line:  NAME|MM|day:bunches,day:bunches,...
+// fix: D<date in the book>, T<ticket number used twice>, B<block as the book writes it>, joined by ';'.
+function importOldCropInto_(est, data) {
+  var out = { mills: 0, tickets: 0, blocks: 0, work: 0, people: 0, same: 0 };
+  var ss = book_(), now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
+  var co = ESTATE_COMPANY[est] || '', NOTE = 'Data lama: ';
+  function tab_(name) {
+    var sh = roomTab_(ss, name);
+    return { sh: sh, head: sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0], rows: [] };
+  }
+  function add_(t, row) {
+    row = Object.assign({ date: now.slice(0, 10), company: co, estate: est, keyed_by: IMPORT_BY, keyed_at: now,
+      phone: '', status: 'active', replaces: '', received_at: now }, row);
+    t.rows.push(t.head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); }));
+  }
+  function flush_(t) {
+    if (!t.rows.length) return;
+    t.sh.getRange(t.sh.getLastRow() + 1, 1, t.rows.length, t.head.length).setValues(t.rows);
+  }
+  // A number written with a leading zero (ticket 00030321, DO 00050) is kept exactly as the book writes it.
+  function txt_(s) { return /^0\d/.test(String(s)) ? "'" + s : String(s); }
+  var mt = tab_('LIST_MILLS'), tt = tab_('FH_TICKET'), tb = tab_('FH_TICKET_BLOCK'),
+      wt = tab_('FH_WORK'), pt = tab_('LIST_PEOPLE'), wl = tab_('WORKER_LOG');
+  // Everything already in the book is read once, before anything is written.
+  var haveM = {}, haveT = {}, haveB = {}, haveW = {}, people = {}, taken = {};
+  standingRows_('LIST_MILLS', est).forEach(function (r) { haveM[millName_(r.name).toLowerCase()] = true; });
+  standingRows_('FH_TICKET', est).forEach(function (r) { haveT[String(r.ticket_no)] = true; });
+  standingRows_('FH_TICKET_BLOCK', est).forEach(function (r) { haveB[String(r.ticket_no) + '|' + String(r.block)] = true; });
+  standingRows_('FH_WORK', est).forEach(function (r) { haveW[String(r.id)] = true; });
+  standingRows_('LIST_PEOPLE', est).forEach(function (r) {
+    taken[String(r.worker_id)] = true;
+    people[String(r.name).replace(/\s+/g, ' ').trim().toUpperCase()] = String(r.worker_id);
+  });
+  // ---- the mills and collection centres the old book names ----
+  var codes = {};
+  (data.tickets || []).forEach(function (s) { codes[String(s).split('|')[2]] = true; });
+  Object.keys(codes).sort().forEach(function (c, i) {
+    var m = OLD_MILLS_[c];
+    if (!m || haveM[m[0].toLowerCase()]) return;
+    haveM[m[0].toLowerCase()] = true;
+    add_(mt, { id: 'ML-' + est + '-OLD-' + (i + 1), name: m[0], kind: m[1], location: '', active: 'Y',
+      note: NOTE + 'buku hantar BTS 2026 (kod dalam buku: ' + c + ')' });
+    out.mills++;
+  });
+  // ---- one row per lorry, and its block split ----
+  (data.tickets || []).forEach(function (s) {
+    var p = String(s).split('|'), tk = p[1];
+    if (haveT[tk]) { out.same++; return; }
+    haveT[tk] = true;
+    var d = '2026-' + p[0].slice(0, 2) + '-' + p[0].slice(2, 4), m = OLD_MILLS_[p[2]];
+    var note = NOTE + 'buku hantar BTS 2026';
+    String(p[13] || '').split(';').forEach(function (f) {
+      if (f.charAt(0) === 'D') note += '; tarikh dalam buku ' + f.slice(1) + ', diambil ikut helaian bulan';
+      if (f.charAt(0) === 'T') note += '; nombor tiket ' + f.slice(1) + ' dipakai dua kali dalam buku, yang kedua ditambah "-2"';
+      if (f.charAt(0) === 'B') note += '; petak dalam buku "' + f.slice(1) + '", pecahan tan tiada';
+    });
+    add_(tt, { id: 'IMP-' + est + '-TK-' + tk, date: d, ticket_no: txt_(tk), trip: '', mill: m ? m[0] : p[2],
+      do_no: txt_(p[3]), lorry: p[4], driver: p[5], time: '',
+      first_kg: Math.round(Number(p[6]) * 1000), second_kg: Math.round(Number(p[7]) * 1000), deduct_kg: '',
+      nett_kg: Math.round(Number(p[8]) * 1000), nett_mt: Number(p[8]), bunches: '', abw_kg: '',
+      lorry_bunches: '', mill_bunches: '', rej_ur: Number(p[9]) || '', rej_emp: Number(p[10]) || '',
+      rej_rott: Number(p[11]) || '', rej_mt: '', note: note });
+    out.tickets++;
+    if (!p[12]) return;
+    p[12].split(',').forEach(function (x) {
+      var b = x.split(':');
+      if (haveB[tk + '|' + b[0]]) return;
+      haveB[tk + '|' + b[0]] = true;
+      add_(tb, { id: 'IMP-' + est + '-TB-' + tk + '-' + b[0], date: d, ticket_no: txt_(tk), block: b[0],
+        bunches: '', mt: Number(b[1]) });
+      out.blocks++;
+    });
+  });
+  // ---- one row per harvester per day ----
+  (data.work || []).forEach(function (s) {
+    var p = String(s).split('|'), nm = p[0].replace(/\s+/g, ' ').trim(), code = people[nm.toUpperCase()];
+    if (!code) {
+      code = newWorkerCode_(est, taken); taken[code] = true; people[nm.toUpperCase()] = code;
+      add_(pt, { id: 'WK-' + est + '-OLD-' + code, worker_id: code, name: nm, job: 'Penuai', gang: 'Tuai',
+        sex: '', mandor: '', active: 'N' });
+      add_(wl, { id: 'WL-' + est + '-OLD-' + code, worker_id: code, name: nm, kind: 'new', day: '2026-01-01',
+        note: 'Pekerja lama: nama dari buku BTS 2026. Belum pada muster; HR tanda aktif bila sahkan.' });
+      out.people++;
+    }
+    String(p[2]).split(',').forEach(function (x) {
+      var y = x.split(':'), dd = ('0' + y[0]).slice(-2), id = 'IMP-' + est + '-HA-' + code + '-' + p[1] + dd;
+      if (haveW[id]) { out.same++; return; }
+      haveW[id] = true;
+      add_(wt, { id: id, date: '2026-' + p[1] + '-' + dd, chit: '', worker_id: code, task_code: HARVEST_CODE,
+        block: '', lot: '', qty: '', unit: '', bunches: Number(y[1]), confirmed_by: '', confirmed_at: '',
+        bags: '', machine: '', meter_start: '', meter_end: '', hours: '',
+        note: NOTE + 'buku BTS 2026; petak tidak direkod dalam buku lama' });
+      out.work++;
+    });
+  });
+  [mt, pt, wl, tt, tb, wt].forEach(flush_);
+  ROWS_MEMO_ = null;
+  return out;
+}
 function seedProgrammeInto_() {
   var ha = { '01': 33.20, '02': 33.93, '03': 31.18, '04': 32.34 }, A = ['01', '02'], B = ['03', '04'], ALL = A.concat(B), lines = [];
   function put(task, blocks, months, rounds, dose) {

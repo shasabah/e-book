@@ -3134,9 +3134,10 @@ function seedPaitanProgrammeInto_() {
  *  before Ria keys her first lorry. Two papers of Christy's: the FFB delivery book (TONNAGE_PTAN: 380 lorries,
  *  1,938.66 MT, 2 Jan - 12 Nov) and the FFB bunches book (SPLT.PTAN_FFB_BUNCHES, 11 Nov): each harvester's own
  *  bunch count, day by day.
- *  The numbers are NOT in this file and never go on GitHub, because the lorry drivers and the harvesters are real
- *  people (standing rule: real worker names never on GitHub). They sit in a second script file in the office
- *  project, "ptan-old-2026.gs", which sets PTAN_OLD_. Without that file this function does nothing.
+ *  The lorries and the bunches are in server/ptan-old-2026.gs, which sets PTAN_OLD_ and carries no names: the
+ *  drivers are D1.. and the harvesters H1.. there, because real worker names never go on GitHub (standing rule,
+ *  19 Oct 2026). The names behind those codes sit in one more file in the office project only,
+ *  "ptan-old-names.gs", which sets PTAN_OLD_NAMES_. Without both files this function writes nothing.
  *  Live sheet only, like the Sugut manuring import: the practice sheet is for training, not the estate's history.
  *  Every row is keyed_by IMPORT and noted "Data lama", so it counts in the month total and in Rekod but never in
  *  the ramp backlog, the lorry list or the ungraded tickets (the 21 Oct 2026 rule).
@@ -3155,19 +3156,29 @@ function importPaitan2026() {
     Logger.log('importPaitan2026: the data file ptan-old-2026.gs is not in this project');
     return { ok: false, error: 'no_data_file' };
   }
+  if (typeof PTAN_OLD_NAMES_ === 'undefined' || !PTAN_OLD_NAMES_) {
+    Logger.log('importPaitan2026: the name file ptan-old-names.gs is not in this project');
+    return { ok: false, error: 'no_name_file' };
+  }
   var was = PRACTICE_, out = null;
   try {
     PRACTICE_ = false; BOOK_ = null; ROWS_MEMO_ = null;
-    out = importOldCropInto_('PTAN', PTAN_OLD_);
+    out = importOldCropInto_('PTAN', PTAN_OLD_, PTAN_OLD_NAMES_);
   } finally { PRACTICE_ = was; BOOK_ = null; ROWS_MEMO_ = null; }
   Logger.log('importPaitan2026: ' + JSON.stringify(out) + ' (live sheet only)');
   return out;
 }
-// One lorry line:  MMDD|ticket|mill code|DO|lorry|driver|first MT|second MT|nett MT|unripe|empty|rotten|block:MT,block:MT|fix
-// One harvester line:  NAME|MM|day:bunches,day:bunches,...
+// One lorry line:  MMDD|ticket|mill code|DO|lorry|Dn|first MT|second MT|nett MT|unripe|empty|rotten|block:MT,block:MT|fix
+// One harvester line:  Hn|MM|day:bunches,day:bunches,...
+// Dn and Hn are looked up in names (PTAN_OLD_NAMES_); an unknown code stops the load before anything is written.
 // fix: D<date in the book>, T<ticket number used twice>, B<block as the book writes it>, joined by ';'.
-function importOldCropInto_(est, data) {
+function importOldCropInto_(est, data, names) {
   var out = { mills: 0, tickets: 0, blocks: 0, work: 0, people: 0, same: 0 };
+  // Nothing is written until every code has a name.
+  var miss = [];
+  (data.tickets || []).forEach(function (s) { var c = String(s).split('|')[5]; if (!names[c] && miss.indexOf(c) < 0) miss.push(c); });
+  (data.work || []).forEach(function (s) { var c = String(s).split('|')[0]; if (!names[c] && miss.indexOf(c) < 0) miss.push(c); });
+  if (miss.length) throw new Error('importOldCropInto_: no name for ' + miss.join(', '));
   var ss = book_(), now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
   var co = ESTATE_COMPANY[est] || '', NOTE = 'Data lama: ';
   function tab_(name) {
@@ -3221,7 +3232,7 @@ function importOldCropInto_(est, data) {
       if (f.charAt(0) === 'B') note += '; petak dalam buku "' + f.slice(1) + '", pecahan tan tiada';
     });
     add_(tt, { id: 'IMP-' + est + '-TK-' + tk, date: d, ticket_no: txt_(tk), trip: '', mill: m ? m[0] : p[2],
-      do_no: txt_(p[3]), lorry: p[4], driver: p[5], time: '',
+      do_no: txt_(p[3]), lorry: p[4], driver: names[p[5]], time: '',
       first_kg: Math.round(Number(p[6]) * 1000), second_kg: Math.round(Number(p[7]) * 1000), deduct_kg: '',
       nett_kg: Math.round(Number(p[8]) * 1000), nett_mt: Number(p[8]), bunches: '', abw_kg: '',
       lorry_bunches: '', mill_bunches: '', rej_ur: Number(p[9]) || '', rej_emp: Number(p[10]) || '',
@@ -3239,7 +3250,7 @@ function importOldCropInto_(est, data) {
   });
   // ---- one row per harvester per day ----
   (data.work || []).forEach(function (s) {
-    var p = String(s).split('|'), nm = p[0].replace(/\s+/g, ' ').trim(), code = people[nm.toUpperCase()];
+    var p = String(s).split('|'), nm = String(names[p[0]]).replace(/\s+/g, ' ').trim(), code = people[nm.toUpperCase()];
     if (!code) {
       code = newWorkerCode_(est, taken); taken[code] = true; people[nm.toUpperCase()] = code;
       add_(pt, { id: 'WK-' + est + '-OLD-' + code, worker_id: code, name: nm, job: 'Penuai', gang: 'Tuai',

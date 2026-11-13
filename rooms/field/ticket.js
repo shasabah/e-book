@@ -380,11 +380,13 @@
     render(el, ctx);
     // The clerk keys the grading sheet from the same WhatsApp post, straight after the ticket.
     var graded = gradings().some(function (g) { return g.estate === ctx.estate && g.ticket_no === t.ticket_no; });
-    if (canGrade(ctx.user) && !graded) gradeSheet(t.ticket_no, t.date, function () { showText(t.key); });
+    // v1.59: a mill that sends no grading sheet is not asked for one.
+    if (canGrade(ctx.user) && !graded && !noGrade(t.mill)) gradeSheet(t.ticket_no, t.date, function () { showText(t.key); });
     else showText(t.key);
   }
 
   // ---------- the mill grading, keyed by the estate clerk ----------
+  function noGrade(mill) { return !!(EA.millNoGrade && EA.millNoGrade(ctx.estate, mill)); }
   function ungraded() {
     var graded = {};
     gradings().forEach(function (g) { if (g.estate === ctx.estate) graded[g.ticket_no] = true; });
@@ -392,17 +394,26 @@
     saved().forEach(function (t) {     // tickets keyed on this phone, even before the office has them
       if (t.estate === ctx.estate && !list.some(function (x) { return x.ticket_no === t.ticket_no; })) list.push({ ticket_no: t.ticket_no, date: t.date, mill: t.mill, nett_mt: t.nett, do_no: t.do_no });
     });
-    return list.filter(function (t) { return !graded[t.ticket_no] && t.date >= daysAgo(30); }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+    return list.filter(function (t) { return !graded[t.ticket_no] && !noGrade(t.mill) && t.date >= daysAgo(30); }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
   }
   function drawGradeList() {
     if (!canGrade(ctx.user) || !$('#tk-gradelist')) return;
     var todo = ungraded();
+    // v1.59: tickets from a mill that sends no grading — shown once, grey, with nothing to chase.
+    var gset = {}; gradings().forEach(function (g) { if (g.estate === ctx.estate) gset[g.ticket_no] = true; });
+    var noG = saved().filter(function (t) { return t.estate === ctx.estate && noGrade(t.mill) && !gset[t.ticket_no] && t.date >= daysAgo(14); })
+      .map(function (t) { return { ticket_no: t.ticket_no, date: t.date, mill: t.mill }; })
+      .sort(function (a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 5);
     var done = gradings().filter(function (g) { return g.estate === ctx.estate; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 5);
     $('#tk-gradelist').innerHTML =
       (todo.length ? '<p class="hint"><b>' + EA.t('Menunggu gred', 'Waiting for grading') + '</b></p>' + todo.map(function (t) {
         return '<div class="list-line"><div><b>' + esc(sd(t.date)) + ' · tiket ' + esc(t.ticket_no) + '</b><span class="en">' + esc(t.mill || '') + (t.nett_mt ? ' · ' + num(t.nett_mt).toFixed(2) + ' MT' : '') + (t.do_no ? ' · DO ' + esc(t.do_no) : '') + '</span></div>' +
           '<div class="acts"><button type="button" class="btn btn-ok" data-grade="' + esc(t.ticket_no) + '" data-gdate="' + esc(t.date) + '">GRADE<small>Isi gred</small></button></div></div>';
       }).join('') : '<p class="hint">' + EA.t('Tiada tiket menunggu gred.', 'No ticket waiting for grading.') + '</p>') +
+      (noG.length ? '<p class="hint"><b>' + EA.t('Kilang tidak beri gred', 'The mill sends no grading') + '</b></p>' + noG.map(function (t) {
+        return '<div class="list-line"><div><b>' + esc(sd(t.date)) + ' · tiket ' + esc(t.ticket_no) + '</b><span class="en">' + esc(t.mill || '') + EA.t(' · tiada kertas gred · tidak perlu buat apa-apa', ' · no grading sheet · nothing to do') + '</span></div>' +
+          '<div class="acts"><button type="button" class="btn btn-ghost" data-grade="' + esc(t.ticket_no) + '" data-gdate="' + esc(t.date) + '">GRADE<small>Isi gred</small></button></div></div>';
+      }).join('') : '') +
       (done.length ? '<p class="hint"><b>' + EA.t('Sudah digred', 'Graded') + '</b></p>' + done.map(function (g) {
         return '<div class="list-line"><div><b>' + esc(sd(g.date)) + ' · tiket ' + esc(g.ticket_no) + '</b><span class="en' + (g.flag ? ' warn-t' : '') + '">' + esc(g.flag || EA.t('Gred baik', 'Grading fine')) + '</span></div>' +
           '<div class="acts"><button type="button" class="btn btn-ghost" data-grade="' + esc(g.ticket_no) + '" data-gdate="' + esc(g.date) + '">CORRECT<small>Betulkan</small></button></div></div>';

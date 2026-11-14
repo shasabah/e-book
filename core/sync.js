@@ -108,10 +108,14 @@ window.EA = window.EA || {};
     var user = EA.currentUser();
     if (!user) throw new Error('Not logged in');
     var est = EA.lists.estate(estate);
+    // v1.60: the company comes from the piece the land belongs to, not from the estate and never from the
+    // worker. A record with no block (a general job, a ticket, a user change) keeps the estate's own company.
+    var own = est ? est.company : '';
+    if (fields && fields.block && EA.lists.pieceOf) own = EA.lists.pieceOf(estate, fields.block).company || own;
     var row = {
       id: nextId(roomCode, estate),
       date: (fields && fields.date) || today(),
-      company: est ? est.company : '',
+      company: own,
       estate: estate,
       keyed_by: user.code,
       keyed_at: stamp(),

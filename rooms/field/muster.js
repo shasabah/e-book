@@ -149,10 +149,14 @@
   }
   function blockOptions(selected, optional, code) {
     var d = EA.lists.durian[ctx.estate];
+    var pieced = EA.lists.blocksFor(ctx.estate).some(function (b) { return !!b.piece; });
     if (code === 'DF' && d) return '<option value="' + d.block + '" selected>' + esc(EA.t(d.bm, d.en)) + ' · ' + EA.t('petak ', 'lots ') + d.lots.join(', ') + '</option>';
     return '<option value="">' + (optional ? EA.t('— Tiada blok —', '— No block —') : EA.t('— Pilih blok —', '— Choose block —')) + '</option>' + EA.lists.blocksFor(ctx.estate).map(function (b) {
       var lots = EA.lists.lotsFor(ctx.estate, b.block);
-      return '<option value="' + b.block + '"' + (b.block === selected ? ' selected' : '') + '>Blok ' + b.block + ' · ' + b.ha.toFixed(2) + ' Ha · ' + lots.length + ' petak · tanam ' + (lots[0] ? lots[0].planted : '') + '</option>';
+      // v1.60: where an estate holds more than one piece (the Paitan group), the block is named by its place
+      // — "TKRS Blk 1" — so the staff can see which land he is keying. Elsewhere it stays "Blok 01".
+      var label = pieced ? esc(b.name || b.block) : 'Blok ' + b.block;
+      return '<option value="' + b.block + '"' + (b.block === selected ? ' selected' : '') + '>' + label + ' · ' + b.ha.toFixed(2) + ' Ha · ' + lots.length + ' petak · tanam ' + (lots[0] ? lots[0].planted : '') + '</option>';
     }).join('') +
       // v1.27: the durian farm, for maintenance jobs (not oil palm crop jobs).
       (d && EA.lists.palmOnly.indexOf(code) < 0 ? '<option value="' + d.block + '"' + (d.block === selected ? ' selected' : '') + '>' + esc(EA.t(d.bm, d.en)) + ' · ' + EA.t('petak ', 'lots ') + d.lots.join(', ') + '</option>' : '');

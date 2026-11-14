@@ -18,12 +18,29 @@ EA.lists.blocks = [
   { estate: 'SSGT', block: '03', name: 'Block 3', ha: 31.18 },
   { estate: 'SSGT', block: '04', name: 'Block 4', ha: 32.34 },
   // Paitan, from Christy's 2022 survey sheets and SPLT.PTAN BUDGET COSTING 2026 (Brief_Data_Induk 2.1): 184.14 Ha
-  { estate: 'PTAN', block: '01', name: 'Block 1', ha: 39.97 },
-  { estate: 'PTAN', block: '02', name: 'Block 2', ha: 36.18 },
-  { estate: 'PTAN', block: '03', name: 'Block 3', ha: 47.71 },
-  { estate: 'PTAN', block: '04', name: 'Block 4', ha: 56.64 },
-  { estate: 'PTAN', block: '9A', name: 'Block 9Ac', ha: 3.64 }
+  { estate: 'PTAN', block: '01', name: 'Paitan Blk 1', ha: 39.97 },
+  { estate: 'PTAN', block: '02', name: 'Paitan Blk 2', ha: 36.18 },
+  { estate: 'PTAN', block: '03', name: 'Paitan Blk 3', ha: 47.71 },
+  { estate: 'PTAN', block: '04', name: 'Paitan Blk 4', ha: 56.64 },
+  { estate: 'PTAN', block: '9A', name: 'Paitan 9Ac', ha: 3.64 },
+  // v1.60 (14 Nov 2026): the Paitan group's other two pieces. One worker team covers all three places, so they
+  // share Paitan's worker list, morning chit and day close, and the land hangs under estate PTAN
+  // (Brief_Data_Induk 2.2–2.4, signed 13 Nov). The piece says which company owns the land, never the worker:
+  // a Paitan man (SPLT) harvesting TKRS lot T1-3 makes a PJSB record. TKRS Ha from Christy's map and the 2026
+  // budget (10.34 / 7.05 / 13.80 / 3.66); 43 Acres 17.54 Ha, one block.
+  { estate: 'PTAN', block: 'T1', name: 'TKRS Blk 1',     ha: 10.34, piece: 'TKRS', company: 'PJSB' },
+  { estate: 'PTAN', block: 'T2', name: 'TKRS Blk 2',     ha: 7.05,  piece: 'TKRS', company: 'PJSB' },
+  { estate: 'PTAN', block: 'T3', name: 'TKRS Blk 3',     ha: 13.80, piece: 'TKRS', company: 'PJSB' },
+  { estate: 'PTAN', block: 'T4', name: 'TKRS Blk 4',     ha: 3.66,  piece: 'TKRS', company: 'PJSB' },
+  { estate: 'PTAN', block: 'A1', name: '43 Acres Blk 1', ha: 17.54, piece: '43AC', company: '43AC' }
 ];
+// The piece a block belongs to, and the company that owns it. A block with no piece of its own belongs to the
+// estate's own piece, which is the ordinary case (Sugut, Meliau, Kawananan, and Paitan's own blocks).
+EA.lists.pieceOf = function (estate, block) {
+  var b = EA.lists.blocks.find(function (x) { return x.estate === estate && x.block === String(block); });
+  var e = EA.lists.estates.find(function (x) { return x.code === estate; });
+  return { piece: (b && b.piece) || estate, company: (b && b.company) || (e && e.company) || '' };
+};
 // Mills and collecting centres Sugut sends to (from the Sugut FFB tonnage file 2026).
 // v1.29: the real list is the office sheet's LIST_MILLS (core/mills.js keeps the phone's copy); this list is
 // only used until the phone has fetched it once.

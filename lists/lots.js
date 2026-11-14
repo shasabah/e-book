@@ -353,7 +353,50 @@ EA.lists.lots = [
   { estate: 'PTAN', block: '04', lot: '4-52', ha: 0.28, palms: 31 , lat: 6.386678, lon: 117.339255 },
   { estate: 'PTAN', block: '04', lot: '4-53', ha: 0.14, palms: 18 , lat: 6.385563, lon: 117.339058 },
   { estate: 'PTAN', block: '04', lot: '4-54', ha: 0.16, palms: 13 , lat: 6.386692, lon: 117.339056 },
-  { estate: 'PTAN', block: '9A', lot: '9A-1', ha: 3.64, palms: 495, planted: 2018 }
+  { estate: 'PTAN', block: '9A', lot: '9A-1', ha: 3.64, palms: 495, planted: 2018 },
+  // TKRS (PJSB) and 43 Acres (43AC), added 14 Nov 2026 for the Paitan group's one chit: one worker team
+  // over three pieces (Brief_Data_Induk 2.2-2.4, signed 13 Nov). They sit under estate PTAN, because people
+  // and the chit belong to the estate while land belongs to the piece. The block code carries the piece:
+  // T1-T4 = TKRS Blk 1-4, A1 = 43 Acres Blk 1, so a lot id stays <block>-<n> and nothing else had to change.
+  // 38 lots from Christy's 2022 survey (PTAN_TKRS_43_lots.csv): TKRS 34.85 Ha / 4,564 palms, 43 Acres 17.54 Ha / 2,274 palms.
+  { estate: 'PTAN', block: 'T1', lot: 'T1-1', ha: 1.62, palms: 213 },
+  { estate: 'PTAN', block: 'T1', lot: 'T1-2', ha: 1.03, palms: 140 },
+  { estate: 'PTAN', block: 'T1', lot: 'T1-3', ha: 0.54, palms: 76 },
+  { estate: 'PTAN', block: 'T1', lot: 'T1-4', ha: 1.37, palms: 190 },
+  { estate: 'PTAN', block: 'T1', lot: 'T1-5', ha: 0.36, palms: 53 },
+  { estate: 'PTAN', block: 'T1', lot: 'T1-6', ha: 0.39, palms: 59 },
+  { estate: 'PTAN', block: 'T1', lot: 'T1-7', ha: 0.65, palms: 88 },
+  { estate: 'PTAN', block: 'T1', lot: 'T1-8', ha: 1.36, palms: 184 },
+  { estate: 'PTAN', block: 'T1', lot: 'T1-9', ha: 3.02, palms: 400 },
+  { estate: 'PTAN', block: 'T2', lot: 'T2-1', ha: 3.06, palms: 401 },
+  { estate: 'PTAN', block: 'T2', lot: 'T2-2', ha: 0.38, palms: 59 },
+  { estate: 'PTAN', block: 'T2', lot: 'T2-3', ha: 3.61, palms: 475 },
+  { estate: 'PTAN', block: 'T3', lot: 'T3-1', ha: 1.22, palms: 170 },
+  { estate: 'PTAN', block: 'T3', lot: 'T3-2', ha: 0.71, palms: 90 },
+  { estate: 'PTAN', block: 'T3', lot: 'T3-3', ha: 1.31, palms: 162 },
+  { estate: 'PTAN', block: 'T3', lot: 'T3-4', ha: 2.87, palms: 349 },
+  { estate: 'PTAN', block: 'T3', lot: 'T3-5', ha: 1.81, palms: 238 },
+  { estate: 'PTAN', block: 'T3', lot: 'T3-6', ha: 0.96, palms: 129 },
+  { estate: 'PTAN', block: 'T3', lot: 'T3-7', ha: 0.88, palms: 109 },
+  { estate: 'PTAN', block: 'T3', lot: 'T3-8', ha: 0.78, palms: 101 },
+  { estate: 'PTAN', block: 'T3', lot: 'T3-9', ha: 2.2, palms: 279 },
+  { estate: 'PTAN', block: 'T3', lot: 'T3-10', ha: 1.06, palms: 118 },
+  { estate: 'PTAN', block: 'T4', lot: 'T4-1', ha: 0.12, palms: 15 },
+  { estate: 'PTAN', block: 'T4', lot: 'T4-2', ha: 3.54, palms: 466 },
+  { estate: 'PTAN', block: 'A1', lot: 'A1-1', ha: 1.04, palms: 138 },
+  { estate: 'PTAN', block: 'A1', lot: 'A1-2', ha: 1.01, palms: 131 },
+  { estate: 'PTAN', block: 'A1', lot: 'A1-3', ha: 2.45, palms: 314 },
+  { estate: 'PTAN', block: 'A1', lot: 'A1-4', ha: 1.18, palms: 150 },
+  { estate: 'PTAN', block: 'A1', lot: 'A1-5', ha: 0.1, palms: 14 },
+  { estate: 'PTAN', block: 'A1', lot: 'A1-6', ha: 1.2, palms: 161 },
+  { estate: 'PTAN', block: 'A1', lot: 'A1-7', ha: 1.54, palms: 196 },
+  { estate: 'PTAN', block: 'A1', lot: 'A1-8', ha: 0.97, palms: 105 },
+  { estate: 'PTAN', block: 'A1', lot: 'A1-9', ha: 0.51, palms: 67 },
+  { estate: 'PTAN', block: 'A1', lot: 'A1-10', ha: 1.3, palms: 169 },
+  { estate: 'PTAN', block: 'A1', lot: 'A1-11', ha: 1.75, palms: 235 },
+  { estate: 'PTAN', block: 'A1', lot: 'A1-12', ha: 1.8, palms: 235 },
+  { estate: 'PTAN', block: 'A1', lot: 'A1-13', ha: 0.64, palms: 85 },
+  { estate: 'PTAN', block: 'A1', lot: 'A1-14', ha: 2.05, palms: 274 }
 ];
 // v1.27: the durian farm is a place of its own (block DR) with lots A, B and C (Yu Chen, 22 Oct 2026).
 // Its cost goes to durian, never to an oil palm block. Not used for FFB (harvest, loose fruit, lorries).

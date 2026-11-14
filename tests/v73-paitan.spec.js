@@ -34,20 +34,21 @@ const { chromium } = require('playwright');
   // ---------- the lists ----------
   let s = await session('PTAN', 'Staf Paitan Contoh'), p = s.p;
   const L = await p.evaluate(() => ({
-    ss: EA.lists.lotsFor('SSGT').length, pt: EA.lists.lotsFor('PTAN').length, tk: EA.lists.lotsFor('TKRS').length,
-    ha: EA.lists.lotsFor('PTAN').reduce((a, l) => a + l.ha, 0).toFixed(2), palms: EA.lists.lotsFor('PTAN').reduce((a, l) => a + l.palms, 0),
-    blocks: EA.lists.blocksFor('PTAN').map(b => b.block + ':' + EA.lists.lotsFor('PTAN', b.block).length).join(' '),
-    bha: EA.lists.blocksFor('PTAN').reduce((a, b) => a + b.ha, 0).toFixed(2), sb: EA.lists.blocksFor('SSGT').map(b => b.block + ':' + b.ha).join(' '),
+    ss: EA.lists.lotsFor('SSGT').length, pt: EA.lists.lotsFor('PTAN').filter(function (l) { return EA.lists.pieceOf('PTAN', l.block).piece === 'PTAN'; }).length, tk: EA.lists.lotsFor('TKRS').length,
+    ha: EA.lists.lotsFor('PTAN').filter(function (l) { return EA.lists.pieceOf('PTAN', l.block).piece === 'PTAN'; }).reduce((a, l) => a + l.ha, 0).toFixed(2), palms: EA.lists.lotsFor('PTAN').filter(function (l) { return EA.lists.pieceOf('PTAN', l.block).piece === 'PTAN'; }).reduce((a, l) => a + l.palms, 0),
+    blocks: EA.lists.blocksFor('PTAN').filter(function (b) { return !b.piece; }).map(b => b.block + ':' + EA.lists.lotsFor('PTAN', b.block).length).join(' '),
+    bha: EA.lists.blocksFor('PTAN').filter(function (b) { return !b.piece; }).reduce((a, b) => a + b.ha, 0).toFixed(2), sb: EA.lists.blocksFor('SSGT').map(b => b.block + ':' + b.ha).join(' '),
     df: EA.lists.mainJobs.PTAN.indexOf('DF'), mj: EA.lists.mainJobs.PTAN.length, smj: EA.lists.mainJobs.SSGT.join(','),
     lot: JSON.stringify(EA.lists.lot('PTAN', '1-13')), slot: EA.lists.lot('SSGT', '1-13').ha, name: EA.lists.estate('PTAN').name,
     gps: EA.lists.nearestLot('PTAN', 6.5, 117.3),
     here: (function () { var l = EA.lists.lot('PTAN', '2-9'); var n = EA.lists.nearestLot('PTAN', l.lat, l.lon); return n && n.lot.lot + '|' + n.metres; })(),
-    noCoord: EA.lists.lotsFor('PTAN').filter(function (l) { return !l.lat; }).map(function (l) { return l.lot; }).join(',')
+    pieces: (function () { var by = {}; EA.lists.lotsFor('PTAN').forEach(function (l) { var pc = EA.lists.pieceOf('PTAN', l.block).piece; by[pc] = (by[pc] || 0) + 1; }); return Object.keys(by).map(function (k) { return k + ':' + by[k]; }).join(' '); })(),
+    noCoord: EA.lists.lotsFor('PTAN').filter(function (l) { return !l.lat && EA.lists.pieceOf('PTAN', l.block).piece === 'PTAN'; }).map(function (l) { return l.lot; }).join(',')
   }));
   check('Paitan has 171 lots: 170 surveyed (184.14 Ha with 9Ac, 20,957 palms) and one for Block 9Ac', L.pt === 171 && L.ha === '184.14' && L.palms === 20957, JSON.stringify(L));
   check('five blocks with their lots: 01 43, 02 33, 03 40, 04 54, 9A 1; block Ha add to 184.14', L.blocks === '01:43 02:33 03:40 04:54 9A:1' && L.bha === '184.14', L.blocks + ' ' + L.bha);
   check('Sugut is untouched: 164 lots, the same four blocks and the same main jobs', L.ss === 164 && L.sb === '01:33.2 02:33.93 03:31.18 04:32.34' && /^HA,ITF,LFF,LF,DF,/.test(L.smj), L.ss + ' ' + L.sb);
-  check('TKRS and 43 Acres are not loaded (they wait for the piece level)', L.tk === 0);
+  check('TKRS and 43 Acres are pieces of the Paitan group, not estates of their own (1.60)', L.tk === 0 && L.pieces === 'PTAN:171 TKRS:24 43AC:14', L.pieces);
   check('Paitan\'s lot 1-13 is its own, not Sugut\'s', /"ha":0.26/.test(L.lot) && /"palms":36/.test(L.lot) && L.slot !== 0.26, L.lot + ' / ' + L.slot);
   check('main jobs as Sugut without durian', L.df < 0 && L.mj === 16);
   check('the estate is named Paitan', L.name === 'Paitan', L.name);
@@ -65,7 +66,8 @@ const { chromium } = require('playwright');
   check('the job buttons have no durian job', !(await p.$('[data-quick="DF"]')) && !!(await p.$('[data-quick="HA"]')) && !!(await p.$('[data-quick="MAN"]')));
   await p.click('[data-quick="HA"]'); await p.waitForTimeout(250);
   const bo = await p.$$eval('#jb-block option', o => o.map(x => x.value).filter(Boolean));
-  check('the block list is Paitan\'s five blocks', bo.join() === '01,02,03,04,9A', bo.join());
+  // v1.60: the group's ten blocks over three pieces — Paitan's five, TKRS's four, 43 Acres' one.
+  check('the block list is the group\'s ten blocks, Paitan\'s five first', bo.join() === '01,02,03,04,9A,T1,T2,T3,T4,A1', bo.join());
   await p.selectOption('#jb-block', '02'); await p.waitForTimeout(250);
   const lots = await p.$$eval('#jb-lots .pick[data-lot]', a => a.map(x => x.dataset.lot));
   check('Block 02 offers its 33 lots, 2-1 to 2-33', lots.length === 33 && lots[0] === '2-1' && lots.indexOf('2-33') >= 0, lots.length + ' ' + lots.slice(0, 3).join());

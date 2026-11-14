@@ -16,8 +16,9 @@ check('Paitan has its own outlines, and Sugut still has its own',
 check('every outline belongs to a lot on the Paitan land list — nothing invented',
   Object.keys(S.PTAN).every(k => lots.some(l => l.lot === k)),
   Object.keys(S.PTAN).filter(k => !lots.some(l => l.lot === k)).join(', '));
+// v1.60: TKRS and 43 Acres have no survey outlines either — only the Paitan piece is mapped.
 check('every Paitan lot has an outline except 9A-1, which has no map',
-  lots.filter(l => !S.PTAN[l.lot]).map(l => l.lot).join(',') === '9A-1',
+  lots.filter(l => !S.PTAN[l.lot] && EA.lists.pieceOf('PTAN', l.block).piece === 'PTAN').map(l => l.lot).join(',') === '9A-1',
   lots.filter(l => !S.PTAN[l.lot]).map(l => l.lot).join(','));
 check('the four blocks hold 43, 33, 40 and 54 lots',
   ['01', '02', '03', '04'].map(b => EA.lists.lotsFor('PTAN', b).filter(l => S.PTAN[l.lot]).length).join(',') === '43,33,40,54',
@@ -63,6 +64,8 @@ const ha = { '01': 39.97, '02': 36.18, '03': 47.71, '04': 56.64 };
 check('each block\'s lots still add up to the hectares in the budget Area Statement',
   ['01', '02', '03', '04'].every(b => Math.abs(EA.lists.lotsFor('PTAN', b).reduce((s, l) => s + l.ha, 0) - ha[b]) < 0.06),
   ['01', '02', '03', '04'].map(b => b + ':' + EA.lists.lotsFor('PTAN', b).reduce((s, l) => s + l.ha, 0).toFixed(2)).join(' '));
-check('Paitan is still 184.14 Ha and 20,957 palms over 171 lots',
-  Math.abs(lots.reduce((s, l) => s + l.ha, 0) - 184.14) < 0.06 && lots.reduce((s, l) => s + l.palms, 0) === 20957 && lots.length === 171,
-  lots.reduce((s, l) => s + l.ha, 0).toFixed(2) + ' Ha · ' + lots.reduce((s, l) => s + l.palms, 0) + ' palms · ' + lots.length + ' lots');
+// v1.60: the Paitan piece, not the whole estate — TKRS and 43 Acres are now land under PTAN too.
+const own = lots.filter(l => EA.lists.pieceOf('PTAN', l.block).piece === 'PTAN');
+check('the Paitan piece is still 184.14 Ha and 20,957 palms over 171 lots',
+  Math.abs(own.reduce((s, l) => s + l.ha, 0) - 184.14) < 0.06 && own.reduce((s, l) => s + l.palms, 0) === 20957 && own.length === 171,
+  own.reduce((s, l) => s + l.ha, 0).toFixed(2) + ' Ha · ' + own.reduce((s, l) => s + l.palms, 0) + ' palms · ' + own.length + ' lots');

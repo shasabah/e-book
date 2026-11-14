@@ -5,7 +5,8 @@ const check = (name, ok, detail) => { console.log((ok ? 'PASS ' : 'FAIL ') + nam
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const root = path.resolve(__dirname, '..');
 const ctx = {}; ctx.window = ctx; vm.createContext(ctx);
-['lists/lot-shapes.js', 'lists/lots.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(root, f), 'utf8'), ctx));
+// v1.60: estates.js too, for EA.lists.pieceOf — Paitan now holds three pieces.
+['lists/lot-shapes.js', 'lists/lots.js', 'lists/estates.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(root, f), 'utf8'), ctx));
 const EA = ctx.EA, S = EA.lists.lotShapes;
 const lots = EA.lists.lots.filter(l => l.estate === 'PTAN');
 const rings = g => Array.isArray(g[0][0]) ? g : [g];

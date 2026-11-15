@@ -634,5 +634,6 @@
   window.addEventListener('hashchange', function () { if (location.hash.indexOf('history') < 0) { openDay = ''; detail = ''; } });
   EA.fh.history = { render: render, reset: function () { openDay = ''; detail = ''; } };
   EA.fh.recView = function (v) { view = v || ''; };
+  EA.fh.recNow = function () { return view; };   // v1.65: the laptop side menu lights the record on the screen
   EA.fh.recShow = function (v) { view = v || ''; if (EA.fh.peopleReset) EA.fh.peopleReset(); if (el && ctx) render(el, ctx); };   // the old in-screen switch, kept for the tests   // v1.61: the Rekod tiles on the home page pick HARIAN, PROGRAM or ORANG
 })();

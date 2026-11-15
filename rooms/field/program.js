@@ -472,5 +472,5 @@
     quietly(redraw);
   }
   function lastDayOf(m) { var x = new Date(m + '-01T00:00:00'), e = daysIn(m), today = EA.today(); var d = m + '-' + String(e).padStart(2, '0'); return d > today ? today : d; }
-  EA.fh.program = { html: html, wire: wire, calc: calc, refresh: refresh, states: { harvest: harvestState, man: manState, cps: cpsState }, CPS_RULE: CPS_RULE };
+  EA.fh.program = { lotMap: lotMap, html: html, wire: wire, calc: calc, refresh: refresh, states: { harvest: harvestState, man: manState, cps: cpsState }, CPS_RULE: CPS_RULE };
 })();

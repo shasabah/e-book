@@ -87,13 +87,16 @@ EA.roomViews = EA.roomViews || {};
     return 0;
   };
   var peeking = false;
+  var peekFail = 0;   // v1.65: an office that answers "busy" is not asked again for 30 seconds
   EA.workersPeek = function (u, est) {
+    if (Date.now() - peekFail < 30000) return;
     if (peeking || !u || !/^(Clerk|Manager|HQ|Owner)$/.test(u.role) || !EA.sendLink() || !navigator.onLine) return;
     var c = EA.local.get(CACHE + est, null);
     if (c && c.code === u.code && Date.now() - c.at < 30 * 60000) return;
     peeking = true;
     EA.askFull('workers', { estate: est }).then(function (j) {
       peeking = false;
+      if (!(j && j.ok && j.people)) peekFail = Date.now();
       if (j && j.ok && j.people) { EA.local.set(CACHE + est, { at: Date.now(), code: u.code, data: j }); if (!location.hash && EA.renderHome) EA.renderHome(); }
     });
   };

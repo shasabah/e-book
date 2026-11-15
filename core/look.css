@@ -944,3 +944,26 @@ body:has(#home-bar.botbar) .sheet-back:not([hidden]) ~ .toast { bottom: auto; to
 .sync-info { flex-wrap: nowrap; min-width: 0; }
 .sync-info #last-sent { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .sync-info .pill { white-space: nowrap; flex: none; }
+
+/* v1.65 Senarai's view-only lists, and the laptop view (a wide screen): the four tabs stand down the left side */
+.ref-blk { margin: 10px 0 14px; } .ref-blk h3, .ref-h { margin: 10px 0 4px; font-size: 1rem; } .ref-blk h3 small, .ref-h small { font-weight: 500; color: var(--muted); }
+.ref-list { list-style: none; margin: 0 0 8px; padding: 0; } .ref-list li { padding: 7px 0; border-bottom: 1px solid var(--line); } .ref-list li small { color: var(--muted); }
+#tiles-ref { margin-bottom: 12px; }
+.bar-brand, .bar-sub { display: none; }
+@media (min-width: 900px) {
+  body:has(#home-bar.botbar) { padding-left: 232px; }
+  #home-bar.tabs.botbar { top: 0; bottom: 0; right: auto; width: 232px; flex-direction: column; justify-content: flex-start; align-items: stretch; gap: 4px;
+    padding: 18px 14px; border-top: 0; border-right: 1px solid var(--line); box-shadow: none; overflow-y: auto; }
+  #home-bar .bar-brand { display: block; font-weight: 800; font-size: 1.15rem; padding: 2px 12px 14px; color: var(--ok); }
+  #home-bar.tabs.botbar a { flex: none; max-width: none; margin: 0; flex-direction: row; justify-content: flex-start; gap: 12px; padding: 11px 12px; font-size: 1rem; border-radius: 12px; }
+  #home-bar.tabs.botbar .tab-n { position: static; margin: 0 0 0 auto; order: 9; }
+  #home-bar .bar-sub { display: block; text-align: left; border: 0; background: none; font: inherit; color: var(--muted); padding: 8px 12px 8px 48px; border-radius: 10px; cursor: pointer; }
+  #home-bar .bar-sub:hover, #home-bar .bar-sub.on { background: var(--ok-soft); color: var(--slate); font-weight: 700; }
+  body:has(#home-bar.botbar) #room, body:has(#home-bar.botbar) #home-main { padding-bottom: 40px; }
+  body:has(#home-bar.botbar) .foot { padding-bottom: 28px; }
+  body:has(#home-bar.botbar) #room .bottom-bar, #room:has(.botbar) .bottom-bar { bottom: 0; }
+  body:has(#home-bar.botbar) .toast { bottom: 24px; left: calc(50% + 116px); }
+  .today-card { max-width: 640px; }
+  .tiles { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+}
+.ref-blk .pg-map path { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1; }

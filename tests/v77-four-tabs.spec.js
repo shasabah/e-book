@@ -29,10 +29,29 @@ const { chromium } = require('playwright');
     await p.locator('[data-room="purchase-store"], [data-room="fleet"], [data-room="hr-payroll"], [data-room="reports"]').count() === 0);
   check('Hari ini: the lists are not on it', await p.locator('#tiles [data-room="workers"], #tiles [data-room="users"], #tiles [data-room="admin"]').count() === 0);
   await p.click('#home-bar [data-pane="lists"]'); await p.waitForTimeout(200);
-  check('Senarai: Pentadbir, Pekerja, Kilang, Pengguna & PIN, phone setup and share the app', await p.locator('#pane-lists:not([hidden]) [data-room="admin"]:visible').count() === 1 &&
+  check('Senarai: Pentadbir, Pekerja, Kilang, Pengguna & PIN, phone setup and share the app', await p.locator('#pane-lists:not([hidden]) [data-adm="summary"]:visible').count() === 1 &&
     await p.locator('#pane-lists [data-room="users"]:visible').count() === 1 && await p.locator('#pane-lists [data-room="workers"]:visible').count() === 1 &&
     await p.locator('#pane-lists [data-room="mills"]:visible').count() === 1 && await p.locator('#pane-lists [data-open-setup]:visible').count() === 1 && await p.locator('#pane-lists [data-share-app]:visible').count() === 1);
   check('1.64: no LOG OUT button on top; the name opens Tukar PIN, language, phone setup, log out', await p.locator('#top #logout').count() === 0 && await (async () => { await p.click('#who-name'); const ok = await p.isVisible('#nm-pin') && await p.isVisible('#nm-setup') && await p.isVisible('#logout') && await p.locator('[data-nmlang]').count() === 2; await p.click('#sheet-x'); return ok; })());
+  check('1.65 Senarai (Owner): lot map, job codes, rates, holidays; Telefon, Masalah and Suis are their own tiles, no Pentadbir tile',
+    await p.locator('#tiles-ref [data-ref]').count() === 4 && await p.locator('#tiles-lists [data-adm]').count() === 4 && await p.locator('#tiles-lists [data-room="admin"]').count() === 0,
+    await p.$$eval('#pane-lists .tile:not([hidden]) .name', a => a.map(x => x.innerText.trim()).join(' | ')));
+  await p.click('[data-ref="map"]'); await p.waitForTimeout(200);
+  check('1.65 Peta petak: the estate\'s four blocks, each with its map, view only', await p.locator('#sheet .ref-blk').count() === 4 && await p.locator('#sheet svg.pg-map').count() === 4 && await p.locator('#sheet input').count() === 0);
+  await p.click('#sheet-x'); await p.click('[data-ref="jobs"]'); await p.waitForTimeout(200);
+  check('1.65 Kod kerja: the estate\'s main jobs (HA first)', await p.locator('#sheet .ref-list li').count() === 17 && /HA/.test(await p.textContent('#sheet .ref-list li')));
+  await p.click('#sheet-x'); await p.click('[data-ref="rates"]'); await p.waitForTimeout(200);
+  check('1.65 Kadar: no rate on the phone, only where to ask', !/RM|\d+\.\d\d/.test(await p.textContent('#sheet')));
+  await p.click('#sheet-x'); await p.click('#tiles-lists [data-adm="switches"]'); await p.waitForTimeout(400);
+  check('1.65 Suis opens the switches page', /#admin\/switches$/.test(p.url()), p.url());
+  await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(300);
+  check('1.65 phone: the side menu\'s brand and sub-lines are hidden', !(await p.isVisible('#home-bar .bar-brand')) && !(await p.isVisible('#home-bar .bar-sub')));
+  await p.setViewportSize({ width: 1366, height: 768 }); await p.waitForTimeout(200);
+  const side = await p.evaluate(() => { const r = document.querySelector('#home-bar').getBoundingClientRect(); return { l: Math.round(r.left), w: Math.round(r.width), h: Math.round(r.height), ih: innerHeight }; });
+  check('1.65 laptop: the four tabs stand down the left side, full height', side.l === 0 && side.w < 300 && side.h === side.ih && await p.isVisible('#home-bar .bar-brand') && await p.locator('#home-bar .bar-sub:visible').count() === 3, JSON.stringify(side));
+  await p.click('#home-bar [data-rsub="org"]'); await p.waitForTimeout(700);
+  check('1.65 laptop: Rekod › Orang from the side menu', /Rekod · Orang|Records · People/.test(await p.textContent('#room h1')) && await p.locator('#home-bar .bar-sub.on').count() === 1);
+  await p.evaluate(() => { location.hash = ''; }); await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(300); await p.evaluate(() => EA.homePane('lists')); await p.waitForTimeout(200);
   check('Senarai: Hari ini\'s cards are hidden', !(await p.isVisible('#work-screens')) && !(await p.isVisible('#home-main .greet')));
   await p.click('#pane-lists [data-room="users"]'); await p.waitForTimeout(400);
   check('a list opens its screen, unchanged (Pengguna & PIN)', /#users$/.test(p.url()), p.url());

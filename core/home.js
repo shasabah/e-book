@@ -219,8 +219,64 @@
     var work = all.filter(function (r) { return LIST_ROOMS.indexOf(r.id) < 0 && r.id !== 'durian' && r.id !== 'field-harvest'; }), lists = all.filter(function (r) { return LIST_ROOMS.indexOf(r.id) >= 0; });
     $('rooms-h').hidden = !work.length;
     $('tiles').innerHTML = tilesHtml(work, u, estate);
-    $('tiles-lists').innerHTML = tilesHtml(lists, u, estate);
+    // v1.65 (Brief_Susun_Atur 4): the Admin page is spread into Senarai — Telefon, Masalah and Suis are their own
+    // tiles for the Owner; HQ keeps the one summary tile.
+    var adm = lists.find(function (r) { return r.id === 'admin'; });
+    $('tiles-lists').innerHTML = tilesHtml(lists.filter(function (r) { return !(u.role === 'Owner' && r.id === 'admin'); }), u, estate) +
+      (adm && u.role === 'Owner' ? [['summary', 'RK', 'Ringkasan ladang', 'Estate summary', 'Semua ladang', 'All estates'], ['phones', 'TL', 'Telefon', 'Phones', 'Peranti dan versi', 'Devices and versions'],
+        ['problems', 'MS', 'Masalah', 'Problems', 'Ralat telefon, simpanan ditolak', 'Phone errors, refused saves'], ['switches', 'SU', 'Suis', 'Switches', 'Buka ladang, PIN ujian', 'Open an estate, test PINs']].map(function (x) {
+        return refTile('data-adm="' + x[0] + '"', x[1], x[2], x[3], x[4], x[5]); }).join('') : '');
+    $('tiles-lists').querySelectorAll('[data-adm]').forEach(function (b) { b.onclick = function () { location.hash = 'admin/' + b.dataset.adm; }; });
+    renderRef(u, estate);
     [$('tiles'), $('tiles-lists')].forEach(function (box) { wireTiles(box, estate); });
+  }
+  // v1.65 (Brief_Susun_Atur 4): the lists that seldom change, for everyone to look at — lot map, workers, job codes,
+  // rates, holidays. View only: nothing is keyed here. All from the shared lists already on the phone.
+  function refTile(attr, mark, bm, en, sbm, sen) {
+    return '<button class="tile live" type="button" ' + attr + '><span class="mark" aria-hidden="true">' + mark + '</span><span class="name"><span class="bm">' + esc(bm) + '</span><span class="en">' + esc(en) + '</span></span>' +
+      '<span class="when"><span class="bm">' + esc(sbm) + '</span><span class="en">' + esc(sen) + '</span></span></button>';
+  }
+  function f2(n) { return (Math.round(Number(n) * 100) / 100).toFixed(2); }
+  function renderRef(u, estate) {
+    var L = EA.lists, box = $('tiles-ref');
+    var blocks = (L.blocksFor ? L.blocksFor(estate) : []).filter(function (b) { return !(L.isDurian && L.isDurian(estate, b.block)); });
+    var lots = L.lotsFor ? L.lotsFor(estate).filter(function (l) { return !(L.isDurian && L.isDurian(estate, l.block)); }) : [];
+    var people = u.role !== 'Worker' && L.workersFor ? L.workersFor(estate) : [];
+    var seesWorkersRoom = EA.roomsFor(u, estate).some(function (r) { return r.id === 'workers'; });
+    var jobs = (L.mainJobs && L.mainJobs[estate]) || [];
+    var hol = (L.holidays || []).filter(function (d) { return d >= EA.today().slice(0, 4) + '-01-01'; });
+    var h = '';
+    if (lots.length) h += refTile('data-ref="map"', 'PP', 'Peta petak', 'Lot map', lots.length + ' petak · ' + blocks.length + ' blok', lots.length + ' lots · ' + blocks.length + ' blocks');
+    if (people.length && !seesWorkersRoom) h += refTile('data-ref="people"', 'PK', 'Pekerja', 'Workers', people.length + ' orang · lihat sahaja', people.length + ' people · view only');
+    if (jobs.length) h += refTile('data-ref="jobs"', 'KK', 'Kod kerja', 'Job codes', jobs.length + ' kerja utama', jobs.length + ' main jobs');
+    if (lots.length) h += refTile('data-ref="rates"', 'KD', 'Kadar', 'Piece rates', 'Dari pejabat', 'From the office');
+    if (lots.length) h += refTile('data-ref="hol"', 'CU', 'Cuti umum', 'Public holidays', hol.length ? hol.length + ' hari' : 'Belum dikunci', hol.length ? hol.length + ' days' : 'Not keyed yet');
+    box.innerHTML = h; box.hidden = !h;
+    var name = estName(estate);
+    var show = { map: function () {
+        var st = {}; lots.forEach(function (l) { st[l.lot] = { k: '' }; });
+        openSheet('<h2 id="sheet-title">' + EA.t('Peta petak · ', 'Lot map · ') + esc(name) + '</h2>' +
+          '<p class="hint">' + lots.length + EA.t(' petak dalam ', ' lots in ') + blocks.length + EA.t(' blok · ', ' blocks · ') + f2(lots.reduce(function (a, l) { return a + (Number(l.ha) || 0); }, 0)) + ' Ha</p>' +
+          blocks.map(function (b) { var bl = lots.filter(function (l) { return l.block === b.block; });
+            var m = EA.fh && EA.fh.program && EA.fh.program.lotMap ? EA.fh.program.lotMap(estate, b.block, st) : '';
+            return '<div class="ref-blk"><h3>Blk ' + esc(b.block) + ' <small>' + bl.length + EA.t(' petak · ', ' lots · ') + f2(b.ha) + ' Ha</small></h3>' +
+              (m || '<p class="hint">' + EA.t('Belum ada peta untuk blok ini.', 'No map for this block yet.') + '</p>') + '</div>'; }).join('') +
+          '<p class="hint">' + EA.t('Peta A3 untuk dicetak ada di pejabat. Warna ikut kerja: Rekod › Program.', 'The A3 maps to print are at the office. Colours by work: Records › Plan.') + '</p>');
+      }, people: function () {
+        var by = {}; people.forEach(function (w) { (by[w.gang || '-'] = by[w.gang || '-'] || []).push(w); });
+        openSheet('<h2 id="sheet-title">' + EA.t('Pekerja · ', 'Workers · ') + esc(name) + '</h2><p class="hint">' + people.length + EA.t(' orang · lihat sahaja. Pekerja baru atau berhenti: beritahu kerani.', ' people · view only. A new or leaving worker: tell the clerk.') + '</p>' +
+          Object.keys(by).sort().map(function (g) { return '<h3 class="ref-h">' + esc(g) + ' <small>' + by[g].length + '</small></h3><ul class="ref-list">' + by[g].map(function (w) { return '<li>' + esc(w.name) + '</li>'; }).join('') + '</ul>'; }).join(''));
+      }, jobs: function () {
+        openSheet('<h2 id="sheet-title">' + EA.t('Kod kerja · ', 'Job codes · ') + esc(name) + '</h2><p class="hint">' + EA.t('Kerja utama ladang ini. Kerja lain: minta lulus di chit.', 'This estate\'s main jobs. Other work: ask for approval on the chit.') + '</p><ul class="ref-list">' +
+          jobs.map(function (c) { var t = L.task(c) || { bm: c, en: c, unit: '' }; return '<li><b class="mono">' + esc(c) + '</b> ' + esc(EA.t(t.bm, t.en)) + (t.unit ? ' <small>' + esc(t.unit) + '</small>' : '') + '</li>'; }).join('') + '</ul>');
+      }, rates: function () {
+        openSheet('<h2 id="sheet-title">' + EA.t('Kadar', 'Piece rates') + '</h2><p>' + EA.t('Kadar disimpan di pejabat sahaja, bukan di telefon. Ada soalan tentang kadar? Tanya Ibu Pejabat Sandakan.', 'Rates are kept at the office only, not on the phone. A question about a rate? Ask Sandakan HQ.') + '</p>');
+      }, hol: function () {
+        var d = function (x) { var t = new Date(x + 'T00:00:00'); return EA.t(DAY_BM, DAY_EN)[t.getDay()] + ', ' + t.getDate() + ' ' + EA.t(MON_BM, MON_EN)[t.getMonth()] + ' ' + t.getFullYear(); };
+        openSheet('<h2 id="sheet-title">' + EA.t('Cuti umum', 'Public holidays') + '</h2>' + (hol.length ? '<ul class="ref-list">' + hol.map(function (x) { return '<li>' + esc(d(x)) + '</li>'; }).join('') + '</ul>'
+          : '<p>' + EA.t('Kalendar cuti belum dikunci oleh Ibu Pejabat. Ahad ialah hari rehat.', 'The holiday calendar is not keyed by HQ yet. Sunday is the rest day.') + '</p>'));
+      } };
+    box.querySelectorAll('[data-ref]').forEach(function (b) { b.onclick = function () { show[b.dataset.ref](); }; });
   }
   function tilesHtml(rooms, u, estate) {
     return rooms.map(function (r) {
@@ -287,7 +343,7 @@
     $('home-main').setAttribute('data-pane', p);   // CSS hides Hari ini's cards on the other tabs (they may redraw later, from the office)
     document.querySelector('#home-main .greet').hidden = p !== 'today';
     $('layout').hidden = p !== 'today';
-    renderScreens(u, estate, fh);
+    renderScreens(u, estate, fh); barFh = fh;
     // Rekod: one tile per record (the screens inside are today's)
     $('pane-rekod').hidden = p !== 'rekod';
     if (p === 'rekod') {
@@ -322,16 +378,26 @@
     $('pane-lists').hidden = p !== 'lists';
   }
   // v1.62: the four tabs on every screen — the home page and inside every room — one bar, never a second one.
+  var barFh = false;
   function renderBar(active) {
     var items = [['today', 'Hari ini', 'Today'], ['rekod', 'Rekod', 'Records'], ['laporan', 'Laporan', 'Reports'], ['lists', 'Senarai', 'Lists']];
     var late = (document.querySelectorAll('#todo .td-it').length || 0);
     $('home-bar').className = 'tabs botbar';
-    $('home-bar').innerHTML = items.map(function (it) {
+    // v1.65: on a laptop (a wide screen) the same four tabs stand down the left side, with Rekod's three records
+    // under it (the mock's laptop view). The brand and the sub-lines are hidden on a phone by the style sheet.
+    var subs = barFh ? [['', 'Harian', 'Daily'], ['prog', 'Program', 'Plan vs actual'], ['org', 'Orang', 'People']] : [];
+    var cur = active === 'rekod' && location.hash.indexOf('field-harvest/history') >= 0 && EA.fh && EA.fh.recNow ? EA.fh.recNow() : null;
+    $('home-bar').innerHTML = '<div class="bar-brand" aria-hidden="true">E-Book</div>' + items.map(function (it) {
       return '<a role="button" tabindex="0" data-pane="' + it[0] + '"' + (active === it[0] ? ' aria-current="page"' : '') + '>' +
         (it[0] === 'today' && late ? '<span class="tab-n">' + late + '</span>' : '') +
-        '<svg viewBox="0 0 24 24" aria-hidden="true">' + BAR_ICON[it[0]] + '</svg><span class="bm">' + it[1] + '</span><span class="en">' + it[2] + '</span></a>';
+        '<svg viewBox="0 0 24 24" aria-hidden="true">' + BAR_ICON[it[0]] + '</svg><span class="bm">' + it[1] + '</span><span class="en">' + it[2] + '</span></a>' +
+        (it[0] === 'rekod' ? subs.map(function (x) { return '<button type="button" class="bar-sub' + (cur === x[0] ? ' on' : '') + '" data-rsub="' + x[0] + '">' + esc(EA.t(x[1], x[2])) + '</button>'; }).join('') : '');
     }).join('');
     $('home-bar').querySelectorAll('[data-pane]').forEach(function (a) { a.onclick = function () { EA.homePane(a.dataset.pane); }; });
+    $('home-bar').querySelectorAll('[data-rsub]').forEach(function (b) { b.onclick = function () {
+      EA.local.set(PANE_KEY, 'rekod');
+      if (location.hash.indexOf('field-harvest/history') >= 0 && EA.fh.recShow) { EA.fh.recShow(b.dataset.rsub); renderBar('rekod'); return; }
+      if (EA.fh && EA.fh.recView) EA.fh.recView(b.dataset.rsub); if (EA.fh && EA.fh.history && EA.fh.history.reset) EA.fh.history.reset(); location.hash = 'field-harvest/history'; }; });
   }
 
   function renderPlan(u) {

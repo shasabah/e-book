@@ -74,13 +74,16 @@ EA.roomViews = EA.roomViews || {};
   };
   // Every phone (the staff's too) fetches the list now and then, so a newly opened mill reaches the lorry screen.
   var peeking = false;
+  var peekFail = 0;   // v1.65: an office that answers "busy" is not asked again for 30 seconds
   EA.millsPeek = function (u, est) {
+    if (Date.now() - peekFail < 30000) return;
     if (peeking || !u || !/^(Staff|Clerk|Manager|HQ|Owner)$/.test(u.role) || !EA.sendLink() || !navigator.onLine) return;
     var c = EA.local.get(CACHE + est, null), every = /^(HQ|Owner)$/.test(u.role) ? 30 : 6 * 60;
     if (c && c.code === u.code && Date.now() - c.at < every * 60000) return;
     peeking = true;
     EA.askFull('mills', { estate: est }).then(function (j) {
       peeking = false;
+      if (!(j && j.ok && j.mills)) peekFail = Date.now();
       if (j && j.ok && j.mills) { keep(j, u); if (!location.hash && EA.renderHome) EA.renderHome(); }
     });
   };

@@ -58,14 +58,17 @@ window.EA = window.EA || {};
     items.sort(function (a, b) { return a.p - b.p; });
     return { items: items, at: c ? c.at : 0 };
   };
+  var peekFail = 0;   // v1.65: an office that answers "busy" is not asked again for 30 seconds
   EA.todoPeek = function (u, est) {
+    if (Date.now() - peekFail < 30000) return;
     if (asking || !u || !ROLES.test(u.role) || !EA.sendLink() || !navigator.onLine) return;
     var c = cached(u, est);
     if (c && Date.now() - c.at < 3 * 60000) return;
     asking = true;
     EA.askFull('todo', { estate: est }).then(function (j) {
       asking = false;
-      if (j && j.ok && j.items) { keep(u, j); if (!location.hash && EA.renderHome) EA.renderHome(); }
+      if (!(j && j.ok && j.items)) peekFail = Date.now();
+      if (j && j.ok && j.items) { j.estate = j.estate || est; keep(u, j); if (!location.hash && EA.renderHome) EA.renderHome(); }
     });
   };
   var COLOR = { 1: 'r', 2: 'a', 3: 'b', 4: 'g' };

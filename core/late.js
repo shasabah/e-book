@@ -59,13 +59,16 @@ window.EA = window.EA || {};
     else window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener');
   }
 
+  var peekFail = 0;   // v1.65: an office that answers "busy" is not asked again for 30 seconds
   EA.latePeek = function (u) {
+    if (Date.now() - peekFail < 30000) return;
     if (asking || !ok(u) || !EA.sendLink() || !navigator.onLine) return;
     var c = cached(u);
     if (c && Date.now() - c.at < 3 * 60000) return;
     asking = true;
     EA.askFull('late', {}).then(function (j) {
       asking = false;
+      if (!(j && j.ok && j.estates)) peekFail = Date.now();
       if (j && j.ok && j.estates) { try { EA.local.set(CACHE, { at: Date.now(), code: u.code, data: j }); } catch (e) {} if (!location.hash && EA.renderHome) EA.renderHome(); }
     });
   };

@@ -367,7 +367,10 @@
       var o = openDays(estate).find(function (x) { return x.date === date; });
       if (!o) return { state: 'none' };
       var d = draftFor(date), ck = checks(estate, o.chit, d), bad = ck.filter(function (x) { return !x.ok; });
-      return { state: bad.length ? 'missing' : 'ready', chit: o.chit, d: d, checks: ck, bad: bad, reopened: o.reopened };
+      // v1.61: the day's rain alone never makes a day "missing": the close question asks it on the spot, and the
+      // morning self-close goes ahead without it ("tiada bacaan").
+      var other = bad.filter(function (x) { return x.n !== 8; });
+      return { state: other.length ? 'missing' : 'ready', needRain: bad.length > other.length, chit: o.chit, d: d, checks: ck, bad: other, reopened: o.reopened };
     } finally { ctx = keep; }
   }
   // ---------- the day summary for WhatsApp ----------
@@ -459,7 +462,12 @@
     var st = closeState(estate, user, date);
     if (st.state === 'none') return null;
     var html;
-    if (st.state === 'ready') html = '<div class="dc-ask" id="dc-ask"><b>✓ ' + EA.t('Semua lengkap. Tutup hari ' + niceDate(date) + '?', 'All complete. Close ' + niceDate(date) + '?') + '</b>' +
+    if (st.state === 'ready' && st.needRain) html = '<div class="dc-ask" id="dc-ask"><b>✓ ' + EA.t('Semua lengkap. Hujan siang ini?', 'All complete. Rain today?') + '</b>' +
+      '<small>' + EA.t('Baca tolok dahulu. Tiada hujan: hari ditutup terus. Ada hujan: isi mm dan bila di skrin Tutup hari.', 'Read the gauge first. No rain: the day closes now. Rain: key the mm and when on the close screen.') + '</small>' +
+      '<div class="actions"><button type="button" class="btn btn-ghost" id="dc-later">LATER<small>NANTI</small></button>' +
+      '<button type="button" class="btn btn-wait" id="dc-wet">IT RAINED<small>ADA HUJAN</small></button>' +
+      '<button type="button" class="btn btn-ok" id="dc-dry">NO RAIN · CLOSE<small>TIADA HUJAN · TUTUP</small></button></div></div>';
+    else if (st.state === 'ready') html = '<div class="dc-ask" id="dc-ask"><b>✓ ' + EA.t('Semua lengkap. Tutup hari ' + niceDate(date) + '?', 'All complete. Close ' + niceDate(date) + '?') + '</b>' +
       '<small>' + EA.t('Selepas ditutup, hari ini hanya diubah melalui MINTA BETULKAN CHIT (kerani).', 'After closing, changes only through MINTA BETULKAN CHIT (the clerk).') + '</small>' +
       '<div class="actions"><button type="button" class="btn btn-ghost" id="dc-later">NANTI<small>' + EA.t('Ada lagi untuk dikunci', 'More to key') + '</small></button>' +
       '<button type="button" class="btn btn-ok" id="dc-yes">YA, TUTUP<small>' + EA.t('Tutup hari', 'Close the day') + '</small></button></div></div>';
@@ -473,6 +481,15 @@
         if (!s) return;
         ui().closeSheet(); if (after) after(); showSummary(date, estate);
       };
+      var keepD = function (d) { var all = EA.local.get(K.draft, {}); all[estate + '|' + date] = d; EA.local.set(K.draft, all); };
+      var dry = sh.querySelector('#dc-dry'), wet = sh.querySelector('#dc-wet');
+      if (dry) dry.onclick = function () {
+        st.d.rainMm = '0'; st.d.rainTime = ''; st.d.rainWet = false; st.d.rainSeen = true; keepD(st.d);
+        var s = closeChit(estate, user, st.chit, st.d, {});
+        if (!s) return;
+        ui().closeSheet(); if (after) after(); showSummary(date, estate);
+      };
+      if (wet) wet.onclick = function () { st.d.rainWet = true; st.d.rainSeen = true; keepD(st.d); EA.local.set('fh.daypick', date); ui().closeSheet(); location.hash = '#field-harvest/close'; };
       sh.querySelectorAll('.dc-go').forEach(function (b) { b.onclick = function () { ui().closeSheet(); EA.local.set('fh.workchit', st.chit.chit); location.hash = b.dataset.go; }; });
     } };
   };

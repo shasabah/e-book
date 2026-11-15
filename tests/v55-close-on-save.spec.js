@@ -52,6 +52,16 @@ function seed(date, dn) {
   await p.evaluate(() => { localStorage.setItem('fh.workchit', JSON.stringify('CH-' + new Date().toISOString().slice(0, 10))); location.hash = 'field-harvest/work'; }); await p.waitForTimeout(700);
   await p.click('#wk-view'); await p.waitForTimeout(300);
   let sheet = await p.innerText('#sheet');
+  // v1.61: with the day's rain not answered yet, the question asks it on the spot (TIADA HUJAN · TUTUP / ADA HUJAN)
+  check('1.61 · rain not answered: "Semua lengkap. Hujan siang ini?" with TIADA HUJAN · TUTUP, ADA HUJAN and NANTI', /Hujan siang ini\?/.test(sheet) && !!(await p.$('#dc-dry')) && !!(await p.$('#dc-wet')) && !!(await p.$('#dc-later')) && !(await p.$('#dc-yes')), sheet.slice(0, 300));
+  await p.click('#dc-wet'); await p.waitForTimeout(500);
+  check('1.61 · ADA HUJAN opens the close screen with the mm and periods asked', /#field-harvest\/close$/.test(p.url()) && await p.locator('#dc-rain-mm').count() === 1 && await p.locator('[data-drp]').count() === 2, p.url());
+  check('1.61 · on the close screen TUTUP HARI waits for the mm and the period', await p.$eval('#dc-close', b => b.disabled));
+  await p.click('#dc-rain-no'); await p.waitForTimeout(200);
+  check('1.61 · TIADA HUJAN there lets the day close', !(await p.$eval('#dc-close', b => b.disabled)));
+  await p.evaluate(() => { localStorage.setItem('fh.workchit', JSON.stringify('CH-' + new Date().toISOString().slice(0, 10))); location.hash = 'field-harvest/work'; }); await p.waitForTimeout(700);
+  await p.click('#wk-view'); await p.waitForTimeout(300);
+  sheet = await p.innerText('#sheet');
   check('Kerja report: "Semua lengkap. Tutup hari …?" with YA, TUTUP and NANTI', /Semua lengkap\. Tutup hari/.test(sheet) && !!(await p.$('#dc-yes')) && !!(await p.$('#dc-later')), sheet.slice(0, 300));
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v55-ask.png' });
   await p.click('#dc-later'); await p.waitForTimeout(150);
@@ -91,7 +101,7 @@ function seed(date, dn) {
   // 4 · the lorry gets its DN on Ramp → the close is offered
   await p.evaluate(({ yd }) => { const c = JSON.parse(localStorage.getItem('fh.collect')); c.forEach(x => { if (x.date === yd) x.dispatch.dn = '8530'; }); localStorage.setItem('fh.collect', JSON.stringify(c)); }, { yd });
   const offered2 = await p.evaluate((yd) => EA.fh.offerClose('SSGT', EA.currentUser(), yd), yd);
-  check('once complete, the close is offered (sheet with YA, TUTUP)', offered2 === true && !!(await p.$('#dc-yes')));
+  check('once complete, the close is offered (YA, TUTUP — or, with the day rain not yet answered, TIADA HUJAN · TUTUP)', offered2 === true && !!(await p.$('#dc-yes') || await p.$('#dc-dry')));
   await p.evaluate(() => EA.ui.closeSheet());
   // 5 · Kerja: lot BELUM SIAP · Hujan offers the rain kinds of the job's group and ¼–1 day
   const kinds = await p.evaluate(() => (EA.lists.rainReasons || []).filter(r => r.groups.indexOf(EA.lists.rainOf('CPS')) >= 0).map(r => r.code).join(',') + ' | ' +

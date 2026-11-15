@@ -151,7 +151,9 @@ const { chromium } = require('playwright');
   const hour = await p.evaluate(() => new Date().getHours());
   const txt = await p.innerText('#todo');
   check('phone: staff sees Perlu tindakan with the office lines', /Perlu tindakan|Needs action/.test(txt) && /Pusingan tuai lewat|Harvest round late/.test(txt));
-  check('phone: no chit today → red line first (after 5 am)', hour < 5 || (await p.locator('#todo .td-it').first().innerText()).match(/Chit muster|muster chit/));
+  // a rest day (Sunday) raises no "chit not made" since 1.51.3, so this check only holds on a working day
+  const restDay = await p.evaluate(() => new Date(EA.today() + 'T00:00:00').getDay() === 0);
+  check('phone: no chit today → red line first (after 5 am, on a working day)', hour < 5 || restDay || (await p.locator('#todo .td-it').first().innerText()).match(/Chit muster|muster chit/));
   check('phone: the direction line cannot be tapped (to read only)', await p.locator('#todo div.td-it').count() === 1);
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v42-staff.png' });
   await p.locator('#todo button.td-it', { hasText: /Pusingan|Harvest/ }).click(); await p.waitForTimeout(400);

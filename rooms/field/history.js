@@ -128,7 +128,8 @@
 
   // ---------- the screen ----------
   var detail = '';
-  function title() { var vo = EA.fh.viewOnly && EA.fh.viewOnly(ctx.user); return vo ? EA.t('Operasi', 'Operations') : EA.t('Rekod', 'Records'); }
+  // v1.62: the Rekod tab's tiles pick the view, so the screen says which one it is (no second row of buttons)
+  function title() { var vo = EA.fh.viewOnly && EA.fh.viewOnly(ctx.user); return (vo ? EA.t('Operasi', 'Operations') : EA.t('Rekod', 'Records')) + ' · ' + (view === 'prog' ? EA.t('Program', 'Plan vs actual') : view === 'org' ? EA.t('Orang', 'People') : EA.t('Harian', 'Daily')); }
   function head(h1, sub, backId) {
     var vo = EA.fh.viewOnly && EA.fh.viewOnly(ctx.user), testing = !EA.roomLive(ctx.room, ctx.estate);
     return '<div class="room-top"><button type="button" class="back-btn" id="' + backId + '">‹ BACK<small>‹ BALIK</small></button>' +
@@ -150,9 +151,8 @@
     var orgOn = !!EA.fh.people, org = view === 'org' && orgOn;          // v1.50: ORANG, the month by person (everyone who sees Rekod)
     el.innerHTML = head(esc(title()), esc(ctx.estate), 'hs-back') +
       (vo && month === thisMonth && !prog && !org ? todayCard(list) : '') +
-      (progOn || orgOn ? '<div class="seg2 pg-seg" role="group"><button type="button" data-view=""' + (prog || org ? '' : ' class="on" aria-pressed="true"') + '>' + EA.t('HARIAN', 'DAILY') + '</button>' +
-        (progOn ? '<button type="button" data-view="prog"' + (prog ? ' class="on" aria-pressed="true"' : '') + '>' + EA.t('PROGRAM', 'PLAN VS ACTUAL') + '</button>' : '') +
-        (orgOn ? '<button type="button" data-view="org"' + (org ? ' class="on" aria-pressed="true"' : '') + '>' + EA.t('ORANG', 'PEOPLE') + '</button>' : '') + '</div>' : '') +
+      // v1.62: HARIAN · PROGRAM · ORANG are the Rekod tab's tiles now; the row of buttons that repeated them is gone.
+
       // v1.11: one line for any number of months: ‹ Month › and a year grid behind the month name.
       '<div class="mstep" role="group" aria-label="' + EA.t('Bulan', 'Month') + '">' +
         '<button type="button" id="hs-prev" aria-label="' + EA.t('Bulan sebelum', 'Month before') + '"' + (month <= FIRST_MONTH ? ' disabled' : '') + '>‹</button>' +
@@ -633,5 +633,6 @@
   // Leaving Rekod closes the day or page that was open, so the tab always opens on the list.
   window.addEventListener('hashchange', function () { if (location.hash.indexOf('history') < 0) { openDay = ''; detail = ''; } });
   EA.fh.history = { render: render, reset: function () { openDay = ''; detail = ''; } };
-  EA.fh.recView = function (v) { view = v || ''; };   // v1.61: the Rekod tiles on the home page pick HARIAN, PROGRAM or ORANG
+  EA.fh.recView = function (v) { view = v || ''; };
+  EA.fh.recShow = function (v) { view = v || ''; if (EA.fh.peopleReset) EA.fh.peopleReset(); if (el && ctx) render(el, ctx); };   // the old in-screen switch, kept for the tests   // v1.61: the Rekod tiles on the home page pick HARIAN, PROGRAM or ORANG
 })();

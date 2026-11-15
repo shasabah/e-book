@@ -53,7 +53,7 @@ EA.roomViews = EA.roomViews || {};
   function bar(active) {
     if (!owner()) return '';
     var n = (cached('problems') || {}).fresh || 0;
-    return '<nav class="tabs botbar" aria-label="' + t('Skrin', 'Screens') + '">' +
+    return '<nav class="tabs adm-tabs" aria-label="' + t('Skrin', 'Screens') + '">' +   // v1.62: a strip at the top; the bottom is the four tabs
       [['summary', '', 'Ringkasan', 'Summary'], ['phones', '/phones', 'Telefon', 'Phones'], ['problems', '/problems', 'Masalah', 'Problems'], ['switches', '/switches', 'Suis', 'Switches']].map(function (it) {
         return '<a href="#admin' + it[1] + '"' + (active === it[0] ? ' aria-current="page"' : '') + ' data-tab="' + it[0] + '">' +
           (it[0] === 'problems' && n ? '<span class="adm-cnt">' + n + '</span>' : '') +

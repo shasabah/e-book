@@ -16,10 +16,10 @@ const fs = require('fs'); const vm = require('vm');
     localStorage.setItem('fh.collect', JSON.stringify([{ date: t, estate: 'SSGT', at: '15:00', lines: [], dispatch: { trip: 'LR-T', dn: '9001', lorry: 'SA 1', mill: 'Boustead (BOU)', bunches: '200', blocks: { '03': 200 } } }])); });
   // Clerk
   await p.reload(); await p.fill('#key', '333333'); await p.waitForSelector('#home:not([hidden])');
-  await (async () => { await p.evaluate(() => { if (EA.homePane && JSON.parse(localStorage.getItem('ea.homePane') || '"today"') !== 'today') EA.homePane('today'); }); return p.click('[data-room="field-harvest"]'); })(); await p.waitForTimeout(500);
+  await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForTimeout(500);
   check('clerk: the room opens on Tiket', /Tiket kilang/.test(await p.textContent('#room h1')));
-  check('clerk: bar is Tiket · Operasi', (await p.$$eval('.botbar a', a => a.map(x => x.innerText.trim()).join('|'))) === 'Tiket|Operasi');
-  await p.click('.botbar a[data-tab="history"]'); await p.waitForTimeout(400);
+  check('1.62: clerk: the four tabs, not Tiket · Operasi', (await p.$$eval('.botbar a', a => a.map(x => x.innerText.trim()).join('|'))) === 'Hari ini|Rekod|Laporan|Senarai');
+  await p.evaluate(() => { location.hash = 'field-harvest/history'; }); await p.waitForTimeout(400);
   const ops = await p.innerText('#room');
   check('Operasi: title, LIHAT SAHAJA badge', /Operasi/.test(await p.textContent('#room h1')) && /LIHAT SAHAJA/.test(ops));
   check('Operasi: "Hari ini" card shows chit done 06:40, work not yet, 1 lorry waiting for a ticket',
@@ -38,9 +38,9 @@ const fs = require('fs'); const vm = require('vm');
   // Manager
   await p.evaluate(() => { location.hash = ''; }); await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
   await p.fill('#key', '888888'); await p.waitForSelector('#home:not([hidden])');
-  check('manager: sees the Field & Harvest tile', await p.locator('[data-room="field-harvest"]').count() === 1);
-  await (async () => { await p.evaluate(() => { if (EA.homePane && JSON.parse(localStorage.getItem('ea.homePane') || '"today"') !== 'today') EA.homePane('today'); }); return p.click('[data-room="field-harvest"]'); })(); await p.waitForTimeout(400);
-  check('manager: opens straight on Operasi, no bar', /Operasi/.test(await p.textContent('#room h1')) && await p.locator('.botbar').count() === 0);
+  check('manager: has Field & Harvest (opened from the Rekod tab since 1.63)', await p.evaluate(() => EA.roomsFor(EA.currentUser(), 'SSGT').some(r => r.id === 'field-harvest')));
+  await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForTimeout(400);
+  check('manager: opens straight on Operasi; the one bar is the four tabs', /Operasi/.test(await p.textContent('#room h1')) && await p.locator('.botbar').count() === 1);
   await p.evaluate(() => { location.hash = 'field-harvest/ticket'; }); await p.waitForTimeout(300);
   check('manager going to the ticket screen sees Operasi', /Operasi/.test(await p.textContent('#room h1')));
   check('role name: Pengurus', /Pengurus/.test(await p.textContent('#who-role')));

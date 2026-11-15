@@ -107,18 +107,18 @@ const { chromium } = require('playwright');
   await (async () => { await p.evaluate(() => EA.homePane && EA.homePane('lists')); await p.waitForTimeout(100); return p.click('[data-room="admin"]'); })(); await p.waitForSelector('.adm-card');
   const sum = await p.locator('#room').innerText();
   check('phone: Ringkasan shows the Sugut card (chit 06:40, 2 / 3 present) and the 4-button bar', /Sugut \(SSGT\)/.test(sum) && /06:40/.test(sum) && /2 \/ 3/.test(sum) &&
-    (await p.$$eval('.botbar a', a => a.map(x => x.innerText.trim()).join('|'))) === 'Ringkasan|Telefon|Masalah|Suis', sum.slice(0, 300));
+    (await p.$$eval('.adm-tabs a', a => a.map(x => x.innerText.trim()).join('|'))) === 'Ringkasan|Telefon|Masalah|Suis', sum.slice(0, 300));
   await p.click('[data-month="1"]');
   check('phone: Bulan ini shows the month counts', /Pembetulan/.test(await p.locator('#room').innerText()));
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v27-summary.png' });
-  await p.click('.botbar a[data-tab="phones"]'); await p.waitForSelector('.adm-dv');
+  await p.click('.adm-tabs a[data-tab="phones"]'); await p.waitForSelector('.adm-dv');
   const phs = await p.locator('#room').innerText();
   check('phone: Telefon lists devices with names and status', /Telefon syarikat Sugut/.test(phs) && /belum pernah masuk|never logged in/.test(phs) === false || /Telefon syarikat Sugut/.test(phs), phs.slice(0, 200));
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v27-phones.png' });
-  await p.click('.botbar a[data-tab="problems"]'); await p.waitForSelector('.adm-pills');
+  await p.click('.adm-tabs a[data-tab="problems"]'); await p.waitForSelector('.adm-pills');
   check('phone: Masalah shows "no new problems" after all seen, and the old ones under Semua', /Tiada masalah baru/.test(await p.locator('#room').innerText()) &&
     (await p.click('[data-all="1"]'), /not_allowed/.test(await p.locator('#room').innerText())));
-  await p.click('.botbar a[data-tab="switches"]'); await p.waitForSelector('#sw-pins');
+  await p.click('.adm-tabs a[data-tab="switches"]'); await p.waitForSelector('#sw-pins');
   check('phone: Suis shows the three switches on, in order', await p.getAttribute('#sw-pins', 'aria-pressed') === 'true' && await p.getAttribute('#sw-mode', 'aria-pressed') === 'true' && await p.getAttribute('#sw-live-SSGT', 'aria-pressed') === 'true');
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v27-switches.png' });
   // close the room for MELU stays off and disabled? open MELU from the phone
@@ -128,10 +128,10 @@ const { chromium } = require('playwright');
   await p.evaluate(() => { location.hash = ''; }); await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
   await p.evaluate(ph => localStorage.setItem('ea.phone', JSON.stringify(ph)), f.phone);
   await p.fill('#key', f.pin); await p.waitForSelector('#home:not([hidden])');
-  const tile = await p.locator('[data-room="field-harvest"]').innerText();
-  check('phone (staff): Field & Harvest tile says "Digunakan · SSGT", no UJIAN', /Digunakan · SSGT/.test(tile) && !/UJIAN/.test(tile), tile);
+  const tile = await p.innerText('#home-main');
+  check('phone (staff): Field & Harvest in use at SSGT (its screens on Hari ini), no UJIAN', await p.evaluate(() => EA.roomLive(EA.rooms.find(r => r.id === 'field-harvest'), 'SSGT')) && await p.locator('#work-screens [data-scr]').count() === 4 && !/UJIAN/.test(tile), tile.slice(0, 200));
   check('phone (staff): no Pentadbir tile', await p.locator('[data-room="admin"]').count() === 0);
-  await (async () => { await p.evaluate(() => { if (EA.homePane && JSON.parse(localStorage.getItem('ea.homePane') || '"today"') !== 'today') EA.homePane('today'); }); return p.click('[data-room="field-harvest"]'); })(); await p.waitForTimeout(400);
+  await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForTimeout(400);
   await p.evaluate(() => { location.hash = 'field-harvest/collect'; }); await p.waitForTimeout(400);
   check('phone (staff): no TEST badge in the live room', await p.locator('#room .test-badge').count() === 0 && await p.locator('#test-mark:visible').count() === 0, await p.evaluate(() => [...document.querySelectorAll('#room .test-badge')].map(b => b.closest('.room-top, section, div').innerText.slice(0, 80) + ' | hash ' + location.hash).join(' // ')));
   check('no page errors', errs.length === 0, errs.join(' | '));

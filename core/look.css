@@ -908,3 +908,16 @@ div.td-it { cursor: default; }
 #home-main[data-pane]:not([data-pane="today"]) > #todo,
 #home-main[data-pane]:not([data-pane="today"]) > #late,
 #home-main[data-pane]:not([data-pane="today"]) > #today { display: none !important; }
+
+/* v1.62 the four tabs on every screen */
+body:has(#home-bar.botbar) #room, body:has(#home-bar.botbar) #home-main { padding-bottom: 96px; }
+body:has(#home-bar.botbar) .foot { padding-bottom: 96px; }
+body:has(#home-bar.botbar) #room .bottom-bar { bottom: calc(68px + env(safe-area-inset-bottom, 0px)); }
+body:has(#home-bar.botbar) .toast { bottom: calc(92px + env(safe-area-inset-bottom, 0px)); }
+body:has(#home-bar.botbar) .sheet-back:not([hidden]) ~ .toast { bottom: auto; top: calc(12px + env(safe-area-inset-top, 0px)); }
+.adm-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 12px; }
+.adm-tabs a { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 7px 4px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--surface); color: var(--muted); font-size: .78rem; font-weight: 700; }
+.adm-tabs a svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.adm-tabs a[aria-current="page"] { color: var(--slate); background: var(--ok-soft); border-color: transparent; }
+.work-screens { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 0 0 12px; }
+.work-screens .btn { margin: 0; }

@@ -373,7 +373,10 @@
   // v1.12: who sees which buttons. The clerk keys tickets and looks at the day (Operasi); the
   // manager (Samsir) only looks, so he has one screen and no bar.
   function viewOnly(u) { return !!u && (u.role === 'Clerk' || u.role === 'Manager'); }
-  function tabs(active, user) {
+  // v1.62 (Brief_Susun_Atur): the room has no bottom bar of its own any more; the four tabs (Hari ini · Rekod ·
+  // Laporan · Senarai) are drawn by the home page on every screen, and Hari ini opens Pagi, Kerja, Ramp and Tiket.
+  function tabs() { return ''; }
+  function tabsOld(active, user) {
     var estate = ctx && ctx.estate;
     if (user && user.role === 'Manager') return '';
     if (user && user.role === 'Clerk') {

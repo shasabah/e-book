@@ -203,7 +203,8 @@
   var LIST_ROOMS = ['workers', 'mills', 'users', 'admin'];
   function renderTiles(u, estate) {
     var all = EA.roomsFor(u, estate).filter(function (r) { return EA.roomLive(r, estate) || enterable(r, estate); });
-    var work = all.filter(function (r) { return LIST_ROOMS.indexOf(r.id) < 0 && r.id !== 'durian'; }), lists = all.filter(function (r) { return LIST_ROOMS.indexOf(r.id) >= 0; });
+    // v1.63: Field & Harvest is opened by its screens on Hari ini (Chit pagi, Kerja, Ramp, Tiket), not by a second tile
+    var work = all.filter(function (r) { return LIST_ROOMS.indexOf(r.id) < 0 && r.id !== 'durian' && r.id !== 'field-harvest'; }), lists = all.filter(function (r) { return LIST_ROOMS.indexOf(r.id) >= 0; });
     $('rooms-h').hidden = !work.length;
     $('tiles').innerHTML = tilesHtml(work, u, estate);
     $('tiles-lists').innerHTML = tilesHtml(lists, u, estate);
@@ -245,10 +246,24 @@
     lists: '<path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>'
   };
   function pane() { var p = EA.local.get(PANE_KEY, 'today'); return /^(today|rekod|laporan|lists)$/.test(p) ? p : 'today'; }
-  EA.homePane = function (p) { EA.local.set(PANE_KEY, p || 'today'); render(); window.scrollTo(0, 0); };
+  EA.homePane = function (p) { EA.local.set(PANE_KEY, p || 'today'); if (location.hash) location.hash = ''; else render(); window.scrollTo(0, 0); };
   function recTile(v, bm, en, sbm, sen) {
     return '<button class="tile live" type="button" data-rec="' + v + '"><span class="mark" aria-hidden="true">' + esc(bm.slice(0, 2).toUpperCase()) + '</span>' +
       '<span class="name"><span class="bm">' + esc(bm) + '</span><span class="en">' + esc(en) + '</span></span><span class="when"><span class="bm">' + esc(sbm) + '</span><span class="en">' + esc(sen) + '</span></span></button>';
+  }
+
+  // v1.62: the screens the room's bottom bar used to open, now on Hari ini, by position. The staff in charge has
+  // them as "Langkah hari ini"; Operasi / Rekod is the Rekod tab.
+  function renderScreens(u, estate, fh) {
+    var box = $('work-screens'); if (!box) return;
+    var list = !fh ? [] : u.role === 'Clerk' ? [['ticket', 'MILL TICKET', 'TIKET KILANG']]
+      : u.role === 'Worker' ? [['collect', 'RAMP & LORRY', 'RAMP & LORI']]
+      : /^(Owner|HQ)$/.test(u.role) ? [['', 'MORNING CHIT', 'CHIT PAGI'], ['work', 'WORK', 'KERJA'], ['collect', 'RAMP & LORRY', 'RAMP & LORI'], ['ticket', 'MILL TICKET', 'TIKET KILANG']]
+      : u.role === 'Staff' ? [['', 'MORNING CHIT', 'CHIT PAGI'], ['work', 'WORK', 'KERJA'], ['collect', 'RAMP & LORRY', 'RAMP & LORI'], ['close', 'CLOSE THE DAY', 'TUTUP HARI']] : [];
+    box.hidden = !list.length;
+    $('rooms-h').hidden = !list.length && !$('tiles').children.length;
+    box.innerHTML = list.map(function (x) { return '<button type="button" class="btn btn-ghost" data-scr="' + x[0] + '">' + x[1] + '<small>' + x[2] + '</small></button>'; }).join('');
+    box.querySelectorAll('[data-scr]').forEach(function (b) { b.onclick = function () { location.hash = 'field-harvest' + (b.dataset.scr ? '/' + b.dataset.scr : ''); }; });
   }
   function renderPanes(u, estate) {
     var p = pane();
@@ -259,6 +274,7 @@
     $('home-main').setAttribute('data-pane', p);   // CSS hides Hari ini's cards on the other tabs (they may redraw later, from the office)
     document.querySelector('#home-main .greet').hidden = p !== 'today';
     $('layout').hidden = p !== 'today';
+    renderScreens(u, estate, fh);
     // Rekod: one tile per record (the screens inside are today's)
     $('pane-rekod').hidden = p !== 'rekod';
     if (p === 'rekod') {
@@ -291,12 +307,14 @@
       });
     }
     $('pane-lists').hidden = p !== 'lists';
-    // the bar
+  }
+  // v1.62: the four tabs on every screen — the home page and inside every room — one bar, never a second one.
+  function renderBar(active) {
     var items = [['today', 'Hari ini', 'Today'], ['rekod', 'Rekod', 'Records'], ['laporan', 'Laporan', 'Reports'], ['lists', 'Senarai', 'Lists']];
     var late = (document.querySelectorAll('#todo .td-it').length || 0);
     $('home-bar').className = 'tabs botbar';
     $('home-bar').innerHTML = items.map(function (it) {
-      return '<a role="button" tabindex="0" data-pane="' + it[0] + '"' + (p === it[0] ? ' aria-current="page"' : '') + '>' +
+      return '<a role="button" tabindex="0" data-pane="' + it[0] + '"' + (active === it[0] ? ' aria-current="page"' : '') + '>' +
         (it[0] === 'today' && late ? '<span class="tab-n">' + late + '</span>' : '') +
         '<svg viewBox="0 0 24 24" aria-hidden="true">' + BAR_ICON[it[0]] + '</svg><span class="bm">' + it[1] + '</span><span class="en">' + it[2] + '</span></a>';
     }).join('');
@@ -351,7 +369,7 @@
     var u = EA.currentUser();
     $('login').hidden = !!u;
     $('home').hidden = !u;
-    if (!u) { renderLogin(); return; }
+    if (!u) { $('home-bar').className = ''; $('home-bar').innerHTML = ''; renderLogin(); return; }
     var estate = currentEstate(u);
     renderHeader(u, estate);
     renderGreeting();
@@ -376,7 +394,8 @@
     var rid = parts[0], screen = parts[1] || '';
     var room = rid && EA.roomsFor(u, estate).find(function (r) { return r.id === rid && enterable(r, estate); });
     $('home-main').hidden = !!room;
-    if (room) { $('home-bar').innerHTML = ''; $('home-bar').className = ''; }   // v1.61: inside a room only the room's own bar exists
+    // v1.62: the same four tabs inside a room; the tab lit is where the screen belongs
+    renderBar(room ? (LIST_ROOMS.indexOf(room.id) >= 0 ? 'lists' : room.id === 'field-harvest' && screen === 'history' ? 'rekod' : 'today') : pane());
     $('room').hidden = !room;
     if (room) {
       try { EA.roomViews[room.id].render($('room'), { user: u, estate: estate, room: room, screen: screen }); }

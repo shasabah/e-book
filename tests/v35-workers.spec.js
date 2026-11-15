@@ -134,7 +134,7 @@ const { chromium } = require('playwright');
     localStorage.setItem('fh.chits2', JSON.stringify([ch(a2), ch(a1)])); }, [ago(1), ago(2)]);
   await p.reload(); await p.fill('#key', '777777'); await p.waitForSelector('#home:not([hidden])');
   check('phone: staff has no Pekerja tile', await p.locator('[data-room="workers"]').count() === 0);
-  await (async () => { await p.evaluate(() => { if (EA.homePane && JSON.parse(localStorage.getItem('ea.homePane') || '"today"') !== 'today') EA.homePane('today'); }); return p.click('[data-room="field-harvest"]'); })(); await p.waitForSelector('#fh-rows');
+  await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForSelector('#fh-rows');
   await p.click('#fh-rows button[data-w="W-SSGT-007"][data-k="T"]'); await p.waitForTimeout(150);
   check('phone: T today after T on the last 2 chit days shows "Mungkin lari?"', await p.locator('#fh-rows .flag-lari [data-lari="W-SSGT-007"]').count() === 1);
   await p.click('#fh-rows button[data-w="W-SSGT-008"][data-k="T"]'); await p.waitForTimeout(150);

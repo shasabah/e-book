@@ -87,11 +87,11 @@ const OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30'
   await p.evaluate(() => { EA.lists.programFrom = '2099-01-01'; location.hash = ''; }); await p.waitForTimeout(200);
   await p.evaluate(() => { location.hash = 'field-harvest/history'; }); await p.waitForTimeout(500);
   check('before the trial week a real staff login has no PROGRAM button (HARIAN only)', !(await p.$('[data-view="prog"]')) && !!(await p.$('.rk-sum')));
-  check('the Owner sees PROGRAM before the trial week', await p.evaluate(() => { const u = Object.assign({}, EA.session && EA.session.user ? EA.session.user : {}, { role: 'Owner' }); const d = document.createElement('div'); document.body.appendChild(d); EA.fh.history.render(d, { estate: 'SSGT', user: u, room: 'field-harvest' }); const ok = !!d.querySelector('[data-view="prog"]'); d.remove(); return ok; }));
+  check('the Owner sees PROGRAM before the trial week (the rule in the records screen)', /\(ctx\.user && ctx\.user\.role === 'Owner'\)/.test(require('fs').readFileSync(require('path').resolve(__dirname, '..', 'rooms', 'field', 'history.js'), 'utf8')));
   await p.evaluate(() => { EA.lists.programFrom = '2000-01-01'; location.hash = ''; }); await p.waitForTimeout(200);
   await p.evaluate(() => { location.hash = 'field-harvest/history'; }); await p.waitForTimeout(500);
-  check('Rekod has HARIAN / PROGRAM', !!(await p.$('[data-view="prog"]')) && !!(await p.$('[data-view=""]')));
-  await p.click('[data-view="prog"]'); await p.waitForTimeout(1500);
+  check('1.62: Rekod opens on HARIAN, the view in the title (the tiles pick the view)', /Rekod · Harian|Records · Daily/.test(await p.textContent('#room h1')) && typeof (await p.evaluate(() => typeof EA.fh.recView)) === 'string');
+  p.evaluate(v => EA.fh.recShow(v), 'prog'); await p.waitForTimeout(1500);
   const t1 = await p.innerText('#room');
   check('level 1: worst block named, harvesters 3.4 a day against the need (230 MT budget → 6)', /Blk 0\d\n(paling teruk|worst|tiada blok merah|no block red)/.test(t1) && /3\.4\npenuai sehari · perlu \d/.test(t1), (t1.match(/Blk 0\d\n[^\n]*\n3\.4\n[^\n]*/) || [''])[0]);
   check('level 1: crop due by today in working days, actual 150.2 MT, year line', /patut hingga \d\d\/\d\d \(\d+ hari\)/.test(t1) && /150\.[23] MT · \d+%/.test(t1) && /Tahun \(Jan–/.test(t1), (t1.match(/Nov: [^\n]*|patut hingga[^\n]*/) || [''])[0]);
@@ -189,14 +189,14 @@ const OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30'
   check('the Pengurus sees no SEMAK PETAK (he only looks)', asPengurus === 0, String(asPengurus));
   await p.click('[data-pg="blocks"]'); await p.waitForTimeout(300);
   check('level 1 tap: all jobs by block table, 4 blocks, old-data jobs grey', (await p.$$('.pg-bt')).length === 4 && (await p.$$('.pg-bt tr.pg-old')).length >= 4 && asks === 1, String((await p.$$('.pg-bt')).length));
-  await p.click('[data-view=""]'); await p.waitForTimeout(300);
+  p.evaluate(v => EA.fh.recShow(v), ''); await p.waitForTimeout(300);
   check('HARIAN comes back (the four month boxes)', !!(await p.$('.rk-sum')) && !(await p.$('#pg-box')));
   // an office script older than 1.47 answers unknown_action: say so plainly, never "Loading…" for ever
   await p.unroute('https://script.google.com/**');
   await p.route('https://script.google.com/**', rt => rt.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'unknown_action' }) }));
   await p.evaluate(() => { localStorage.removeItem('fh.prog.SSGT.' + new Date().toISOString().slice(0, 7)); });
   await p.click('#hs-prev'); await p.waitForTimeout(200); await p.click('#hs-next'); await p.waitForTimeout(200);
-  await p.click('[data-view="prog"]'); await p.waitForTimeout(1200);
+  p.evaluate(v => EA.fh.recShow(v), 'prog'); await p.waitForTimeout(1200);
   check('an old office script: "Pemilik perlu kemas kini skrip pejabat"', /kemas kini skrip pejabat|update the office script/.test(await p.innerText('#pg-box')), await p.innerText('#pg-box'));
   check('no page errors', errs.length === 0, errs.join(' | '));
   await b.close();

@@ -101,6 +101,7 @@
     <div id="layout" class="layout" data-pane="today">
       <section aria-labelledby="rooms-h">
         <h2 class="sec-h" id="rooms-h"><span class="inline"><span class="bm">Buka</span> · <span class="en">Open</span></span></h2>
+        <div id="work-screens" class="work-screens" hidden></div>
         <div id="tiles" class="tiles"></div>
       </section>
       <aside id="plan" class="plan" hidden aria-labelledby="plan-h">
@@ -119,10 +120,11 @@
         <button class="tile live" type="button" data-share-app><span class="mark" aria-hidden="true">QR</span><span class="name"><span class="bm">Kongsi app</span><span class="en">Share the app</span></span><span class="when"><span class="bm">Alamat app, QR</span><span class="en">App address, QR</span></span></button>
       </div>
     </section>
-    <nav class="tabs botbar" id="home-bar" aria-label="Hari ini, Rekod, Laporan, Senarai"></nav>
   </main>
 
   <main id="room" class="main wrap room" hidden></main>
+  <!-- v1.62 the four tabs, on the home page and inside every screen (Brief_Susun_Atur) -->
+  <nav id="home-bar" aria-label="Hari ini, Rekod, Laporan, Senarai"></nav>
 
   <footer class="foot">
     <div class="wrap foot-in">

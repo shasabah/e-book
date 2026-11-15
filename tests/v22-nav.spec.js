@@ -1,4 +1,4 @@
-// E-Book test (1.11). The room's bottom bar (Pagi · Kerja · Lori · Sejarah, icon + one word,
+// E-Book test (1.11, bar rewritten 1.62). The room's bottom bar (Pagi · Kerja · Lori · Sejarah, icon + one word,
 // green dot when done today, Tiket only for the clerk) and History's ‹ Month › stepper with the year grid.
 const check = (name, ok, detail) => { console.log((ok ? 'PASS ' : 'FAIL ') + name + (detail ? ' — ' + detail : '')); if (!ok) process.exitCode = 1; };
 const { chromium } = require('playwright');
@@ -12,21 +12,20 @@ const { chromium } = require('playwright');
       { chit: 'C-Y', date: D(35), estate: 'SSGT', confirmedAt: '06:40', rows: [{ worker_id: 'W1', muster: 'H', task_code: 'HA', block: '03', lots: '3-30' }], jobs: [], alerts: [] }])); });
   await p.reload(); await p.fill('#key', '777777'); await p.waitForSelector('#home:not([hidden])');
   await p.evaluate(() => { location.hash = 'field-harvest/work'; }); await p.waitForTimeout(500);
+  // v1.62 (Brief_Susun_Atur): one bar on every screen — Hari ini · Rekod · Laporan · Senarai — never the room's own
   const bar = await p.$$eval('.botbar a', a => a.map(x => x.innerText.trim()));
-  check('staff bar: Pagi · Kerja · Ramp · Rekod (no Tiket)', bar.join('|') === 'Pagi|Kerja|Ramp|Rekod', bar.join('|'));
+  check('1.62: inside Kerja the bar is the four tabs, Hari ini lit, and only one bar', bar.join('|') === 'Hari ini|Rekod|Laporan|Senarai' && await p.locator('.botbar').count() === 1 && await p.getAttribute('.botbar a[data-pane="today"]', 'aria-current') === 'page', bar.join('|'));
   const pos = await p.evaluate(() => { const r = document.querySelector('.botbar').getBoundingClientRect(); return { bottom: Math.round(r.bottom), h: innerHeight, pos: getComputedStyle(document.querySelector('.botbar')).position }; });
   check('the bar is fixed at the bottom of the screen', pos.pos === 'fixed' && Math.abs(pos.bottom - pos.h) <= 1, JSON.stringify(pos));
-  check('Kerja is the current screen', await p.getAttribute('.botbar a[data-tab="work"]', 'aria-current') === 'page');
-  check('green dot on Pagi (chit saved today), none on Kerja', await p.locator('.botbar a[data-tab="muster"] .tab-ok').count() === 1 && await p.locator('.botbar a[data-tab="work"] .tab-ok').count() === 0);
-  await p.click('.botbar a[data-tab="muster"]'); await p.waitForTimeout(400);
-  check('tapping Pagi opens the morning chit', /Chit muster pagi/.test(await p.textContent('#room h1')));
-  // nothing hidden under the bar: the last thing on the page can scroll above it
   const clear = await p.evaluate(() => { window.scrollTo(0, document.body.scrollHeight); const bar = document.querySelector('.botbar').getBoundingClientRect().top;
     const last = [...document.querySelectorAll('#room .card')].pop(); return last ? last.getBoundingClientRect().bottom <= bar + 1 : true; });
   check('the last card scrolls clear of the bar', clear);
-  // English
+  await p.click('.botbar a[data-pane="today"]'); await p.waitForTimeout(400);
+  check('Hari ini from inside a screen goes home, with the screens to open (Chit pagi, Kerja, Ramp, Tutup hari)', !p.url().includes('#field') && (await p.$$eval('#work-screens [data-scr]', a => a.map(x => x.dataset.scr).join(','))) === ',work,collect,close');
+  await p.click('#work-screens [data-scr=""]'); await p.waitForTimeout(400);
+  check('tapping Chit pagi opens the morning chit', /Chit muster pagi/.test(await p.textContent('#room h1')));
   await p.evaluate(() => EA.setLang('en')); await p.evaluate(() => { location.hash = 'field-harvest/history'; }); await p.waitForTimeout(400);
-  check('English bar: Morning · Work · Ramp · Records', (await p.$$eval('.botbar a', a => a.map(x => x.innerText.trim()).join('|'))) === 'Morning|Work|Ramp|Records');
+  check('English bar: Today · Records · Reports · Lists, Records lit', (await p.$$eval('.botbar a', a => a.map(x => x.innerText.trim()).join('|'))) === 'Today|Records|Reports|Lists' && await p.getAttribute('.botbar a[data-pane="rekod"]', 'aria-current') === 'page');
   await p.evaluate(() => EA.setLang('bm')); await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(100);
   await p.evaluate(() => { location.hash = 'field-harvest/history'; }); await p.waitForSelector('#hs-pick');
   // History: ‹ Month ›
@@ -48,7 +47,9 @@ const { chromium } = require('playwright');
   await p.fill('#key', '333333'); await p.waitForSelector('#home:not([hidden])');
   await p.evaluate(() => { location.hash = 'field-harvest/ticket'; }); await p.waitForTimeout(500);
   const cb = await p.$$eval('.botbar a', a => a.map(x => x.innerText.trim()).join('|'));
-  check('clerk bar: Tiket · Operasi only', cb === 'Tiket|Operasi', cb);
+  check('clerk: the same four tabs', cb === 'Hari ini|Rekod|Laporan|Senarai', cb);
+  await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(300);
+  check('clerk: Hari ini opens Tiket kilang', (await p.$$eval('#work-screens [data-scr]', a => a.map(x => x.dataset.scr).join(','))) === 'ticket');
   check('no page errors', errs.length === 0, errs.join(' | '));
   await b.close();
 })();

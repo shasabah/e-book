@@ -13,6 +13,6 @@ const { chromium } = require('playwright');
   const q = await p.evaluate(() => JSON.parse(localStorage.getItem('ea.queue')));
   check('error is queued for the office (APP_ERROR)', q.some(x => x.tab === 'APP_ERROR'));
   await p.click('#err-back'); await p.waitForTimeout(300);
-  check('BACK returns to the home tiles', (await p.locator('[data-room]').count()) > 0);
+  check('BACK returns to the home page', await p.isVisible('#home-main') && !(await p.isVisible('#room')));
   await b.close();
 })();

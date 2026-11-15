@@ -19,7 +19,7 @@ const { chromium } = require('playwright');
       jobs: [{ key: 'j1', task: 'CPS', block: '03', lots: ['3-30', '3-31'], mandor: '' }, { key: 'j2', task: 'HA', block: '02', lots: [], mandor: '' }] } }));
   });
   await p.reload(); await p.fill('#key', '777777'); await p.waitForSelector('#home:not([hidden])');
-  await (async () => { await p.evaluate(() => { if (EA.homePane && JSON.parse(localStorage.getItem('ea.homePane') || '"today"') !== 'today') EA.homePane('today'); }); return p.click('[data-room="field-harvest"]'); })(); await p.waitForTimeout(400);
+  await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForTimeout(400);
   const jobs = t(await p.textContent('#fh-jobs'));
   check('chit: CPS target 3 × 2.5 = 7.5 Ha shown against 2.57 Ha planned, below target', /7\.5 Ha.*2\.57 Ha.*KURANG 4\.93/.test(jobs), jobs.slice(0, 260));
   check('chit: below-target job is highlighted', (await p.locator('#fh-jobs .flag-line').count()) === 1);
@@ -32,7 +32,7 @@ const { chromium } = require('playwright');
   await p.click('#cf-ok'); await p.waitForTimeout(400);
   await p.keyboard.press('Escape'); await p.waitForTimeout(200);
   // Day's work
-  await p.click('.tabs a[href="#field-harvest/work"]'); await p.waitForTimeout(400);
+  await p.evaluate(() => { location.hash = 'field-harvest/work'; }); await p.waitForTimeout(400);
   // v1.39: a gang on several lots taps each person's lots; SAME FOR ALL puts everyone on every lot (shared equally).
   await p.click('[data-allwho="j1"]'); await p.waitForTimeout(200);
   const cps = t(await p.textContent('[data-job="j1"]'));
@@ -53,7 +53,7 @@ const { chromium } = require('playwright');
   check('work: job line carries its target', /7\.5 Ha/.test(jd), jd);
   await p.keyboard.press('Escape'); await p.waitForTimeout(200);
   // Kutip & hantar: the block's harvest shows as one row
-  await p.click('.tabs a[href="#field-harvest/collect"]'); await p.waitForSelector('#cl-rows');
+  await p.evaluate(() => { location.hash = 'field-harvest/collect'; }); await p.waitForSelector('#cl-rows');
   const rows = t(await p.textContent('#cl-rows'));
   check('collect: block harvest shows as "Blk 02 (semua petak)" with 200 in the field', /Blk 02 \(semua petak\).*Ladang 200/.test(rows), rows.slice(0, 160));
   check('chit card: no count check', !/Semak kiraan|Count check/.test(await p.textContent('#fh-backlog')));

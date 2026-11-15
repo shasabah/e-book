@@ -79,7 +79,7 @@ const { chromium } = require('playwright');
   await p.goto('http://localhost:8765/index.html');
   await p.evaluate(() => { localStorage.clear(); localStorage.setItem('ea.phone', JSON.stringify('P12')); localStorage.setItem('ea.sendLink', JSON.stringify('https://script.google.com/macros/s/X/exec')); });
   await p.reload(); await p.fill('#key', '777777'); await p.waitForSelector('#home:not([hidden])');
-  await (async () => { await p.evaluate(() => { if (EA.homePane && JSON.parse(localStorage.getItem('ea.homePane') || '"today"') !== 'today') EA.homePane('today'); }); return p.click('[data-room="field-harvest"]'); })(); await p.waitForTimeout(1500);
+  await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForTimeout(1500);
   await p.click('#fh-addjob'); await p.waitForSelector('#jb-quick');
   await p.click('#jb-quick [data-quick="HA"]'); await p.selectOption('#jb-block', '01'); await p.waitForTimeout(200);
   const cls = l => p.getAttribute('#jb-lots [data-lot="' + l + '"]', 'class');

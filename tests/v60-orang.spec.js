@@ -62,8 +62,8 @@ const { chromium } = require('playwright');
   let m = await p.innerText('#hs-pick').catch(() => '');
   for (let i = 0; i < 14 && !/Oktober 2026|October 2026/.test(m); i++) { await p.click('#hs-prev'); await p.waitForTimeout(150); m = await p.innerText('#hs-pick'); }
   check('Rekod shows October 2026', /Oktober 2026|October 2026/.test(m), m);
-  check('ORANG button beside HARIAN (and PROGRAM for the Owner/practice)', await p.locator('[data-view="org"]').count() === 1);
-  await p.click('[data-view="org"]'); await p.waitForTimeout(400);
+  check('1.62: ORANG is a Rekod tile (the records screen has no second row of buttons)', await p.evaluate(() => typeof EA.fh.recView === 'function') && await p.locator('[data-view]').count() === 0);
+  p.evaluate(v => EA.fh.recShow(v), 'org'); await p.waitForTimeout(400);
   check('KEHADIRAN tab on; PRESTASI, AGIHAN, ASAS GAJI greyed "akan datang"', /KEHADIRAN/.test(await p.locator('.or-tabs button.on').innerText()) && await p.locator('.or-tabs button[disabled]').count() === 3 && /akan datang/.test(await p.locator('.or-tabs').innerText()));
   check('the grid scrolls inside its box; the page does not widen', await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), String(await p.evaluate(() => document.documentElement.scrollWidth)));
   check('opens on Semua with a header row per gang', /Semua|All/.test(await p.locator('.or-gangs button.on').innerText()) && await p.locator('tr.or-gh').count() >= 2, String(await p.locator('tr.or-gh').count()));
@@ -107,7 +107,7 @@ const { chromium } = require('playwright');
   await p.evaluate(() => { location.hash = 'field-harvest/history'; }); await p.waitForTimeout(600);
   m = await p.innerText('#hs-pick');
   for (let i = 0; i < 14 && !/Oktober 2026|October 2026/.test(m); i++) { await p.click('#hs-prev'); await p.waitForTimeout(150); m = await p.innerText('#hs-pick'); }
-  await p.click('[data-view="org"]'); await p.waitForTimeout(400);
+  p.evaluate(v => EA.fh.recShow(v), 'org'); await p.waitForTimeout(400);
   check('the Pengurus has CETAK BULAN', await p.locator('#or-print').count() === 1);
   await p.evaluate(() => { window.print = () => { window.__printed = true; }; });
   await p.click('#or-print'); await p.waitForTimeout(300);

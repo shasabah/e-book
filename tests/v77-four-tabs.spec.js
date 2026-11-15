@@ -25,14 +25,14 @@ const { chromium } = require('playwright');
   await login();
   const bar = await p.$$eval('#home-bar [data-pane]', a => a.map(x => x.dataset.pane + (x.getAttribute('aria-current') ? '*' : '')).join(' '));
   check('four tabs at the bottom, Hari ini first and on', bar === 'today* rekod laporan lists', bar);
-  check('Hari ini: the work room opens from here; no tile for rooms not open yet', await p.locator('#tiles [data-room="field-harvest"]').count() === 1 &&
+  check('Hari ini: the work room opens from here; no tile for rooms not open yet', await p.locator('#work-screens [data-scr]').count() === 4 && await p.locator('[data-room="field-harvest"]').count() === 0 &&
     await p.locator('[data-room="purchase-store"], [data-room="fleet"], [data-room="hr-payroll"], [data-room="reports"]').count() === 0);
   check('Hari ini: the lists are not on it', await p.locator('#tiles [data-room="workers"], #tiles [data-room="users"], #tiles [data-room="admin"]').count() === 0);
   await p.click('#home-bar [data-pane="lists"]'); await p.waitForTimeout(200);
   check('Senarai: Pentadbir, Pekerja, Kilang, Pengguna & PIN, phone setup and share the app', await p.locator('#pane-lists:not([hidden]) [data-room="admin"]:visible').count() === 1 &&
     await p.locator('#pane-lists [data-room="users"]:visible').count() === 1 && await p.locator('#pane-lists [data-room="workers"]:visible').count() === 1 &&
     await p.locator('#pane-lists [data-room="mills"]:visible').count() === 1 && await p.locator('#pane-lists [data-open-setup]:visible').count() === 1 && await p.locator('#pane-lists [data-share-app]:visible').count() === 1);
-  check('Senarai: Hari ini\'s cards are hidden', !(await p.isVisible('#tiles [data-room="field-harvest"]')) && !(await p.isVisible('#home-main .greet')));
+  check('Senarai: Hari ini\'s cards are hidden', !(await p.isVisible('#work-screens')) && !(await p.isVisible('#home-main .greet')));
   await p.click('#pane-lists [data-room="users"]'); await p.waitForTimeout(400);
   check('a list opens its screen, unchanged (Pengguna & PIN)', /#users$/.test(p.url()), p.url());
   await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(300);
@@ -40,10 +40,12 @@ const { chromium } = require('playwright');
   await p.click('#home-bar [data-pane="rekod"]'); await p.waitForTimeout(200);
   check('Rekod: tiles Harian, Program, Orang', await p.locator('#pane-rekod [data-rec]').count() === 3);
   await p.click('#pane-rekod [data-rec="prog"]'); await p.waitForTimeout(600);
-  check('Rekod › Program opens the records screen on PROGRAM', /#field-harvest\/history$/.test(p.url()) && await p.locator('.pg-seg [data-view="prog"].on').count() === 1, p.url());
+  check('Rekod › Program opens the records screen on PROGRAM', /#field-harvest\/history$/.test(p.url()) && /Rekod · Program|Records · Plan/.test(await p.textContent('#room h1')) && await p.locator('[data-view]').count() === 0, p.url());
+  const inRoom = await p.$$eval('.botbar a', a => a.map(x => x.dataset.pane + (x.getAttribute('aria-current') ? '*' : '')).join(' '));
+  check('1.62: inside the records screen the same four tabs, Rekod lit, and only one bar', inRoom === 'today rekod* laporan lists' && await p.locator('.botbar').count() === 1, inRoom);
   await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(300);
   await p.click('#pane-rekod [data-rec=""]'); await p.waitForTimeout(600);
-  check('Rekod › Harian opens it on HARIAN', await p.locator('.pg-seg [data-view=""].on').count() === 1);
+  check('Rekod › Harian opens it on HARIAN', /Rekod · Harian|Records · Daily/.test(await p.textContent('#room h1')));
   await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(300);
   await p.click('#home-bar [data-pane="laporan"]'); await p.waitForTimeout(200);
   const lp = await p.innerText('#pane-laporan');

@@ -921,3 +921,26 @@ body:has(#home-bar.botbar) .sheet-back:not([hidden]) ~ .toast { bottom: auto; to
 .adm-tabs a[aria-current="page"] { color: var(--slate); background: var(--ok-soft); border-color: transparent; }
 .work-screens { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 0 0 12px; }
 .work-screens .btn { margin: 0; }
+
+/* v1.64 tidy-ups: steps are buttons, one estate button, the name menu, a small sent mark */
+.today-steps li { padding: 0; }
+.today-steps .step-go { display: flex; gap: 10px; align-items: center; width: 100%; padding: 8px 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; min-height: 48px; }
+.today-steps .step-go div { flex: 1; min-width: 0; }
+.today-steps .step-ar { color: var(--muted); font-size: 20px; line-height: 1; }
+.today-steps li + li { border-top: 1px solid var(--line); }
+.est-row { padding-block: 0 10px; }
+.est-btn { border: 0; border-radius: 999px; padding: 7px 14px; font: inherit; font-weight: 700; background: var(--sun); color: var(--sun-ink); cursor: pointer; }
+.est-btn:disabled { cursor: default; opacity: 1; }
+.top.hq .est-btn { background: rgba(255,255,255,.95); color: var(--hq); }
+.top.practice .est-btn { background: rgba(255,255,255,.95); color: #8a5200; }
+.est-arr { font-size: .8em; margin-left: 2px; }
+.est-pick, .name-menu { display: grid; gap: 8px; margin: 10px 0; }
+.est-pick .btn, .name-menu .btn { width: 100%; }
+.who .brand-name { text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
+.sync-in { padding-block: 4px; gap: 8px; flex-wrap: nowrap; }
+.sync-info { font-size: .8rem; gap: 4px 10px; }
+.sync .btn { min-height: 34px; padding: 4px 14px; font-size: .85rem; }
+.sync .btn small { display: none; }
+.sync-info { flex-wrap: nowrap; min-width: 0; }
+.sync-info #last-sent { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.sync-info .pill { white-space: nowrap; flex: none; }

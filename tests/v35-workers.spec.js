@@ -144,7 +144,7 @@ const { chromium } = require('playwright');
   const q = await p.evaluate(() => JSON.parse(localStorage.getItem('ea.queue') || '[]').filter(x => x.tab === 'FH_ALERT').map(x => x.row));
   check('phone: BERITAHU KERANI saves one alert line (absent3) and shows "sudah diberitahu"', q.length === 1 && q[0].kind === 'absent3' && q[0].ref === 'W-SSGT-007' && await p.locator('#fh-rows .flag-lari.sent').count() === 1, JSON.stringify(q[0] || {}));
   // the clerk
-  await p.evaluate(() => { location.hash = ''; }); await p.click('#logout'); await p.waitForTimeout(300); if (await p.isVisible('#lo-out')) { await p.click('#lo-out'); await p.waitForTimeout(300); }
+  await p.evaluate(() => { location.hash = ''; }); await p.click('#who-name'); await p.click('#logout'); await p.waitForTimeout(300); if (await p.isVisible('#lo-out')) { await p.click('#lo-out'); await p.waitForTimeout(300); }
   role = 'Clerk'; await p.fill('#key', '222222'); await p.waitForSelector('#home:not([hidden])'); await p.waitForTimeout(800);
   check('phone: the clerk has the Pekerja tile with the flag count', /1 mungkin lari|1 maybe absconded/.test(await p.innerText('[data-room="workers"]')));
   await (async () => { await p.evaluate(() => EA.homePane && EA.homePane('lists')); await p.waitForTimeout(100); return p.click('[data-room="workers"]'); })(); await p.waitForSelector('.wk-three');
@@ -153,7 +153,7 @@ const { chromium } = require('playwright');
   check('phone: new hire form has no IC, passport, bank or pay box', !/IC|pasport|passport|bank|gaji/i.test(await p.innerText('.wk .card').then(t => t.replace(/Tiada IC.*$/s, ''))));
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v35-new.png' });
   await p.click('#wk-cancel');
-  await p.evaluate(() => { location.hash = ''; }); await p.click('#logout'); await p.waitForTimeout(300); if (await p.isVisible('#lo-out')) { await p.click('#lo-out'); await p.waitForTimeout(300); }
+  await p.evaluate(() => { location.hash = ''; }); await p.click('#who-name'); await p.click('#logout'); await p.waitForTimeout(300); if (await p.isVisible('#lo-out')) { await p.click('#lo-out'); await p.waitForTimeout(300); }
   role = 'Manager'; await p.fill('#key', '333333'); await p.waitForSelector('#home:not([hidden])'); await p.waitForTimeout(800);
   check('phone: the Pengurus tile shows "1 perlu lulus"', /1 perlu lulus|1 to approve/.test(await p.innerText('[data-room="workers"]')));
   await (async () => { await p.evaluate(() => EA.homePane && EA.homePane('lists')); await p.waitForTimeout(100); return p.click('[data-room="workers"]'); })(); await p.waitForSelector('[data-ans="1"]');

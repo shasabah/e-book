@@ -74,13 +74,13 @@ const fs = require('fs'); const vm = require('vm'); const crypto = require('cryp
   });
   await p.evaluate(() => { EA.logout(); localStorage.removeItem('ea.queue'); }); await p.reload(); await p.waitForTimeout(300);
   await p.fill('#key', '111222'); await p.waitForSelector('#home:not([hidden])');
-  await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
+  await p.click('#who-name'); await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
   await p.fill('#key', '333444'); await p.waitForSelector('#home:not([hidden])');
-  await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
+  await p.click('#who-name'); await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
   await p.unroute(LINK); await p.route(LINK, route => route.abort('internetdisconnected'));
   await p.fill('#key', '111222'); await p.waitForTimeout(500);
   check('no signal: the first person (not the last) can still log in', /Staf Contoh/.test(await p.textContent('#who-name') || ''));
-  await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
+  await p.click('#who-name'); await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
 
   // 7. office calls stop after the time limit
   await p.unroute(LINK); await p.route(LINK, () => { /* never answers */ });

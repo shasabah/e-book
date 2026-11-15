@@ -34,7 +34,6 @@
     </form>
     <div>
       <button id="open-setup" class="link-btn" type="button"><span class="inline"><span class="bm">Tetapan telefon</span> · <span class="en">Phone setup</span></span></button>
-      <button class="link-btn" type="button" data-share-app><span class="inline"><span class="bm">Kongsi app</span> · <span class="en">Share the app</span></span></button>
       <div id="phone-line" class="en"></div>
     </div>
     <div id="test-keys" class="test-keys" hidden>
@@ -55,9 +54,8 @@
           <div><span class="brand-name">Estate Book</span><span class="brand-sub">E-Book · Buku Ladang</span></div>
         </div>
         <div class="who"><span class="brand-name" id="who-name"></span><span class="brand-sub" id="who-role"></span></div>
-        <button id="logout" class="btn btn-ghost" type="button">LOG OUT<small>Keluar</small></button>
       </div>
-      <div id="estate-chips" class="estates" role="group" aria-label="Ladang / Estate"></div>
+      <div class="est-row"><button id="estate-btn" class="est-btn" type="button" aria-haspopup="dialog"></button></div>
     </div>
   </header>
   <div id="practice-band" class="practice-band" hidden>
@@ -117,7 +115,7 @@
       <div id="tiles-lists" class="tiles"></div>
       <div class="tiles" id="tiles-phone">
         <button class="tile live" type="button" data-open-setup><span class="mark" aria-hidden="true">P</span><span class="name"><span class="bm">Tetapan telefon</span><span class="en">Phone setup</span></span><span class="when"><span class="bm">Kod telefon, bahasa</span><span class="en">Phone code, language</span></span></button>
-        <button class="tile live" type="button" data-share-app><span class="mark" aria-hidden="true">QR</span><span class="name"><span class="bm">Kongsi app</span><span class="en">Share the app</span></span><span class="when"><span class="bm">Alamat app, QR</span><span class="en">App address, QR</span></span></button>
+        <button class="tile live" type="button" id="tile-share" data-share-app><span class="mark" aria-hidden="true">QR</span><span class="name"><span class="bm">Kongsi app</span><span class="en">Share the app</span></span><span class="when"><span class="bm">Alamat app, QR</span><span class="en">App address, QR</span></span></button>
       </div>
     </section>
   </main>
@@ -132,7 +130,6 @@
       <span><span class="bm">Telefon</span><span class="en">Phone</span> <span class="mono" id="foot-phone"></span></span>
       <span id="offline-mark" hidden><span class="bm">Boleh buka tanpa isyarat</span><span class="en">Opens with no signal</span></span>
       <button class="link-btn" type="button" data-open-setup><span class="bm">Tetapan telefon</span><span class="en">Phone setup</span></button>
-      <button class="link-btn" type="button" data-share-app><span class="bm">Kongsi app</span><span class="en">Share the app</span></button>
     </div>
   </footer>
 </div>

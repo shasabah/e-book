@@ -43,7 +43,7 @@ const { chromium } = require('playwright');
   role = 'Staff';
   await p.evaluate(() => { location.hash = ''; localStorage.removeItem('ea.user'); localStorage.setItem('ea.phone', JSON.stringify('P21')); });
   await p.reload(); await p.waitForSelector('#key'); await p.fill('#key', '135790'); await p.waitForSelector('#home:not([hidden])');
-  await p.click('#who-name'); await p.waitForSelector('#my-1');
+  await p.click('#who-name'); await p.click('#nm-pin'); await p.waitForSelector('#my-1');
   await p.fill('#my-1', '123456'); await p.fill('#my-2', '123457'); await p.click('#my-ok');
   check('two different PINs: told, nothing sent', /tidak sama|not the same/i.test(await p.innerText('#my-err')) && !asked.some(a => a.action === 'myPin'));
   await p.fill('#my-1', '123456'); await p.fill('#my-2', '123456'); await p.click('#my-ok'); await p.waitForTimeout(300);

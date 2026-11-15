@@ -132,7 +132,7 @@ const { chromium } = require('playwright');
   check('phone: today\'s chit list is not touched (no new chit for today)', !q.some(x => x.tab === 'FH_CHIT' && x.row.date !== yd));
   // the clerk asks from Rekod
   role = 'Clerk'; if (await p.isVisible('#sheet-x')) { await p.click('#sheet-x'); await p.waitForTimeout(200); }
-  await p.evaluate(() => { location.hash = ''; }); await p.click('#logout'); await p.waitForTimeout(300); if (await p.isVisible('#lo-out')) { await p.click('#lo-out'); await p.waitForTimeout(300); }
+  await p.evaluate(() => { location.hash = ''; }); await p.click('#who-name'); await p.click('#logout'); await p.waitForTimeout(300); if (await p.isVisible('#lo-out')) { await p.click('#lo-out'); await p.waitForTimeout(300); }
   await p.fill('#key', '222222'); await p.waitForSelector('#home:not([hidden])'); await p.waitForTimeout(500);
   await p.evaluate(() => { location.hash = 'field-harvest/history'; }); await p.waitForTimeout(1500);
   await p.click('[data-day="' + yd + '"]'); await p.waitForSelector('#rk-ask');

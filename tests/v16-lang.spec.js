@@ -25,7 +25,7 @@ const PAIRS = [/SIMPAN CHIT.{0,3}SAVE CHIT|SAVE CHIT.{0,3}SIMPAN CHIT/i, /Tetapa
       const btns = await p.$$eval('#room button.btn', a => a.map(x => x.innerText.replace(/\s+/g, ' ').trim()));
       out[s] = { txt, btns };
     }
-    await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(200); await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
+    await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(200); await p.click('#who-name'); await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
     return out;
   }
   const bm = await sweep('bm', '111111');

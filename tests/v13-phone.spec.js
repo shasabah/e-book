@@ -63,7 +63,7 @@ const { chromium } = require('playwright');
   // Each person's entries go with their own key.
   const staffQ = await p.evaluate(() => JSON.parse(localStorage.getItem('ea.queue') || '[]').length);
   await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(200);
-  await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
+  await p.click('#who-name'); await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
   await p.fill('#key', '333333'); await p.waitForSelector('#home:not([hidden])'); await p.waitForTimeout(300);
   await p.evaluate(() => EA.send()); await p.waitForTimeout(200);
   const left = await p.evaluate(() => JSON.parse(localStorage.getItem('ea.queue') || '[]').filter(x => x.row.keyed_by === 'T-STF').length);

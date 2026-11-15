@@ -93,7 +93,7 @@ const { chromium } = require('playwright');
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v25-device.png' });
   await p.click('#dv-close'); await p.waitForTimeout(200);
   // the new Manager tries to log in on the Owner's code P01
-  await p.evaluate(() => { location.hash = ''; }); await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
+  await p.evaluate(() => { location.hash = ''; }); await p.click('#who-name'); await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
   await p.fill('#key', pin); await p.waitForTimeout(800);
   const msg = await p.textContent('#login-msg');
   check('phone: a wrong code at login gives the plain-word message with the code', /Kod telefon P01 bukan milik anda/.test(msg) && await p.locator('#home:not([hidden])').count() === 0, msg);

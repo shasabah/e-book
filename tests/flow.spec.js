@@ -18,7 +18,7 @@ const out = process.argv[2] || require('os').tmpdir();
   });
   const t = s => (s || '').replace(/\s+/g, ' ').trim();
   const login = async (key) => { await p.reload(); await p.fill('#key', key); await p.waitForSelector('#home:not([hidden])'); await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForTimeout(300); };
-  const logout = async () => { await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(300); await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out'); };
+  const logout = async () => { await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(300); await p.click('#who-name'); await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out'); };
   const rowsNow = async () => (await p.locator('#cl-rows .lot-row').evaluateAll(a => a.map(x => {
     const g = s => x.querySelector(s); const nums = x.querySelectorAll('.en b');
     return x.querySelector('b').textContent.replace('Petak ', '') + ' F' + nums[0].textContent + ' R' + nums[1].textContent +

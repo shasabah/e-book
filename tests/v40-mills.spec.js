@@ -118,7 +118,7 @@ const { chromium } = require('playwright');
   });
   await p.goto('http://localhost:8765/index.html');
   await p.evaluate(() => { localStorage.clear(); localStorage.setItem('ea.phone', JSON.stringify('P12')); localStorage.setItem('ea.sendLink', JSON.stringify('https://script.google.com/macros/s/X/exec')); });
-  const as2 = async (r, ps) => { role = r; pos = ps || ''; await p.evaluate(() => { location.hash = ''; }); if (await p.isVisible('#logout')) { await p.click('#logout'); await p.waitForTimeout(300); if (await p.isVisible('#lo-out')) { await p.click('#lo-out'); await p.waitForTimeout(300); } }
+  const as2 = async (r, ps) => { role = r; pos = ps || ''; await p.evaluate(() => { location.hash = ''; }); if (await p.isVisible('#who-name')) { await p.click('#who-name'); await p.click('#logout'); await p.waitForTimeout(300); if (await p.isVisible('#lo-out')) { await p.click('#lo-out'); await p.waitForTimeout(300); } }
     await p.fill('#key', '222222'); await p.waitForSelector('#home:not([hidden])'); await p.waitForTimeout(700); };
   await p.reload(); await as2('Staff');
   check('phone: staff has no mill tile but gets the office list', await p.locator('[data-room="mills"]').count() === 0 && await p.evaluate(() => EA.lists.millsFor('SSGT').join('|')) === 'Boustead (BOU)|Kilang Contoh');

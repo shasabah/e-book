@@ -116,7 +116,7 @@ const { chromium } = require('playwright');
   });
   await p.goto('http://localhost:8765/index.html');
   await p.evaluate(() => { localStorage.clear(); localStorage.setItem('ea.phone', JSON.stringify('P12')); localStorage.setItem('ea.sendLink', JSON.stringify('https://script.google.com/macros/s/X/exec')); });
-  const as = async r => { role = r; await p.evaluate(() => { location.hash = ''; }); if (await p.isVisible('#logout')) { await p.click('#logout'); await p.waitForTimeout(300); if (await p.isVisible('#lo-out')) { await p.click('#lo-out'); await p.waitForTimeout(300); } }
+  const as = async r => { role = r; await p.evaluate(() => { location.hash = ''; }); if (await p.isVisible('#who-name')) { await p.click('#who-name'); await p.click('#logout'); await p.waitForTimeout(300); if (await p.isVisible('#lo-out')) { await p.click('#lo-out'); await p.waitForTimeout(300); } }
     await p.fill('#key', '222222'); await p.waitForSelector('#home:not([hidden])'); await p.waitForTimeout(600); };
   await p.reload(); await as('Clerk');
   await (async () => { await p.evaluate(() => EA.homePane && EA.homePane('lists')); await p.waitForTimeout(100); return p.click('[data-room="workers"]'); })(); await p.waitForSelector('.wk-three');

@@ -55,20 +55,23 @@ window.EA = window.EA || {};
     el.hidden = !show;
     if (!show) { el.innerHTML = ''; return; }
     var steps = EA.todaySteps(u, estate), next = steps.find(function (s) { return !s.done; });
-    var li = function (s) { return '<li class="' + (s.done ? 'done' : 'wait') + '"><span class="tick">' + (s.done ? '✓' : '·') + '</span><div><b>' + esc(EA.t(s.bm, s.en)) + '</b><small>' + esc(s.sub) + '</small></div></li>'; };
+    // v1.64: every step line opens its screen (the second row of buttons under the card is gone)
+    var li = function (s) { return '<li class="' + (s.done ? 'done' : 'wait') + '"><button type="button" class="step-go" data-step="' + s.k + '"><span class="tick">' + (s.done ? '✓' : '·') + '</span><div><b>' + esc(EA.t(s.bm, s.en)) + '</b><small>' + esc(s.sub) + '</small></div><span class="step-ar" aria-hidden="true">›</span></button></li>'; };
     var html = '<section class="card today-card" aria-labelledby="today-h"><h2 id="today-h"><span class="bm">Langkah hari ini</span><span class="en">Steps today</span></h2>';
     var i = next ? steps.indexOf(next) : steps.length;
     if (i > 0) html += '<ul class="today-steps">' + steps.slice(0, i).map(li).join('') + '</ul>';
-    if (next) html += '<button type="button" class="btn btn-main today-go" id="today-go">' + esc(next.en.toUpperCase()) + '<small>' + esc(next.bm.toUpperCase()) + '</small></button>' +
+    if (next) html += '<button type="button" class="btn btn-main today-go" id="today-go" data-step="' + next.k + '">' + esc(next.en.toUpperCase()) + '<small>' + esc(next.bm.toUpperCase()) + '</small></button>' +
       '<p class="hint today-sub">' + esc(next.sub) + '</p>' +
       '<ul class="today-steps">' + steps.slice(i + 1).map(li).join('') + '</ul>';
     else html += '<p class="hint">' + EA.t('Semua langkah hari ini siap. Esok pagi: baca tolok, kemudian tanda siapa tidak hadir.', 'Every step today is done. Tomorrow morning: read the gauge, then mark who is absent.') + '</p>';
     html += '</section>';
     el.innerHTML = html;
-    var go = el.querySelector('#today-go');
-    if (go) go.onclick = function () {
-      if (next.plan) EA.local.set('fh.planGo', { estate: estate, date: next.plan });
-      location.hash = next.go || '#field-harvest';
+    var open = function (s) {
+      if (s.plan) EA.local.set('fh.planGo', { estate: estate, date: s.plan });
+      location.hash = s.go || '#field-harvest';
     };
+    var go = el.querySelector('#today-go');
+    if (go) go.onclick = function () { open(next); };
+    el.querySelectorAll('[data-step]').forEach(function (b) { b.onclick = function () { open(steps.find(function (s) { return s.k === b.dataset.step; })); }; });
   };
 })();

@@ -166,7 +166,9 @@
   // ---------- home ----------
   function currentEstate(u) {
     var e = EA.local.get(ESTATE_KEY, '');
-    return u.estates.indexOf(e) >= 0 ? e : u.estates[0];
+    if (u.estates.indexOf(e) >= 0) return e;
+    // v1.64: SDK is the head office, not an estate (12 Nov) — HQ and the Owner open on the first estate
+    return u.estates.find(function (x) { return x !== 'SDK'; }) || u.estates[0];
   }
 
   function renderHeader(u, estate) {
@@ -176,13 +178,23 @@
     $('who-name').textContent = u.name;
     var r = EA.roleNames[u.role] || { bm: u.role, en: u.role };
     $('who-role').textContent = EA.t(r.bm, r.en);
-    $('estate-chips').innerHTML = u.estates.map(function (code) {
-      return '<button class="chip" type="button" data-estate="' + code + '" aria-pressed="' + (code === estate) + '">' + code + '</button>';
-    }).join('');
-    $('estate-chips').querySelectorAll('.chip').forEach(function (c) {
-      c.onclick = function () { EA.local.set(ESTATE_KEY, c.dataset.estate); render(); };
-    });
+    // v1.64 (Brief_Susun_Atur 2): one estate button with the estate's name, instead of the row of codes
+    var many = u.estates.length > 1, eb = $('estate-btn');
+    eb.innerHTML = esc(estName(estate)) + (many ? ' <span class="est-arr" aria-hidden="true">▾</span>' : '');
+    eb.dataset.estate = estate; eb.disabled = !many;
+    eb.onclick = !many ? null : function () {
+      openSheet('<h2 id="sheet-title">' + EA.t('Pilih ladang', 'Pick the estate') + '</h2><div class="est-pick">' +
+        u.estates.map(function (code) {
+          return '<button type="button" class="btn ' + (code === estate ? 'btn-main' : 'btn-ghost') + '" data-estate="' + code + '">' + esc(estName(code)) + '</button>';
+        }).join('') + '</div>',
+        function (s) {
+          s.querySelectorAll('[data-estate]').forEach(function (b) { b.onclick = function () { EA.local.set(ESTATE_KEY, b.dataset.estate); closeSheet(); render(); }; });
+        });
+    };
+    $('tile-share').hidden = !isHQ(u);   // v1.64: only the Owner and HQ share the app (Yu Chen, 15 Nov)
   }
+  var EST_NAMES = { SDK: ['Ibu Pejabat Sandakan', 'Sandakan HQ'], MELU: ['Meliau', 'Meliau'], SSGT: ['Sugut', 'Sugut'], PTAN: ['Paitan', 'Paitan'], TKRS: ['Tekara', 'Tekara'], KWNN: ['Kawananan', 'Kawananan'] };
+  function estName(code) { var n = EST_NAMES[code]; return n ? EA.t(n[0], n[1]) : code; }
 
   function renderGreeting() {
     var d = new Date(), h = d.getHours();
@@ -256,7 +268,8 @@
   // them as "Langkah hari ini"; Operasi / Rekod is the Rekod tab.
   function renderScreens(u, estate, fh) {
     var box = $('work-screens'); if (!box) return;
-    var list = !fh ? [] : u.role === 'Clerk' ? [['ticket', 'MILL TICKET', 'TIKET KILANG']]
+    var steps = u.role === 'Staff' && $('today') && !$('today').hidden;   // v1.64: the steps are the buttons, no second row
+    var list = !fh || steps ? [] : u.role === 'Clerk' ? [['ticket', 'MILL TICKET', 'TIKET KILANG']]
       : u.role === 'Worker' ? [['collect', 'RAMP & LORRY', 'RAMP & LORI']]
       : /^(Owner|HQ)$/.test(u.role) ? [['', 'MORNING CHIT', 'CHIT PAGI'], ['work', 'WORK', 'KERJA'], ['collect', 'RAMP & LORRY', 'RAMP & LORI'], ['ticket', 'MILL TICKET', 'TIKET KILANG']]
       : u.role === 'Staff' ? [['', 'MORNING CHIT', 'CHIT PAGI'], ['work', 'WORK', 'KERJA'], ['collect', 'RAMP & LORRY', 'RAMP & LORI'], ['close', 'CLOSE THE DAY', 'TUTUP HARI']] : [];
@@ -498,11 +511,30 @@
         };
       });
   }
-  $('who-name').onclick = myPinSheet;
+  // v1.64 (Brief_Susun_Atur 2): your name opens Tukar PIN, language, phone setup and log out; no LOG OUT button on top
+  function nameMenu() {
+    var u = EA.currentUser(); if (!u) return;
+    var r = EA.roleNames[u.role] || { bm: u.role, en: u.role };
+    openSheet('<h2 id="sheet-title">' + esc(u.name) + '</h2><p class="hint">' + esc(EA.t(r.bm, r.en)) + '</p>' +
+      '<div class="name-menu">' +
+      (testUser() ? '' : '<button class="btn btn-ghost" type="button" id="nm-pin">CHANGE MY PIN<small>TUKAR PIN SAYA</small></button>') +
+      '<div class="field"><span class="inline"><span class="bm">Bahasa di telefon ini</span><span class="en">Language on this phone</span></span>' +
+      '<div class="lang-pick" role="group"><button type="button" data-nmlang="bm" aria-pressed="' + (EA.lang() === 'bm') + '">Bahasa Malaysia</button>' +
+      '<button type="button" data-nmlang="en" aria-pressed="' + (EA.lang() === 'en') + '">English</button></div></div>' +
+      '<button class="btn btn-ghost" type="button" id="nm-setup">PHONE SETUP<small>TETAPAN TELEFON</small></button>' +
+      '<button class="btn btn-ghost" type="button" id="logout">LOG OUT<small>KELUAR</small></button></div>',
+      function (s) {
+        var pin = s.querySelector('#nm-pin'); if (pin) pin.onclick = function () { closeSheet(); myPinSheet(); };
+        s.querySelector('#nm-setup').onclick = function () { closeSheet(); openSetup(); };
+        s.querySelectorAll('[data-nmlang]').forEach(function (b) { b.onclick = function () { EA.setLang(b.dataset.nmlang); closeSheet(); render(); }; });
+        s.querySelector('#logout').onclick = function () { closeSheet(); logoutAsk(); };
+      });
+  }
+  $('who-name').onclick = nameMenu;
   $('who-name').setAttribute('role', 'button'); $('who-name').setAttribute('tabindex', '0');
-  $('who-name').title = 'Tukar PIN saya · Change my PIN';
+  $('who-name').title = 'Tukar PIN, bahasa, keluar · Change PIN, language, log out';
 
-  $('logout').onclick = function () {
+  function logoutAsk() {
     var n = EA.waitingMine();
     if (!n) { EA.logout(); render(); return; }
     openSheet('<h2 id="sheet-title"><span class="bm">' + n + ' catatan belum dihantar</span><span class="en">' + n + ' entries not sent yet</span></h2>' +
@@ -513,7 +545,8 @@
         s.querySelector('#lo-send').onclick = function () { closeSheet(); $('send-btn').click(); };
         s.querySelector('#lo-out').onclick = function () { closeSheet(); EA.logout(); render(); };
       });
-  };
+  }
+  EA.logoutAsk = logoutAsk;
 
   $('load-btn').onclick = EA.loadUpdate;
   async function checkUpdate() {

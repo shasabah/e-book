@@ -102,7 +102,7 @@ const { chromium } = require('playwright');
   await p.click('#or-back'); await p.waitForTimeout(300);
   check('BALIK returns to the grid on Semua', await p.locator('.or-g').count() === 1 && /Semua|All/.test(await p.locator('.or-gangs button.on').innerText()));
   // the Pengurus: print
-  await p.evaluate(() => { location.hash = ''; }); await p.click('#logout'); await p.waitForTimeout(300); if (await p.isVisible('#lo-out')) { await p.click('#lo-out'); await p.waitForTimeout(300); }
+  await p.evaluate(() => { location.hash = ''; }); await p.click('#who-name'); await p.click('#logout'); await p.waitForTimeout(300); if (await p.isVisible('#lo-out')) { await p.click('#lo-out'); await p.waitForTimeout(300); }
   role = 'Manager'; await p.fill('#key', '333333'); await p.waitForSelector('#home:not([hidden])'); await p.waitForTimeout(500);
   await p.evaluate(() => { location.hash = 'field-harvest/history'; }); await p.waitForTimeout(600);
   m = await p.innerText('#hs-pick');

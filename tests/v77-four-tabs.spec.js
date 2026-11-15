@@ -32,6 +32,7 @@ const { chromium } = require('playwright');
   check('Senarai: Pentadbir, Pekerja, Kilang, Pengguna & PIN, phone setup and share the app', await p.locator('#pane-lists:not([hidden]) [data-room="admin"]:visible').count() === 1 &&
     await p.locator('#pane-lists [data-room="users"]:visible').count() === 1 && await p.locator('#pane-lists [data-room="workers"]:visible').count() === 1 &&
     await p.locator('#pane-lists [data-room="mills"]:visible').count() === 1 && await p.locator('#pane-lists [data-open-setup]:visible').count() === 1 && await p.locator('#pane-lists [data-share-app]:visible').count() === 1);
+  check('1.64: no LOG OUT button on top; the name opens Tukar PIN, language, phone setup, log out', await p.locator('#top #logout').count() === 0 && await (async () => { await p.click('#who-name'); const ok = await p.isVisible('#nm-pin') && await p.isVisible('#nm-setup') && await p.isVisible('#logout') && await p.locator('[data-nmlang]').count() === 2; await p.click('#sheet-x'); return ok; })());
   check('Senarai: Hari ini\'s cards are hidden', !(await p.isVisible('#work-screens')) && !(await p.isVisible('#home-main .greet')));
   await p.click('#pane-lists [data-room="users"]'); await p.waitForTimeout(400);
   check('a list opens its screen, unchanged (Pengguna & PIN)', /#users$/.test(p.url()), p.url());
@@ -56,6 +57,15 @@ const { chromium } = require('playwright');
   check('staff: opens on Hari ini with "Langkah hari ini"', await p.isVisible('#today .today-card'));
   await p.click('#home-bar [data-pane="lists"]'); await p.waitForTimeout(200);
   check('staff: Senarai has no Pentadbir, no Pengguna & PIN', await p.locator('#pane-lists [data-room="admin"], #pane-lists [data-room="users"]').count() === 0 && await p.isVisible('#pane-lists [data-open-setup]'));
+  check('1.64 staff: no Kongsi app (Owner and HQ only)', !(await p.isVisible('#pane-lists [data-share-app]')) && await p.locator('.foot [data-share-app]').count() === 0);
+  await p.evaluate(() => EA.homePane('today')); await p.waitForTimeout(200);
+  check('1.64 staff: the steps are the buttons, no second row under them', await p.locator('#today [data-step]').count() >= 4 && !(await p.isVisible('#work-screens')),
+    await p.locator('#today [data-step]').count() + ' steps');
+  await p.click('#today [data-step="work"]'); await p.waitForTimeout(500);
+  check('1.64 staff: tapping "Kerja" opens Kerja', /#field-harvest\/work$/.test(p.url()), p.url());
+  await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(300);
+  check('1.64: one estate button with the name, not the code', (await p.textContent('#estate-btn')).trim() === 'Sugut' && await p.locator('#estate-chips').count() === 0, await p.textContent('#estate-btn'));
+  await p.evaluate(() => EA.homePane('lists')); await p.waitForTimeout(200);
   check('staff: the steps card does not show on another tab', !(await p.isVisible('#today .today-card')));
   check('no page errors', errs.length === 0, errs.join(' | '));
   await b.close();

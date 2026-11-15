@@ -125,11 +125,11 @@ const { chromium } = require('playwright');
   await p.click('#sw-live-MELU'); await p.waitForSelector('#cs-ok'); await p.click('#cs-ok'); await p.waitForTimeout(400);
   check('phone: opening Field & Harvest for MELU from Suis works and is logged', await p.getAttribute('#sw-live-MELU', 'aria-pressed') === 'true' && /MELU/.test(await p.locator('#room').innerText()));
   // the staff phone: no TEST marks, the room "In use" for SSGT
-  await p.evaluate(() => { location.hash = ''; }); await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
+  await p.evaluate(() => { location.hash = ''; }); await p.click('#who-name'); await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
   await p.evaluate(ph => localStorage.setItem('ea.phone', JSON.stringify(ph)), f.phone);
   await p.fill('#key', f.pin); await p.waitForSelector('#home:not([hidden])');
   const tile = await p.innerText('#home-main');
-  check('phone (staff): Field & Harvest in use at SSGT (its screens on Hari ini), no UJIAN', await p.evaluate(() => EA.roomLive(EA.rooms.find(r => r.id === 'field-harvest'), 'SSGT')) && await p.locator('#work-screens [data-scr]').count() === 4 && !/UJIAN/.test(tile), tile.slice(0, 200));
+  check('phone (staff): Field & Harvest in use at SSGT (its screens on Hari ini), no UJIAN', await p.evaluate(() => EA.roomLive(EA.rooms.find(r => r.id === 'field-harvest'), 'SSGT')) && await p.locator('#today [data-step]').count() === 6 && !/UJIAN/.test(tile), tile.slice(0, 200));
   check('phone (staff): no Pentadbir tile', await p.locator('[data-room="admin"]').count() === 0);
   await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForTimeout(400);
   await p.evaluate(() => { location.hash = 'field-harvest/collect'; }); await p.waitForTimeout(400);

@@ -49,7 +49,7 @@ const LINK = 'https://script.google.com/macros/s/TEST-LINK/exec';
   // Staff sees no Users tile
   await p.fill('#key', '777777'); await p.waitForSelector('#home:not([hidden])');
   check('Staff has no "Pengguna & PIN" tile', await p.locator('[data-room="users"]').count() === 0);
-  await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
+  await p.click('#who-name'); await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
 
   // Test Owner: first-Owner mode
   await p.fill('#key', '111111'); await p.waitForSelector('#home:not([hidden])');
@@ -67,7 +67,7 @@ const LINK = 'https://script.google.com/macros/s/TEST-LINK/exec';
   await p.click('#us-done'); await p.click('#dn-ok'); await p.waitForTimeout(200);
   check('after DONE the PIN cannot be seen again', !(await p.locator('#room').innerText()).includes(pinText.slice(0, 3) + ' ' + pinText.slice(3)));
   await p.evaluate(() => { location.hash = ''; });
-  await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
+  await p.click('#who-name'); await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
 
   // Real Owner, on the phone code made with the PIN (v1.14)
   await p.evaluate(ph => localStorage.setItem('ea.phone', JSON.stringify(ph)), phoneText);

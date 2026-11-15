@@ -36,7 +36,7 @@ const fs = require('fs'); const vm = require('vm');
     check('clerk going to #' + h + ' sees Operasi, not a keying screen', /Operasi/.test(await p.textContent('#room h1')) && !(await p.locator('#wk-check, #cl-save, #fh-check').count()));
   }
   // Manager
-  await p.evaluate(() => { location.hash = ''; }); await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
+  await p.evaluate(() => { location.hash = ''; }); await p.click('#who-name'); await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
   await p.fill('#key', '888888'); await p.waitForSelector('#home:not([hidden])');
   check('manager: has Field & Harvest (opened from the Rekod tab since 1.63)', await p.evaluate(() => EA.roomsFor(EA.currentUser(), 'SSGT').some(r => r.id === 'field-harvest')));
   await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForTimeout(400);

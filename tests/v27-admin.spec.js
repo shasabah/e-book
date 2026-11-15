@@ -106,19 +106,19 @@ const { chromium } = require('playwright');
   check('phone: the Owner has the Pentadbir tiles in Senarai (1.65: Ringkasan, Telefon, Masalah, Suis)', await p.locator('[data-adm="summary"]').count() === 1);
   await (async () => { await p.evaluate(() => EA.homePane && EA.homePane('lists')); await p.waitForTimeout(100); return p.click('[data-adm="summary"]'); })(); await p.waitForSelector('.adm-card');
   const sum = await p.locator('#room').innerText();
-  check('phone: Ringkasan shows the Sugut card (chit 06:40, 2 / 3 present) and the 4-button bar', /Sugut \(SSGT\)/.test(sum) && /06:40/.test(sum) && /2 \/ 3/.test(sum) &&
-    (await p.$$eval('.adm-tabs a', a => a.map(x => x.innerText.trim()).join('|'))) === 'Ringkasan|Telefon|Masalah|Suis', sum.slice(0, 300));
+  check('phone: Ringkasan shows the Sugut card (chit 06:40, 2 / 3 present) and no strip repeating the Senarai tiles (1.66)', /Sugut \(SSGT\)/.test(sum) && /06:40/.test(sum) && /2 \/ 3/.test(sum) &&
+    await p.locator('.adm-tabs').count() === 0, sum.slice(0, 300));
   await p.click('[data-month="1"]');
   check('phone: Bulan ini shows the month counts', /Pembetulan/.test(await p.locator('#room').innerText()));
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v27-summary.png' });
-  await p.click('.adm-tabs a[data-tab="phones"]'); await p.waitForSelector('.adm-dv');
+  await p.evaluate(() => { location.hash = 'admin/phones'; }); await p.waitForSelector('.adm-dv');
   const phs = await p.locator('#room').innerText();
   check('phone: Telefon lists devices with names and status', /Telefon syarikat Sugut/.test(phs) && /belum pernah masuk|never logged in/.test(phs) === false || /Telefon syarikat Sugut/.test(phs), phs.slice(0, 200));
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v27-phones.png' });
-  await p.click('.adm-tabs a[data-tab="problems"]'); await p.waitForSelector('.adm-pills');
+  await p.evaluate(() => { location.hash = 'admin/problems'; }); await p.waitForSelector('.adm-pills');
   check('phone: Masalah shows "no new problems" after all seen, and the old ones under Semua', /Tiada masalah baru/.test(await p.locator('#room').innerText()) &&
     (await p.click('[data-all="1"]'), /not_allowed/.test(await p.locator('#room').innerText())));
-  await p.click('.adm-tabs a[data-tab="switches"]'); await p.waitForSelector('#sw-pins');
+  await p.evaluate(() => { location.hash = 'admin/switches'; }); await p.waitForSelector('#sw-pins');
   check('phone: Suis shows the three switches on, in order', await p.getAttribute('#sw-pins', 'aria-pressed') === 'true' && await p.getAttribute('#sw-mode', 'aria-pressed') === 'true' && await p.getAttribute('#sw-live-SSGT', 'aria-pressed') === 'true');
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v27-switches.png' });
   // close the room for MELU stays off and disabled? open MELU from the phone

@@ -25,14 +25,14 @@ const { chromium } = require('playwright');
   await login();
   const bar = await p.$$eval('#home-bar [data-pane]', a => a.map(x => x.dataset.pane + (x.getAttribute('aria-current') ? '*' : '')).join(' '));
   check('four tabs at the bottom, Hari ini first and on', bar === 'today* rekod laporan lists', bar);
-  check('Hari ini: the work room opens from here; no tile for rooms not open yet', await p.locator('#work-screens [data-scr]').count() === 4 && await p.locator('[data-room="field-harvest"]').count() === 0 &&
+  check('Hari ini: the work room opens from here; no tile for rooms not open yet', await p.locator('#work-screens [data-scr]').count() === 1 && await p.locator('#work-screens [data-scr="ticket"]').count() === 1 && await p.locator('[data-room="field-harvest"]').count() === 0 &&
     await p.locator('[data-room="purchase-store"], [data-room="fleet"], [data-room="hr-payroll"], [data-room="reports"]').count() === 0);
   check('Hari ini: the lists are not on it', await p.locator('#tiles [data-room="workers"], #tiles [data-room="users"], #tiles [data-room="admin"]').count() === 0);
   await p.click('#home-bar [data-pane="lists"]'); await p.waitForTimeout(200);
   check('Senarai: Pentadbir, Pekerja, Kilang, Pengguna & PIN, phone setup and share the app', await p.locator('#pane-lists:not([hidden]) [data-adm="summary"]:visible').count() === 1 &&
     await p.locator('#pane-lists [data-room="users"]:visible').count() === 1 && await p.locator('#pane-lists [data-room="workers"]:visible').count() === 1 &&
-    await p.locator('#pane-lists [data-room="mills"]:visible').count() === 1 && await p.locator('#pane-lists [data-open-setup]:visible').count() === 1 && await p.locator('#pane-lists [data-share-app]:visible').count() === 1);
-  check('1.64: no LOG OUT button on top; the name opens Tukar PIN, language, phone setup, log out', await p.locator('#top #logout').count() === 0 && await (async () => { await p.click('#who-name'); const ok = await p.isVisible('#nm-pin') && await p.isVisible('#nm-setup') && await p.isVisible('#logout') && await p.locator('[data-nmlang]').count() === 2; await p.click('#sheet-x'); return ok; })());
+    await p.locator('#pane-lists [data-room="mills"]:visible').count() === 1 && await p.locator('#pane-lists [data-open-setup]').count() === 0 && await p.isVisible('.foot [data-open-setup]') && await p.locator('#pane-lists [data-share-app]:visible').count() === 1);
+  check('1.64: no LOG OUT button on top; the name opens Tukar PIN, language, phone setup, log out', await p.locator('#top #logout').count() === 0 && await (async () => { await p.click('#who-name'); const ok = await p.isVisible('#nm-pin') && await p.isVisible('#logout') && await p.locator('#nm-setup, [data-nmlang]').count() === 0; await p.click('#sheet-x'); return ok; })());
   check('1.65 Senarai (Owner): lot map, job codes, rates, holidays; Telefon, Masalah and Suis are their own tiles, no Pentadbir tile',
     await p.locator('#tiles-ref [data-ref]').count() === 4 && await p.locator('#tiles-lists [data-adm]').count() === 4 && await p.locator('#tiles-lists [data-room="admin"]').count() === 0,
     await p.$$eval('#pane-lists .tile:not([hidden]) .name', a => a.map(x => x.innerText.trim()).join(' | ')));
@@ -45,12 +45,11 @@ const { chromium } = require('playwright');
   await p.click('#sheet-x'); await p.click('#tiles-lists [data-adm="switches"]'); await p.waitForTimeout(400);
   check('1.65 Suis opens the switches page', /#admin\/switches$/.test(p.url()), p.url());
   await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(300);
-  check('1.65 phone: the side menu\'s brand and sub-lines are hidden', !(await p.isVisible('#home-bar .bar-brand')) && !(await p.isVisible('#home-bar .bar-sub')));
+  check('1.65 phone: the side menu\'s brand and sub-lines are hidden', await p.locator('#home-bar .bar-brand, #home-bar .bar-sub').count() === 0);
   await p.setViewportSize({ width: 1366, height: 768 }); await p.waitForTimeout(200);
   const side = await p.evaluate(() => { const r = document.querySelector('#home-bar').getBoundingClientRect(); return { l: Math.round(r.left), w: Math.round(r.width), h: Math.round(r.height), ih: innerHeight }; });
-  check('1.65 laptop: the four tabs stand down the left side, full height', side.l === 0 && side.w < 300 && side.h === side.ih && await p.isVisible('#home-bar .bar-brand') && await p.locator('#home-bar .bar-sub:visible').count() === 3, JSON.stringify(side));
-  await p.click('#home-bar [data-rsub="org"]'); await p.waitForTimeout(700);
-  check('1.65 laptop: Rekod › Orang from the side menu', /Rekod · Orang|Records · People/.test(await p.textContent('#room h1')) && await p.locator('#home-bar .bar-sub.on').count() === 1);
+  check('1.65 laptop: the four tabs stand down the left side, full height', side.l === 0 && side.w < 300 && side.h === side.ih && await p.locator('#home-bar .bar-sub').count() === 0 && await p.locator('#home-bar a:visible').count() === 4, JSON.stringify(side));
+  check('1.66: no welcome pop-up over the greeting', !/Selamat datang|Welcome/.test(await p.textContent('#toast') || ''));
   await p.evaluate(() => { location.hash = ''; }); await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(300); await p.evaluate(() => EA.homePane('lists')); await p.waitForTimeout(200);
   check('Senarai: Hari ini\'s cards are hidden', !(await p.isVisible('#work-screens')) && !(await p.isVisible('#home-main .greet')));
   await p.click('#pane-lists [data-room="users"]'); await p.waitForTimeout(400);
@@ -75,7 +74,7 @@ const { chromium } = require('playwright');
   role = 'Staff'; await login();
   check('staff: opens on Hari ini with "Langkah hari ini"', await p.isVisible('#today .today-card'));
   await p.click('#home-bar [data-pane="lists"]'); await p.waitForTimeout(200);
-  check('staff: Senarai has no Pentadbir, no Pengguna & PIN', await p.locator('#pane-lists [data-room="admin"], #pane-lists [data-room="users"]').count() === 0 && await p.isVisible('#pane-lists [data-open-setup]'));
+  check('staff: Senarai has no Pentadbir, no Pengguna & PIN', await p.locator('#pane-lists [data-room="admin"], #pane-lists [data-room="users"]').count() === 0 && await p.isVisible('.foot [data-open-setup]'));
   check('1.64 staff: no Kongsi app (Owner and HQ only)', !(await p.isVisible('#pane-lists [data-share-app]')) && await p.locator('.foot [data-share-app]').count() === 0);
   await p.evaluate(() => EA.homePane('today')); await p.waitForTimeout(200);
   check('1.64 staff: the steps are the buttons, no second row under them', await p.locator('#today [data-step]').count() >= 4 && !(await p.isVisible('#work-screens')),

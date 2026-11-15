@@ -136,7 +136,6 @@
     if (!r.ok) { loginError(r.why); $('key').select(); return; }
     $('key').value = ''; $('login-msg').hidden = true;
     render();
-    toast(EA.t('Selamat datang, ', 'Welcome, ') + r.user.name);
   }
   $('login-form').addEventListener('submit', function (e) { e.preventDefault(); tryLogin($('key').value); });
   $('key').addEventListener('input', function () {
@@ -327,7 +326,7 @@
     var steps = u.role === 'Staff' && $('today') && !$('today').hidden;   // v1.64: the steps are the buttons, no second row
     var list = !fh || steps ? [] : u.role === 'Clerk' ? [['ticket', 'MILL TICKET', 'TIKET KILANG']]
       : u.role === 'Worker' ? [['collect', 'RAMP & LORRY', 'RAMP & LORI']]
-      : /^(Owner|HQ)$/.test(u.role) ? [['', 'MORNING CHIT', 'CHIT PAGI'], ['work', 'WORK', 'KERJA'], ['collect', 'RAMP & LORRY', 'RAMP & LORI'], ['ticket', 'MILL TICKET', 'TIKET KILANG']]
+      : /^(Owner|HQ)$/.test(u.role) ? [['ticket', 'MILL TICKET', 'TIKET KILANG']]   // v1.66: they key no chit, work or ramp
       : u.role === 'Staff' ? [['', 'MORNING CHIT', 'CHIT PAGI'], ['work', 'WORK', 'KERJA'], ['collect', 'RAMP & LORRY', 'RAMP & LORI'], ['close', 'CLOSE THE DAY', 'TUTUP HARI']] : [];
     box.hidden = !list.length;
     $('rooms-h').hidden = !list.length && !$('tiles').children.length;
@@ -385,9 +384,9 @@
     $('home-bar').className = 'tabs botbar';
     // v1.65: on a laptop (a wide screen) the same four tabs stand down the left side, with Rekod's three records
     // under it (the mock's laptop view). The brand and the sub-lines are hidden on a phone by the style sheet.
-    var subs = barFh ? [['', 'Harian', 'Daily'], ['prog', 'Program', 'Plan vs actual'], ['org', 'Orang', 'People']] : [];
+    var subs = [];   // v1.66: the Rekod tiles pick Harian, Program or Orang; the side menu does not repeat them
     var cur = active === 'rekod' && location.hash.indexOf('field-harvest/history') >= 0 && EA.fh && EA.fh.recNow ? EA.fh.recNow() : null;
-    $('home-bar').innerHTML = '<div class="bar-brand" aria-hidden="true">E-Book</div>' + items.map(function (it) {
+    $('home-bar').innerHTML = items.map(function (it) {
       return '<a role="button" tabindex="0" data-pane="' + it[0] + '"' + (active === it[0] ? ' aria-current="page"' : '') + '>' +
         (it[0] === 'today' && late ? '<span class="tab-n">' + late + '</span>' : '') +
         '<svg viewBox="0 0 24 24" aria-hidden="true">' + BAR_ICON[it[0]] + '</svg><span class="bm">' + it[1] + '</span><span class="en">' + it[2] + '</span></a>' +
@@ -577,28 +576,23 @@
         };
       });
   }
-  // v1.64 (Brief_Susun_Atur 2): your name opens Tukar PIN, language, phone setup and log out; no LOG OUT button on top
+  // v1.64, trimmed 1.66: your name opens Tukar PIN and log out. Language and the phone code stay in Tetapan telefon
+  // at the bottom, as before (Yu Chen, 15 Nov: "tetapan telefon keep at the bottom like old version").
   function nameMenu() {
     var u = EA.currentUser(); if (!u) return;
     var r = EA.roleNames[u.role] || { bm: u.role, en: u.role };
     openSheet('<h2 id="sheet-title">' + esc(u.name) + '</h2><p class="hint">' + esc(EA.t(r.bm, r.en)) + '</p>' +
       '<div class="name-menu">' +
       (testUser() ? '' : '<button class="btn btn-ghost" type="button" id="nm-pin">CHANGE MY PIN<small>TUKAR PIN SAYA</small></button>') +
-      '<div class="field"><span class="inline"><span class="bm">Bahasa di telefon ini</span><span class="en">Language on this phone</span></span>' +
-      '<div class="lang-pick" role="group"><button type="button" data-nmlang="bm" aria-pressed="' + (EA.lang() === 'bm') + '">Bahasa Malaysia</button>' +
-      '<button type="button" data-nmlang="en" aria-pressed="' + (EA.lang() === 'en') + '">English</button></div></div>' +
-      '<button class="btn btn-ghost" type="button" id="nm-setup">PHONE SETUP<small>TETAPAN TELEFON</small></button>' +
       '<button class="btn btn-ghost" type="button" id="logout">LOG OUT<small>KELUAR</small></button></div>',
       function (s) {
         var pin = s.querySelector('#nm-pin'); if (pin) pin.onclick = function () { closeSheet(); myPinSheet(); };
-        s.querySelector('#nm-setup').onclick = function () { closeSheet(); openSetup(); };
-        s.querySelectorAll('[data-nmlang]').forEach(function (b) { b.onclick = function () { EA.setLang(b.dataset.nmlang); closeSheet(); render(); }; });
         s.querySelector('#logout').onclick = function () { closeSheet(); logoutAsk(); };
       });
   }
   $('who-name').onclick = nameMenu;
   $('who-name').setAttribute('role', 'button'); $('who-name').setAttribute('tabindex', '0');
-  $('who-name').title = 'Tukar PIN, bahasa, keluar · Change PIN, language, log out';
+  $('who-name').title = 'Tukar PIN, keluar · Change PIN, log out';
 
   function logoutAsk() {
     var n = EA.waitingMine();

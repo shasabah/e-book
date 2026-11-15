@@ -7,6 +7,9 @@ const check = (name, ok, detail) => { console.log((ok ? 'PASS ' : 'FAIL ') + nam
 const { chromium } = require('playwright');
 (async () => {
   const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: 390, height: 844 } });
+  // 1.66: the app raises no "chit belum dibuat" line before 5 am, so a run after midnight failed here. The test sees 9 am
+  // on a night run; the date is untouched.
+  await p.addInitScript(() => { const g = Date.prototype.getHours; Date.prototype.getHours = function () { const h = g.call(this); return h < 5 ? 9 : h; }; });
   const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.goto('http://localhost:8765/index.html');
   // The rule is read straight from the page, with today's date forced to each kind of day.

@@ -17,7 +17,7 @@ const { chromium } = require('playwright');
   await p.fill('#key', '777777'); await p.waitForSelector('#home:not([hidden])');
   check('staff: no Kongsi app at the bottom', await p.locator('.foot [data-share-app]').count() === 0 && await p.isVisible('.foot [data-open-setup]'));
   await p.evaluate(() => EA.homePane('lists')); await p.waitForTimeout(200);
-  check('staff: Senarai has Tetapan telefon, not Kongsi app', await p.isVisible('#pane-lists [data-open-setup]') && !(await p.isVisible('#pane-lists [data-share-app]')));
+  check('staff: Senarai has no Kongsi app; Tetapan telefon is only at the bottom (1.66)', await p.locator('#pane-lists [data-open-setup]').count() === 0 && !(await p.isVisible('#pane-lists [data-share-app]')));
   await p.click('#who-name'); await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
   await p.waitForSelector('#login:not([hidden])');
   // the Owner: Kongsi app in Senarai

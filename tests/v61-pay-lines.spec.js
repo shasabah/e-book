@@ -8,8 +8,15 @@
 // Rule 8: made-up workers only.
 const check = (name, ok, detail) => { console.log((ok ? 'PASS ' : 'FAIL ') + name + (detail ? ' — ' + detail : '')); if (!ok) process.exitCode = 1; };
 const { chromium } = require('playwright');
+const OFF = new Date().getDay() === 1 ? 86400000 : 0;
 (async () => {
   const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: 390, height: 844 } });
+  // 1.66: the app raises no "chit belum dibuat" line before 5 am, so a run after midnight failed here. The test sees 9 am
+  // on a night run; the date is untouched.
+  // 1.66: Kerja opens today's or yesterday's chit only. On a Monday "the last weekday before today" is Saturday, two
+  // days back, so this test could never pass on a Monday. On a Monday the page (and the test) live one day ahead.
+  await p.addInitScript((off) => { if (!off) return; const R = Date; class D extends R { constructor(...a) { if (a.length) super(...a); else super(R.now() + off); } static now() { return R.now() + off; } } window.Date = D; }, OFF);
+  await p.addInitScript(() => { const g = Date.prototype.getHours; Date.prototype.getHours = function () { const h = g.call(this); return h < 5 ? 9 : h; }; });
   const errs = [], posted = []; p.on('pageerror', e => errs.push(e.message));
   await p.route('https://script.google.com/**', async rt => {
     const bd = JSON.parse(rt.request().postData() || '{}'); const sw = { testModeOff: true, live: { 'field-harvest': ['SSGT'] }, cleanFrom: '' };
@@ -26,7 +33,7 @@ const { chromium } = require('playwright');
   await p.goto('http://localhost:8765/index.html');
   const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   // the last weekday before today (never a Sunday), and the last Sunday before it
-  const wd = new Date(); wd.setDate(wd.getDate() - 1); if (wd.getDay() === 0) wd.setDate(wd.getDate() - 1);
+  const wd = new Date(Date.now() + OFF); wd.setDate(wd.getDate() - 1); if (wd.getDay() === 0) wd.setDate(wd.getDate() - 1);
   const su = new Date(wd); while (su.getDay() !== 0) su.setDate(su.getDate() - 1);
   const yd = iso(wd), sun = iso(su);
   const people = [

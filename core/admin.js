@@ -51,7 +51,7 @@ EA.roomViews = EA.roomViews || {};
   }
 
   function bar(active) {
-    if (!owner()) return '';
+    return '';   // v1.66: the four tiles in Senarai open these pages; the strip here repeated them
     var n = (cached('problems') || {}).fresh || 0;
     return '<nav class="tabs adm-tabs" aria-label="' + t('Skrin', 'Screens') + '">' +   // v1.62: a strip at the top; the bottom is the four tabs
       [['summary', '', 'Ringkasan', 'Summary'], ['phones', '/phones', 'Telefon', 'Phones'], ['problems', '/problems', 'Masalah', 'Problems'], ['switches', '/switches', 'Suis', 'Switches']].map(function (it) {

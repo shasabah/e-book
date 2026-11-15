@@ -882,3 +882,16 @@ div.td-it { cursor: default; }
 .aq-why button { flex: 1 1 46%; border-radius: 14px; min-height: 48px; } .aq-by button { min-height: 48px; }
 /* v1.58 The manager's three buttons */
 .mg-3 { display: grid; gap: 8px; margin: 12px 0; } .mg-3 .btn { width: 100%; }
+
+/* v1.61 rain from the estate's own gauge, and Hari ini for the staff in charge */
+.rain-row { display: flex; gap: 8px; margin: 6px 0 10px; }
+.rain-row .btn { flex: 1; min-width: 0; }
+.rain-q.done { box-shadow: inset 4px 0 0 var(--ok); }
+.today-card h2 { margin-bottom: 6px; }
+.today-steps { list-style: none; margin: 0; padding: 0; }
+.today-steps li { display: flex; gap: 10px; align-items: center; padding: 7px 0; }
+.today-steps li .tick { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; flex: none; font-weight: 700; font-size: 13px; background: #efece2; color: #9a9484; }
+.today-steps li.done .tick { background: var(--ok-soft, #e1f3e6); color: var(--ok); }
+.today-steps li.done b { font-weight: 500; color: var(--muted); }
+.today-steps li small { display: block; color: var(--muted); font-size: 12px; }
+.today-go { width: 100%; margin: 6px 0; }

@@ -18,7 +18,7 @@ const { chromium } = require('playwright');
   });
   await p.reload(); await p.fill('#key', '777777'); await p.waitForSelector('#home:not([hidden])');
   await p.click('[data-room="field-harvest"]'); await p.waitForTimeout(400);
-  await p.click('#fh-check'); await p.waitForSelector('#cf-ok'); await p.click('#cf-ok'); await p.waitForTimeout(400);
+  await (async () => { if (await p.$('#fh-rain-no') && await p.getAttribute('#fh-rain-no', 'aria-pressed') !== 'true') { await p.click('#fh-rain-no'); await p.waitForTimeout(150); } await p.click('#fh-check'); })(); await p.waitForSelector('#cf-ok'); await p.click('#cf-ok'); await p.waitForTimeout(400);
   await p.keyboard.press('Escape'); await p.waitForTimeout(200);
   await p.click('.tabs a[href="#field-harvest/work"]'); await p.waitForTimeout(400);
   await p.fill('[data-job="j2"] input[data-w="W-SSGT-001"][data-f="bunches"]', '120');

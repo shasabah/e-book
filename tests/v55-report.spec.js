@@ -73,7 +73,7 @@ const { chromium } = require('playwright');
     localStorage.setItem('fh.draft2', JSON.stringify(all));
   });
   const saveChit = async () => {
-    await p.click('#fh-check'); await p.waitForTimeout(300);
+    await (async () => { if (await p.$('#fh-rain-no') && await p.getAttribute('#fh-rain-no', 'aria-pressed') !== 'true') { await p.click('#fh-rain-no'); await p.waitForTimeout(150); } await p.click('#fh-check'); })(); await p.waitForTimeout(300);
     if (await p.$('#ck-go')) { await p.click('#ck-go'); await p.waitForTimeout(300); }
     if (await p.$('#cf-ok')) { await p.click('#cf-ok'); await p.waitForTimeout(500); }
     if (await p.$('#ch-close')) await p.click('#ch-close');

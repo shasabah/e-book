@@ -44,9 +44,9 @@ const { chromium } = require('playwright');
   check('a job added on a correction gets a new number (no clash with j3)', keys === 'j1,j3,j4', keys);
   await p.click('[data-pick="j1"]'); await p.waitForSelector('#pp-list');
   await p.click('#pp-list .pick[data-w="W-SSGT-002"]'); await p.click('#pp-ok'); await p.waitForTimeout(200);
-  // v1.17: no rain question on the chit (Sugut rain is keyed in the Sugut DMS)
-  check('the chit has no rain question', await p.locator('#fh-rain').count() === 0 && !/Hujan semalam \(mm\)/.test(await p.locator('#room').innerText()));
-  await p.click('#fh-check'); await p.waitForTimeout(300);
+  // v1.61 (15 Nov 2026): the chit asks last night's rain again, from the estate's own gauge (the DMS line is gone)
+  check('the chit asks last night\'s rain, and no DMS line shows', await p.locator('#fh-rainq').count() === 1 && await p.locator('#fh-rain').count() === 0);
+  await (async () => { if (await p.$('#fh-rain-no') && await p.getAttribute('#fh-rain-no', 'aria-pressed') !== 'true') { await p.click('#fh-rain-no'); await p.waitForTimeout(150); } await p.click('#fh-check'); })(); await p.waitForTimeout(300);
   if (await p.isVisible('#lo-all')) { await p.click('#lo-all'); await p.click('#lo-next'); await p.waitForTimeout(300); }
   if (await p.isVisible('#st-go')) { await p.click('#st-go'); await p.waitForTimeout(300); }
   await p.click('#cf-ok'); await p.waitForTimeout(500);

@@ -73,7 +73,7 @@ const { chromium } = require('playwright');
   check('fh.planGo is consumed', await p.evaluate(() => localStorage.getItem('fh.planGo') === null));
 
   // ---- 3. save the plan ----
-  await p.click('#fh-check'); await p.waitForTimeout(400);
+  await (async () => { if (await p.$('#fh-rain-no') && await p.getAttribute('#fh-rain-no', 'aria-pressed') !== 'true') { await p.click('#fh-rain-no'); await p.waitForTimeout(150); } await p.click('#fh-check'); })(); await p.waitForTimeout(400);
   check('the sheet is "Semak rancangan ini" with SAVE PLAN', /Semak rancangan ini/i.test(await p.innerText('#sheet-title')) && /SAVE PLAN|Simpan rancangan/i.test(await p.innerText('#cf-ok')));
   await p.click('#cf-ok'); await p.waitForTimeout(700);
   // saving a plan opens the share sheet (the plan can go to the group / the Pengurus); close it as the staff would
@@ -101,7 +101,7 @@ const { chromium } = require('playwright');
   // a planned man's row is shrunk (marked, 25 Oct); open it, then mark him absent
   const tk = await p.$('[data-chg="W-SSGT-003"]'); if (tk) { await tk.click(); await p.waitForTimeout(200); }
   await p.click('[data-w="W-SSGT-003"][data-k="T"]'); await p.waitForTimeout(250);
-  await p.click('#fh-check'); await p.waitForTimeout(400);
+  await (async () => { if (await p.$('#fh-rain-no') && await p.getAttribute('#fh-rain-no', 'aria-pressed') !== 'true') { await p.click('#fh-rain-no'); await p.waitForTimeout(150); } await p.click('#fh-check'); })(); await p.waitForTimeout(400);
   const sheet = await p.innerText('#sheet-title').catch(() => '');
   check('the sheet is "Sahkan chit" with the difference listed', /Sahkan chit/i.test(sheet) && !!(await p.$('.plan-diff')), sheet);
   const whyLabel = await p.$eval('label[for="cf-why"]', e => e.textContent).catch(() => 'none');

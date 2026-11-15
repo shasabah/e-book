@@ -26,7 +26,7 @@ async function run(b, when, day, task) {
   await p.reload(); await p.fill('#key', '123456'); await p.waitForSelector('#home:not([hidden])');
   await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForSelector('#fh-addjob'); await p.waitForTimeout(600);
   for (const i of await p.$$('#fh-alerts [data-alert]')) await i.fill('ok');
-  await p.click('#fh-check'); await p.waitForTimeout(300);
+  await (async () => { if (await p.$('#fh-rain-no') && await p.getAttribute('#fh-rain-no', 'aria-pressed') !== 'true') { await p.click('#fh-rain-no'); await p.waitForTimeout(150); } await p.click('#fh-check'); })(); await p.waitForTimeout(300);
   if (await p.isVisible('#ck-go')) { await p.click('#ck-go'); await p.waitForTimeout(300); }
   if (await p.isVisible('#cf-ok')) { await p.click('#cf-ok'); await p.waitForTimeout(500); }
   const q = await p.evaluate(() => JSON.parse(localStorage.getItem('ea.queue') || '[]'));

@@ -226,7 +226,7 @@
   }
 
   function renderPlan(u) {
-    var show = isHQ(u);
+    var show = false;   // v1.61 (Yu Chen, 15 Nov 2026: "Milestone can be removed") — the dates stay in the Growth Plan
     $('plan').hidden = !show;
     $('layout').className = 'layout' + (show ? ' with-plan' : '');
     if (!show) return;
@@ -284,6 +284,7 @@
     if (EA.renderTodo) { EA.renderTodo($('todo'), u, estate); EA.todoPeek(u, estate); }   // v1.31: Perlu tindakan
     if (EA.askLateAuto) EA.askLateAuto(u, estate);                                        // v1.57: the app asks first, once a day
     if (EA.renderLate) { EA.renderLate($('late'), u); EA.latePeek(u); }                   // v1.56: Susulan harian (HQ and the Owner)
+    if (EA.renderToday) EA.renderToday($('today'), u, estate);                            // v1.61: Hari ini, the day's steps (staff in charge)
     // v1.16: fetch the trial switches from the office now and then (a phone may stay logged in for weeks).
     var sw = EA.switches();
     if (EA.sendLink() && navigator.onLine && !switchAsk && (!sw.at || Date.now() - sw.at > 30 * 60000)) {

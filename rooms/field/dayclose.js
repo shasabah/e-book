@@ -124,6 +124,38 @@
   }
   EA.fh.openDays = openDays;
 
+
+  // ---------- v1.61 the day's rain reading (Yu Chen, 15 Nov 2026) ----------
+  // Keyed at the close for 6 am–12 pm and 12 pm–6 pm: one mm figure as the gauge shows it, a tick for the period.
+  // A lot stopped for rain in Kerja ticks 6 am–12 pm by itself (the work ends 1:30 pm), so the rain is keyed once.
+  var DAYP = [['06-12', '6 pg–12 tgh', '6 am–noon'], ['12-18', '12 tgh–6 ptg', 'noon–6 pm']];
+  function dayRainOk(d) { var mm = String(d.rainMm == null ? '' : d.rainMm).trim(); return mm === '0' || (Number(mm) > 0 && !!String(d.rainTime || '').trim()); }
+  function dayRainText(mm, time) {
+    if (String(mm == null ? '' : mm).trim() === '') return 'tiada bacaan';
+    var n = Number(mm) || 0; if (!(n > 0)) return 'tiada';
+    var t = (EA.fh.rainPeriods ? EA.fh.rainPeriods.text(time, DAYP) : time);
+    return (Math.round(n * 10) / 10).toFixed(1).replace(/\.0$/, '') + ' mm' + (t ? ' (' + t + ')' : '');
+  }
+  // The latest closed day before a date with its day reading, for the morning chit's rain lines.
+  EA.fh.dayRainBefore = function (estate, date) {
+    var c = closes().filter(function (s) { return s.estate === estate && s.date < date; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; })[0];
+    return c ? { date: c.date, mm: c.rainMm == null ? '' : String(c.rainMm), time: c.rainTime || '' } : null;
+  };
+  function rainDayCard(d, fromWork) {
+    var mm = String(d.rainMm == null ? '' : d.rainMm), dry = mm === '0', wet = !dry && (d.rainWet || Number(mm) > 0);
+    var picked = String(d.rainTime || '').split(/[ ,]+/).filter(Boolean);
+    return '<div class="card rain-q' + (dayRainOk(d) ? ' done' : '') + '" id="dc-rainq"><h2>' + EA.t('Hujan siang ini', 'Rain today') + '</h2>' +
+      '<p class="hint">' + EA.t('6 pagi hingga 6 petang. Baca tolok, kemudian kosongkan.', '6 am to 6 pm. Read the gauge, then empty it.') + '</p>' +
+      '<div class="rain-row"><button type="button" class="btn' + (dry ? ' btn-ok' : ' btn-ghost') + '" id="dc-rain-no" aria-pressed="' + dry + '">NO RAIN<small>TIADA HUJAN</small></button>' +
+      '<button type="button" class="btn' + (wet ? ' btn-wait' : ' btn-ghost') + '" id="dc-rain-yes" aria-pressed="' + wet + '">IT RAINED<small>ADA HUJAN</small></button></div>' +
+      (wet ? '<div class="field"><label><span class="bm">Bacaan tolok (mm)</span><span class="en">Gauge reading (mm)</span></label>' +
+        '<input class="text-input qty" id="dc-rain-mm" inputmode="decimal" value="' + esc(Number(mm) > 0 ? mm : '') + '" placeholder="mm"></div>' +
+        '<p class="hint">' + EA.t('Bila hujan turun? Tanda satu atau dua.', 'When did it rain? Tick one or both.') + '</p><div class="rain-row">' +
+        DAYP.map(function (p) { var on = picked.indexOf(p[0]) >= 0; return '<button type="button" class="btn' + (on ? ' btn-wait' : ' btn-ghost') + '" data-drp="' + p[0] + '" aria-pressed="' + on + '">' + p[2] + '<small>' + p[1] + '</small></button>'; }).join('') + '</div>' +
+        (fromWork ? '<p class="hint">' + EA.t('6 pagi–12 tengah hari ditanda dari Kerja: petak berhenti kerana hujan. Hanya kunci mm.', '6 am–noon is ticked from Work: a lot stopped for rain. Only key the mm.') + '</p>' : '') : '') +
+      '</div>';
+  }
+
   // ---------- the six checks ----------
   // Each check: { n, ok, bm, en, sub, go } — go is the screen that fixes it.
   function checks(estate, c, d) {
@@ -164,6 +196,9 @@
     out.push({ n: 6, ok: true, bm: waiting ? waiting + ' rekod menunggu · dihantar bersama penutupan' : 'Semua rekod dihantar', en: waiting ? waiting + ' records waiting · sent with the close' : 'All records sent', sub: '', soft: true });
     // 7 · v1.52.3: Membaja / CPS lots already done this round keyed again. It never stops the close; it shows the lots
     // and the reason picked on the chit, so a repeat is seen the same day (Blk 01, 27 Oct–3 Nov).
+    // 8 · v1.61: the day's rain reading (the morning self-close skips it; the reading is then "tiada bacaan")
+    if (!d.autoClose) out.push(dayRainOk(d) ? { n: 8, ok: true, bm: 'Hujan siang: ' + dayRainText(d.rainMm, d.rainTime), en: 'Day rain: ' + dayRainText(d.rainMm, d.rainTime), sub: '' }
+      : { n: 8, ok: false, bm: 'Hujan siang belum dijawab', en: 'Day rain not answered', sub: EA.t('TIADA HUJAN, atau mm dan bila (di atas)', 'NO RAIN, or the mm and when (above)'), go: '#field-harvest/close' });
     var rep = EA.fh.roundRepeats ? EA.fh.roundRepeats(estate, c) : [];
     if (rep.length) out.push({ n: 7, ok: true, warn: true, soft: true, bm: rep.length + ' petak sudah siap pusingan ini dikunci lagi', en: rep.length + ' lots already done this round keyed again',
       sub: rep.map(function (x) { return x.task + ' ' + x.lot + ' (' + EA.t('siap ', 'done ') + x.on.slice(8, 10) + '/' + x.on.slice(5, 7) + (x.why ? ' · ' + x.why : EA.t(' · tiada sebab', ' · no reason')) + ')'; }).join(' · ') });
@@ -222,6 +257,9 @@
       html += (open.length > 1 ? '<div class="field"><label><span class="bm">Hari</span><span class="en">Day</span></label><select class="text-input" id="dc-pick">' +
         open.map(function (o) { return '<option value="' + o.date + '"' + (o.date === day.date ? ' selected' : '') + '>' + esc(niceDate(o.date)) + (o.reopened ? EA.t(' · DIBUKA SEMULA', ' · REOPENED') : '') + '</option>'; }).join('') + '</select></div>' : '');
       if (day.reopened) html += '<p class="warn"><b>' + EA.t('Dibuka semula · ', 'Reopened · ') + esc(niceDate(day.date)) + '</b> <span class="bm">Kerani minta pembetulan. Selepas pembetulan dikunci, tutup hari ini semula.</span></p>';
+      var wr = rainFromWork(workOf(day.chit));
+      if (wr.lots && String(d.rainMm == null ? '' : d.rainMm) === '' && !d.rainTime && !d.rainSeen) { d.rainWet = true; d.rainTime = '06-12'; d.rainSeen = true; keepDraft(day.date, d); ck = checks(ctx.estate, day.chit, d); bad = ck.filter(function (x) { return !x.ok; }); }
+      html += rainDayCard(d, wr.lots > 0 && d.rainTime === '06-12');
       html += '<div class="card"><h2>' + esc(niceDate(day.date)) + ' · ' + EA.t('Semakan sebelum tutup', 'Checks before closing') + '</h2>' +
         '<ol class="dc-list">' + ck.map(function (x) {
           return '<li class="dc-it ' + (x.ok ? (x.warn ? 'dc-warn' : x.drop ? 'dc-drop' : 'dc-ok') : 'dc-bad') + '">' + (x.go && !x.ok ? '<button type="button" class="link-btn dc-go" data-go="' + esc(x.go) + '">' : '<span>') +
@@ -271,6 +309,13 @@
     el.querySelectorAll('.dc-go').forEach(function (b) { b.onclick = function () { EA.local.set('fh.workchit', day.chit.chit); location.hash = b.dataset.go; }; });
     var f = $('#dc-field'); if (f) { f.oninput = function () { d.fieldNote = f.value; keepDraft(day.date, d); }; f.onchange = function () { render(el, ctx); }; }
     var n = $('#dc-note'); if (n) n.oninput = function () { d.note = n.value; keepDraft(day.date, d); };
+    var rn = $('#dc-rain-no'), ry = $('#dc-rain-yes'), rm = $('#dc-rain-mm');
+    if (rn) rn.onclick = function () { upd(function (x) { x.rainMm = '0'; x.rainTime = ''; x.rainWet = false; x.rainSeen = true; }); };
+    if (ry) ry.onclick = function () { upd(function (x) { x.rainWet = true; x.rainSeen = true; if (String(x.rainMm) === '0') x.rainMm = ''; }); var m = $('#dc-rain-mm'); if (m) m.focus(); };
+    if (rm) { rm.oninput = function () { d.rainMm = rm.value.replace(',', '.').replace(/[^\d.]/g, ''); keepDraft(day.date, d); }; rm.onchange = function () { render(el, ctx); }; }
+    el.querySelectorAll('[data-drp]').forEach(function (b) {
+      b.onclick = function () { upd(function (x) { var cur = String(x.rainTime || '').split(/[ ,]+/).filter(Boolean), i = cur.indexOf(b.dataset.drp); if (i >= 0) cur.splice(i, 1); else cur.push(b.dataset.drp); x.rainTime = DAYP.map(function (p) { return p[0]; }).filter(function (k) { return cur.indexOf(k) >= 0; }).join(' '); }); };
+    });
     var cb = $('#dc-close'); if (cb) cb.onclick = function () { var dt = day.chit.date, ok = closeChit(ctx.estate, ctx.user, day.chit, d, {}); render(el, ctx); if (ok) showSummary(dt); };
     el.querySelectorAll('[data-sum]').forEach(function (b) { b.onclick = function () { showSummary(b.dataset.sum); }; });
   }
@@ -280,6 +325,7 @@
   // opts.auto: closed by the app at the next chit because the day was complete (closed_by stays the staff's code).
   function closeChit(estate, user, c, d, opts) {
     d = d || {}; opts = opts || {};
+    if (opts.auto) d = Object.assign({}, d, { autoClose: true });
     var ck = checks(estate, c, d);
     if (ck.some(function (x) { return !x.ok; })) { if (!opts.auto) ui().toast(EA.t('Belum lengkap', 'Not complete yet'), 'bad'); return null; }
     var w = workOf(c), jobs = (w && w.rec && w.rec.jobs) || [], lines = (w && w.rec && w.rec.lines) || [];
@@ -297,10 +343,11 @@
       rec = EA.save(TAB, ROOM, estate, { date: c.date, chit: c.chit, kind: 'close', closed_by: user.code, closed_at: at, checks: checksTxt,
         rain_when: keepRain ? (RAIN_WHEN[rain.reason] || 'work') : '', rain_reason: keepRain ? rain.reason : '', rain_lost: keepRain ? String(rain.lost) : '', rain_jobs: keepRain ? rain.jobs.join(' ') : '',
         workers: String(total), present: String(present), bunches: String(bunches), jobs_done: String(jobs.filter(function (j) { return j.status === 'done'; }).length), jobs_planned: String(jobs.length),
-        lorries: String(lorries), note: note }, old && old.reopened ? old.id : '');
+        lorries: String(lorries), note: note, rain_mm: dayRainOk(d) ? String(Number(d.rainMm) || 0) : '', rain_time: dayRainOk(d) && Number(d.rainMm) > 0 ? String(d.rainTime || '') : '' }, old && old.reopened ? old.id : '');
     } catch (e) { if (!opts.auto) ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad'); return null; }
     var s = { id: rec.id, estate: estate, date: c.date, chit: c.chit, at: at.slice(11), by: user.code, byName: user.name, present: present, total: total, bunches: bunches, auto: !!opts.auto,
       jobsDone: jobs.filter(function (j) { return j.status === 'done'; }).length, jobs: jobs.length, lorries: lorries, rain: keepRain ? rainLabel(rain) + ' · ' + lostLabel(rain.lost) : '', rainJobs: keepRain ? rain.jobs : [],
+      rainMm: dayRainOk(d) ? String(Number(d.rainMm) || 0) : '', rainTime: dayRainOk(d) && Number(d.rainMm) > 0 ? String(d.rainTime || '') : '',
       // v1.50.1 (Yu Chen, 5 Nov): who was away, by name and mark, for the day summary.
       pay: (function () { var c1 = ck.find(function (x) { return x.n === 1 && x.pay; }); return c1 ? payCountText(c1.pay) : ''; })(),
       away: (c.rows || []).filter(function (r) { return r.status !== 'removed' && r.muster !== 'H'; }).map(function (r) { return person(r.worker_id) + ' (' + r.muster + ')'; }),
@@ -333,8 +380,10 @@
     L.push('Kerja: ' + s.jobsDone + '/' + s.jobs + ' siap');
     (s.notDone || []).forEach(function (j) { L.push('  • ' + j.job + ' BELUM SIAP' + (j.why ? ' — ' + j.why : '')); });
     if (s.fieldNote) L.push('Buah belum ke ramp: ' + s.fieldNote);
-    if (s.rain) L.push('Hujan: ' + s.rain + (s.rainJobs && s.rainJobs.length ? ' (' + s.rainJobs.map(shortName).join(', ') + ') · jadi baki kerja' : ''));
-    else L.push('Hujan: tiada');
+    // v1.61: the day's gauge reading first, then the work rain stopped (a reason, as since 25 Oct).
+    if (s.rainMm !== undefined) L.push('Hujan siang: ' + dayRainText(s.rainMm, s.rainTime));
+    if (s.rain) L.push((s.rainMm !== undefined ? 'Kerja terjejas hujan: ' : 'Hujan: ') + s.rain + (s.rainJobs && s.rainJobs.length ? ' (' + s.rainJobs.map(shortName).join(', ') + ') · jadi baki kerja' : ''));
+    else if (s.rainMm === undefined) L.push('Hujan: tiada');
     if (s.note) L.push('Catatan: ' + s.note);
     L.push('');
     L.push('Ditutup: ' + (s.byName || s.by) + ' · ' + s.at + (s.auto ? ' (oleh app, hari lengkap)' : ''));

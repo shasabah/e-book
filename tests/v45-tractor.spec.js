@@ -46,13 +46,13 @@ const { chromium } = require('playwright');
   // the driver on ITF, with the loader: no "semak dulu"
   await p.evaluate(() => { const all = JSON.parse(localStorage.getItem('fh.draft2')); const s = all.SSGT; const k = s.jobs.find(j => j.task === 'ITF').key; s.marks.T1 = 'H'; s.jobOf.T1 = k; localStorage.setItem('fh.draft2', JSON.stringify(all)); });
   await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(100); await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForTimeout(500);
-  for (const i of await p.$$('#fh-alerts [data-alert]')) await i.fill('Dikutip esok'); await p.click('#fh-check'); await p.waitForTimeout(300);
+  for (const i of await p.$$('#fh-alerts [data-alert]')) await i.fill('Dikutip esok'); await (async () => { if (await p.$('#fh-rain-no') && await p.getAttribute('#fh-rain-no', 'aria-pressed') !== 'true') { await p.click('#fh-rain-no'); await p.waitForTimeout(150); } await p.click('#fh-check'); })(); await p.waitForTimeout(300);
   const sh1 = await p.evaluate(() => document.body.innerText); check('tractor with a loader: no tractor warning (and the chit can be checked)', !/Traktor tanpa pemuat/.test(sh1) && !/Belum lengkap/.test(sh1), sh1.slice(0, 200));
   if (await p.isVisible('#sheet-x')) await p.click('#sheet-x');
   // loader taken off: the tractor alone asks
   await p.evaluate(() => { const all = JSON.parse(localStorage.getItem('fh.draft2')); const s = all.SSGT; s.marks.L1 = 'C'; delete s.jobOf.L1; localStorage.setItem('fh.draft2', JSON.stringify(all)); });
   await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(100); await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForTimeout(500);
-  for (const i of await p.$$('#fh-alerts [data-alert]')) await i.fill('Dikutip esok'); await p.click('#fh-check'); await p.waitForTimeout(300);
+  for (const i of await p.$$('#fh-alerts [data-alert]')) await i.fill('Dikutip esok'); await (async () => { if (await p.$('#fh-rain-no') && await p.getAttribute('#fh-rain-no', 'aria-pressed') !== 'true') { await p.click('#fh-rain-no'); await p.waitForTimeout(150); } await p.click('#fh-check'); })(); await p.waitForTimeout(300);
   const sh = await p.innerText('body');
   await p.waitForTimeout(300); const shx = await p.evaluate(() => (document.querySelector('#sheet') || document.querySelector('#sheet-back') || document.body).innerText); check('tractor with no loader: "semak dulu" asks (absent / little crop / add a replacement as LFF)', /Traktor tanpa pemuat: Pemandu Contoh \(ITF\)/.test(shx) && /LFF/.test(shx), shx.slice(0, 300));
   // a non-collection job is unchanged: no auto lots

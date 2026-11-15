@@ -25,7 +25,7 @@ const { chromium } = require('playwright');
   check('chit: below-target job is highlighted', (await p.locator('#fh-jobs .flag-line').count()) === 1);
   check('chit: harvest target 2 × 1.5 = 3 MT', /2 × 1\.5 = 3 MT/.test(jobs));
   check('chit: no CHECK WITH MANDOR', /SAVE CHIT/.test(await p.textContent('#fh-check')));
-  await p.click('#fh-check'); await p.waitForSelector('#cf-ok');
+  await (async () => { if (await p.$('#fh-rain-no') && await p.getAttribute('#fh-rain-no', 'aria-pressed') !== 'true') { await p.click('#fh-rain-no'); await p.waitForTimeout(150); } await p.click('#fh-check'); })(); await p.waitForSelector('#cf-ok');
   check('chit: no mandor to choose before saving', (await p.locator('#cf-who').count()) === 0);
   const prev = await p.textContent('.sheet pre, #sheet pre');
   check('chit text: no "Disemak mandor", no count check', !/Disemak mandor|Semak kiraan/.test(prev));

@@ -563,7 +563,8 @@
   }
   function backlogLines(b) {
     if (!b) return [];
-    var L = (b.rain && b.rain.from ? ['Hujan · Rain: ' + rainText(b.rain)] : []).concat(b.tonnage ? ['Tan bulan ini · Month to date: ' + tonnageText(b.tonnage)] : []).concat(['Baki ladang · Field: ' + (b.fieldTotal || 0) + ' tandan' + (b.estate ? tanTxt(b.estate, b.fieldTotal || 0) : '') + (b.field && b.field.length ? ' (' + b.field.map(function (x) { return x.lot + ' ' + x.bunches; }).join(', ') + ')' : ''),
+    // v1.61 (Yu Chen, 15 Nov 2026): every estate keys its own rain gauge on the chit; the DMS figure is no longer shown.
+    var L = [].concat(b.tonnage ? ['Tan bulan ini · Month to date: ' + tonnageText(b.tonnage)] : []).concat(['Baki ladang · Field: ' + (b.fieldTotal || 0) + ' tandan' + (b.estate ? tanTxt(b.estate, b.fieldTotal || 0) : '') + (b.field && b.field.length ? ' (' + b.field.map(function (x) { return x.lot + ' ' + x.bunches; }).join(', ') + ')' : ''),
              'Baki ramp · Ramp: ' + ((b.ramp && b.ramp.bunches) || 0) + ' tandan' + (b.ramp && b.ramp.bunches ? ' (' + rampText(b.ramp) + ')' : '')]);
     return L;
   }
@@ -593,7 +594,7 @@
     var b = getBacklog(estate);
     var t = b && b.tonnage;
     var body = !b ? '<p class="hint">' + EA.t('Belum ada. Perlu isyarat sekali untuk ambil dari pejabat.', 'Not yet: needs signal once to get it from the office.') + '</p>' :
-      (b.rain && b.rain.from ? '<div class="list-line" id="fh-rain"><div><b>' + EA.t('Hujan: ', 'Rain: ') + esc(rainText(b.rain)) + '</b><span class="en">' +
+      (false && b.rain && b.rain.from ? '<div class="list-line" id="fh-rain"><div><b>' + EA.t('Hujan: ', 'Rain: ') + esc(rainText(b.rain)) + '</b><span class="en">' +
         EA.t('Dari DMS Sugut (dikunci sekali di DMS)', 'From the Sugut DMS (keyed once, in the DMS)') + '</span></div></div>' : '') +
       (t ? '<div class="list-line"><div><b>' + EA.t('Tan bulan ini: ', 'Month to date: ') + Number(t.mt || 0).toFixed(2) + ' MT</b><span class="en">' +
         (t.tickets ? esc(tonnageDetail(t)) : EA.t('Belum ada tiket bulan ini', 'No tickets this month yet')) + '</span>' +
@@ -860,6 +861,7 @@
       (draft.fixAsk ? '<p class="warn"><b>' + EA.t('Membetulkan chit ', 'Fixing the chit of ') + esc(niceDate(draft.date)) + EA.t(' atas permintaan ', ' as asked by ') + esc(draft.fixAsk.by) + ':</b> "' + esc(draft.fixAsk.note) + '"</p>' : '') +
       (draft.replacing && !draft.fixAsk ? '<p class="warn"><span class="bm">Membetulkan chit ' + esc(draft.replacing) + '. Chit lama kekal; yang baru menggantikannya.</span><span class="en">Correcting chit ' + esc(draft.replacing) + '. The old one stays on record; this one replaces it.</span></p>' : '') +
 
+      (mode === 'plan' || isPast() ? '' : rainCard()) +
       (mode ? '' : backlogCard(ctx.estate) + jenteraCard(ctx.estate) + '<div id="fh-alert-slot">' + alertSection() + '</div>') +
       '<section class="card" aria-labelledby="fh-s1"><h2 id="fh-s1"><span class="step">1</span><span class="inline">' +
         (mode === 'plan' ? '<span class="bm">Kerja dirancang</span> · <span class="en">Planned jobs</span>' : mode === 'confirm' && draft.date !== EA.today() ? '<span class="bm">Kerja hari itu</span> · <span class="en">That day\'s jobs</span>'
@@ -877,7 +879,6 @@
       '<div class="rows" id="fh-rows"></div>' +
       '</section>' +
 
-      // v1.17: no rain question here. Sugut rain is keyed once, in the Sugut DMS (decided 20 Oct 2026).
       '<section class="card" aria-labelledby="fh-s4"><h2 id="fh-s4"><span class="step">3</span><span class="inline"><span class="bm">Chit</span> · <span class="en">The chit</span></span></h2>' +
       '<div id="fh-table"></div></section>' +
 
@@ -887,6 +888,7 @@
       (mode ? '' : (draft.fixAsk || draft.replacing ? '' : plansCard(false)) + todayCard());
 
     $('#fh-addjob').onclick = function () { editJob(null); };
+    wireRain();
     if ($('#fh-copy')) $('#fh-copy').onclick = copyLast;
     // A comma is a decimal point too (many phone keyboards show only a comma): 2,5 = 2.5 mm.
     $('#fh-check').onclick = check;
@@ -1454,6 +1456,63 @@
       });
   }
 
+
+  // ---------- v1.61 rain, keyed by every estate from its own gauge (Yu Chen, 15 Nov 2026) ----------
+  // Two readings a day in four periods: the morning chit keys the night (6 pm–12 am, 12 am–6 am), Tutup hari keys the
+  // day (6 am–12 pm, 12 pm–6 pm). No rain is one tap; rain is one mm figure as the gauge shows it, and a tick for the
+  // period or periods it fell in — the mm is never split by guess. Stored on the chit as rain_mm and rain_time.
+  var NIGHT = [['18-24', '6 ptg–12 mlm', '6 pm–midnight'], ['00-06', '12 mlm–6 pg', 'midnight–6 am']];
+  function rainOk(d) { d = d || draft; var mm = String(d.rain_mm == null ? '' : d.rain_mm).trim(); return mm === '0' || (Number(mm.replace(',', '.')) > 0 && !!String(d.rain_time || '').trim()); }
+  function periodText(codes, list, en) {
+    var c = String(codes || '').split(/[ ,]+/).filter(Boolean);
+    var known = c.map(function (x) { var p = list.find(function (q) { return q[0] === x; }); return p ? p[en ? 2 : 1] : null; });
+    return known.every(Boolean) ? known.join(' · ') : String(codes || '');
+  }
+  function rainCard() {
+    var mm = String(draft.rain_mm == null ? '' : draft.rain_mm), dry = mm === '0', wet = !dry && (draft.rainWet || Number(mm) > 0);
+    var picked = String(draft.rain_time || '').split(/[ ,]+/).filter(Boolean);
+    return '<section class="card rain-q' + (rainOk() ? ' done' : '') + '" id="fh-rainq" aria-labelledby="fh-s0"><h2 id="fh-s0"><span class="step">0</span><span class="inline"><span class="bm">Hujan malam tadi</span> · <span class="en">Rain last night</span></span></h2>' +
+      '<p class="hint">' + EA.t('6 petang semalam hingga 6 pagi ini. Baca tolok, kemudian kosongkan.', '6 pm yesterday to 6 am today. Read the gauge, then empty it.') + '</p>' +
+      '<div class="rain-row"><button type="button" class="btn' + (dry ? ' btn-ok' : ' btn-ghost') + '" id="fh-rain-no" aria-pressed="' + dry + '">NO RAIN<small>TIADA HUJAN</small></button>' +
+      '<button type="button" class="btn' + (wet ? ' btn-wait' : ' btn-ghost') + '" id="fh-rain-yes" aria-pressed="' + wet + '">IT RAINED<small>ADA HUJAN</small></button></div>' +
+      (wet ? '<div class="field"><label><span class="bm">Bacaan tolok (mm)</span><span class="en">Gauge reading (mm)</span></label>' +
+        '<input class="text-input qty" id="fh-rain-mm" inputmode="decimal" value="' + esc(Number(mm) > 0 ? mm : '') + '" placeholder="mm"></div>' +
+        '<p class="hint">' + EA.t('Bila hujan turun? Tanda satu atau dua.', 'When did it rain? Tick one or both.') + '</p><div class="rain-row">' +
+        NIGHT.map(function (p) { var on = picked.indexOf(p[0]) >= 0; return '<button type="button" class="btn' + (on ? ' btn-wait' : ' btn-ghost') + '" data-rp="' + p[0] + '" aria-pressed="' + on + '">' + p[2] + '<small>' + p[1] + '</small></button>'; }).join('') + '</div>' : '') +
+      '</section>';
+  }
+  function wireRain() {
+    var no = $('#fh-rain-no'), yes = $('#fh-rain-yes'), mm = $('#fh-rain-mm');
+    if (!no) return;
+    no.onclick = function () { draft.rain_mm = '0'; draft.rain_time = ''; draft.rainWet = false; keepDraft(); render(el, ctx); };
+    yes.onclick = function () { draft.rainWet = true; if (String(draft.rain_mm) === '0') draft.rain_mm = ''; keepDraft(); render(el, ctx); var m = $('#fh-rain-mm'); if (m) m.focus(); };
+    if (mm) mm.oninput = function () { draft.rain_mm = mm.value.replace(',', '.').replace(/[^\d.]/g, ''); keepDraft(); var c = $('#fh-rainq'); if (c) c.classList.toggle('done', rainOk()); };
+    el.querySelectorAll('[data-rp]').forEach(function (b) {
+      b.onclick = function () {
+        var cur = String(draft.rain_time || '').split(/[ ,]+/).filter(Boolean), k = b.dataset.rp, i = cur.indexOf(k);
+        if (i >= 0) cur.splice(i, 1); else cur.push(k);
+        draft.rain_time = NIGHT.map(function (p) { return p[0]; }).filter(function (x) { return cur.indexOf(x) >= 0; }).join(' ');
+        keepDraft(); render(el, ctx);
+      };
+    });
+  }
+  // The rain lines for the WhatsApp chit: last night's reading, and yesterday's whole day when its close holds the day reading.
+  function rainLines(c) {
+    var mm = String(c.rain_mm == null ? '' : c.rain_mm).trim();
+    if (mm === '') return [];
+    var n = Number(mm) || 0, L = [];
+    var prev = EA.fh.dayRainBefore ? EA.fh.dayRainBefore(c.estate, c.date) : null;
+    var yday = (function () { var d = new Date(c.date + 'T00:00:00'); d.setDate(d.getDate() - 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })();
+    var since = prev && prev.date < yday ? ' sejak ' + dayDm(prev.date) + ' 6 ptg' : '';
+    L.push('Hujan ' + (since ? since.trim() : 'malam tadi') + ': ' + (n > 0 ? fmtMm(n) + ' mm (' + periodText(c.rain_time, NIGHT) + ')' : 'tiada'));
+    if (prev && prev.date === yday && prev.mm !== '') {
+      var dm2 = Number(prev.mm) || 0;
+      L.push('Hujan ' + dayDm(prev.date) + ': ' + fmtMm(dm2 + n) + ' mm (siang ' + fmtMm(dm2) + ' · malam ' + fmtMm(n) + ')');
+    }
+    return L;
+  }
+  function fmtMm(v) { return (Math.round(Number(v) * 10) / 10).toFixed(1).replace(/\.0$/, ''); }
+
   // ---------- check, confirm, save ----------
   function problems() {
     var p = [], rows = draftRows();
@@ -1467,6 +1526,8 @@
     if (!draft.alertNotes) draft.alertNotes = {};
     var noNote = isPast() ? [] : chitAlerts().filter(function (a) { return !a.note; });
     if (noNote.length) p.push(['Tulis apa berlaku untuk setiap amaran (' + noNote.length + ' belum).', 'Say what happened for each alert (' + noNote.length + ' not done).']);
+    // v1.61: today's chit (not a plan, not a day gone by) answers last night's rain first.
+    if (!isPast() && draft.mode !== 'plan' && !rainOk()) p.push(['Jawab hujan malam tadi: TIADA HUJAN, atau mm dan bila.', 'Answer last night\'s rain: no rain, or the mm and when.']);
     return p;
   }
   function emptyJobs() {
@@ -1924,7 +1985,7 @@
       if (df.length && c.planNote) L.push('Sebab: ' + c.planNote);
     }
     // v1.17: an old chit keyed with rain still shows it; new chits have none (rain is in the Sugut DMS).
-    if (c.rain_mm !== '' && c.rain_mm !== undefined && c.rain_mm !== null) L.push('Hujan semalam: ' + (Number(c.rain_mm) || 0).toFixed(2) + ' mm' + (c.rain_time ? ' (' + c.rain_time + ')' : ''));
+    rainLines(c).forEach(function (x) { L.push(x); });   // v1.61: the estate's own gauge (Yu Chen, 15 Nov)
     backlogLines(c.backlog).forEach(function (x) { L.push(x); });
     fieldLines(c.estate, c.backlog).forEach(function (x) { L.push(/^⚠/.test(x) ? '*' + x + '*' : x); });   // v1.54: the day-after-harvest rule
     machLines(c.backlog).forEach(function (x) { L.push(x); });   // v1.55: the Jentera block, after the fruit
@@ -2093,6 +2154,8 @@
   EA.fh = EA.fh || {};
   EA.fh.viewOnly = viewOnly;
   EA.fh.allChits = chits;
+  EA.fh.rainPeriods = { night: NIGHT, text: periodText };   // v1.61
+  EA.fh.rainLines = rainLines;
   EA.fh.roundRepeats = roundRepeats;
   EA.fh.summary = summary;
   EA.fh.tabs = tabs;

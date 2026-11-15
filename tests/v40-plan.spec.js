@@ -106,7 +106,7 @@ const { chromium } = require('playwright');
   const rowsHint = await p.textContent('#fh-rows');
   check('Sunday: people not marked are resting (2), not "not marked yet"', /rehat \(2 orang\)|resting \(2\)/i.test(rowsHint) && !/belum ditanda/.test(rowsHint), rowsHint.slice(0, 120));
   check('plan save button says SAVE PLAN', /SAVE PLAN/.test(await p.textContent('#fh-check')));
-  await p.click('#fh-check'); await p.waitForTimeout(300);
+  await (async () => { if (await p.$('#fh-rain-no') && await p.getAttribute('#fh-rain-no', 'aria-pressed') !== 'true') { await p.click('#fh-rain-no'); await p.waitForTimeout(150); } await p.click('#fh-check'); })(); await p.waitForTimeout(300);
   if (await p.$('#ck-go')) { await p.click('#ck-go'); await p.waitForTimeout(300); }
   check('no leftover sheet on a Sunday', !(await p.$('#lo-all')));
   check('Sunday plan asks why (for the Pengurus)', !!(await p.$('#cf-why')));
@@ -142,7 +142,7 @@ const { chromium } = require('playwright');
   const marks = await p.evaluate(() => JSON.parse(localStorage.getItem('fh.draft2')).SSGT.marks);
   check('everyone as planned (W1–W4 H)', JSON.stringify(marks) === JSON.stringify({ W1: 'H', W2: 'H', W3: 'H', W4: 'H' }), JSON.stringify(marks));
   await setDraft(() => { const all = JSON.parse(localStorage.getItem('fh.draft2')); const d = all.SSGT; d.marks.W3 = 'T'; delete d.jobOf.W3; localStorage.setItem('fh.draft2', JSON.stringify(all)); });
-  await p.click('#fh-check'); await p.waitForTimeout(300);
+  await (async () => { if (await p.$('#fh-rain-no') && await p.getAttribute('#fh-rain-no', 'aria-pressed') !== 'true') { await p.click('#fh-rain-no'); await p.waitForTimeout(150); } await p.click('#fh-check'); })(); await p.waitForTimeout(300);
   if (await p.$('#ck-go')) { await p.click('#ck-go'); await p.waitForTimeout(300); }
   const diffBox = await p.textContent('.plan-diff');
   check('confirm sheet shows the difference: Pekerja Tiga planned HA Blk 02 → Tak hadir', /Pekerja Tiga: dirancang HA Blk 02 → Tak hadir/.test(diffBox), diffBox);
@@ -186,7 +186,7 @@ const { chromium } = require('playwright');
     localStorage.setItem('fh.draft2', JSON.stringify(all));
   });
   check('a weekday plan shows no Sunday band and no lari flag', !(await p.textContent('#fh-rows')).match(/Mungkin lari|Maybe absconded/));
-  await p.click('#fh-check'); await p.waitForTimeout(300);
+  await (async () => { if (await p.$('#fh-rain-no') && await p.getAttribute('#fh-rain-no', 'aria-pressed') !== 'true') { await p.click('#fh-rain-no'); await p.waitForTimeout(150); } await p.click('#fh-check'); })(); await p.waitForTimeout(300);
   if (await p.$('#ck-go')) { await p.click('#ck-go'); await p.waitForTimeout(300); }
   check('weekday plan: no reason asked', !(await p.$('#cf-why')));
   await p.click('#cf-ok'); await p.waitForTimeout(400); await p.click('#ch-close'); await settle();
@@ -213,7 +213,7 @@ const { chromium } = require('playwright');
     }, marks);
   };
   const allMarks = { W1: 'T', W2: 'T', W3: 'T', W4: 'T', W5: 'H', W6: 'H' };
-  const savePlanNow = async () => { await p.click('#fh-check'); await p.waitForTimeout(300); if (await p.$('#ck-go')) { await p.click('#ck-go'); await p.waitForTimeout(300); } if (await p.$('#cf-why')) await p.fill('#cf-why', 'Ujian sebab'); await p.click('#cf-ok'); await p.waitForTimeout(400); if (await p.$('#ch-close')) await p.click('#ch-close'); await settle(); };
+  const savePlanNow = async () => { await (async () => { if (await p.$('#fh-rain-no') && await p.getAttribute('#fh-rain-no', 'aria-pressed') !== 'true') { await p.click('#fh-rain-no'); await p.waitForTimeout(150); } await p.click('#fh-check'); })(); await p.waitForTimeout(300); if (await p.$('#ck-go')) { await p.click('#ck-go'); await p.waitForTimeout(300); } if (await p.$('#cf-why')) await p.fill('#cf-why', 'Ujian sebab'); await p.click('#cf-ok'); await p.waitForTimeout(400); if (await p.$('#ch-close')) await p.click('#ch-close'); await settle(); };
   // 1. a plan left unsaved overnight never becomes a plan for today
   await planDraft('2026-11-05', allMarks);
   await p.clock.setFixedTime(new Date('2026-11-05T06:00:00+08:00'));

@@ -121,7 +121,7 @@ const { chromium } = require('playwright');
   check('phone: the asked chit opens with what the clerk said', /atas permintaan Kerani Contoh|as asked by Kerani Contoh/.test(banner) && /Bakar T, bukan H/.test(banner));
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v43-fix.png' });
   await p.click('#fh-rows button[data-w="H2"][data-k="T"]'); await p.waitForTimeout(150);
-  await p.click('#fh-check'); await p.waitForTimeout(300);
+  await (async () => { if (await p.$('#fh-rain-no') && await p.getAttribute('#fh-rain-no', 'aria-pressed') !== 'true') { await p.click('#fh-rain-no'); await p.waitForTimeout(150); } await p.click('#fh-check'); })(); await p.waitForTimeout(300);
   if (await p.isVisible('#ck-go')) { await p.click('#ck-go'); await p.waitForTimeout(300); }
   await p.click('#cf-ok'); await p.waitForTimeout(500);
   const q = await p.evaluate(() => JSON.parse(localStorage.getItem('ea.queue') || '[]'));

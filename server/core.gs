@@ -121,7 +121,9 @@ var ROOM_TABS = {
   // reason, never a reading: rain_when night/morning/work, rain_reason LEWAT/HENTI/GERIMIS/BASAH, rain_lost ¼–1 day,
   // rain_jobs the job codes it excuses. The day summary numbers are kept so the WhatsApp text can be made again.
   FH_DAYCLOSE: ['chit', 'kind', 'closed_by', 'closed_at', 'checks', 'rain_when', 'rain_reason', 'rain_lost', 'rain_jobs',
-                'workers', 'present', 'bunches', 'jobs_done', 'jobs_planned', 'lorries', 'note'],
+                'workers', 'present', 'bunches', 'jobs_done', 'jobs_planned', 'lorries', 'note',
+                // v1.61 (Yu Chen, 15 Nov 2026): the day's own rain gauge reading — mm, and the periods it fell in (06-12, 12-18).
+                'rain_mm', 'rain_time'],
   // Errors on phones, so the builder can see what went wrong without asking for screenshots.
   APP_ERROR: ['where', 'message', 'stack', 'version', 'agent']
 };
@@ -718,7 +720,8 @@ function backlog(estate) {
 // only reads it. The newest DMS reading dated today or yesterday is used; with none, the nearest JPS station's
 // figure that the DMS already fetches (tab JPS_RAIN), marked JPS. Remembered for an hour (the DMS book is large).
 var DMS_SHEET_ID = '1BaxqGMwwbz_2m4Ryd2quBgmoAqk-uyE4gdlPcd0S2tw';
-var RAIN_ESTATES = { SSGT: true };
+// v1.61 (15 Nov 2026): every estate keys its own gauge in E-Book; the chit no longer shows the DMS reading.
+var RAIN_ESTATES = {};
 function dmsDay_(v) {
   if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd');
   var s = String(v || '').trim(), m;

@@ -400,6 +400,8 @@ details.card-sub summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
 .tabs.botbar a .en { font-size: inherit; }
 .tabs.botbar .tab-ok { position: absolute; top: 5px; left: 50%; margin-left: 9px; width: 9px; height: 9px; border-radius: 50%; background: var(--ok); border: 2px solid var(--surface); }
 #room:has(.botbar) { padding-bottom: 96px; }
+#home-main:has(#home-bar) { padding-bottom: 96px; }
+body:has(#home-main:not([hidden]) #home-bar) .foot { padding-bottom: 96px; }
 body:has(#room:not([hidden]) .botbar) .toast { bottom: calc(92px + env(safe-area-inset-bottom, 0px)); }
 body:has(#room:not([hidden]) .botbar) .foot { padding-bottom: 96px; }
 #room:has(.botbar) .bottom-bar { bottom: calc(68px + env(safe-area-inset-bottom, 0px)); }
@@ -895,3 +897,14 @@ div.td-it { cursor: default; }
 .today-steps li.done b { font-weight: 500; color: var(--muted); }
 .today-steps li small { display: block; color: var(--muted); font-size: 12px; }
 .today-go { width: 100%; margin: 6px 0; }
+
+/* v1.61 the four tabs on the home page */
+.tabs.botbar .tab-n { position: absolute; top: 2px; left: 50%; margin-left: 6px; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--bad); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
+.tabs.botbar a[role="button"] { cursor: pointer; }
+.pane { margin-top: 6px; }
+.lp-list { list-style: none; margin: 0; padding: 0; }
+.lp-list li { padding: 8px 0; border-bottom: 1px solid var(--line); color: var(--muted); }
+.lp-list li small { display: block; font-size: 12px; }
+#home-main[data-pane]:not([data-pane="today"]) > #todo,
+#home-main[data-pane]:not([data-pane="today"]) > #late,
+#home-main[data-pane]:not([data-pane="today"]) > #today { display: none !important; }

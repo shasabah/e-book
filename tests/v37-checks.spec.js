@@ -27,7 +27,7 @@ const { chromium } = require('playwright');
     localStorage.setItem('ea.people.at', JSON.stringify(Date.now()));
   });
   await p.reload(); await p.fill('#key', '123456'); await p.waitForSelector('#home:not([hidden])');
-  await p.click('[data-room="field-harvest"]'); await p.waitForSelector('#fh-addjob');
+  await (async () => { await p.evaluate(() => { if (EA.homePane && JSON.parse(localStorage.getItem('ea.homePane') || '"today"') !== 'today') EA.homePane('today'); }); return p.click('[data-room="field-harvest"]'); })(); await p.waitForSelector('#fh-addjob');
   // a manuring job: the durian farm is offered, with lots A, B, C
   await p.click('#fh-addjob'); await p.waitForSelector('#jb-task');
   await p.evaluate(() => { const d = document.querySelector('#jb-more'); if (d) d.open = true; }); await p.click('.jb-quick [data-quick="MAN"]'); await p.waitForTimeout(150);

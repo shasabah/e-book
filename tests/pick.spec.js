@@ -16,7 +16,7 @@ const { chromium } = require('playwright');
       jobs: [{ key: 'j1', task: 'CPS', block: '03', lots: ['3-30'], mandor: '' }] } }));
   });
   await p.reload(); await p.fill('#key', '777777'); await p.waitForSelector('#home:not([hidden])');
-  await p.click('[data-room="field-harvest"]'); await p.waitForTimeout(400);
+  await (async () => { await p.evaluate(() => { if (EA.homePane && JSON.parse(localStorage.getItem('ea.homePane') || '"today"') !== 'today') EA.homePane('today'); }); return p.click('[data-room="field-harvest"]'); })(); await p.waitForTimeout(400);
   await p.click('[data-pick="j1"]'); await p.waitForSelector('#pp-list');
   const groups = await p.locator('#pp-list .pick-group').allTextContents();
   check('pick: maintenance gang first for a spraying job', /Rawatan/.test(groups[0] || ''), groups.join(' | '));

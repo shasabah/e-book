@@ -16,7 +16,7 @@ const fs = require('fs'); const vm = require('vm');
     localStorage.setItem('fh.collect', JSON.stringify([{ date: t, estate: 'SSGT', at: '15:00', lines: [], dispatch: { trip: 'LR-T', dn: '9001', lorry: 'SA 1', mill: 'Boustead (BOU)', bunches: '200', blocks: { '03': 200 } } }])); });
   // Clerk
   await p.reload(); await p.fill('#key', '333333'); await p.waitForSelector('#home:not([hidden])');
-  await p.click('[data-room="field-harvest"]'); await p.waitForTimeout(500);
+  await (async () => { await p.evaluate(() => { if (EA.homePane && JSON.parse(localStorage.getItem('ea.homePane') || '"today"') !== 'today') EA.homePane('today'); }); return p.click('[data-room="field-harvest"]'); })(); await p.waitForTimeout(500);
   check('clerk: the room opens on Tiket', /Tiket kilang/.test(await p.textContent('#room h1')));
   check('clerk: bar is Tiket · Operasi', (await p.$$eval('.botbar a', a => a.map(x => x.innerText.trim()).join('|'))) === 'Tiket|Operasi');
   await p.click('.botbar a[data-tab="history"]'); await p.waitForTimeout(400);
@@ -39,7 +39,7 @@ const fs = require('fs'); const vm = require('vm');
   await p.evaluate(() => { location.hash = ''; }); await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out');
   await p.fill('#key', '888888'); await p.waitForSelector('#home:not([hidden])');
   check('manager: sees the Field & Harvest tile', await p.locator('[data-room="field-harvest"]').count() === 1);
-  await p.click('[data-room="field-harvest"]'); await p.waitForTimeout(400);
+  await (async () => { await p.evaluate(() => { if (EA.homePane && JSON.parse(localStorage.getItem('ea.homePane') || '"today"') !== 'today') EA.homePane('today'); }); return p.click('[data-room="field-harvest"]'); })(); await p.waitForTimeout(400);
   check('manager: opens straight on Operasi, no bar', /Operasi/.test(await p.textContent('#room h1')) && await p.locator('.botbar').count() === 0);
   await p.evaluate(() => { location.hash = 'field-harvest/ticket'; }); await p.waitForTimeout(300);
   check('manager going to the ticket screen sees Operasi', /Operasi/.test(await p.textContent('#room h1')));

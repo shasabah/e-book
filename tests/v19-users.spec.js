@@ -54,7 +54,7 @@ const LINK = 'https://script.google.com/macros/s/TEST-LINK/exec';
   // Test Owner: first-Owner mode
   await p.fill('#key', '111111'); await p.waitForSelector('#home:not([hidden])');
   check('Owner sees the "Pengguna & PIN" tile', await p.locator('[data-room="users"]').count() === 1);
-  await p.click('[data-room="users"]'); await p.waitForSelector('#us-first');
+  await (async () => { await p.evaluate(() => EA.homePane && EA.homePane('lists')); await p.waitForTimeout(100); return p.click('[data-room="users"]'); })(); await p.waitForSelector('#us-first');
   check('test Owner sees "Langkah pertama" and no Add button', await p.locator('#us-add').count() === 0 && /Langkah pertama/.test(await p.locator('#room').innerText()));
   await p.click('#us-first'); await p.waitForSelector('#us-name');
   check('first Owner form: role Pemilik only, all 6 estates on', (await p.locator('#us-roles [data-role]').count()) === 1 && (await p.locator('#us-ests [aria-pressed="true"]').count()) === 6);
@@ -73,7 +73,7 @@ const LINK = 'https://script.google.com/macros/s/TEST-LINK/exec';
   await p.evaluate(ph => localStorage.setItem('ea.phone', JSON.stringify(ph)), phoneText);
   await p.fill('#key', pinText); await p.waitForSelector('#home:not([hidden])');
   check('log in with the new Owner PIN', /Pemilik Contoh/.test(await p.textContent('#who-name')));
-  await p.click('[data-room="users"]'); await p.waitForSelector('#us-add');
+  await (async () => { await p.evaluate(() => EA.homePane && EA.homePane('lists')); await p.waitForTimeout(100); return p.click('[data-room="users"]'); })(); await p.waitForSelector('#us-add');
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v19-list.png' });
   await p.click('#us-add'); await p.waitForSelector('#us-name');
   await p.fill('#us-name', 'Staf Contoh');

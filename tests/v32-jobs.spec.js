@@ -78,7 +78,7 @@ const { chromium } = require('playwright');
   await p.goto('http://localhost:8765/index.html');
   await p.evaluate(() => { localStorage.clear(); localStorage.setItem('ea.phone', JSON.stringify('P12')); localStorage.setItem('ea.sendLink', JSON.stringify('https://script.google.com/macros/s/X/exec')); });
   await p.reload(); await p.fill('#key', '777777'); await p.waitForSelector('#home:not([hidden])');
-  await p.click('[data-room="field-harvest"]'); await p.waitForTimeout(1500);
+  await (async () => { await p.evaluate(() => { if (EA.homePane && JSON.parse(localStorage.getItem('ea.homePane') || '"today"') !== 'today') EA.homePane('today'); }); return p.click('[data-room="field-harvest"]'); })(); await p.waitForTimeout(1500);
   await p.click('#fh-addjob'); await p.waitForSelector('#jb-quick');
   const chips = await p.$$eval('#jb-quick [data-quick]', a => a.map(x => x.dataset.quick).join(','));
   check('Tambah kerja: the usual Sugut jobs are buttons at the top', chips === 'HA,ITF,LFF,LF,CPS,MAN,DF,MDR,CA,WM', chips);   // v1.36 daily shortcuts; v1.51.1 adds CPS and MAN for the rounds season

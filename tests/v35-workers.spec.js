@@ -134,7 +134,7 @@ const { chromium } = require('playwright');
     localStorage.setItem('fh.chits2', JSON.stringify([ch(a2), ch(a1)])); }, [ago(1), ago(2)]);
   await p.reload(); await p.fill('#key', '777777'); await p.waitForSelector('#home:not([hidden])');
   check('phone: staff has no Pekerja tile', await p.locator('[data-room="workers"]').count() === 0);
-  await p.click('[data-room="field-harvest"]'); await p.waitForSelector('#fh-rows');
+  await (async () => { await p.evaluate(() => { if (EA.homePane && JSON.parse(localStorage.getItem('ea.homePane') || '"today"') !== 'today') EA.homePane('today'); }); return p.click('[data-room="field-harvest"]'); })(); await p.waitForSelector('#fh-rows');
   await p.click('#fh-rows button[data-w="W-SSGT-007"][data-k="T"]'); await p.waitForTimeout(150);
   check('phone: T today after T on the last 2 chit days shows "Mungkin lari?"', await p.locator('#fh-rows .flag-lari [data-lari="W-SSGT-007"]').count() === 1);
   await p.click('#fh-rows button[data-w="W-SSGT-008"][data-k="T"]'); await p.waitForTimeout(150);
@@ -147,7 +147,7 @@ const { chromium } = require('playwright');
   await p.evaluate(() => { location.hash = ''; }); await p.click('#logout'); await p.waitForTimeout(300); if (await p.isVisible('#lo-out')) { await p.click('#lo-out'); await p.waitForTimeout(300); }
   role = 'Clerk'; await p.fill('#key', '222222'); await p.waitForSelector('#home:not([hidden])'); await p.waitForTimeout(800);
   check('phone: the clerk has the Pekerja tile with the flag count', /1 mungkin lari|1 maybe absconded/.test(await p.innerText('[data-room="workers"]')));
-  await p.click('[data-room="workers"]'); await p.waitForSelector('.wk-three');
+  await (async () => { await p.evaluate(() => EA.homePane && EA.homePane('lists')); await p.waitForTimeout(100); return p.click('[data-room="workers"]'); })(); await p.waitForSelector('.wk-three');
   check('phone: clerk sees + BARU, BERHENTI, LARI, the flag and the change list; no approve button', await p.locator('.wk-big').count() === 3 && await p.locator('[data-flag="W-SSGT-008"]').count() === 1 && await p.locator('[data-ans]').count() === 0);
   await p.click('[data-go="new"]'); await p.waitForSelector('#wk-name');
   check('phone: new hire form has no IC, passport, bank or pay box', !/IC|pasport|passport|bank|gaji/i.test(await p.innerText('.wk .card').then(t => t.replace(/Tiada IC.*$/s, ''))));
@@ -156,7 +156,7 @@ const { chromium } = require('playwright');
   await p.evaluate(() => { location.hash = ''; }); await p.click('#logout'); await p.waitForTimeout(300); if (await p.isVisible('#lo-out')) { await p.click('#lo-out'); await p.waitForTimeout(300); }
   role = 'Manager'; await p.fill('#key', '333333'); await p.waitForSelector('#home:not([hidden])'); await p.waitForTimeout(800);
   check('phone: the Pengurus tile shows "1 perlu lulus"', /1 perlu lulus|1 to approve/.test(await p.innerText('[data-room="workers"]')));
-  await p.click('[data-room="workers"]'); await p.waitForSelector('[data-ans="1"]');
+  await (async () => { await p.evaluate(() => EA.homePane && EA.homePane('lists')); await p.waitForTimeout(100); return p.click('[data-room="workers"]'); })(); await p.waitForSelector('[data-ans="1"]');
   check('phone: the Pengurus sees LULUS / BUKAN LARI and no keying buttons', await p.locator('.wk-big').count() === 0 && await p.locator('[data-ans]').count() === 2);
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v35-approve.png' });
   check('no page errors', errs.length === 0, errs.join(' | '));

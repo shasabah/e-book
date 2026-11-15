@@ -113,7 +113,7 @@ const { chromium } = require('playwright');
   check('phone: made-up workers for Paitan (Pekerja Contoh), never real names', w.n === 20 && /Contoh/.test(w.first.name) && w.first.id === 'W-PTAN-001' && w.one && w.one.estate === 'PTAN', JSON.stringify(w.first));
   const st = await p.evaluate(() => { EA.local.set('fh.draft', { PTAN: { date: '2026-10-21', practice: 1 } }); return { mine: EA.local.get('fh.draft'), real: JSON.parse(localStorage.getItem('fh.draft')) }; });
   check('phone: practice drafts are kept apart from the real person\'s on the same phone', st.mine.PTAN && st.real.SSGT && !st.real.PTAN);
-  await p.click('[data-room="field-harvest"]'); await p.waitForTimeout(1200);
+  await (async () => { await p.evaluate(() => { if (EA.homePane && JSON.parse(localStorage.getItem('ea.homePane') || '"today"') !== 'today') EA.homePane('today'); }); return p.click('[data-room="field-harvest"]'); })(); await p.waitForTimeout(1200);
   check('phone: the band stays on inside the room', await p.isVisible('#practice-band') && !(await p.isHidden('#room')));
   await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(300);
   await p.click('#logout'); await p.waitForTimeout(400);

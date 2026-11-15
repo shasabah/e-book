@@ -104,7 +104,7 @@ const { chromium } = require('playwright');
   await p.evaluate(() => { localStorage.clear(); localStorage.setItem('ea.phone', JSON.stringify('P01')); localStorage.setItem('ea.sendLink', JSON.stringify('https://script.google.com/macros/s/TEST/exec')); });
   await p.reload(); await p.fill('#key', OWN); await p.waitForSelector('#home:not([hidden])');
   check('phone: the Owner has the Pentadbir tile', await p.locator('[data-room="admin"]').count() === 1);
-  await p.click('[data-room="admin"]'); await p.waitForSelector('.adm-card');
+  await (async () => { await p.evaluate(() => EA.homePane && EA.homePane('lists')); await p.waitForTimeout(100); return p.click('[data-room="admin"]'); })(); await p.waitForSelector('.adm-card');
   const sum = await p.locator('#room').innerText();
   check('phone: Ringkasan shows the Sugut card (chit 06:40, 2 / 3 present) and the 4-button bar', /Sugut \(SSGT\)/.test(sum) && /06:40/.test(sum) && /2 \/ 3/.test(sum) &&
     (await p.$$eval('.botbar a', a => a.map(x => x.innerText.trim()).join('|'))) === 'Ringkasan|Telefon|Masalah|Suis', sum.slice(0, 300));
@@ -131,7 +131,7 @@ const { chromium } = require('playwright');
   const tile = await p.locator('[data-room="field-harvest"]').innerText();
   check('phone (staff): Field & Harvest tile says "Digunakan · SSGT", no UJIAN', /Digunakan · SSGT/.test(tile) && !/UJIAN/.test(tile), tile);
   check('phone (staff): no Pentadbir tile', await p.locator('[data-room="admin"]').count() === 0);
-  await p.click('[data-room="field-harvest"]'); await p.waitForTimeout(400);
+  await (async () => { await p.evaluate(() => { if (EA.homePane && JSON.parse(localStorage.getItem('ea.homePane') || '"today"') !== 'today') EA.homePane('today'); }); return p.click('[data-room="field-harvest"]'); })(); await p.waitForTimeout(400);
   await p.evaluate(() => { location.hash = 'field-harvest/collect'; }); await p.waitForTimeout(400);
   check('phone (staff): no TEST badge in the live room', await p.locator('#room .test-badge').count() === 0 && await p.locator('#test-mark:visible').count() === 0, await p.evaluate(() => [...document.querySelectorAll('#room .test-badge')].map(b => b.closest('.room-top, section, div').innerText.slice(0, 80) + ' | hash ' + location.hash).join(' // ')));
   check('no page errors', errs.length === 0, errs.join(' | '));

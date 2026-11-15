@@ -84,7 +84,7 @@ const { chromium } = require('playwright');
   await p.goto('http://localhost:8765/index.html');
   await p.evaluate(() => { localStorage.clear(); localStorage.setItem('ea.phone', JSON.stringify('P01')); localStorage.setItem('ea.sendLink', JSON.stringify('https://script.google.com/macros/s/TEST/exec')); });
   await p.reload(); await p.fill('#key', OWN); await p.waitForSelector('#home:not([hidden])');
-  await p.click('[data-room="users"]'); await p.waitForSelector('#us-add');
+  await (async () => { await p.evaluate(() => EA.homePane && EA.homePane('lists')); await p.waitForTimeout(100); return p.click('[data-room="users"]'); })(); await p.waitForSelector('#us-add');
   await p.click('#us-add'); await p.waitForSelector('#us-pos');
   await p.click('[data-pos="Senior Assistant Manager"]');
   check('phone: picking Sr Assistant Manager ticks Pengurus by itself', await p.getAttribute('[data-role="Manager"]', 'aria-pressed') === 'true');

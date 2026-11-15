@@ -107,7 +107,7 @@ const { chromium } = require('playwright');
   const as2 = async r => { role = r; await p.evaluate(() => { location.hash = ''; }); if (await p.isVisible('#logout')) { await p.click('#logout'); await p.waitForTimeout(300); if (await p.isVisible('#lo-out')) { await p.click('#lo-out'); await p.waitForTimeout(300); } }
     await p.fill('#key', '222222'); await p.waitForSelector('#home:not([hidden])'); await p.waitForTimeout(600); };
   await p.reload(); await as2('Clerk');
-  await p.click('[data-room="workers"]'); await p.waitForSelector('[data-go="fix"]');
+  await (async () => { await p.evaluate(() => EA.homePane && EA.homePane('lists')); await p.waitForTimeout(100); return p.click('[data-room="workers"]'); })(); await p.waitForSelector('[data-go="fix"]');
   check('phone: the clerk sees the fix waiting for SDK, no BETUL button', /Menunggu SDK|Waiting for SDK/.test(await p.innerText('.wk')) && await p.locator('[data-fixok]').count() === 0);
   await p.click('[data-go="fix"]'); await p.waitForSelector('#wk-who');
   await p.selectOption('#wk-who', 'W-SSGT-008'); await p.waitForTimeout(150);
@@ -119,7 +119,7 @@ const { chromium } = require('playwright');
   check('phone: the fix goes with the new name, sex and reason', sent.some(x => x.action === 'workerFix' && x.worker === 'W-SSGT-008' && x.name === 'Pekerja Contoh Lapan' && x.sex === 'M' && x.note === 'Ejaan salah dalam senarai'));
   await as2('HQ');
   check('phone: SDK tile counts the fix', /1 perlu tindakan|1 to act on/.test(await p.innerText('[data-room="workers"]')));
-  await p.click('[data-room="workers"]'); await p.waitForSelector('[data-fixok]');
+  await (async () => { await p.evaluate(() => EA.homePane && EA.homePane('lists')); await p.waitForTimeout(100); return p.click('[data-room="workers"]'); })(); await p.waitForSelector('[data-fixok]');
   check('phone: SDK sees old → new name and sex', (t => /Pekerja Contoh 9/.test(t) && /Pekerja Contoh Sembilan/.test(t) && /→/.test(t))(await p.innerText('.wk')));
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v41-sdk.png' });
   await p.click('[data-fixok]'); await p.waitForTimeout(400);

@@ -17,7 +17,7 @@ const out = process.argv[2] || require('os').tmpdir();
         { id: 'W-3', worker_id: 'W-SSGT-003', task_code: 'HA', block: '02', lot: '2-5', bunches: '400' }], jobs: [] } }]));
   });
   const t = s => (s || '').replace(/\s+/g, ' ').trim();
-  const login = async (key) => { await p.reload(); await p.fill('#key', key); await p.waitForSelector('#home:not([hidden])'); await p.click('[data-room="field-harvest"]'); await p.waitForTimeout(300); };
+  const login = async (key) => { await p.reload(); await p.fill('#key', key); await p.waitForSelector('#home:not([hidden])'); await (async () => { await p.evaluate(() => { if (EA.homePane && JSON.parse(localStorage.getItem('ea.homePane') || '"today"') !== 'today') EA.homePane('today'); }); return p.click('[data-room="field-harvest"]'); })(); await p.waitForTimeout(300); };
   const logout = async () => { await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(300); await p.click('#logout'); if (await p.isVisible('#lo-out')) await p.click('#lo-out'); };
   const rowsNow = async () => (await p.locator('#cl-rows .lot-row').evaluateAll(a => a.map(x => {
     const g = s => x.querySelector(s); const nums = x.querySelectorAll('.en b');

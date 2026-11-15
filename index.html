@@ -98,9 +98,9 @@
     <div id="todo" hidden></div>
     <div id="late" hidden></div>
     <div id="today" hidden></div>
-    <div id="layout" class="layout">
+    <div id="layout" class="layout" data-pane="today">
       <section aria-labelledby="rooms-h">
-        <h2 class="sec-h" id="rooms-h"><span class="inline"><span class="bm">Bilik</span> · <span class="en">Rooms</span></span></h2>
+        <h2 class="sec-h" id="rooms-h"><span class="inline"><span class="bm">Buka</span> · <span class="en">Open</span></span></h2>
         <div id="tiles" class="tiles"></div>
       </section>
       <aside id="plan" class="plan" hidden aria-labelledby="plan-h">
@@ -108,6 +108,18 @@
         <ol id="plan-list"></ol>
       </aside>
     </div>
+    <!-- v1.61 the new layout (Brief_Susun_Atur): four tabs at the bottom of the home page -->
+    <section id="pane-rekod" class="pane" data-pane="rekod" hidden></section>
+    <section id="pane-laporan" class="pane" data-pane="laporan" hidden></section>
+    <section id="pane-lists" class="pane" data-pane="lists" hidden>
+      <h2 class="sec-h"><span class="inline"><span class="bm">Senarai</span> · <span class="en">Lists</span></span></h2>
+      <div id="tiles-lists" class="tiles"></div>
+      <div class="tiles" id="tiles-phone">
+        <button class="tile live" type="button" data-open-setup><span class="mark" aria-hidden="true">P</span><span class="name"><span class="bm">Tetapan telefon</span><span class="en">Phone setup</span></span><span class="when"><span class="bm">Kod telefon, bahasa</span><span class="en">Phone code, language</span></span></button>
+        <button class="tile live" type="button" data-share-app><span class="mark" aria-hidden="true">QR</span><span class="name"><span class="bm">Kongsi app</span><span class="en">Share the app</span></span><span class="when"><span class="bm">Alamat app, QR</span><span class="en">App address, QR</span></span></button>
+      </div>
+    </section>
+    <nav class="tabs botbar" id="home-bar" aria-label="Hari ini, Rekod, Laporan, Senarai"></nav>
   </main>
 
   <main id="room" class="main wrap room" hidden></main>

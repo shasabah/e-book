@@ -19,7 +19,7 @@ const { chromium } = require('playwright');
       jobs: [{ key: 'j1', task: 'CPS', block: '03', lots: ['3-30', '3-31'], mandor: '' }, { key: 'j2', task: 'HA', block: '02', lots: [], mandor: '' }] } }));
   });
   await p.reload(); await p.fill('#key', '777777'); await p.waitForSelector('#home:not([hidden])');
-  await p.click('[data-room="field-harvest"]'); await p.waitForTimeout(400);
+  await (async () => { await p.evaluate(() => { if (EA.homePane && JSON.parse(localStorage.getItem('ea.homePane') || '"today"') !== 'today') EA.homePane('today'); }); return p.click('[data-room="field-harvest"]'); })(); await p.waitForTimeout(400);
   const jobs = t(await p.textContent('#fh-jobs'));
   check('chit: CPS target 3 × 2.5 = 7.5 Ha shown against 2.57 Ha planned, below target', /7\.5 Ha.*2\.57 Ha.*KURANG 4\.93/.test(jobs), jobs.slice(0, 260));
   check('chit: below-target job is highlighted', (await p.locator('#fh-jobs .flag-line').count()) === 1);

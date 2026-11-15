@@ -77,7 +77,7 @@ const { chromium } = require('playwright');
   await p.goto('http://localhost:8765/index.html');
   await p.evaluate(() => { localStorage.clear(); localStorage.setItem('ea.phone', JSON.stringify('P10')); localStorage.setItem('ea.sendLink', JSON.stringify('https://script.google.com/macros/s/X/exec')); });
   await p.reload(); await p.fill('#key', '222222'); await p.waitForSelector('#home:not([hidden])');
-  await p.click('[data-room="field-harvest"]'); await p.waitForSelector('#tk-w1');
+  await (async () => { await p.evaluate(() => { if (EA.homePane && JSON.parse(localStorage.getItem('ea.homePane') || '"today"') !== 'today') EA.homePane('today'); }); return p.click('[data-room="field-harvest"]'); })(); await p.waitForSelector('#tk-w1');
   check('weight boxes give a keypad with a dot (decimal)', await p.getAttribute('#tk-w1', 'inputmode') === 'decimal');
   await p.fill('#tk-w1', '32.30'); await p.fill('#tk-w2', '16.22'); await p.click('#tk-no'); await p.waitForTimeout(200);
   check('MT with a dot: 32.30 − 16.22 = 16.08 MT net', (await p.inputValue('#tk-w1')) === '32.30' && (await p.inputValue('#tk-nett')) === '16.08', await p.inputValue('#tk-nett'));

@@ -75,7 +75,7 @@ const { chromium } = require('playwright');
   await p.goto('http://localhost:8765/index.html');
   await p.evaluate(() => { localStorage.clear(); localStorage.setItem('ea.phone', JSON.stringify('P01')); localStorage.setItem('ea.sendLink', JSON.stringify('https://script.google.com/macros/s/TEST/exec')); });
   await p.reload(); await p.fill('#key', OWN); await p.waitForSelector('#home:not([hidden])');
-  await p.click('[data-room="users"]'); await p.waitForSelector('#us-add');
+  await (async () => { await p.evaluate(() => EA.homePane && EA.homePane('lists')); await p.waitForTimeout(100); return p.click('[data-room="users"]'); })(); await p.waitForSelector('#us-add');
   const row = await p.locator('[data-user="OWN-ALL-01"]').innerText();
   check('phone: the list shows the Owner\'s devices P01 P12', /Peranti:[\s\S]*P01[\s\S]*P12/.test(row), row.replace(/\n/g, ' '));
   await p.click('#us-add'); await p.fill('#us-name', 'Samsir Contoh'); await p.click('[data-role="Manager"]'); await p.click('#us-go'); await p.waitForSelector('#us-phone');

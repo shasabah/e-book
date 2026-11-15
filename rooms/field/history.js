@@ -633,4 +633,5 @@
   // Leaving Rekod closes the day or page that was open, so the tab always opens on the list.
   window.addEventListener('hashchange', function () { if (location.hash.indexOf('history') < 0) { openDay = ''; detail = ''; } });
   EA.fh.history = { render: render, reset: function () { openDay = ''; detail = ''; } };
+  EA.fh.recView = function (v) { view = v || ''; };   // v1.61: the Rekod tiles on the home page pick HARIAN, PROGRAM or ORANG
 })();

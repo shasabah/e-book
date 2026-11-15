@@ -198,13 +198,19 @@
     return !!(EA.roomViews && EA.roomViews[r.id]) && (EA.roomLive(r, estate) || EA.testMode() || !!(EA.practice && EA.practice()));
   }
 
+  // v1.61 the new layout: work rooms open from Hari ini, the lists (workers, mills, users, admin) live under Senarai,
+  // and rooms not open yet show nowhere (they appear when they open).
+  var LIST_ROOMS = ['workers', 'mills', 'users', 'admin'];
   function renderTiles(u, estate) {
-    var rooms = EA.roomsFor(u, estate);
-    if (!rooms.length) {
-      $('tiles').innerHTML = '<div class="empty"><span class="bm">Tiada bilik untuk ' + esc(estate) + ' lagi.</span><span class="en">No rooms for ' + esc(estate) + ' yet.</span></div>';
-      return;
-    }
-    $('tiles').innerHTML = rooms.map(function (r) {
+    var all = EA.roomsFor(u, estate).filter(function (r) { return EA.roomLive(r, estate) || enterable(r, estate); });
+    var work = all.filter(function (r) { return LIST_ROOMS.indexOf(r.id) < 0 && r.id !== 'durian'; }), lists = all.filter(function (r) { return LIST_ROOMS.indexOf(r.id) >= 0; });
+    $('rooms-h').hidden = !work.length;
+    $('tiles').innerHTML = tilesHtml(work, u, estate);
+    $('tiles-lists').innerHTML = tilesHtml(lists, u, estate);
+    [$('tiles'), $('tiles-lists')].forEach(function (box) { wireTiles(box, estate); });
+  }
+  function tilesHtml(rooms, u, estate) {
+    return rooms.map(function (r) {
       var live = EA.roomLive(r, estate);
       return '<button class="tile ' + (live ? 'live' : r.state) + '" type="button" data-room="' + r.id + '">' +
         '<span class="mark" aria-hidden="true">' + r.mark + '</span>' +
@@ -213,7 +219,9 @@
         (r.id === 'mills' && EA.millsWaiting && EA.millsWaiting(u, estate) ? '<span class="tile-badge">' + EA.millsWaiting(u, estate) + EA.t(' perlu tindakan', ' to act on') + '</span>' : '') +
         (r.id === 'workers' && EA.workersWaiting && EA.workersWaiting(u, estate) ? '<span class="tile-badge">' + EA.workersWaiting(u, estate) + (u.role === 'Manager' ? EA.t(' perlu lulus', ' to approve') : u.role === 'Clerk' ? EA.t(' mungkin lari', ' maybe absconded') : EA.t(' perlu tindakan', ' to act on')) + '</span>' : '') + '</button>';
     }).join('');
-    $('tiles').querySelectorAll('.tile').forEach(function (t) {
+  }
+  function wireTiles(box, estate) {
+    box.querySelectorAll('.tile[data-room]').forEach(function (t) {
       t.onclick = function () {
         var r = EA.rooms.find(function (x) { return x.id === t.dataset.room; });
         if (enterable(r, estate)) { location.hash = r.id; return; }
@@ -223,6 +231,76 @@
           function (s) { s.querySelector('#sheet-ok').onclick = closeSheet; });
       };
     });
+  }
+
+
+  // ---------- v1.61 the new layout: four tabs at the bottom of the home page (Brief_Susun_Atur, signed 15 Nov 2026) ----------
+  // Hari ini (the day's work and what is late), Rekod (records as tiles), Laporan (the company's papers), Senarai
+  // (lists that seldom change). The room screens themselves are unchanged; the tabs are a new way in.
+  var PANE_KEY = 'ea.homePane';
+  var BAR_ICON = {
+    today: '<path d="M4 5h16v15H4z"/><path d="M4 10h16M9 3v4M15 3v4"/><path d="m8.5 15 2 2 4-4"/>',
+    rekod: '<path d="M5 4h11l3 3v13H5z"/><path d="M9 11h6M9 15h6M9 7h3"/>',
+    laporan: '<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 17v-3M12 17v-6M15 17v-4"/>',
+    lists: '<path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>'
+  };
+  function pane() { var p = EA.local.get(PANE_KEY, 'today'); return /^(today|rekod|laporan|lists)$/.test(p) ? p : 'today'; }
+  EA.homePane = function (p) { EA.local.set(PANE_KEY, p || 'today'); render(); window.scrollTo(0, 0); };
+  function recTile(v, bm, en, sbm, sen) {
+    return '<button class="tile live" type="button" data-rec="' + v + '"><span class="mark" aria-hidden="true">' + esc(bm.slice(0, 2).toUpperCase()) + '</span>' +
+      '<span class="name"><span class="bm">' + esc(bm) + '</span><span class="en">' + esc(en) + '</span></span><span class="when"><span class="bm">' + esc(sbm) + '</span><span class="en">' + esc(sen) + '</span></span></button>';
+  }
+  function renderPanes(u, estate) {
+    var p = pane();
+    var fhR = EA.rooms.find(function (r) { return r.id === 'field-harvest'; });
+    var fh = !!fhR && EA.roomsFor(u, estate).some(function (r) { return r.id === 'field-harvest'; }) && enterable(fhR, estate) && u.role !== 'Worker';
+    var dur = EA.roomsFor(u, estate).find(function (r) { return r.id === 'durian'; });
+    // Hari ini: greeting, what is late, the day's steps, the work rooms
+    $('home-main').setAttribute('data-pane', p);   // CSS hides Hari ini's cards on the other tabs (they may redraw later, from the office)
+    document.querySelector('#home-main .greet').hidden = p !== 'today';
+    $('layout').hidden = p !== 'today';
+    // Rekod: one tile per record (the screens inside are today's)
+    $('pane-rekod').hidden = p !== 'rekod';
+    if (p === 'rekod') {
+      $('pane-rekod').innerHTML = '<h2 class="sec-h"><span class="inline"><span class="bm">Rekod</span> · <span class="en">Records</span></span></h2>' +
+        (fh ? '<div class="tiles" id="rec-tiles">' + recTile('', 'Harian', 'Daily', 'Hari demi hari: chit, kerja, lori, tiket', 'Day by day: chit, work, lorries, tickets') +
+          recTile('prog', 'Program', 'Plan vs actual', 'Rancangan vs sebenar, ikut blok dan petak', 'Plan against actual, by block and lot') +
+          recTile('org', 'Orang', 'People', 'Kehadiran bulan ini, ikut orang', 'This month\'s attendance, by person') +
+          (dur ? '<button class="tile live" type="button" data-room="durian"><span class="mark" aria-hidden="true">DR</span><span class="name"><span class="bm">Durian</span><span class="en">Durian farm</span></span><span class="when"><span class="bm">Buka DMS</span><span class="en">Opens the DMS</span></span></button>' : '') + '</div>' :
+          '<p class="hint">' + EA.t('Tiada rekod untuk ' + esc(estate) + ' lagi.', 'No records for ' + esc(estate) + ' yet.') + '</p>');
+      $('pane-rekod').querySelectorAll('[data-rec]').forEach(function (b) {
+        b.onclick = function () { if (EA.fh && EA.fh.recView) EA.fh.recView(b.dataset.rec); if (EA.fh && EA.fh.history && EA.fh.history.reset) EA.fh.history.reset(); location.hash = 'field-harvest/history'; };
+      });
+      wireTiles($('pane-rekod'), estate);
+    }
+    // Laporan: the company's own papers, in their three tiers (Kajian_Laporan_dan_Rekod)
+    $('pane-laporan').hidden = p !== 'laporan';
+    if (p === 'laporan') {
+      var soon = function (bm, en, sbm, sen) { return '<li class="lp-soon"><b><span class="bm">' + bm + '</span><span class="en">' + en + '</span></b><small><span class="bm">' + sbm + '</span><span class="en">' + sen + '</span></small></li>'; };
+      $('pane-laporan').innerHTML = '<h2 class="sec-h"><span class="inline"><span class="bm">Laporan</span> · <span class="en">Reports</span></span></h2>' +
+        (fh ? '<div class="card"><h2><span class="bm">Harian</span><span class="en">Daily</span></h2><p class="hint">' + EA.t('Chit pagi dan tutup hari setiap hari, dengan teks WhatsApp.', 'Each day\'s morning chit and day close, with the WhatsApp text.') + '</p>' +
+          '<button type="button" class="btn" data-rec="">OPEN DAY BY DAY<small>BUKA HARI DEMI HARI</small></button></div>' +
+          '<div class="card"><h2><span class="bm">Bulanan</span><span class="en">Monthly</span></h2><p class="hint">' + EA.t('Laporan bulan (2 muka A4, ditandatangani Kerani, Staf, Pengurus). Cetak di komputer pejabat.', 'The month report (2 A4 pages, signed by Clerk, Staff, Manager). Print on the office computer.') + '</p>' +
+          '<button type="button" class="btn" data-rec="">MONTH REPORT<small>LAPORAN BULAN</small></button></div>' : '') +
+        '<div class="card"><h2><span class="bm">Akan datang</span><span class="en">Coming</span></h2><ul class="lp-list">' +
+          soon('Minit mesyuarat mingguan', 'Weekly meeting minutes', 'Mesyuarat Jumaat · minit sebelum Sabtu 11 pagi', 'Meeting Friday · minutes before Saturday 11 am') +
+          soon('Laporan Kemajuan Bulanan', 'Monthly Progress Report', '19 muka, diisi dari rekod', '19 pages, filled from the records') +
+          soon('Pek gaji', 'Pay pack', 'Bila bilik Gaji dibuka', 'When the Pay room opens') + '</ul></div>';
+      $('pane-laporan').querySelectorAll('[data-rec]').forEach(function (b) {
+        b.onclick = function () { if (EA.fh && EA.fh.recView) EA.fh.recView(''); if (EA.fh && EA.fh.history && EA.fh.history.reset) EA.fh.history.reset(); location.hash = 'field-harvest/history'; };
+      });
+    }
+    $('pane-lists').hidden = p !== 'lists';
+    // the bar
+    var items = [['today', 'Hari ini', 'Today'], ['rekod', 'Rekod', 'Records'], ['laporan', 'Laporan', 'Reports'], ['lists', 'Senarai', 'Lists']];
+    var late = (document.querySelectorAll('#todo .td-it').length || 0);
+    $('home-bar').className = 'tabs botbar';
+    $('home-bar').innerHTML = items.map(function (it) {
+      return '<a role="button" tabindex="0" data-pane="' + it[0] + '"' + (p === it[0] ? ' aria-current="page"' : '') + '>' +
+        (it[0] === 'today' && late ? '<span class="tab-n">' + late + '</span>' : '') +
+        '<svg viewBox="0 0 24 24" aria-hidden="true">' + BAR_ICON[it[0]] + '</svg><span class="bm">' + it[1] + '</span><span class="en">' + it[2] + '</span></a>';
+    }).join('');
+    $('home-bar').querySelectorAll('[data-pane]').forEach(function (a) { a.onclick = function () { EA.homePane(a.dataset.pane); }; });
   }
 
   function renderPlan(u) {
@@ -285,6 +363,7 @@
     if (EA.askLateAuto) EA.askLateAuto(u, estate);                                        // v1.57: the app asks first, once a day
     if (EA.renderLate) { EA.renderLate($('late'), u); EA.latePeek(u); }                   // v1.56: Susulan harian (HQ and the Owner)
     if (EA.renderToday) EA.renderToday($('today'), u, estate);                            // v1.61: Hari ini, the day's steps (staff in charge)
+    renderPanes(u, estate);                                                                // v1.61: the four tabs
     // v1.16: fetch the trial switches from the office now and then (a phone may stay logged in for weeks).
     var sw = EA.switches();
     if (EA.sendLink() && navigator.onLine && !switchAsk && (!sw.at || Date.now() - sw.at > 30 * 60000)) {
@@ -297,6 +376,7 @@
     var rid = parts[0], screen = parts[1] || '';
     var room = rid && EA.roomsFor(u, estate).find(function (r) { return r.id === rid && enterable(r, estate); });
     $('home-main').hidden = !!room;
+    if (room) { $('home-bar').innerHTML = ''; $('home-bar').className = ''; }   // v1.61: inside a room only the room's own bar exists
     $('room').hidden = !room;
     if (room) {
       try { EA.roomViews[room.id].render($('room'), { user: u, estate: estate, room: room, screen: screen }); }

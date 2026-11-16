@@ -3590,7 +3590,11 @@ function dropTkrsEstate16Nov() {
     rows.forEach(function (r, i) {
       var list = String(r[iEst] || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
       if (list.indexOf('TKRS') < 0) return;
-      var kept = list.filter(function (x) { return x !== 'TKRS'; }).join(',');
+      var keptL = list.filter(function (x) { return x !== 'TKRS'; });
+      // A login with no estate at all cannot open anything, so one is never stripped bare: it is reported
+      // instead and left for Yu Chen to give the right estate. No login is TKRS-only today; this is a guard.
+      if (!keptL.length) { out.users.push(r[iCode] + ': TIDAK DIUBAH — TKRS sahaja, beri ladang dahulu'); return; }
+      var kept = keptL.join(',');
       sh.getRange(i + 2, iEst + 1).setValue(kept);
       try { CacheService.getScriptCache().remove('u:' + r[iHash]); } catch (e) {}
       if (log) log.appendRow([now, 'OWN-ALL-01', 'Yu Chen Lee', 'estates', r[iCode], r[iName],

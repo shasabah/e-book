@@ -57,7 +57,11 @@ const LINK = 'https://script.google.com/macros/s/TEST-LINK/exec';
   await (async () => { await p.evaluate(() => EA.homePane && EA.homePane('lists')); await p.waitForTimeout(100); return p.click('[data-room="users"]'); })(); await p.waitForSelector('#us-first');
   check('test Owner sees "Langkah pertama" and no Add button', await p.locator('#us-add').count() === 0 && /Langkah pertama/.test(await p.locator('#room').innerText()));
   await p.click('#us-first'); await p.waitForSelector('#us-name');
-  check('first Owner form: role Pemilik only, all 6 estates on', (await p.locator('#us-roles [data-role]').count()) === 1 && (await p.locator('#us-ests [aria-pressed="true"]').count()) === 6);
+  // v1.68: five estates, not six — Tekara is a piece of the Paitan group now, so it is never offered. The count
+  // comes from the shared list, so this check follows the list instead of a number written out by hand.
+  const liveEsts = await p.evaluate(() => EA.lists.estatesLive().length);
+  check('first Owner form: role Pemilik only, every estate on', (await p.locator('#us-roles [data-role]').count()) === 1 && (await p.locator('#us-ests [aria-pressed="true"]').count()) === liveEsts && liveEsts === 5, 'estates on: ' + liveEsts);
+  check('Tekara is not offered when making a login', (await p.locator('#us-ests [data-est="TKRS"]').count()) === 0);
   await p.fill('#us-name', 'Pemilik Contoh'); await p.click('#us-go'); await p.waitForSelector('#us-pin');
   const pinText = (await p.textContent('#us-pin')).replace(/\s/g, '');
   const phoneText = (await p.textContent('#us-phone')).trim();

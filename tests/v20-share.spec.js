@@ -25,7 +25,9 @@ const { chromium } = require('playwright');
   await p.evaluate(() => EA.homePane('lists')); await p.waitForTimeout(200);
   await p.evaluate(() => { window.__opened = []; window.open = u => { window.__opened.push(u); return null; }; });
   await p.click('#pane-lists [data-share-app]'); await p.waitForSelector('.share-qr img');
-  const ok = await p.evaluate(() => { const i = document.querySelector('.share-qr img'); return i.complete && i.naturalWidth > 0; });
+  // The picture file still has to load. Waiting only for the tag made this check fail now and then on a
+  // busy machine, which is the test being too quick, not the app being wrong.
+  const ok = await p.waitForFunction(() => { const i = document.querySelector('.share-qr img'); return !!i && i.complete && i.naturalWidth > 0; }, null, { timeout: 5000 }).then(() => true).catch(() => false);
   check('login page: Kongsi app opens the QR picture', ok);
   check('the address shown is the app address', /shasabah\.github\.io\/e-book/.test(await p.textContent('.share-url')));
   await p.context().grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => {});

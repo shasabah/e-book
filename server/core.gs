@@ -3675,3 +3675,77 @@ function fixPaitanJobs16Nov() {
   Logger.log('fixPaitanJobs16Nov: ' + JSON.stringify(out));
   return out;
 }
+
+// ---------------- v1.68 one-off: Sugut 6 and 11 Nov (Yu Chen, 16 Nov 2026) ----------------
+// Two corrections confirmed by Yu Chen after Samsir's answers.
+//   11/11 · Ake B. Kuneng, lot 4-14: 143 tandan is wrong, it is 273. The day's harvest line follows:
+//     505 → 635 tandan. About 130 tandan, 2.5 tonnes, of the month's missing crop.
+//   6/11 · Bakar Bin Contoh (2-19) and Chandra Bin Contoh (2-21) were NOT at work: no bunches, tidak hadir.
+//     Both were keyed as 1 tandan, which is what the phone forces when a harvester has none — it refuses a
+//     zero. Their work lines are removed, their muster mark goes from Hadir to Tak hadir, and the day's
+//     harvest line drops to the two lots that were really harvested: 2-20 and 2-22, 2 men, 237 tandan.
+// Nothing is deleted (Rule 4): a removal is a new line with status "removed", a change is a new line that
+// replaces the old one. The loading and transport lines are left alone — those men did work that day.
+// Run once. Running it again changes nothing.
+function fixSugut6and11Nov() {
+  var was = PRACTICE_, out = { book: '', did: [], same: [] };
+  try {
+    PRACTICE_ = false; BOOK_ = null; ROWS_MEMO_ = null;
+    var ss = book_(), now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
+    try { out.book = ss.getName(); } catch (e) { out.book = '?'; }
+    function replaceWith_(tab, r, fields, why) {
+      var sh = roomTab_(ss, tab), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+      var row = {}; head.forEach(function (c) { row[c] = r[c] === undefined ? '' : r[c]; });
+      Object.keys(fields).forEach(function (k) { row[k] = fields[k]; });
+      row.id = String(r.id) + '-F'; row.replaces = r.id; row.status = 'active';
+      row.keyed_by = 'OWNER-FIX'; row.keyed_at = now; row.received_at = now;
+      if (head.indexOf('note') >= 0) row.note = why;
+      sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); }));
+    }
+    function one_(tab, est, test) { return standingRows_(tab, est).filter(test)[0] || null; }
+    var WHY11 = 'Betulkan 11/11: Ake menuai 273 tandan, bukan 143 (jawapan Samsir, sah Yu Chen 16/11).';
+    var WHY6 = 'Betulkan 6/11: Bakar dan Chandra tidak hadir, tiada tandan. "1 tandan" hanya kerana telefon tidak terima kosong (jawapan Samsir, sah Yu Chen 16/11).';
+
+    // 1 · 11/11 Ake, lot 4-14
+    var ake = one_('FH_WORK', 'SSGT', function (r) {
+      return String(r.date).slice(0, 10) === '2026-11-11' && r.task_code === 'HA' && String(r.lot) === '4-14'; });
+    if (!ake) out.same.push('11/11 Ake: tiada baris');
+    else if (Number(ake.bunches) === 273) out.same.push('11/11 Ake: sudah 273');
+    else { replaceWith_('FH_WORK', ake, { bunches: 273 }, WHY11); out.did.push('11/11 Ake ' + ake.bunches + ' → 273'); }
+
+    // 2 · 11/11 the day's harvest line
+    var jd11 = one_('FH_JOBDAY', 'SSGT', function (r) {
+      return String(r.date).slice(0, 10) === '2026-11-11' && r.task_code === 'HA'; });
+    if (jd11 && Number(jd11.bunches) !== 635) { replaceWith_('FH_JOBDAY', jd11, { bunches: 635 }, WHY11); out.did.push('11/11 hari: tandan ' + jd11.bunches + ' → 635'); }
+    else out.same.push('11/11 hari: sudah betul');
+
+    // 3 · 6/11 the two men who were not there
+    // The worker code is written out, not read off the work line: the muster still has to be put right even
+    // if the work line is already gone, and every muster line of that day carries the whole lot list, so the
+    // lot cannot tell the two men apart.
+    [{ lot: '2-19', name: 'Bakar', id: 'SSGTSC260701' }, { lot: '2-21', name: 'Chandra', id: 'SSGTSC261002' }].forEach(function (p) {
+      var w = one_('FH_WORK', 'SSGT', function (r) {
+        return String(r.date).slice(0, 10) === '2026-11-06' && r.task_code === 'HA' && String(r.lot) === p.lot; });
+      if (!w) out.same.push('6/11 ' + p.name + ': baris kerja sudah tiada');
+      else { removeLine_('FH_WORK', w, WHY6); out.did.push('6/11 ' + p.name + ' ' + p.lot + ': baris kerja dibuang'); }
+      // The muster is checked on its own, not only when the work line was there: if a run ever stops between
+      // the two, the next run still finishes the job.
+      var m = one_('FH_MUSTER', 'SSGT', function (r) {
+        return String(r.date).slice(0, 10) === '2026-11-06' && String(r.worker_id) === p.id; });
+      if (!m) { out.same.push('6/11 ' + p.name + ': tiada baris muster'); return; }
+      if (String(m.muster) === 'T') { out.same.push('6/11 ' + p.name + ': muster sudah T'); return; }
+      replaceWith_('FH_MUSTER', m, { muster: 'T' }, WHY6);
+      out.did.push('6/11 ' + p.name + ': muster ' + m.muster + ' → T (tak hadir)');
+    });
+
+    // 4 · 6/11 the day's harvest line: only 2-20 and 2-22 were harvested
+    var jd6 = one_('FH_JOBDAY', 'SSGT', function (r) {
+      return String(r.date).slice(0, 10) === '2026-11-06' && r.task_code === 'HA'; });
+    if (jd6 && Number(jd6.bunches) !== 237) {
+      replaceWith_('FH_JOBDAY', jd6, { bunches: 237, workers: 2, lots: '2-20 2-22' }, WHY6);
+      out.did.push('6/11 hari: tandan ' + jd6.bunches + ' → 237, 4 orang → 2, petak 2-20 2-22');
+    } else out.same.push('6/11 hari: sudah betul');
+  } finally { PRACTICE_ = was; BOOK_ = null; ROWS_MEMO_ = null; newGen_(); }
+  Logger.log('fixSugut6and11Nov: ' + JSON.stringify(out));
+  return out;
+}

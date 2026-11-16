@@ -3614,3 +3614,57 @@ function dropTkrsEstate16Nov() {
   Logger.log('dropTkrsEstate16Nov: ' + JSON.stringify(out));
   return out;
 }
+
+// ---------------- v1.68 one-off: Paitan's real jobs and gangs (Ria's answers, 16 Nov 2026) ----------------
+// Ria answered Yu Chen's five questions of 30 Oct. Two things only the office can change: the job name and
+// the gang. The phone can fix a name or a sex, never these, so they are keyed here.
+//   Afran B. Ahmad is the loader. The chit finds a loader by his GANG, so his gang must read "Muat",
+//     otherwise the loader box does not offer him (muster.js: /Muat|Load/).
+//   "Driver HTC" is not a job: Irwan drives the mini excavator on roads, Randy the JCB backhoe, loading at
+//     the ramp and roads. Nuralim drives the farm tractor, field and ramp.
+//   Six people had no gang at all, so they fell into "Lain-lain" on the chit. Each now sits in his own gang.
+// Nothing is deleted (Rule 4): each change is a new LIST_PEOPLE line that replaces the old one, with the
+// same worker code, name, sex and mandor mark, plus one WORKER_LOG line saying what changed and why.
+// Run once. Running it again changes nothing.
+var PTAN_JOBS_16NOV = [
+  { id: 'PTANSC260901', job: 'Loader',                gang: 'Muat · Loading',    why: 'Loader Paitan (jawapan Ria 16/11). Traktor tidak boleh angkut buah tanpa loader.' },
+  { id: 'KWNNP171201', job: 'Mini Excavator Driver',  gang: 'Pemandu · Driver',  why: 'Driver Mini Hitachi Kubota UH50, buat jalan (jawapan Ria 16/11). "Driver HTC" bukan kod kerja.' },
+  { id: 'PTANSC240704', job: 'Backhoe Driver (JCB)',  gang: 'Pemandu · Driver',  why: 'Driver JCB/Backhoe: muat buah di ramp dan buat jalan (jawapan Ria 16/11).' },
+  { id: 'PTANSC260103', job: 'Farm Tractor Driver',   gang: 'Pemandu · Driver',  why: 'Driver traktor ladang, ladang dan ramp (jawapan Ria 16/11).' },
+  { id: 'PTANSC260205', job: 'Lorry Driver',          gang: 'Pemandu · Driver',  why: 'Tiada gang: dimasukkan ke gang pemandu (16/11).' },
+  { id: 'PTANSC251108', job: 'Mandore',               gang: 'Mandor',            why: 'Mandore: pantau pekerja di ladang (jawapan Ria 16/11).' },
+  { id: 'KWNNP171202', job: 'Creche Ayah',            gang: 'Am · General',      why: 'Tiada gang: dimasukkan ke gang am (16/11).' }
+];
+function fixPaitanJobs16Nov() {
+  var was = PRACTICE_, out = { changed: [], same: [], missing: [] };
+  try {
+    PRACTICE_ = false; BOOK_ = null; ROWS_MEMO_ = null;
+    var ss = book_(), now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), today = todayKL_();
+    var ps = roomTab_(ss, 'LIST_PEOPLE'), ph = ps.getRange(1, 1, 1, ps.getLastColumn()).getValues()[0];
+    var ws = roomTab_(ss, 'WORKER_LOG'), wh = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0];
+    var byId = {};
+    standingRows_('LIST_PEOPLE', 'PTAN').forEach(function (r) { byId[String(r.worker_id)] = r; });
+    PTAN_JOBS_16NOV.forEach(function (f) {
+      var old = byId[f.id];
+      if (!old) { out.missing.push(f.id); return; }
+      if (String(old.job) === f.job && String(old.gang) === f.gang) { out.same.push(f.id); return; }
+      var row = {};
+      ph.forEach(function (c) { row[c] = old[c] === undefined ? '' : old[c]; });
+      row.id = 'WK-PTAN-' + now.replace(/\D/g, '') + '-' + f.id.slice(-4);
+      row.job = f.job; row.gang = f.gang; row.replaces = old.id; row.status = 'active'; row.date = today;
+      row.keyed_by = 'OWN-ALL-01'; row.keyed_at = now; row.phone = 'OFFICE'; row.received_at = now;
+      ps.appendRow(ph.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); }));
+      var lg = {};
+      wh.forEach(function (c) { lg[c] = ''; });
+      lg.id = 'WL-PTAN-' + now.replace(/\D/g, '') + '-' + f.id.slice(-4);
+      lg.date = today; lg.company = 'SPLT'; lg.estate = 'PTAN'; lg.keyed_by = 'OWN-ALL-01'; lg.keyed_at = now;
+      lg.phone = 'OFFICE'; lg.status = 'active'; lg.replaces = ''; lg.received_at = now;
+      lg.worker_id = f.id; lg.name = String(old.name); lg.kind = 'job'; lg.day = today;
+      lg.note = f.why + ' Kerja: ' + (old.job || '(kosong)') + ' → ' + f.job + '. Gang: ' + (old.gang || '(kosong)') + ' → ' + f.gang + '.';
+      ws.appendRow(wh.map(function (c) { return plain(lg[c] === undefined ? '' : lg[c]); }));
+      out.changed.push(f.id + ': ' + (old.gang || '(kosong)') + ' → ' + f.gang);
+    });
+  } finally { PRACTICE_ = was; BOOK_ = null; ROWS_MEMO_ = null; newGen_(); }
+  Logger.log('fixPaitanJobs16Nov: ' + JSON.stringify(out));
+  return out;
+}

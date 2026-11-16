@@ -629,7 +629,7 @@ div.td-it { cursor: default; }
 .lt-es small { flex-basis: 100%; color: var(--muted, #888); font-size: .78rem; }
 .lt-bd { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .lt-bx { font-size: .72rem; font-weight: 700; border-radius: 999px; padding: 2px 8px; background: #e8f4ec; color: #2e7d4f; white-space: nowrap; }
-.lt-bx.no { background: #fbe3e1; color: #b3261e; } .lt-bx.wait, .lt-bx.rest { background: #eee; color: #666; }
+.lt-bx.no { background: #fbe3e1; color: #b3261e; } .lt-bx.wait, .lt-bx.rest, .lt-bx.none { background: #eee; color: #666; }
 .lt-card { border: 1px solid var(--line, #ddd); border-radius: 12px; padding: 10px 12px; margin: 10px 0; }
 .lt-card h3 { margin: 0 0 6px; font-size: 1rem; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
 .lt-it { border-top: 1px solid var(--line, #eee); padding: 7px 0; font-size: .9rem; }

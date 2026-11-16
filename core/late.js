@@ -15,7 +15,9 @@ window.EA = window.EA || {};
   function estName(code) { var e = (EA.lists.estates || []).filter(function (x) { return x.code === code; })[0]; return e ? e.name : code; }
   function dayLbl(iso) { var d = new Date(iso + 'T00:00:00'); return EA.ui.dayBm[d.getDay()].slice(0, 3) + ' ' + d.getDate() + '/' + (d.getMonth() + 1); }
   var BOX = [['chit', 'Chit'], ['close', 'Tutup hari'], ['ticket', 'Tiket'], ['fruit', 'Buah keluar']];
-  var MARK = { ok: '✅', no: '❌', wait: '⏳', rest: '➖' };
+  // v1.67: 'none' is a dash — nothing to check yet (no day owes a close, no lorry went, no fruit was cut).
+  // It is not a tick: the board must never say work was done on a day nothing was keyed.
+  var MARK = { ok: '✅', no: '❌', wait: '⏳', rest: '➖', none: '➖' };
 
   // The message for one estate. WhatsApp keeps a line as written only when it does not start with a space, a
   // number, a dash or a bullet (27 Oct), so every line starts with a letter or a bold star. The names are bold;

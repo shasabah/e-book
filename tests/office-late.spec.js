@@ -98,3 +98,25 @@ NOW = at(DAY(0), '17:05'); env = build(); e = late(env, 'HQ').estates[0];
 check('5:05 petang with lines still open: they are the Pengurus\'s now', e.withManager === true && e.items.length > 0);
 NOW = at(DAY(-3), '10:30'); env = build(); e = late(env, 'HQ').estates[0];   // Sunday 15 Nov 2026
 check('Sunday: no chit line, board says rest; fruit still counts', !one(e, 'CH') && e.board.chit === 'rest' && !!one(e, 'FO'), kinds(e) + ' ' + e.board.chit);
+
+// ---------- v1.67: an estate that has keyed nothing shows dashes, not ticks ----------
+// Yu Chen, 16 Nov 2026: Paitan's first morning showed Tutup hari, Tiket and Buah keluar green, because the board
+// turned a box green whenever it found no late line. No problem found is not the same as work done — and this
+// board goes to the WhatsApp group, so it would have reported work that never happened.
+NOW = at(DAY(0), '10:30'); env = build();
+['FH_WORK', 'FH_COLLECT', 'FH_DISPATCH', 'FH_TICKET', 'FH_CHIT', 'FH_MUSTER', 'FH_DAYCLOSE'].forEach(t => {
+  if (env.tabs[t]) env.tabs[t].rows = [env.tabs[t].rows[0]];     // header only: nothing ever keyed
+});
+e = late(env, 'HQ').estates[0];
+check('an estate with nothing keyed: no green tick anywhere', !Object.values(e.board).some(v => v === 'ok'), JSON.stringify(e.board));
+check('close, ticket and fruit say "nothing to check", not "done"', e.board.close === 'none' && e.board.ticket === 'none' && e.board.fruit === 'none', JSON.stringify(e.board));
+check('the chit is still chased: it is the one thing owed every working day', e.board.chit === 'no', e.board.chit);
+check('the WhatsApp board draws a dash for it, never a tick or a cross', (() => { const M = { ok: '✅', no: '❌', wait: '⏳', rest: '➖', none: '➖' }; return M[e.board.close] === '➖'; })());
+
+// imported history alone does not make a box green: Paitan holds a year of IMPORT rows and had still keyed nothing
+env = build();
+env.tabs.FH_DISPATCH.rows = [env.tabs.FH_DISPATCH.rows[0], ['d9', DAY(1), 'SPLT', 'SSGT', 'IMPORT', DAY(1) + ' 07:00', '', 'active', '', '100', 'L', 'BOU', 'Y', '', '01', 'T9', '8009', 'D']];
+env.tabs.FH_WORK.rows = [env.tabs.FH_WORK.rows[0], ['w9', DAY(1), 'SPLT', 'SSGT', 'IMPORT', DAY(1) + ' 07:00', '', 'active', '', 'c', 'H1', 'HA', '01', '1-9', '', 'bunch', '500']];
+['FH_COLLECT', 'FH_TICKET', 'FH_CHIT', 'FH_MUSTER', 'FH_DAYCLOSE'].forEach(t => { if (env.tabs[t]) env.tabs[t].rows = [env.tabs[t].rows[0]]; });
+e = late(env, 'HQ').estates[0];
+check('a year of imported history still shows dashes, because nobody keyed anything', e.board.ticket === 'none' && e.board.fruit === 'none', JSON.stringify(e.board));

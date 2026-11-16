@@ -954,7 +954,10 @@ function openTrips(estate) {
   standingRows_('FH_TICKET', estate).forEach(function (r) { if (r.trip) ticketed[r.trip] = true; });
   var trips = {};
   standingRows_('FH_DISPATCH', estate).forEach(function (r) {
-    if (!r.trip || r.date < cut || ticketed[r.trip] || !(Number(r.bunches) > 0)) return;
+    // v1.67: an imported lorry is history, never a line to chase (21 Oct: imported records count in month totals
+    // and History, not in backlog, lorry lines or the ungraded list). Without this, loading an estate's old
+    // delivery book would put a year of "ticket not keyed" on the clerk.
+    if (!r.trip || r.date < cut || ticketed[r.trip] || !(Number(r.bunches) > 0) || !live_(r)) return;
     var x = trips[r.trip] || (trips[r.trip] = { trip: r.trip, date: r.date, lorry: r.lorry, mill: r.mill, dn: r.dn_no || '', driver: r.driver || '', ramp_cleared: r.ramp_cleared || '', blocks: {}, bunches: 0, blockIds: {} });
     x.blocks[r.block] = (x.blocks[r.block] || 0) + Number(r.bunches); x.bunches += Number(r.bunches);
     x.blockIds[r.block] = r.id;     // so a phone can correct this delivery note (new rows replace these)
@@ -2555,7 +2558,23 @@ function lateLines_(est, alerts) {
   if (chit === 'no') push('CH', 'Staff', { id: 'CH:' + today, ls: today, bm: 'Chit muster hari ini belum dibuat', en: 'Today\'s muster chit is not made', sub: 'Had ' + CHIT_BY + ' pagi · sekarang ' + hm });
   st.forEach(function (i) { var m = /^(TH|FO|RP|FA):/.exec(String(i.id)); if (m && i.p === 1) push(m[1], 'Staff', i); });
   ck.forEach(function (i) { if (/^DN:/.test(String(i.id)) && i.p === 1) push('DN', 'Clerk', i); });
-  return { items: items, chit: chit, staff: staff, clerk: clerk, manager: mgr };
+  // v1.67 (Yu Chen, 16 Nov 2026): is there anything to check at all? Until now the board turned a box green
+  // whenever it found no late line, so an estate that had keyed nothing — Paitan on its first morning — showed
+  // three green ticks and the board told the group it had closed its day and sent its fruit. No problem found is
+  // not the same as work done. A box with nothing behind it now shows a dash instead (late_ below).
+  var have = { close: false, ticket: false, fruit: false };
+  try { have.close = days.some(function (x) { return x.date < today; }); } catch (e) {}
+  try {
+    var fortnight = dayAdd_(today, -14);
+    have.ticket = standingRows_('FH_DISPATCH', est).some(function (x) { return live_(x) && String(x.date) >= fortnight; });
+  } catch (e) {}
+  try {
+    var b2 = backlog(est), since3 = dayAdd_(today, -3);
+    if (b2) have.fruit = !!((b2.ramp && b2.ramp.bunches) || (b2.field || []).length);
+    if (!have.fruit) have.fruit = standingRows_('FH_WORK', est).some(function (x) {
+      return live_(x) && x.task_code === HARVEST_CODE && String(x.date) >= since3 && Number(x.bunches || 0) > 0; });
+  } catch (e) {}
+  return { items: items, chit: chit, staff: staff, clerk: clerk, manager: mgr, have: have };
 }
 function late_(user, req) {
   if (user.role !== 'HQ' && user.role !== 'Owner') return { ok: false, error: 'not_allowed' };
@@ -2565,7 +2584,13 @@ function late_(user, req) {
     var L = lateLines_(est), items = L.items;
     var has = function (k) { return items.some(function (x) { return x.kind === k; }); };
     estates.push({ estate: est, staff: L.staff, clerk: L.clerk, manager: L.manager, withManager: items.some(function (x) { return x.mg; }),
-      board: { chit: L.chit, close: has('TH') ? 'no' : 'ok', ticket: has('DN') ? 'no' : 'ok', fruit: has('FO') || has('RP') ? 'no' : 'ok' }, items: items });
+      // v1.67: a tick means checked and right, a cross means late, a dash means there is nothing to check yet —
+      // no past day owes a close, no lorry went, no fruit was harvested. An estate that has keyed nothing shows
+      // dashes, so the board never reports work that did not happen.
+      board: { chit: L.chit,
+        close: has('TH') ? 'no' : (L.have.close ? 'ok' : 'none'),
+        ticket: has('DN') ? 'no' : (L.have.ticket ? 'ok' : 'none'),
+        fruit: (has('FO') || has('RP')) ? 'no' : (L.have.fruit ? 'ok' : 'none') }, items: items });
   });
   return { ok: true, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), today: todayKL_(), estates: estates };
 }

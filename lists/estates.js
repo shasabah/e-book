@@ -4,14 +4,30 @@
 // Other estates' blocks are added from HQ's block list before their pilot.
 window.EA = window.EA || {};
 EA.lists = EA.lists || {};
+// Every estate has one name, kept here. Before v1.68 the list and the names were written out again in
+// core/users.js and core/home.js, so taking TKRS out of this file left it on the estate picker and on the
+// home switcher — three copies of one list, which Rule 5 exists to stop. Those screens now read this one.
+// `retired` marks a code that is no longer an estate: it is never offered, but its name still shows on the
+// old records that carry it (Rule 4 — nothing is deleted).
 EA.lists.estates = [
-  { code: 'SDK',  company: 'SPLT', name: 'Sandakan HQ' },
-  { code: 'MELU', company: 'SPLT', name: 'Meliau' },
-  { code: 'SSGT', company: 'SPLT', name: 'Sugut', ha: 130.65 },
-  { code: 'PTAN', company: 'SPLT', name: 'Paitan', ha: 184.14 },   // 13 Nov 2026: Paitan land only (blocks 01–04 + 9Ac)
-  { code: 'TKRS', company: 'SPLT', name: 'TKRS' },
-  { code: 'KWNN', company: 'PJSB', name: 'Kawananan' }
+  { code: 'SDK',  company: 'SPLT', bm: 'Ibu Pejabat Sandakan', en: 'Sandakan HQ' },
+  { code: 'MELU', company: 'SPLT', bm: 'Meliau', en: 'Meliau' },
+  { code: 'SSGT', company: 'SPLT', bm: 'Sugut', en: 'Sugut', ha: 130.65 },
+  { code: 'PTAN', company: 'SPLT', bm: 'Paitan', en: 'Paitan', ha: 236.53 },   // the group: Paitan 184.14 + TKRS 34.85 + 43 Acres 17.54
+  // v1.68 (Yu Chen, 16 Nov 2026): Tekara is a piece of the Paitan group, not an estate of its own
+  // (Brief_Data_Induk 2.2, signed 13 Nov). Its land is the PTAN blocks T1–T4, owned by PJSB. No work record
+  // ever carried estate TKRS; the logins and the one machine that did are corrected in the office.
+  { code: 'TKRS', company: 'PJSB', bm: 'Tekara', en: 'Tekara', retired: 'PTAN' },
+  { code: 'KWNN', company: 'PJSB', bm: 'Kawananan', en: 'Kawananan' }
 ];
+// The estates a person can be given or can key to: everything still standing.
+EA.lists.estates.forEach(function (e) { if (!e.name) e.name = e.en; });   // older code reads .name
+EA.lists.estatesLive = function () { return EA.lists.estates.filter(function (e) { return !e.retired; }); };
+// One estate's name in the phone's language. An unknown code shows as itself, so an old record always reads.
+EA.lists.estateName = function (code) {
+  var e = EA.lists.estates.filter(function (x) { return x.code === code; })[0];
+  return e ? EA.t(e.bm, e.en) : String(code || '');
+};
 EA.lists.blocks = [
   { estate: 'SSGT', block: '01', name: 'Block 1', ha: 33.20 },
   { estate: 'SSGT', block: '02', name: 'Block 2', ha: 33.93 },

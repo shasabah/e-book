@@ -51,7 +51,7 @@ var USER_COLS = ['user_code', 'name', 'role', 'estates', 'key_hash', 'status', '
 var POSITIONS = ['Trainee Field Staff', 'Field Staff', 'Senior Staff', 'Estate Clerk', 'Assistant Manager', 'Senior Assistant Manager', 'Mandor', 'Storekeeper', 'Account & Finance Executive', 'Operation Clerk', 'AGM', 'GM'];   // v1.55.1: Operation Clerk (HQ) for Wawa
 var ROLES = ['Owner', 'HQ', 'Staff', 'Clerk', 'Mandor', 'Store', 'Worker', 'Manager'];
 var ESTATES = ['SDK', 'MELU', 'SSGT', 'PTAN', 'TKRS', 'KWNN'];
-var ESTATE_COMPANY = { SDK: 'SPLT', MELU: 'SPLT', SSGT: 'SPLT', PTAN: 'SPLT', TKRS: 'SPLT', KWNN: 'PJSB' };
+var ESTATE_COMPANY = { SDK: 'SPLT', MELU: 'SPLT', SSGT: 'SPLT', PTAN: 'SPLT', TKRS: 'PJSB', KWNN: 'PJSB' };   // v1.68: TKRS is a PJSB piece of the Paitan group, kept here only for old lines that carry the code
 var STANDARD_COLS = ['id', 'date', 'company', 'estate', 'keyed_by', 'keyed_at', 'phone', 'status', 'replaces'];
 var STATUSES = ['active', 'corrected', 'removed', 'disposed'];
 
@@ -3557,4 +3557,51 @@ function machinesInto_(text) {
     sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); })); n++; have[reg] = 1;
   });
   return n;
+}
+
+/** One-off (Yu Chen, 16 Nov 2026): take TKRS off every login and off the one machine that still names it.
+ *  TKRS is a piece of the Paitan group, not an estate (Brief_Data_Induk 2.2, signed 13 Nov). 1.68 removes it
+ *  from the estate list, but a login that already carries the code keeps showing it in the estate picker — which
+ *  is how it was still being chosen, and how it became a row of its own on the follow-up board. No work record
+ *  anywhere carries estate TKRS, so nothing has to be moved; only these seven logins and one tractor.
+ *  The tractor SAB946D (New Holland, owned by PJSB) moves to PTAN, so the Paitan team can pick it on the chit —
+ *  it could not be picked at all while it sat on an estate nobody keys. Its home piece and owner are unchanged.
+ *  Nothing is deleted: the machine's old line is replaced by a new one naming it (Rule 4), and every login
+ *  change is a USERS_LOG line. Running it twice does nothing. Returns what it did. */
+function dropTkrsEstate16Nov() {
+  var was = PRACTICE_, out = { users: [], machine: '', already: false };
+  try {
+    PRACTICE_ = false; BOOK_ = null; ROWS_MEMO_ = null;
+    var ss = book_(), now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
+    // 1 · the logins
+    var sh = ss.getSheetByName(USERS_TAB), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    var iEst = head.indexOf('estates'), iCode = head.indexOf('user_code'), iName = head.indexOf('name'), iHash = head.indexOf('key_hash');
+    var rows = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), head.length).getValues();
+    var log = ss.getSheetByName('USERS_LOG');
+    rows.forEach(function (r, i) {
+      var list = String(r[iEst] || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+      if (list.indexOf('TKRS') < 0) return;
+      var kept = list.filter(function (x) { return x !== 'TKRS'; }).join(',');
+      sh.getRange(i + 2, iEst + 1).setValue(kept);
+      try { CacheService.getScriptCache().remove('u:' + r[iHash]); } catch (e) {}
+      if (log) log.appendRow([now, 'OWN-ALL-01', 'Yu Chen Lee', 'estates', r[iCode], r[iName],
+        'TKRS dibuang: ia petak kumpulan Paitan, bukan ladang. ' + String(r[iEst]) + ' → ' + kept]);
+      out.users.push(r[iCode] + ': ' + kept);
+    });
+    // 2 · the tractor
+    var ms = roomTab_(ss, 'LIST_MACHINES'), mh = ms.getRange(1, 1, 1, ms.getLastColumn()).getValues()[0];
+    var old = standingRows_('LIST_MACHINES', 'TKRS')[0];
+    if (old) {
+      var row = {};
+      mh.forEach(function (c) { row[c] = old[c] === undefined ? '' : old[c]; });
+      row.id = 'FLT-PTAN-' + String(old.reg_no || '').replace(/\W/g, '');
+      row.estate = 'PTAN'; row.company = 'PJSB'; row.replaces = old.id; row.status = 'active';
+      row.keyed_by = 'OWN-ALL-01'; row.keyed_at = now; row.phone = 'OFFICE'; row.received_at = now;
+      row.note = 'Dipindah ke kumpulan Paitan 16/11: TKRS ialah petak, bukan ladang. Petak asal dan pemilik tidak berubah.';
+      ms.appendRow(mh.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); }));
+      out.machine = row.id;
+    }
+  } finally { PRACTICE_ = was; BOOK_ = null; ROWS_MEMO_ = null; newGen_(); }
+  Logger.log('dropTkrsEstate16Nov: ' + JSON.stringify(out));
+  return out;
 }

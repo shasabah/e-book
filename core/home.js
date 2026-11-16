@@ -192,8 +192,9 @@
     };
     $('tile-share').hidden = !isHQ(u);   // v1.64: only the Owner and HQ share the app (Yu Chen, 15 Nov)
   }
-  var EST_NAMES = { SDK: ['Ibu Pejabat Sandakan', 'Sandakan HQ'], MELU: ['Meliau', 'Meliau'], SSGT: ['Sugut', 'Sugut'], PTAN: ['Paitan', 'Paitan'], TKRS: ['Tekara', 'Tekara'], KWNN: ['Kawananan', 'Kawananan'] };
-  function estName(code) { var n = EST_NAMES[code]; return n ? EA.t(n[0], n[1]) : code; }
+  // v1.68: names come from the shared estate list (Rule 5: built once). A retired code still reads, so an
+  // old record naming Tekara shows its name and not a bare code.
+  function estName(code) { return EA.lists.estateName(code); }
 
   function renderGreeting() {
     var d = new Date(), h = d.getHours();

@@ -8,8 +8,10 @@ window.EA = window.EA || {};
 EA.roomViews = EA.roomViews || {};
 (function () {
   var ROLES = ['Staff', 'Clerk', 'Manager', 'Mandor', 'Store', 'HQ', 'Owner', 'Worker'];
-  var ALL = ['SDK', 'MELU', 'SSGT', 'PTAN', 'TKRS', 'KWNN'];
-  var EST_NAME = { SDK: 'Sandakan HQ', MELU: 'Melu', SSGT: 'Sugut', PTAN: 'Paitan', TKRS: 'Tekara', KWNN: 'Kawananan' };
+  // v1.68: the estates and their names come from the shared list, not a second copy kept here. A retired
+  // code (Tekara, now a piece of the Paitan group) is never offered, but still reads on old records.
+  function ALLest() { return EA.lists.estatesLive().map(function (e) { return e.code; }); }
+  function estNm(code) { return EA.lists.estateName(code); }
   // v1.15: job titles as on the organisation chart, and the app access each one usually has.
   var POSITIONS = [['Trainee Field Staff', 'Staff'], ['Field Staff', 'Staff'], ['Senior Staff', 'Staff'], ['Estate Clerk', 'Clerk'],
     ['Assistant Manager', 'Manager'], ['Senior Assistant Manager', 'Manager'], ['Mandor', 'Mandor'], ['Storekeeper', 'Store'], ['Account & Finance Executive', 'HQ'], ['Operation Clerk', 'HQ'], ['AGM', 'HQ'], ['GM', 'Owner']];
@@ -116,13 +118,13 @@ EA.roomViews = EA.roomViews || {};
     // Active real users, grouped: all estates first, then by first estate; then the switched-off ones.
     var groups = {}, order = [];
     real.filter(function (u) { return u.status === 'active'; }).forEach(function (u) {
-      var g = u.estates.length === ALL.length ? 'ALL' : u.estates[0];
+      var g = u.estates.length === ALLest().length ? 'ALL' : u.estates[0];
       if (!groups[g]) { groups[g] = []; }
       groups[g].push(u);
     });
-    ['ALL'].concat(ALL).forEach(function (g) { if (groups[g]) order.push(g); });
+    ["ALL"].concat(ALLest()).forEach(function (g) { if (groups[g]) order.push(g); });
     order.forEach(function (g) {
-      h += '<div class="card"><h2>' + (g === 'ALL' ? EA.t('Semua ladang', 'All estates') : esc(EST_NAME[g] || g) + ' (' + g + ')') + '</h2>' +
+      h += '<div class="card"><h2>' + (g === 'ALL' ? EA.t('Semua ladang', 'All estates') : esc(estNm(g)) + ' (' + g + ')') + '</h2>' +
         groups[g].map(function (u) { return rowHtml(u, me); }).join('') + '</div>';
     });
     if (!order.length && !data.firstOwner) h += '<div class="empty">' + EA.t('Belum ada pengguna sebenar. Tekan + Tambah pengguna.', 'No real users yet. Tap + Add user.') + '</div>';
@@ -144,7 +146,7 @@ EA.roomViews = EA.roomViews || {};
   function rowHtml(u, me) {
     var on = u.status === 'active';
     return '<button type="button" class="hrow us-row" data-user="' + esc(u.code) + '"><div><b>' + esc(u.name) + (u.code === me ? ' · ' + EA.t('anda', 'you') : '') + '</b>' +
-      '<span class="s">' + esc(u.position ? posShort(u.position) : roleName(u.role)) + ' · ' + esc(u.estates.length === ALL.length ? EA.t('semua ladang', 'all estates') : u.estates.join(', ')) +
+      '<span class="s">' + esc(u.position ? posShort(u.position) : roleName(u.role)) + ' · ' + esc(u.estates.length === ALLest().length ? EA.t('semua ladang', 'all estates') : u.estates.join(', ')) +
       (u.move ? ' · ' + EA.t('pindah ke ', 'moving to ') + esc(u.move.estates.join(', ')) + ' ' + esc(shortDate(u.move.date)) : '') +
       (u.added ? ' · ' + EA.t('sejak ', 'since ') + esc(shortDate(u.added)) : '') + '</span>' + phonesHtml(u) + '</div>' +
       (u.practice && on ? '<span class="tag-practice">' + EA.t('LATIHAN', 'PRACTICE') + '</span>' :
@@ -165,7 +167,7 @@ EA.roomViews = EA.roomViews || {};
     var b = el.querySelector('#us-back'); if (b) b.onclick = function () { location.hash = ''; };
     var r = el.querySelector('#us-retry'); if (r) r.onclick = load;
     var a = el.querySelector('#us-add'); if (a) a.onclick = function () { form = { mode: 'add', name: '', role: 'Staff', estates: [ctx.estate] }; draw(); window.scrollTo(0, 0); };
-    var f = el.querySelector('#us-first'); if (f) f.onclick = function () { form = { mode: 'add', name: ctx.user.name && !/ujian|test/i.test(ctx.user.name) ? ctx.user.name : '', role: 'Owner', estates: ALL.slice(), firstOwner: true }; draw(); };
+    var f = el.querySelector('#us-first'); if (f) f.onclick = function () { form = { mode: 'add', name: ctx.user.name && !/ujian|test/i.test(ctx.user.name) ? ctx.user.name : '', role: 'Owner', estates: ALLest(), firstOwner: true }; draw(); };
     var t = el.querySelector('#us-testoff'); if (t) t.onclick = testOffSheet;
     var pn = el.querySelector('#us-pins'); if (pn) pn.onclick = pinsAsk;
     el.querySelectorAll('[data-user]').forEach(function (x) { x.onclick = function () { personSheet(x.dataset.user); }; });
@@ -187,8 +189,8 @@ EA.roomViews = EA.roomViews || {};
     h += '<div class="field"><label>' + EA.t('Akses app · App access', 'App access · Akses app') + '</label><div class="us-pills" id="us-roles">' + roles.map(function (r) {
       return '<button type="button" data-role="' + r + '" aria-pressed="' + (f.role === r) + '">' + esc(roleName(r)) + '</button>';
     }).join('') + '</div>' + (f.firstOwner || f.self ? '' : '<p class="hint">' + EA.t('Diisi sendiri dari jawatan. Tukar hanya jika orang ini berbeza.', 'Filled in from the position. Change it only for an exception.') + '</p>') + '</div>';
-    h += '<div class="field"><label>' + EA.t('Ladang', 'Estates') + '</label><div class="us-pills" id="us-ests">' + ALL.map(function (e) {
-      return '<button type="button" data-est="' + e + '" aria-pressed="' + (f.estates.indexOf(e) >= 0) + '" title="' + esc(EST_NAME[e]) + '">' + e + '</button>';
+    h += '<div class="field"><label>' + EA.t('Ladang', 'Estates') + '</label><div class="us-pills" id="us-ests">' + ALLest().map(function (e) {
+      return '<button type="button" data-est="' + e + '" aria-pressed="' + (f.estates.indexOf(e) >= 0) + '" title="' + esc(estNm(e)) + '">' + e + '</button>';
     }).join('') + '<button type="button" data-est="*" class="us-all">' + EA.t('Semua', 'All') + '</button></div></div>';
     if (!editing && !f.firstOwner) h += '<button type="button" class="us-practice" id="us-prac" aria-pressed="' + !!f.practice + '"><i>' + (f.practice ? '✓' : '') + '</i><span><b>' +
       EA.t('Pengguna latihan', 'Practice user') + '</b><span class="s">' + EA.t('Rekod pergi ke buku LATIHAN, bukan buku sebenar.', 'Records go to the PRACTICE book, not the real book.') + '</span></span></button>';
@@ -208,7 +210,7 @@ EA.roomViews = EA.roomViews || {};
       b.onclick = function () {
         if (f.firstOwner) return;
         var e = b.dataset.est;
-        if (e === '*') f.estates = f.estates.length === ALL.length ? [] : ALL.slice();
+        if (e === '*') f.estates = f.estates.length === ALLest().length ? [] : ALLest();
         else if (f.estates.indexOf(e) >= 0) f.estates = f.estates.filter(function (x) { return x !== e; });
         else f.estates = f.estates.concat([e]);
         drawForm();
@@ -264,7 +266,7 @@ EA.roomViews = EA.roomViews || {};
     var s = shown, text = pinMessage(s);
     var h = '<div class="room-top"><div class="grow"><h1>' + EA.t('PIN baru', 'New PIN') + '</h1><span class="brand-sub">' + EA.t('Ditunjuk sekali sahaja', 'Shown once only') + '</span></div></div>';
     h += '<div class="card us-pincard"><div class="hint">' + EA.t('PIN untuk', 'PIN for') + '</div><div class="us-who">' + esc(s.name) + '</div>' +
-      '<div class="hint">' + esc(roleName(s.role)) + ' · ' + esc(s.estates.length === ALL.length ? EA.t('semua ladang', 'all estates') : s.estates.join(', ')) + ' · ' + esc(s.code) + '</div>' +
+      '<div class="hint">' + esc(roleName(s.role)) + ' · ' + esc(s.estates.length === ALLest().length ? EA.t('semua ladang', 'all estates') : s.estates.join(', ')) + ' · ' + esc(s.code) + '</div>' +
       '<div class="us-big"><div><span>PIN</span><b class="us-pin" id="us-pin">' + esc(s.pin.slice(0, 3)) + ' ' + esc(s.pin.slice(3)) + '</b></div>' +
       ((s.phones || []).length ? '<div><span>' + EA.t('KOD TELEFON', 'PHONE CODE') + '</span><b class="us-pin" id="us-phone">' + esc(s.phones.join(' ')) + '</b></div>' : '') + '</div>' +
       '<p class="msg">' + EA.t('Hantar atau tulis PIN ini sekarang. Selepas TUTUP ia tidak boleh dilihat lagi.', 'Send or write this PIN now. After CLOSE it cannot be seen again.') + '</p></div>';
@@ -349,8 +351,8 @@ EA.roomViews = EA.roomViews || {};
     var h = top(EA.t('Pindah', 'Transfer'), EA.t('Pengguna', 'Users'));
     h += '<div class="card"><div><b>' + esc(f.name) + '</b>' + (f.position ? '<span class="hint"> · ' + esc(f.position) + '</span>' : '') + '</div>' +
       '<div class="field"><label>' + EA.t('Sekarang · Now', 'Now · Sekarang') + '</label><div class="us-pills">' + f.from.map(function (e) { return '<button type="button" aria-pressed="true" disabled>' + e + '</button>'; }).join('') + '</div></div>' +
-      '<div class="field"><label>' + EA.t('Ke ladang · To', 'To · Ke ladang') + '</label><div class="us-pills" id="mv-ests">' + ALL.map(function (e) {
-        return '<button type="button" data-mest="' + e + '" aria-pressed="' + (f.estates.indexOf(e) >= 0) + '" title="' + esc(EST_NAME[e]) + '">' + e + '</button>'; }).join('') + '</div></div>' +
+      '<div class="field"><label>' + EA.t('Ke ladang · To', 'To · Ke ladang') + '</label><div class="us-pills" id="mv-ests">' + ALLest().map(function (e) {
+        return '<button type="button" data-mest="' + e + '" aria-pressed="' + (f.estates.indexOf(e) >= 0) + '" title="' + esc(estNm(e)) + '">' + e + '</button>'; }).join('') + '</div></div>' +
       '<div class="field"><label for="mv-date">' + EA.t('Mula · Starts', 'Starts · Mula') + '</label><input id="mv-date" class="text-input" type="date" value="' + esc(f.date) + '"></div>' +
       '<div class="field"><label>' + EA.t('Jawatan baru? (pilihan)', 'New position? (optional)') + '</label><div class="us-pills" id="mv-pos">' +
         '<button type="button" data-mpos="" aria-pressed="' + (!f.newPos) + '">' + EA.t('Sama', 'Same') + '</button>' +
@@ -367,8 +369,8 @@ EA.roomViews = EA.roomViews || {};
     el.querySelectorAll('[data-mpos]').forEach(function (b) { b.onclick = function () { f.newPos = b.dataset.mpos; drawMove(); }; });
     el.querySelector('#mv-go').onclick = async function () {
       if (!f.estates.length) return showErr('bad_estates');
-      var sorted = ALL.filter(function (e) { return f.estates.indexOf(e) >= 0; });
-      if (sorted.join() === ALL.filter(function (e) { return f.from.indexOf(e) >= 0; }).join()) return showErr('same_estates');
+      var sorted = ALLest().filter(function (e) { return f.estates.indexOf(e) >= 0; });
+      if (sorted.join() === ALLest().filter(function (e) { return f.from.indexOf(e) >= 0; }).join()) return showErr('same_estates');
       if (!/^\d{4}-\d{2}-\d{2}$/.test(f.date || '')) return showErr('bad_date');
       this.disabled = true;
       var j = await call('userMove', { code: f.code, estates: sorted, date: f.date, position: f.newPos || '' });

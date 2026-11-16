@@ -50,7 +50,13 @@ var USER_COLS = ['user_code', 'name', 'role', 'estates', 'key_hash', 'status', '
 // v1.15: job titles as on the organisation chart (for reading only; the role is the app access).
 var POSITIONS = ['Trainee Field Staff', 'Field Staff', 'Senior Staff', 'Estate Clerk', 'Assistant Manager', 'Senior Assistant Manager', 'Mandor', 'Storekeeper', 'Account & Finance Executive', 'Operation Clerk', 'AGM', 'GM'];   // v1.55.1: Operation Clerk (HQ) for Wawa
 var ROLES = ['Owner', 'HQ', 'Staff', 'Clerk', 'Mandor', 'Store', 'Worker', 'Manager'];
+// ESTATES is every code the office still accepts, so an old login or an old record that carries TKRS keeps
+// reading. ESTATES_LIVE is the estates that still stand: that is the list a new login is made from, and the
+// one that decides whether a login covers "ALL". v1.68 (Yu Chen, 16 Nov 2026): Tekara is a piece of the
+// Paitan group, not an estate of its own.
 var ESTATES = ['SDK', 'MELU', 'SSGT', 'PTAN', 'TKRS', 'KWNN'];
+var ESTATES_RETIRED = ['TKRS'];
+var ESTATES_LIVE = ESTATES.filter(function (e) { return ESTATES_RETIRED.indexOf(e) < 0; });
 var ESTATE_COMPANY = { SDK: 'SPLT', MELU: 'SPLT', SSGT: 'SPLT', PTAN: 'SPLT', TKRS: 'PJSB', KWNN: 'PJSB' };   // v1.68: TKRS is a PJSB piece of the Paitan group, kept here only for old lines that carry the code
 var STANDARD_COLS = ['id', 'date', 'company', 'estate', 'keyed_by', 'keyed_at', 'phone', 'status', 'replaces'];
 var STATUSES = ['active', 'corrected', 'removed', 'disposed'];
@@ -1231,7 +1237,10 @@ function usersAction_(user, req) {
       if (pos && POSITIONS.indexOf(pos) < 0) return { ok: false, error: 'bad_position' };
       var prac = !!req.practice;
       if (prac && ['Staff', 'Clerk', 'Manager'].indexOf(req.role) < 0) return { ok: false, error: 'bad_role' };
-      var stem = (prac ? 'L-' : '') + ROLE_PREFIX[req.role] + '-' + (est.length === ESTATES.length ? 'ALL' : est[0]) + '-';
+      // "ALL" means every estate that still stands, so a login made before or after Tekara was retired
+      // carries the same code.
+      var coversAll = ESTATES_LIVE.every(function (e) { return est.indexOf(e) >= 0; });
+      var stem = (prac ? 'L-' : '') + ROLE_PREFIX[req.role] + '-' + (coversAll ? 'ALL' : est[0]) + '-';
       var n = 1, code;
       do { code = stem + ('0' + n).slice(-2); n++; } while (list.some(function (u) { return u.user_code === code; }));
       var pin = newPin_(list), phone = nextPhone_(list);

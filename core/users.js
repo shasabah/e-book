@@ -12,6 +12,11 @@ EA.roomViews = EA.roomViews || {};
   // code (Tekara, now a piece of the Paitan group) is never offered, but still reads on old records.
   function ALLest() { return EA.lists.estatesLive().map(function (e) { return e.code; }); }
   function estNm(code) { return EA.lists.estateName(code); }
+  // A login counts as "all estates" when it covers every estate still standing. Codes it carries for an estate
+  // that has been retired (Tekara) are ignored, not counted — otherwise a login made before the change stops
+  // reading as all-estates and gets grouped under a code nobody uses any more.
+  function allEst(list) { var L = ALLest(); return L.every(function (e) { return (list || []).indexOf(e) >= 0; }); }
+  function firstEst(list) { var L = ALLest(); return (list || []).filter(function (e) { return L.indexOf(e) >= 0; })[0] || (list || [])[0]; }
   // v1.15: job titles as on the organisation chart, and the app access each one usually has.
   var POSITIONS = [['Trainee Field Staff', 'Staff'], ['Field Staff', 'Staff'], ['Senior Staff', 'Staff'], ['Estate Clerk', 'Clerk'],
     ['Assistant Manager', 'Manager'], ['Senior Assistant Manager', 'Manager'], ['Mandor', 'Mandor'], ['Storekeeper', 'Store'], ['Account & Finance Executive', 'HQ'], ['Operation Clerk', 'HQ'], ['AGM', 'HQ'], ['GM', 'Owner']];
@@ -118,7 +123,7 @@ EA.roomViews = EA.roomViews || {};
     // Active real users, grouped: all estates first, then by first estate; then the switched-off ones.
     var groups = {}, order = [];
     real.filter(function (u) { return u.status === 'active'; }).forEach(function (u) {
-      var g = u.estates.length === ALLest().length ? 'ALL' : u.estates[0];
+      var g = allEst(u.estates) ? 'ALL' : firstEst(u.estates);
       if (!groups[g]) { groups[g] = []; }
       groups[g].push(u);
     });
@@ -146,7 +151,7 @@ EA.roomViews = EA.roomViews || {};
   function rowHtml(u, me) {
     var on = u.status === 'active';
     return '<button type="button" class="hrow us-row" data-user="' + esc(u.code) + '"><div><b>' + esc(u.name) + (u.code === me ? ' · ' + EA.t('anda', 'you') : '') + '</b>' +
-      '<span class="s">' + esc(u.position ? posShort(u.position) : roleName(u.role)) + ' · ' + esc(u.estates.length === ALLest().length ? EA.t('semua ladang', 'all estates') : u.estates.join(', ')) +
+      '<span class="s">' + esc(u.position ? posShort(u.position) : roleName(u.role)) + ' · ' + esc(allEst(u.estates) ? EA.t('semua ladang', 'all estates') : u.estates.join(', ')) +
       (u.move ? ' · ' + EA.t('pindah ke ', 'moving to ') + esc(u.move.estates.join(', ')) + ' ' + esc(shortDate(u.move.date)) : '') +
       (u.added ? ' · ' + EA.t('sejak ', 'since ') + esc(shortDate(u.added)) : '') + '</span>' + phonesHtml(u) + '</div>' +
       (u.practice && on ? '<span class="tag-practice">' + EA.t('LATIHAN', 'PRACTICE') + '</span>' :
@@ -210,7 +215,7 @@ EA.roomViews = EA.roomViews || {};
       b.onclick = function () {
         if (f.firstOwner) return;
         var e = b.dataset.est;
-        if (e === '*') f.estates = f.estates.length === ALLest().length ? [] : ALLest();
+        if (e === '*') f.estates = allEst(f.estates) ? [] : ALLest();
         else if (f.estates.indexOf(e) >= 0) f.estates = f.estates.filter(function (x) { return x !== e; });
         else f.estates = f.estates.concat([e]);
         drawForm();
@@ -266,7 +271,7 @@ EA.roomViews = EA.roomViews || {};
     var s = shown, text = pinMessage(s);
     var h = '<div class="room-top"><div class="grow"><h1>' + EA.t('PIN baru', 'New PIN') + '</h1><span class="brand-sub">' + EA.t('Ditunjuk sekali sahaja', 'Shown once only') + '</span></div></div>';
     h += '<div class="card us-pincard"><div class="hint">' + EA.t('PIN untuk', 'PIN for') + '</div><div class="us-who">' + esc(s.name) + '</div>' +
-      '<div class="hint">' + esc(roleName(s.role)) + ' · ' + esc(s.estates.length === ALLest().length ? EA.t('semua ladang', 'all estates') : s.estates.join(', ')) + ' · ' + esc(s.code) + '</div>' +
+      '<div class="hint">' + esc(roleName(s.role)) + ' · ' + esc(allEst(s.estates) ? EA.t('semua ladang', 'all estates') : s.estates.join(', ')) + ' · ' + esc(s.code) + '</div>' +
       '<div class="us-big"><div><span>PIN</span><b class="us-pin" id="us-pin">' + esc(s.pin.slice(0, 3)) + ' ' + esc(s.pin.slice(3)) + '</b></div>' +
       ((s.phones || []).length ? '<div><span>' + EA.t('KOD TELEFON', 'PHONE CODE') + '</span><b class="us-pin" id="us-phone">' + esc(s.phones.join(' ')) + '</b></div>' : '') + '</div>' +
       '<p class="msg">' + EA.t('Hantar atau tulis PIN ini sekarang. Selepas TUTUP ia tidak boleh dilihat lagi.', 'Send or write this PIN now. After CLOSE it cannot be seen again.') + '</p></div>';

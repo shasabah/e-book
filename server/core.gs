@@ -3749,3 +3749,72 @@ function fixSugut6and11Nov() {
   Logger.log('fixSugut6and11Nov: ' + JSON.stringify(out));
   return out;
 }
+
+// ---------------- v1.68 one-off: Sugut 7 and 8 Nov, the work that was never keyed ----------------
+// 7 Nov is the only day in November where the chit went in and the day's work did not: 15 people marked
+// present on the phone that morning, 5 work lines keyed. Samsir and Ferezelly answered for five of the ten
+// who were missing, and the chit itself proves the lots, because it carries the whole lot list for each job
+// and the answers split it exactly:
+//   loose fruit, chit lots 2-9 2-10 2-11 2-12 — Cidam 2-9 (3 bags) and 2-10 (5), Nasrah 2-11 (5) and 2-12 (4)
+//   VOP spray,   chit lots 2-15 2-18 2-20     — Nursiani 2-15, Aisah 2-18, Enaylin 2-20, one lot each
+// 8 Nov (Sunday): both the loader and the tractor driver worked, so Herman's loading line is added.
+// The spray hectares are each lot's own area from the land list, NOT a figure anyone gave — the note on
+// every line says so, so nobody later reads them as measured.
+// The other five of 7 Nov are deliberately left empty (Yu Chen, 16 Nov): Aco's pruning has no hectares
+// anyone can give, and rebuilding the rest from the chit would be guessing. A hole is better than a guess.
+// Run once. Running it again changes nothing.
+var SSGT_7NOV_CHIT = 'MC-SSGT-P13-20261107-1';
+var SSGT_8NOV_CHIT = 'MC-SSGT-P13-20261108-1';
+var SSGT_ADD_16NOV = [
+  { d: '2026-11-07', c: SSGT_7NOV_CHIT, w: 'SSGTSC260708', t: 'LF',   lot: '2-9',  qty: 3,    u: 'bag', why: 'Buah lerai 7/11: jawapan Samsir 16/11. Petak dari chit pagi itu.' },
+  { d: '2026-11-07', c: SSGT_7NOV_CHIT, w: 'SSGTSC260708', t: 'LF',   lot: '2-10', qty: 5,    u: 'bag', why: 'Buah lerai 7/11: jawapan Samsir 16/11. Petak dari chit pagi itu.' },
+  { d: '2026-11-07', c: SSGT_7NOV_CHIT, w: 'SSGTSC260709', t: 'LF',   lot: '2-11', qty: 5,    u: 'bag', why: 'Buah lerai 7/11: jawapan Samsir 16/11. Petak dari chit pagi itu.' },
+  { d: '2026-11-07', c: SSGT_7NOV_CHIT, w: 'SSGTSC260709', t: 'LF',   lot: '2-12', qty: 4,    u: 'bag', why: 'Buah lerai 7/11: jawapan Samsir 16/11. Petak dari chit pagi itu.' },
+  { d: '2026-11-07', c: SSGT_7NOV_CHIT, w: 'SSGTSC260804', t: 'VOPS', lot: '2-15', qty: 2.01, u: 'Ha',  why: 'Racun VOP 7/11: jawapan Samsir 16/11. Hektar dari senarai petak, bukan ukuran di ladang.' },
+  { d: '2026-11-07', c: SSGT_7NOV_CHIT, w: 'SSGTSC260702', t: 'VOPS', lot: '2-18', qty: 0.55, u: 'Ha',  why: 'Racun VOP 7/11: jawapan Samsir 16/11. Hektar dari senarai petak, bukan ukuran di ladang.' },
+  { d: '2026-11-07', c: SSGT_7NOV_CHIT, w: 'SSGTSC260703', t: 'VOPS', lot: '2-20', qty: 0.6,  u: 'Ha',  why: 'Racun VOP 7/11: jawapan Samsir 16/11. Hektar dari senarai petak, bukan ukuran di ladang.' },
+  { d: '2026-11-08', c: SSGT_8NOV_CHIT, w: 'SSGTSC260604', t: 'LFF',  lot: '2-25 2-26', qty: '', u: 'MT', why: 'Ahad 8/11: loader dan pemandu traktor kedua-duanya bekerja (jawapan Samsir 16/11). Muat BTS dibayar dari tiket kilang.' }
+];
+var SSGT_ADD_DAYS_16NOV = [
+  { d: '2026-11-07', c: SSGT_7NOV_CHIT, t: 'LF',   lots: '2-9 2-10 2-11 2-12', qty: 17,   u: 'bag', men: 2 },
+  { d: '2026-11-07', c: SSGT_7NOV_CHIT, t: 'VOPS', lots: '2-15 2-18 2-20',     qty: 3.16, u: 'Ha',  men: 3 },
+  { d: '2026-11-08', c: SSGT_8NOV_CHIT, t: 'LFF',  lots: '2-25 2-26',          qty: '',   u: 'MT',  men: 1 }
+];
+function addSugut7and8Nov() {
+  var was = PRACTICE_, out = { book: '', added: [], same: [] };
+  try {
+    PRACTICE_ = false; BOOK_ = null; ROWS_MEMO_ = null;
+    var ss = book_(), now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), n = 0;
+    try { out.book = ss.getName(); } catch (e) { out.book = '?'; }
+    function add_(tab, fields) {
+      var sh = roomTab_(ss, tab), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+      var row = {}; head.forEach(function (c) { row[c] = ''; });
+      row.id = 'OFC-SSGT-' + now.slice(0, 10).replace(/\D/g, '') + '-A' + (++n);
+      row.company = 'SPLT'; row.estate = 'SSGT'; row.keyed_by = 'OWNER-FIX'; row.keyed_at = now;
+      row.phone = 'OFFICE'; row.status = 'active'; row.replaces = ''; row.received_at = now;
+      row.confirmed_by = 'OWNER-FIX'; row.confirmed_at = now;
+      Object.keys(fields).forEach(function (k) { if (head.indexOf(k) >= 0) row[k] = fields[k]; });
+      sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); }));
+    }
+    SSGT_ADD_16NOV.forEach(function (r) {
+      var have = standingRows_('FH_WORK', 'SSGT').some(function (x) {
+        return String(x.date).slice(0, 10) === r.d && String(x.worker_id) === r.w
+          && String(x.task_code) === r.t && String(x.lot) === r.lot; });
+      if (have) { out.same.push(r.d.slice(5) + ' ' + r.t + ' ' + r.lot); return; }
+      add_('FH_WORK', { date: r.d, chit: r.c, worker_id: r.w, task_code: r.t, block: '02',
+        lot: r.lot, qty: r.qty, unit: r.u, note: r.why });
+      out.added.push(r.d.slice(5) + ' ' + r.t + ' ' + r.lot + (r.qty === '' ? '' : ' · ' + r.qty + ' ' + r.u));
+    });
+    SSGT_ADD_DAYS_16NOV.forEach(function (r) {
+      var have = standingRows_('FH_JOBDAY', 'SSGT').some(function (x) {
+        return String(x.date).slice(0, 10) === r.d && String(x.task_code) === r.t; });
+      if (have) { out.same.push('hari ' + r.d.slice(5) + ' ' + r.t); return; }
+      add_('FH_JOBDAY', { date: r.d, chit: r.c, task_code: r.t, block: '02', lots: r.lots,
+        qty: r.qty, unit: r.u, workers: r.men, job_status: 'done',
+        note: 'Baris hari dibuat dari baris kerja yang ditambah 16/11.' });
+      out.added.push('hari ' + r.d.slice(5) + ' ' + r.t);
+    });
+  } finally { PRACTICE_ = was; BOOK_ = null; ROWS_MEMO_ = null; newGen_(); }
+  Logger.log('addSugut7and8Nov: ' + JSON.stringify(out));
+  return out;
+}

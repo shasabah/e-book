@@ -3640,10 +3640,13 @@ var PTAN_JOBS_16NOV = [
   { id: 'KWNNP171202', job: 'Creche Ayah',            gang: 'Am · General',      why: 'Tiada gang: dimasukkan ke gang am (16/11).' }
 ];
 function fixPaitanJobs16Nov() {
-  var was = PRACTICE_, out = { changed: [], same: [], missing: [] };
+  var was = PRACTICE_, out = { book: '', changed: [], same: [], missing: [] };
   try {
     PRACTICE_ = false; BOOK_ = null; ROWS_MEMO_ = null;
     var ss = book_(), now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), today = todayKL_();
+    // Say which book was written, by name. The script project is still called "E-Book TEST script", so the
+    // name in the answer is the proof that the real sheet was the one touched, not the old test sheet.
+    try { out.book = ss.getName(); } catch (e) { out.book = '?'; }
     var ps = roomTab_(ss, 'LIST_PEOPLE'), ph = ps.getRange(1, 1, 1, ps.getLastColumn()).getValues()[0];
     var ws = roomTab_(ss, 'WORKER_LOG'), wh = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0];
     var byId = {};

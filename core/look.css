@@ -967,3 +967,7 @@ body:has(#home-bar.botbar) .sheet-back:not([hidden]) ~ .toast { bottom: auto; to
   .tiles { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 }
 .ref-blk .pg-map path { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1; }
+
+/* v1.67 the working calendar in Senarai › Cuti umum */
+.ref-list li.past { color: var(--muted); }
+.ref-tab { width: 100%; border-collapse: collapse; font-size: .78rem; margin: 4px 0 8px; } .ref-tab th, .ref-tab td { border: 1px solid var(--line); padding: 3px 2px; text-align: center; } .ref-tab td:first-child { text-align: left; padding-left: 5px; font-weight: 700; }

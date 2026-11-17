@@ -69,7 +69,12 @@
   }
   function keepPlan(p) { var list = plans().filter(function (x) { return x.plan !== p.plan; }); list.push(p); EA.local.set(K.plans, list); }
   function planOn(date, estate) { return plans().find(function (p) { return p.estate === (estate || ctx.estate) && p.date === date && !p.cancelled; }) || null; }
-  function isSunday(date) { return new Date(date + 'T00:00:00').getDay() === 0; }
+  // v1.69 (Yu Chen, 17 Nov 2026): a public holiday acts like a Sunday (5 Nov rule) — the same rest-day rules, the same
+  // approval before the work. The holidays come from lists/calendar.js. The words say which it is.
+  function isHoliday(date) { return !!(EA.lists.holidays && EA.lists.holidays.indexOf(date) >= 0); }
+  function isSunday(date) { return new Date(date + 'T00:00:00').getDay() === 0 || isHoliday(date); }
+  function restBm(date) { return new Date(date + 'T00:00:00').getDay() === 0 ? 'Hari Ahad' : 'Cuti umum'; }
+  function restEn(date) { return new Date(date + 'T00:00:00').getDay() === 0 ? 'Sunday' : 'Public holiday'; }
   function dm(date) { var d = new Date(date + 'T00:00:00'); return d.getDate() + '/' + (d.getMonth() + 1); }
   function dayDm(date) { var d = new Date(date + 'T00:00:00'); return ui().dayBm[d.getDay()] + ' ' + dm(date); }
   function addDays(date, n) { var d = new Date(date + 'T00:00:00'); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
@@ -860,7 +865,7 @@
         '<p class="plain-row"><button type="button" class="btn btn-ghost" id="fh-plain">PLAIN CHIT · drop the plan, start from nothing<small>CHIT BIASA · buang rancangan, buat dari kosong</small></button></p>' : '') +
       (mode === 'confirm' && draft.date !== EA.today() ? '<p class="plan-band due"><b>' + EA.t('SAHKAN · ', 'CONFIRM · ') + esc(dayDm(draft.date)) + '</b>' +
         '<span>' + EA.t('Dari rancangan. Ikut kertas muster hari itu: ubah hanya yang berbeza, kemudian SAHKAN.', 'From the plan. Follow that day\'s paper muster: change only what was different, then CONFIRM.') + '</span></p>' : '') +
-      (d.getDay() === 0 ? '<p class="warn"><span class="bm">Hari Ahad: kerja perlu kelulusan Penolong Pengurus sebelum dikira untuk gaji.</span><span class="en">Sunday: work needs the Assistant Manager\'s approval before it counts for pay.</span></p>' : '') +
+      (isSunday(draft.date || EA.today()) ? '<p class="warn"><span class="bm">' + restBm(draft.date || EA.today()) + ': kerja perlu kelulusan Penolong Pengurus sebelum dikira untuk gaji.</span><span class="en">' + restEn(draft.date || EA.today()) + ': work needs the Assistant Manager\'s approval before it counts for pay.</span></p>' : '') +
       (draft.fixAsk ? '<p class="warn"><b>' + EA.t('Membetulkan chit ', 'Fixing the chit of ') + esc(niceDate(draft.date)) + EA.t(' atas permintaan ', ' as asked by ') + esc(draft.fixAsk.by) + ':</b> "' + esc(draft.fixAsk.note) + '"</p>' : '') +
       (draft.replacing && !draft.fixAsk ? '<p class="warn"><span class="bm">Membetulkan chit ' + esc(draft.replacing) + '. Chit lama kekal; yang baru menggantikannya.</span><span class="en">Correcting chit ' + esc(draft.replacing) + '. The old one stays on record; this one replaces it.</span></p>' : '') +
 
@@ -954,7 +959,7 @@
       (list.length ? list.map(function (p) {
         var s = summary(p.rows), waiting = p.rows.some(function (r) { return EA.isWaiting(r.id); });
         return '<div class="list-line"><div><b>' + esc(dayDm(p.date)) + '</b> · ' + s.tot(s.worked) + EA.t(' orang dirancang', ' people planned') +
-          '<span class="en">' + EA.t('Dirancang ', 'Planned ') + esc(String(p.at).slice(11)) + (isSunday(p.date) ? ' · ' + EA.t('Ahad: perlu lulus Pengurus', 'Sunday: needs the manager\'s approval') : '') + '</span></div>' +
+          '<span class="en">' + EA.t('Dirancang ', 'Planned ') + esc(String(p.at).slice(11)) + (isSunday(p.date) ? ' · ' + EA.t(restBm(p.date).replace('Hari ', '') + ': perlu lulus Pengurus', restEn(p.date) + ': needs the manager\'s approval') : '') + '</span></div>' +
           '<div class="acts"><span class="pill ' + (waiting ? 'wait">' + EA.t('Menunggu', 'Waiting') : 'ok">' + EA.t('Dihantar', 'Sent')) + '</span>' +
           '<button type="button" class="btn btn-ghost" data-pview="' + esc(p.plan) + '">VIEW<small>Lihat</small></button>' +
           (p.date > EA.today() ? '<button type="button" class="btn btn-ghost" data-pedit="' + esc(p.plan) + '">CHANGE<small>Ubah</small></button>' : '') +
@@ -976,7 +981,7 @@
       days.map(function (d) {
         var have = planOn(d), done = chitsOn(d).length;
         return '<button type="button" class="btn btn-ghost plan-day" data-pday="' + d + '"' + (done ? ' disabled' : '') + '><b>' + esc(dayDm(d)) + '</b>' +
-          '<small>' + (done ? EA.t('Sudah ada chit', 'Already has a chit') : have ? EA.t('Sudah dirancang · UBAH', 'Already planned · CHANGE') : isSunday(d) ? EA.t('Hari Ahad: kerja perlu lulus Penolong Pengurus', 'Sunday: work needs the Assistant Manager\'s approval') : EA.t('Rancang', 'Plan')) + '</small></button>';
+          '<small>' + (done ? EA.t('Sudah ada chit', 'Already has a chit') : have ? EA.t('Sudah dirancang · UBAH', 'Already planned · CHANGE') : isSunday(d) ? EA.t(restBm(d) + ': kerja perlu lulus Penolong Pengurus', restEn(d) + ': work needs the Assistant Manager\'s approval') : EA.t('Rancang', 'Plan')) + '</small></button>';
       }).join('') +
       '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="pp-back">‹ BACK<small>‹ BALIK</small></button></div>',
       function (s) {
@@ -1127,7 +1132,7 @@
     var taken = onOtherChit();
     var left = unmarked();
     var sun = isSunday(draft.date || EA.today());
-    $('#fh-rows').innerHTML = (left.length && sun ? '<p class="hint">' + EA.t('Hari Ahad: yang tidak ditanda = rehat (' + left.length + ' orang). Tanda hanya yang bekerja, sakit atau cuti.', 'Sunday: anyone not marked is resting (' + left.length + '). Mark only those working, sick or on leave.') + '</p>' : '') +
+    $('#fh-rows').innerHTML = (left.length && sun ? '<p class="hint">' + EA.t(restBm(draft.date || EA.today()) + ': yang tidak ditanda = rehat (' + left.length + ' orang). Tanda hanya yang bekerja, sakit atau cuti.', restEn(draft.date || EA.today()) + ': anyone not marked is resting (' + left.length + '). Mark only those working, sick or on leave.') + '</p>' : '') +
       (left.length && !sun ? '<p class="warn"><span class="bm">' + left.length + ' orang belum ditanda.</span><span class="en">' + left.length + ' people not marked yet.</span></p>' : left.length ? '' : '<p class="hint">' + EA.t('Semua orang sudah ditanda.', 'Everyone is marked.') + '</p>') +
       // v1.38 (Yu Chen, 25 Oct): people still to mark come first; a person done (mark, and a job if H) shrinks to a
       // short line, so the list gets shorter as the staff goes and a wrong mark stands out.
@@ -1667,7 +1672,7 @@
     var why = null, c0 = null;
     if (isPlan()) {
       c0 = planAsChit(planObj(draft.planId || notSaved, EA.today() + ' ' + EA.ui.hhmm(new Date())));
-      if (isSunday(draft.date)) why = { label: ['Kenapa kerja hari Ahad?', 'Why work on Sunday? (for the Assistant Manager)'], val: draft.reason || '' };
+      if (isSunday(draft.date)) why = { label: ['Kenapa kerja ' + restBm(draft.date).toLowerCase() + '?', 'Why work on a ' + restEn(draft.date).toLowerCase() + '? (for the Assistant Manager)'], val: draft.reason || '' };
     } else {
       c0 = buildChit(notSaved, EA.ui.hhmm(new Date()), ctx.user.code);
       if (isConfirm() && c0.planDiff.length) why = { label: ['Kenapa berbeza dari rancangan? (' + c0.planDiff.length + ')', 'Why different from the plan?'], val: draft.planNote || '' };
@@ -1724,7 +1729,7 @@
   function planDetail(p) {
     var s = summary(p.rows), parts = [];
     s.sections.forEach(function (x) { x.lines.forEach(function (l) { parts.push(l.task + (l.block ? ' Blk ' + l.block : '') + ' ' + s.tot(l)); }); });
-    return 'Kerja Ahad ' + dm(p.date) + ' (rancangan): ' + parts.join(', ') + ' · ' + s.tot(s.worked) + ' orang';
+    return 'Kerja ' + restBm(p.date).replace('Hari ', '') + ' ' + dm(p.date) + ' (rancangan): ' + parts.join(', ') + ' · ' + s.tot(s.worked) + ' orang';
   }
   // v1.40: save a plan: tab FH_PLAN (one row per person, like the muster); never FH_MUSTER or FH_CHIT.
   // A Sunday plan goes to the Pengurus for LULUS / TOLAK at once (alert kind "jobask", as other work).
@@ -1975,7 +1980,7 @@
     // v1.40: a plan says so on top; a confirmed plan says when, and what was different from the plan.
     if (c.isPlan) {
       L.push('⏳ _Belum muster sebenar · disahkan bila staf balik_');
-      if (d.getDay() === 0) L.push('⚠ Hari Ahad: perlu lulus Penolong Pengurus' + (c.reason ? ' · sebab: ' + c.reason : ''));
+      if (isSunday(c.date)) L.push('⚠ ' + restBm(c.date) + ': perlu lulus Penolong Pengurus' + (c.reason ? ' · sebab: ' + c.reason : ''));
     }
     if (c.fromPlan) {
       // v1.52: a chit confirmed on its own day from last night's plan says so; "(staf cuti)" is only for a day gone by.
@@ -2029,10 +2034,10 @@
     L.push(row('', 'GRAND TOTAL', s.grand));
     L.push('```');
     // v1.40: on a Sunday the people not on the chit are resting.
-    if (d.getDay() === 0) {
+    if (isSunday(c.date)) {
       var on = {}; c.rows.forEach(function (r) { if (r.status !== 'removed') on[r.worker_id] = true; });
       var rest = EA.lists.mandorsFor(c.estate).concat(EA.lists.workersFor(c.estate)).filter(function (w) { return !on[w.id]; }).length;
-      if (rest) L.push('Rehat (hari Ahad) · Rest day: ' + rest + ' orang');
+      if (rest) L.push('Rehat (' + restBm(c.date).toLowerCase() + ') · Rest day: ' + rest + ' orang');
     }
     s.sections.forEach(function (x) {
       x.lines.forEach(function (l) {

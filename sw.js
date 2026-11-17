@@ -33,7 +33,7 @@ var FILES = [
   'manifest.webmanifest', 'core/icons/logo.svg', 'core/icons/favicon-32.png', 'core/icons/apple-touch-icon.png',
   'core/icons/icon-192.png', 'core/icons/icon-512.png', 'core/icons/icon-maskable-512.png',
   'lists/test-workers.js',
-  'lists/people.js'
+  'lists/people.js', 'lists/calendar.js'
 ];
 
 self.addEventListener('install', function (e) {

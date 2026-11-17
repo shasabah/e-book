@@ -244,13 +244,13 @@
     var people = u.role !== 'Worker' && L.workersFor ? L.workersFor(estate) : [];
     var seesWorkersRoom = EA.roomsFor(u, estate).some(function (r) { return r.id === 'workers'; });
     var jobs = (L.mainJobs && L.mainJobs[estate]) || [];
-    var hol = (L.holidays || []).filter(function (d) { return d >= EA.today().slice(0, 4) + '-01-01'; });
+    var hol = (L.holidays || []).filter(function (d) { return d.slice(0, 4) === EA.today().slice(0, 4); });
     var h = '';
     if (lots.length) h += refTile('data-ref="map"', 'PP', 'Peta petak', 'Lot map', lots.length + ' petak · ' + blocks.length + ' blok', lots.length + ' lots · ' + blocks.length + ' blocks');
     if (people.length && !seesWorkersRoom) h += refTile('data-ref="people"', 'PK', 'Pekerja', 'Workers', people.length + ' orang · lihat sahaja', people.length + ' people · view only');
     if (jobs.length) h += refTile('data-ref="jobs"', 'KK', 'Kod kerja', 'Job codes', jobs.length + ' kerja utama', jobs.length + ' main jobs');
     if (lots.length) h += refTile('data-ref="rates"', 'KD', 'Kadar', 'Piece rates', 'Dari pejabat', 'From the office');
-    if (lots.length) h += refTile('data-ref="hol"', 'CU', 'Cuti umum', 'Public holidays', hol.length ? hol.length + ' hari' : 'Belum dikunci', hol.length ? hol.length + ' days' : 'Not keyed yet');
+    if (lots.length) h += refTile('data-ref="hol"', 'CU', 'Cuti umum', 'Public holidays', hol.length ? hol.length + ' cuti umum ' + EA.today().slice(0, 4) : 'Belum dimuat naik', hol.length ? hol.length + ' holidays ' + EA.today().slice(0, 4) : 'Not loaded yet');
     box.innerHTML = h; box.hidden = !h;
     var name = estName(estate);
     var show = { map: function () {
@@ -272,9 +272,31 @@
       }, rates: function () {
         openSheet('<h2 id="sheet-title">' + EA.t('Kadar', 'Piece rates') + '</h2><p>' + EA.t('Kadar disimpan di pejabat sahaja, bukan di telefon. Ada soalan tentang kadar? Tanya Ibu Pejabat Sandakan.', 'Rates are kept at the office only, not on the phone. A question about a rate? Ask Sandakan HQ.') + '</p>');
       }, hol: function () {
+        // v1.69: the estate's working calendar — public holidays (they act like a Sunday), then the estate's own off
+        // days for harvesting and for general & maintenance work (shown only).
         var d = function (x) { var t = new Date(x + 'T00:00:00'); return EA.t(DAY_BM, DAY_EN)[t.getDay()] + ', ' + t.getDate() + ' ' + EA.t(MON_BM, MON_EN)[t.getMonth()] + ' ' + t.getFullYear(); };
-        openSheet('<h2 id="sheet-title">' + EA.t('Cuti umum', 'Public holidays') + '</h2>' + (hol.length ? '<ul class="ref-list">' + hol.map(function (x) { return '<li>' + esc(d(x)) + '</li>'; }).join('') + '</ul>'
-          : '<p>' + EA.t('Kalendar cuti belum dikunci oleh Ibu Pejabat. Ahad ialah hari rehat.', 'The holiday calendar is not keyed by HQ yet. Sunday is the rest day.') + '</p>'));
+        var cal = L.calendarFor ? L.calendarFor(estate) : null, today = EA.today(), yr = today.slice(0, 4);
+        var ul = function (a, mark) { return a.length ? '<ul class="ref-list">' + a.map(function (x) { return '<li' + (x < today ? ' class="past"' : '') + '>' + esc(d(x)) + (mark && mark(x) ? ' <small>' + mark(x) + '</small>' : '') + '</li>'; }).join('') + '</ul>' : '<p class="hint">' + EA.t('Tiada.', 'None.') + '</p>'; };
+        var inYear = function (a) { return (a || []).filter(function (x) { return x.slice(0, 4) === yr; }); };
+        var h = '<h2 id="sheet-title">' + EA.t('Cuti umum · ', 'Public holidays · ') + esc(name) + ' ' + yr + '</h2>';
+        if (!hol.length) h += '<p>' + EA.t('Kalendar ' + yr + ' belum dimuat naik. Ahad ialah hari rehat.', 'The ' + yr + ' calendar is not loaded yet. Sunday is the rest day.') + '</p>';
+        else {
+          var next = hol.filter(function (x) { return x >= today; })[0];
+          h += '<p class="hint">' + EA.t('Cuti umum sama seperti Ahad: kerja selain tuai, baja dan racun bulat perlu lulus Pengurus dahulu.', 'A public holiday is like a Sunday: work other than harvesting, manuring and circle spray needs the manager\'s approval first.') +
+            (next ? ' ' + EA.t('Seterusnya: ', 'Next: ') + '<b>' + esc(d(next)) + '</b>.' : '') + '</p>' +
+            '<h3 class="ref-h">' + EA.t('Cuti umum', 'Public holidays') + ' <small>' + hol.length + '</small></h3>' +
+            ul(hol, cal ? function (x) { return cal.harvestPH.indexOf(x) < 0 ? EA.t('tuai bekerja', 'harvesting works') : ''; } : null);
+          if (cal) {
+            var ho = inYear(cal.harvestOff), go = inYear(cal.gmOff), sum = function (a) { return a.reduce(function (x, y) { return x + y; }, 0); };
+            h += '<h3 class="ref-h">' + EA.t('Hari tutup ladang · tuai', 'Estate off days · harvesting') + ' <small>' + ho.length + '</small></h3>' + ul(ho) +
+              '<h3 class="ref-h">' + EA.t('Hari tutup ladang · kerja am & rawatan', 'Estate off days · general & maintenance') + ' <small>' + go.length + '</small></h3>' + ul(go) +
+              '<h3 class="ref-h">' + EA.t('Hari kerja sebulan', 'Working days a month') + '</h3><table class="ref-tab"><tr><th></th>' + EA.t(MON_BM, MON_EN).map(function (m) { return '<th>' + esc(String(m).slice(0, 3)) + '</th>'; }).join('') + '<th>' + EA.t('Jum', 'Tot') + '</th></tr>' +
+              '<tr><td>' + EA.t('Tuai', 'Harvest') + '</td>' + cal.harvestDays.map(function (n) { return '<td>' + n + '</td>'; }).join('') + '<td><b>' + sum(cal.harvestDays) + '</b></td></tr>' +
+              '<tr><td>' + EA.t('Am', 'G&M') + '</td>' + cal.gmDays.map(function (n) { return '<td>' + n + '</td>'; }).join('') + '<td><b>' + sum(cal.gmDays) + '</b></td></tr></table>' +
+              '<p class="hint">' + EA.t('Hari tutup ladang ditunjuk sahaja; app tidak menghalang kerja pada hari itu. Sumber: ', 'Estate off days are shown only; the app does not stop work on them. Source: ') + esc(cal.src) + '.</p>';
+          }
+        }
+        openSheet(h);
       } };
     box.querySelectorAll('[data-ref]').forEach(function (b) { b.onclick = function () { show[b.dataset.ref](); }; });
   }

@@ -18,6 +18,14 @@ const ctx = { SpreadsheetApp: { openById: () => ({ getSheetByName: n => ({ LIST_
 vm.createContext(ctx); vm.runInContext(code, ctx);
 const r = ctx.people_({ estates: ['SSGT'], role: 'Staff' });
 check('office people: only active people of the user\'s estates (a correction to inactive drops X-002)', r.people.map(x => x.id).join(',') === 'X-001', JSON.stringify(r.people));
-check('office people: no other columns than name, job, code, gang, sex', Object.keys(r.people[0]).sort().join(',') === 'estate,gang,id,job,mdr,name,sex');
+// v1.69 adds 'start', the day the worker began, because the day close has to know not to demand a man on a
+// chit from before he was hired. It is an employment date, not a personal paper: the guard below still holds.
+check('office people: no other columns than name, job, code, gang, sex, start',
+  Object.keys(r.people[0]).sort().join(',') === 'estate,gang,id,job,mdr,name,sex,start', JSON.stringify(Object.keys(r.people[0]).sort()));
+// The point of the check above, said plainly, so widening it by accident is harder: the papers never leave
+// the office (19 and 20 Oct). A new column on LIST_PEOPLE must not reach the phone by itself.
+check('office people: no birth date, passport, nationality, IC or pay ever reaches the phone',
+  !Object.keys(r.people[0]).some(function (k) { return /born|birth|dob|passport|ic|nationality|wage|rate|pay|salary|bank|account/i.test(k); }),
+  JSON.stringify(Object.keys(r.people[0])));
 const no = ctx.saveRow({ estates: ['SSGT'], role: 'Staff', user_code: 'T-STF' }, 'LIST_PEOPLE', { id: 'x', estate: 'SSGT', status: 'active', date: '2026-10-19' });
 check('office people: a Staff key cannot write the people list', no.error === 'not_allowed', JSON.stringify(no));

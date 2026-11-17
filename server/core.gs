@@ -3818,3 +3818,62 @@ function addSugut7and8Nov() {
   Logger.log('addSugut7and8Nov: ' + JSON.stringify(out));
   return out;
 }
+
+// ---------------- v1.68 one-off: Sugut 16 Nov, four harvesters who never came ----------------
+// Ferezelly, 17 Nov: "Harvester tidak turun kerja. Saya sudah buat chit pagi tetapi harvester tidak turun
+// dan saya tidak dapat betulkan semula atau tukar chit tidak hadir, saya hanya letak 1 sahaja."
+// Four men were on the morning chit of 16 Nov, did not come to work, and were keyed 1 tandan each because
+// the phone would not take a zero and he could not move them to tidak hadir. So E-Book holds four days of
+// attendance that never happened, and four bunches that were never harvested. Attendance becomes pay, so
+// this is the worst kind of wrong record to leave standing.
+//   Ahmad Bin Contoh 3-3 · DAUD BIN CONTOH 3-4 · EKA CONTOH 3-6 · FARID BIN CONTOH 3-7
+// Their work lines go, their muster mark goes from Hadir to Tak hadir, and the day's harvest line drops to
+// the three men who really harvested: 3-1, 3-2 and 3-5, 495 tandan. The job stays "not_done" with
+// Ferezelly's own words on it, because that is what happened.
+// Nothing is deleted (Rule 4). Run once; running it again changes nothing.
+var SSGT_16NOV_AWAY = [
+  { id: 'SSGTSC260507', lot: '3-3', name: 'Ahmad' },
+  { id: 'SSGTSC261001', lot: '3-4', name: 'Daud' },
+  { id: 'SSGTB261101', lot: '3-6', name: 'Eka' },
+  { id: 'SSGTB261102', lot: '3-7', name: 'Farid' }
+];
+function fixSugut16Nov() {
+  var was = PRACTICE_, out = { book: '', did: [], same: [] };
+  try {
+    PRACTICE_ = false; BOOK_ = null; ROWS_MEMO_ = null;
+    var ss = book_(), now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
+    try { out.book = ss.getName(); } catch (e) { out.book = '?'; }
+    var WHY = 'Betulkan 16/11: empat penuai tidak turun kerja (jawapan Ferezelly 17/11). "1 tandan" hanya kerana telefon tidak terima kosong dan chit tidak boleh ditukar kepada tidak hadir. Sah Yu Chen 17/11.';
+    function replaceWith_(tab, r, fields, why) {
+      var sh = roomTab_(ss, tab), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+      var row = {}; head.forEach(function (c) { row[c] = r[c] === undefined ? '' : r[c]; });
+      Object.keys(fields).forEach(function (k) { row[k] = fields[k]; });
+      row.id = String(r.id) + '-F'; row.replaces = r.id; row.status = 'active';
+      row.keyed_by = 'OWNER-FIX'; row.keyed_at = now; row.received_at = now;
+      if (head.indexOf('note') >= 0) row.note = why;
+      sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); }));
+    }
+    function one_(tab, test) { return standingRows_(tab, 'SSGT').filter(test)[0] || null; }
+    SSGT_16NOV_AWAY.forEach(function (p) {
+      var w = one_('FH_WORK', function (r) {
+        return String(r.date).slice(0, 10) === '2026-11-16' && r.task_code === 'HA' && String(r.worker_id) === p.id; });
+      if (!w) out.same.push(p.name + ': baris kerja sudah tiada');
+      else { removeLine_('FH_WORK', w, WHY); out.did.push(p.name + ' ' + p.lot + ': baris kerja 1 tandan dibuang'); }
+      var m = one_('FH_MUSTER', function (r) {
+        return String(r.date).slice(0, 10) === '2026-11-16' && String(r.worker_id) === p.id; });
+      if (!m) { out.same.push(p.name + ': tiada baris muster'); return; }
+      if (String(m.muster) === 'T') { out.same.push(p.name + ': muster sudah T'); return; }
+      replaceWith_('FH_MUSTER', m, { muster: 'T' }, WHY);
+      out.did.push(p.name + ': muster ' + m.muster + ' → T (tidak hadir)');
+    });
+    var jd = one_('FH_JOBDAY', function (r) {
+      return String(r.date).slice(0, 10) === '2026-11-16' && r.task_code === 'HA'; });
+    if (jd && Number(jd.bunches) !== 495) {
+      replaceWith_('FH_JOBDAY', jd, { bunches: 495, workers: 3, lots: '3-1 3-2 3-5' },
+        WHY + ' ' + String(jd.note || ''));
+      out.did.push('hari 16/11: tandan ' + jd.bunches + ' → 495, 7 orang → 3, petak 3-1 3-2 3-5');
+    } else out.same.push('hari 16/11: sudah betul');
+  } finally { PRACTICE_ = was; BOOK_ = null; ROWS_MEMO_ = null; newGen_(); }
+  Logger.log('fixSugut16Nov: ' + JSON.stringify(out));
+  return out;
+}

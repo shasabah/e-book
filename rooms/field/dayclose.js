@@ -86,7 +86,14 @@
     // On the estate list but on no chit that day: the day cannot settle his pay. Sunday is a rest day: only those
     // who came are on the chit, so no one is missing (public holidays the same once HQ gives the list).
     var rest = new Date(c.date + 'T00:00:00').getDay() === 0 || (EA.lists.holidays && EA.lists.holidays.indexOf(c.date) >= 0);
-    if (!rest) listed(estate).forEach(function (w) { if (!seen[w.id]) out.missing.push(w.id); });
+    // v1.69: a worker is only expected on a chit from the day he started. Without this a man keyed today was
+    // demanded on every past day as well, so one late registration could lock every day of the month — two
+    // Sugut workers registered on 16 Nov with a start of 12 Nov blocked all eleven unclosed days back to 2 Nov.
+    // No start date (the workers loaded before WORKER_LOG existed) means expected on every day, as before.
+    if (!rest) listed(estate).forEach(function (w) {
+      if (w.start && String(w.start).slice(0, 10) > c.date) return;
+      if (!seen[w.id]) out.missing.push(w.id);
+    });
     return out;
   }
   function payCountText(pl) { return ['P', '1', '½', 'S', 'L', 'X'].filter(function (k) { return pl.count[k]; }).map(function (k) { return k + ' ' + pl.count[k]; }).join(' · '); }
@@ -114,7 +121,12 @@
   function openDays(estate) {
     var seen = {}, out = [], today = EA.today(), f = from();
     EA.fh.allChits().forEach(function (c) {
-      if (c.estate !== estate || c.date < f || c.date > today || seen[c.date] || c.date < EA.dayAgo(7)) return;
+      // v1.69: 40 days, the same window the phone keeps its chits for, instead of 7. The chit was always
+      // there; only this list refused to offer it, so a day older than a week could not be closed by anyone
+      // — the staff had no line to press and the office has no close of its own. On 17 Nov that left eight
+      // November days on the Owner's board with nobody able to clear them. Closing an old day is not
+      // correcting it: the day's seven checks still have to pass, and the 3-day fix window is unchanged.
+      if (c.estate !== estate || c.date < f || c.date > today || seen[c.date] || c.date < EA.dayAgo(40)) return;
       seen[c.date] = true;
       var st = officeState(estate, c.date), loc = closedLocal(estate, c.date);
       if (st === 'closed' || (loc && st !== 'reopened' && st !== 'fixing')) return;

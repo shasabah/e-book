@@ -807,7 +807,12 @@ function people_(user) {
     standingRows_('LIST_PEOPLE', est).forEach(function (r) {
       if (String(r.active).toUpperCase() === 'N') return;
       if (!onMuster_(st[r.worker_id], today)) return;          // v1.25: resigned after the last day, or absconded (approved)
-      out.push({ id: r.worker_id, name: r.name, job: r.job, gang: r.gang, sex: r.sex, mdr: String(r.mandor).toUpperCase() === 'Y', estate: est });
+      // v1.69: the day he started, from his own "new" line in WORKER_LOG. The day close needs it: a worker
+      // keyed today must not be demanded on a chit of a day before he was hired, which is what blocked every
+      // unclosed day of November when two Sugut workers were registered on 16 Nov with a start of 12 Nov.
+      // Blank for the workers loaded before E-Book had a WORKER_LOG: those are demanded on every day, as before.
+      out.push({ id: r.worker_id, name: r.name, job: r.job, gang: r.gang, sex: r.sex, mdr: String(r.mandor).toUpperCase() === 'Y', estate: est,
+                 start: (st[r.worker_id] && st[r.worker_id].start) || '' });
     });
   });
   return { ok: true, people: out };

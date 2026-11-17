@@ -290,9 +290,10 @@
             var ho = inYear(cal.harvestOff), go = inYear(cal.gmOff), sum = function (a) { return a.reduce(function (x, y) { return x + y; }, 0); };
             h += '<h3 class="ref-h">' + EA.t('Hari tutup ladang · tuai', 'Estate off days · harvesting') + ' <small>' + ho.length + '</small></h3>' + ul(ho) +
               '<h3 class="ref-h">' + EA.t('Hari tutup ladang · kerja am & rawatan', 'Estate off days · general & maintenance') + ' <small>' + go.length + '</small></h3>' + ul(go) +
-              '<h3 class="ref-h">' + EA.t('Hari kerja sebulan', 'Working days a month') + '</h3><table class="ref-tab"><tr><th></th>' + EA.t(MON_BM, MON_EN).map(function (m) { return '<th>' + esc(String(m).slice(0, 3)) + '</th>'; }).join('') + '<th>' + EA.t('Jum', 'Tot') + '</th></tr>' +
-              '<tr><td>' + EA.t('Tuai', 'Harvest') + '</td>' + cal.harvestDays.map(function (n) { return '<td>' + n + '</td>'; }).join('') + '<td><b>' + sum(cal.harvestDays) + '</b></td></tr>' +
-              '<tr><td>' + EA.t('Am', 'G&M') + '</td>' + cal.gmDays.map(function (n) { return '<td>' + n + '</td>'; }).join('') + '<td><b>' + sum(cal.gmDays) + '</b></td></tr></table>' +
+              '<h3 class="ref-h">' + EA.t('Hari kerja sebulan', 'Working days a month') + '</h3><table class="ref-tab"><tr><th>' + EA.t('Bulan', 'Month') + '</th><th>' + EA.t('Tuai', 'Harvest') + '</th><th>' + EA.t('Kerja am', 'G&M') + '</th></tr>' +
+              // v1.69.1: one row per month. Twelve months across did not fit a phone and pushed the whole sheet off the screen.
+              EA.t(MON_BM, MON_EN).map(function (m, i) { return '<tr><td>' + esc(m) + '</td><td>' + cal.harvestDays[i] + '</td><td>' + cal.gmDays[i] + '</td></tr>'; }).join('') +
+              '<tr><td>' + EA.t('Jumlah', 'Total') + '</td><td><b>' + sum(cal.harvestDays) + '</b></td><td><b>' + sum(cal.gmDays) + '</b></td></tr></table>' +
               '<p class="hint">' + EA.t('Hari tutup ladang ditunjuk sahaja; app tidak menghalang kerja pada hari itu. Sumber: ', 'Estate off days are shown only; the app does not stop work on them. Source: ') + esc(cal.src) + '.</p>';
           }
         }

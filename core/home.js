@@ -167,7 +167,10 @@
     var e = EA.local.get(ESTATE_KEY, '');
     if (u.estates.indexOf(e) >= 0) return e;
     // v1.64: SDK is the head office, not an estate (12 Nov) — HQ and the Owner open on the first estate
-    return u.estates.find(function (x) { return x !== 'SDK'; }) || u.estates[0];
+    // v1.70: and on an estate that is already keying (Sugut, Paitan), not on the first in the list (Meliau,
+    // not started), where Hari ini and Senarai were nearly empty for the Owner and HQ.
+    var live = ((EA.switches && EA.switches().live) || {})['field-harvest'] || [];
+    return u.estates.find(function (x) { return x !== 'SDK' && live.indexOf(x) >= 0; }) || u.estates.find(function (x) { return x !== 'SDK'; }) || u.estates[0];
   }
 
   function renderHeader(u, estate) {
@@ -249,8 +252,9 @@
     if (lots.length) h += refTile('data-ref="map"', 'PP', 'Peta petak', 'Lot map', lots.length + ' petak · ' + blocks.length + ' blok', lots.length + ' lots · ' + blocks.length + ' blocks');
     if (people.length && !seesWorkersRoom) h += refTile('data-ref="people"', 'PK', 'Pekerja', 'Workers', people.length + ' orang · lihat sahaja', people.length + ' people · view only');
     if (jobs.length) h += refTile('data-ref="jobs"', 'KK', 'Kod kerja', 'Job codes', jobs.length + ' kerja utama', jobs.length + ' main jobs');
-    if (lots.length) h += refTile('data-ref="rates"', 'KD', 'Kadar', 'Piece rates', 'Dari pejabat', 'From the office');
-    if (lots.length) h += refTile('data-ref="hol"', 'CU', 'Cuti umum', 'Public holidays', hol.length ? hol.length + ' cuti umum ' + EA.today().slice(0, 4) : 'Belum dimuat naik', hol.length ? hol.length + ' holidays ' + EA.today().slice(0, 4) : 'Not loaded yet');
+    if (lots.length || isHQ(u)) h += refTile('data-ref="rates"', 'KD', 'Kadar', 'Piece rates', isHQ(u) ? 'Senarai kadar ladang' : 'Dari pejabat', isHQ(u) ? 'The estate\'s rate list' : 'From the office');
+    // v1.70: the calendar is loaded for Meliau and Kawananan too, so its tile shows there before their lots are in
+    if (lots.length || (L.calendarFor && L.calendarFor(estate))) h += refTile('data-ref="hol"', 'CU', 'Cuti umum', 'Public holidays', hol.length ? hol.length + ' cuti umum ' + EA.today().slice(0, 4) : 'Belum dimuat naik', hol.length ? hol.length + ' holidays ' + EA.today().slice(0, 4) : 'Not loaded yet');
     box.innerHTML = h; box.hidden = !h;
     var name = estName(estate);
     var show = { map: function () {
@@ -270,7 +274,32 @@
         openSheet('<h2 id="sheet-title">' + EA.t('Kod kerja · ', 'Job codes · ') + esc(name) + '</h2><p class="hint">' + EA.t('Kerja utama ladang ini. Kerja lain: minta lulus di chit.', 'This estate\'s main jobs. Other work: ask for approval on the chit.') + '</p><ul class="ref-list">' +
           jobs.map(function (c) { var t = L.task(c) || { bm: c, en: c, unit: '' }; return '<li><b class="mono">' + esc(c) + '</b> ' + esc(EA.t(t.bm, t.en)) + (t.unit ? ' <small>' + esc(t.unit) + '</small>' : '') + '</li>'; }).join('') + '</ul>');
       }, rates: function () {
-        openSheet('<h2 id="sheet-title">' + EA.t('Kadar', 'Piece rates') + '</h2><p>' + EA.t('Kadar disimpan di pejabat sahaja, bukan di telefon. Ada soalan tentang kadar? Tanya Ibu Pejabat Sandakan.', 'Rates are kept at the office only, not on the phone. A question about a rate? Ask Sandakan HQ.') + '</p>');
+        // v1.70 (Yu Chen, 17 Nov 2026: "owner and hq"): the Owner and HQ see the estate's rate list, asked from the
+        // office each time and never kept on the phone. Every other position still reads "ask HQ".
+        var askHq = '<p>' + EA.t('Kadar disimpan di pejabat sahaja, bukan di telefon. Ada soalan tentang kadar? Tanya Ibu Pejabat Sandakan.', 'Rates are kept at the office only, not on the phone. A question about a rate? Ask Sandakan HQ.') + '</p>';
+        var title = '<h2 id="sheet-title">' + EA.t('Kadar', 'Piece rates') + (isHQ(u) ? ' · ' + esc(name) : '') + '</h2>';
+        if (!isHQ(u)) { openSheet(title + askHq); return; }
+        openSheet(title + '<p class="hint" id="rates-box">' + EA.t('Memuat dari pejabat…', 'Loading from the office…') + '</p>');
+        EA.askFull('rates', { estate: estate }).then(function (j) {
+          var box = document.getElementById('rates-box'); if (!box) return;
+          if (!j || !j.ok) { box.textContent = j && j.error === 'not_allowed' ? EA.t('Hanya Pemilik dan Ibu Pejabat boleh lihat kadar.', 'Only the Owner and HQ can see the rates.') : EA.t('Pejabat tidak dapat dihubungi. Perlu isyarat. Cuba lagi.', 'The office cannot be reached. Signal is needed. Try again.'); return; }
+          var rows = j.rates || [];
+          if (!rows.length) { box.textContent = EA.t('Belum ada kadar untuk ladang ini.', 'No rates for this estate yet.'); return; }
+          var groups = [], at = {};
+          rows.forEach(function (r) { var g = String(r.note || '').split(' · ')[0] || '-'; if (!at[g]) { at[g] = { name: g, rows: [] }; groups.push(at[g]); } at[g].rows.push(r); });
+          var money = function (v) { var n = Number(v); return isNaN(n) ? esc(String(v)) : (Math.round(n * 1000) % 10 ? n.toFixed(3) : n.toFixed(2)); };
+          var dm = function (x) { x = String(x || ''); return /^\d{4}-\d{2}-\d{2}/.test(x) ? x.slice(8, 10) + '/' + x.slice(5, 7) + '/' + x.slice(2, 4) : x; };
+          var h = '<p class="hint">' + rows.length + EA.t(' baris · untuk Pemilik dan Ibu Pejabat sahaja · tidak disimpan di telefon.', ' lines · for the Owner and HQ only · not kept on the phone.') +
+            (estate === 'PTAN' ? ' ' + EA.t('Tekara dan 43 Ekar guna kadar yang sama.', 'Tekara and 43 Acres use the same rates.') : '') + '</p>';
+          groups.forEach(function (g) {
+            h += '<h3 class="ref-h">' + esc(g.name) + ' <small>' + g.rows.length + '</small></h3><ul class="ref-list rate-list">' + g.rows.map(function (r) {
+              var sub = [r.task_code, r.target_day ? EA.t('sasaran ', 'target ') + r.target_day : '', r.from_date ? EA.t('dari ', 'from ') + dm(r.from_date) : ''].filter(Boolean).map(function (x) { return esc(String(x)); }).join(' · ');
+              return '<li><span class="rate-l">' + esc(String(r.band)) + (sub ? '<small>' + sub + '</small>' : '') + '</span><span class="rate-r"><b>RM ' + money(r.rate_rm) + '</b>' + (r.pay_unit ? '<small>/ ' + esc(String(r.pay_unit)) + '</small>' : '') + '</span></li>';
+            }).join('') + '</ul>';
+          });
+          h += '<p class="hint">' + EA.t('Sumber: ', 'Source: ') + esc(String(rows[0].approved_by || '')) + '</p>';
+          box.outerHTML = '<div id="rates-box">' + h + '</div>';
+        });
       }, hol: function () {
         // v1.69: the estate's working calendar — public holidays (they act like a Sunday), then the estate's own off
         // days for harvesting and for general & maintenance work (shown only).

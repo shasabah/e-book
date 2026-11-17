@@ -971,3 +971,6 @@ body:has(#home-bar.botbar) .sheet-back:not([hidden]) ~ .toast { bottom: auto; to
 /* v1.67 the working calendar in Senarai › Cuti umum */
 .ref-list li.past { color: var(--muted); }
 .ref-tab { width: 100%; border-collapse: collapse; font-size: .78rem; margin: 4px 0 8px; } .ref-tab th, .ref-tab td { border: 1px solid var(--line); padding: 3px 2px; text-align: center; } .ref-tab td:first-child { text-align: left; padding-left: 5px; font-weight: 700; }
+
+/* v1.70: the rate list (Owner and HQ) — the words on the left, the rate on the right, nothing wider than the phone */
+.rate-list li { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; } .rate-l { min-width: 0; overflow-wrap: anywhere; } .rate-l small, .rate-r small { display: block; color: var(--muted); font-size: .78rem; } .rate-r { flex: none; text-align: right; white-space: nowrap; }

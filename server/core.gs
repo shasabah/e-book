@@ -257,12 +257,12 @@ function doPost_(e) {
 // answer is never older than the last change.
 // Every action answered in doRead_ must be listed here, or it is sent to doWrite_ and
 // comes back 'unknown_action' (1.49.1: 'program' was missing since 1.47).
-var READS_ = { crop: 1, dayclose: 1, workers: 1, mills: 1, todo: 1, ungraded: 1, harvest: 1, trips: 1, people: 1, history: 1, backlog: 1, rounds: 1, program: 1, adminSummary: 1, adminPhones: 1, adminProblems: 1, adminSwitches: 1, late: 1 };
+var READS_ = { crop: 1, dayclose: 1, workers: 1, mills: 1, todo: 1, ungraded: 1, harvest: 1, trips: 1, people: 1, history: 1, backlog: 1, rounds: 1, program: 1, rates: 1, adminSummary: 1, adminPhones: 1, adminProblems: 1, adminSwitches: 1, late: 1 };
 var READ_SECONDS = 60;
 function gen_() { return CacheService.getScriptCache().get('gen') || '0'; }
 function newGen_() { try { CacheService.getScriptCache().put('gen', String(Date.now()) + Math.floor(Math.random() * 1000), 21600); } catch (e) {} }
 function readCached_(user, req) {
-  var personal = req.action === 'people' || req.action === 'workers' || req.action === 'mills' || req.action === 'todo' || req.action === 'late' || /^admin/.test(String(req.action));
+  var personal = req.action === 'people' || req.action === 'workers' || req.action === 'mills' || req.action === 'todo' || req.action === 'late' || req.action === 'rates' || /^admin/.test(String(req.action));
   var key = ['rd', PRACTICE_ ? 'L' : '', req.action, String(req.estate || ''), String(req.month || ''), personal ? user.user_code : '', gen_()].join('|').slice(0, 240);
   var c = CacheService.getScriptCache(), hit = null;
   try { hit = c.get(key); } catch (e) {}
@@ -285,6 +285,7 @@ function doRead_(user, req) {
     return people_(user);
   }
   if (user.estates.indexOf(req.estate) < 0) return { ok: false, error: 'not_your_estate' };
+  if (req.action === 'rates') return rates_(user, req.estate);
   if (req.action === 'ungraded') return ungraded_(req.estate);
   if (req.action === 'harvest') return openHarvest(req.estate);
   if (req.action === 'trips') return openTrips(req.estate);
@@ -304,6 +305,18 @@ function doRead_(user, req) {
     return history_(req.estate, String(req.month));
   }
   return { ok: false, error: 'unknown_action' };
+}
+// v1.70 (Yu Chen, 17 Nov 2026: who sees the rate list — "owner and hq"). The standing lines of LIST_RATES for one
+// estate, for the Owner and HQ only; every other position is refused, and so are test and practice logins.
+// The answer is kept per person (see readCached_), never under a key another login could read.
+function rates_(user, estate) {
+  if (user.role !== 'Owner' && user.role !== 'HQ') return { ok: false, error: 'not_allowed' };
+  if (isTestCode_(user.user_code) || isPracticeCode_(user.user_code)) return { ok: false, error: 'not_allowed' };
+  var rows = standingRows_('LIST_RATES', estate).map(function (r) {
+    return { id: r.id, task_code: r.task_code, pay_unit: r.pay_unit, band: r.band, rate_rm: r.rate_rm, target_day: r.target_day,
+      from_date: r.from_date, note: r.note, approved_by: r.approved_by };
+  });
+  return { ok: true, estate: estate, rates: rows };
 }
 function doWrite_(user, req) {
   if (req.action === 'save') {

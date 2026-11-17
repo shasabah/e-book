@@ -5,7 +5,17 @@ window.EA = window.EA || {};
 (function () {
   var USER = 'ea.user', LAST = 'ea.lastUser';
 
-  EA.currentUser = function () { return EA.local.get(USER, null); };
+  // v1.70: a login kept on the phone from before 1.68 still lists Tekara (TKRS), which is no longer an estate, so
+  // the estate picker kept offering it until the person logged in afresh. A retired code is dropped here, where
+  // every screen reads the user — never down to nothing, so nobody is left with no estate.
+  function liveOnly(u) {
+    if (!u || !u.estates || !EA.lists || !EA.lists.estates) return u;
+    var gone = {}; EA.lists.estates.forEach(function (e) { if (e.retired) gone[e.code] = 1; });
+    var keep = u.estates.filter(function (c) { return !gone[c]; });
+    if (keep.length && keep.length !== u.estates.length) u.estates = keep;
+    return u;
+  }
+  EA.currentUser = function () { return liveOnly(EA.local.get(USER, null)); };
 
   var KNOWN = 'ea.knownUsers';
   function keep(u) {

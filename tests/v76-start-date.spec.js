@@ -95,11 +95,19 @@ check('Bahasa unchanged', /'6 pg–12 tgh'/.test(dc) && /'12 mlm–6 pg'/.test(m
 // the clerk asked to fix, or a planned day — so the jump opened a different day's chit; and the rain line
 // carried the close screen's own address, so pressing it changed the hash to the hash it already had.
 const wkjs = fs.readFileSync(path.join(root, 'rooms', 'field', 'work.js'), 'utf8');
+// v1.75 rewrote the body of that one rule: today, yesterday, a clerk-asked fix or a planned day became
+// "not closed yet, within 5 days" (Yu Chen, 19 Nov). What 1.72 was about — ONE rule, exported, so the close
+// and Kerja cannot drift apart — is unchanged, and that is what this still checks.
 check('one rule for whether this phone may key a day\'s work, exported from Kerja',
   /EA\.fh\.workChitOpen = function \(c\)/.test(wkjs)
-  && /c\.date === t \|\| c\.date === yd \|\| fixOpen\(c\) \|\| planOpen\(c\)/.test(wkjs), 'workChitOpen');
-check('Kerja\'s own list uses that one rule, not a second copy (Rule 5)',
-  /c\.estate === estate && EA\.fh\.workChitOpen\(c\)/.test(wkjs), 'chitsFor');
+  && /var OPEN_BACK = 5;/.test(wkjs)
+  && /closed \? fixOpen\(c\) : true;/.test(wkjs), 'workChitOpen');
+// v1.75: the list also carries days it may NOT key — a day closed an hour ago still has to appear, or the
+// staff's work vanishes off the screen the moment he closes it. That is a second question, not a second copy:
+// the list still asks workChitOpen, and inWindow leans on the same OPEN_BACK rather than its own number.
+check('Kerja\'s own list still asks that one rule, not a second copy of it (Rule 5)',
+  /c\.estate === estate && \(inWindow\(c\) \|\| EA\.fh\.workChitOpen\(c\)\)/.test(wkjs)
+  && /function inWindow\(c\) \{[^}]*daysAgo\(OPEN_BACK\)/.test(wkjs), 'chitsFor');
 check('the close asks before it offers a jump to Kerja',
   /var canKey = EA\.fh\.workChitOpen \? EA\.fh\.workChitOpen\(c\) : true;/.test(dc), 'canKey');
 check('too old to key: no button, and the line says to ask the office',
@@ -113,5 +121,8 @@ check('pressing a card line scrolls to the card and marks it',
   /if \(b\.dataset\.scroll\)/.test(dc) && /scrollIntoView/.test(dc) && /look-here/.test(dc), 'handler');
 const css = fs.readFileSync(path.join(root, 'core', 'look.css'), 'utf8');
 check('the mark has a style', /\.look-here \{/.test(css) && /@keyframes look-here/.test(css), 'css');
-check('the 24 Oct rule is not widened: Kerja still stops at 3 days',
+// v1.75: the 24 Oct rule now covers CLOSED days only, and there it is untouched — a closed day still reopens
+// only through the clerk's ask, still within 3 days. What was widened, on Yu Chen's word of 19 Nov, is days
+// that were never closed. Saying "not widened" of the whole rule would now be a false comfort.
+check('a closed day is unchanged: the clerk\'s ask, still 3 days',
   /c\.date >= daysAgo\(1\) \|\| c\.date < daysAgo\(3\)/.test(wkjs), 'fixOpen unchanged');

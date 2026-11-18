@@ -72,11 +72,22 @@ const root = path.resolve(__dirname, '..');
     on(ago[2]).closed === true && on(ago[2]).open === false, JSON.stringify(on(ago[2])));
   check('a date ahead is never keyable', (r.rows.find(x => x.d > ago[0]) || { open: false }).open === false);
 
-  // what Ferezelly actually sees: the open days listed, the closed one gone
+  // What Ferezelly actually sees. A closed day is still LISTED — it has to be, or the day he just closed
+  // vanishes from Kerja and his work looks lost. Listing it and keying it are two questions: the card says
+  // it is closed, and workChitOpen above is what refuses the change.
   const listed = d => r.txt.indexOf(d.slice(8).replace(/^0/, '') + ' ') >= 0;
-  check('Kerja lists the days he may key, and not the closed one',
-    listed(ago[1]) && listed(ago[3]) && listed(ago[4]) && !listed(ago[2]),
-    r.txt.slice(0, 260));
+  check('Kerja lists every day in the window, the closed one included',
+    listed(ago[1]) && listed(ago[2]) && listed(ago[3]) && listed(ago[4]), r.txt.slice(0, 260));
+  check('Kerja does not list a day past the window', !listed(ago[6]), r.txt.slice(0, 260));
+
+  // opening the closed day shows it, and refuses to change it
+  await p.evaluate(() => { EA.local.set('fh.workchit', 'CH-2'); location.hash = ''; });
+  await p.waitForTimeout(150);
+  await p.evaluate(() => { location.hash = 'field-harvest/work'; });
+  await p.waitForTimeout(700);
+  const shut = await p.evaluate(() => document.querySelector('#room').innerText.replace(/\s+/g, ' '));
+  check('opening a closed day says so and sends him to the clerk, instead of opening the form',
+    /sudah ditutup/i.test(shut) && /MINTA BETULKAN CHIT/i.test(shut), shut.slice(0, 220));
   check('no page errors', errs.length === 0, errs.join(' | '));
   await b.close();
 

@@ -33,19 +33,30 @@ const ago = n => { const x = new Date(Date.now() - n * 864e5); return x.getFullY
       rows: [{ id: 'R1', worker_id: 'T1', muster: 'H', task_code: 'ITF', block: '01', lots: lots.join(' '), mandor: '' }, { id: 'R2', worker_id: 'L1', muster: 'H', task_code: 'LFF', block: '01', lots: lots.join(' '), mandor: '' }] };
     const plain = { chit: 'MC-OLD', date: d2, estate: 'SSGT', rev: 1, confirmedAt: '06:10', chitRowId: 'C2', alerts: [], jobs: [{ key: 'j1', task: 'CA', block: '', lots: [], mandor: '' }], rows: [{ id: 'R3', worker_id: 'H1', muster: 'H', task_code: 'CA', block: '', lots: '', mandor: '' }] };
     const tooOld = Object.assign({}, fixed, { chit: 'MC-5', date: d5, chitRowId: 'C5' });
-    localStorage.setItem('fh.chits2', JSON.stringify([fixed, plain, tooOld]));
+    // v1.75: 6 days back is past the window, so it must stay shut whatever its state.
+    const wayOld = Object.assign({}, fixed, { chit: 'MC-6', date: d6, chitRowId: 'C6' });
+    localStorage.setItem('fh.chits2', JSON.stringify([fixed, plain, tooOld, wayOld]));
     const work = (chit, date) => ({ chit, date, estate: 'SSGT', rev: 1, chitRev: 1, checker: 'STF-SSGT-01', lines: { T1: [{ lot: '', qty: '1', bunches: '' }], L1: [{ lot: '', qty: '', bunches: '' }] }, status: { j1: { done: 'Y', reason: '' } }, prog: {}, manual: {}, bags: {},
       rec: { chit, date, estate: 'SSGT', at: '18:28', lines: [{ id: 'W1', worker_id: 'T1', task_code: 'MT', block: '', lot: '', qty: '1', unit: 'day', bunches: '' }, { id: 'W2', worker_id: 'L1', task_code: 'LFF', block: '01', lot: '', qty: '', unit: 'MT', bunches: '' }],
         jobs: [{ id: 'J1', key: 'j1', task_code: 'MT', block: '', lots: '', workers: 1, qty: '1', unit: 'day', bunches: '', status: 'done', reason: '' }] } });
     const w3 = work('MC-OLD', d2); w3.rec.lines = [{ id: 'W3', worker_id: 'H1', task_code: 'CA', block: '', lot: '', qty: '1', unit: 'day', bunches: '' }];
     localStorage.setItem('fh.work', JSON.stringify([work('MC-FIX', d2), w3, work('MC-5', d5)]));
-  }, { d2: ago(2), d5: ago(5) });
+  }, { d2: ago(2), d5: ago(5), d6: ago(6) });
   await p.reload(); await p.fill('#key', '123456'); await p.waitForSelector('#home:not([hidden])');
   await p.evaluate(() => { location.hash = 'field-harvest/work'; }); await p.waitForTimeout(900);
   const opts = await p.$$eval('#wk-chit option', a => a.map(x => x.value + '|' + x.textContent));
   check('Kerja: the fixed past chit opens again, marked BETULKAN', opts.some(o => /^MC-FIX\|.*BETULKAN/.test(o)) || (await p.isVisible('#wk-fixband')), JSON.stringify(opts));
-  check('Kerja: a past chit not fixed stays closed', !opts.some(o => /^MC-OLD/.test(o)), JSON.stringify(opts));
-  check('Kerja: a fixed chit older than 3 days stays closed', !opts.some(o => /^MC-5/.test(o)), JSON.stringify(opts));
+  // v1.75 (Yu Chen, 19 Nov: "i wan him able to open and close the chit, especially 17 and 18 closing").
+  // These two used to check that a past chit stayed shut unless the clerk had asked for a fix, and that the
+  // wall was 3 days. That wall is what left 15, 16 and 17 Nov unclosable by anybody at Sugut. The rule is now
+  // closing, not age: an unclosed day is open for 5 days, whether or not the clerk asked. Past 5 days, and for
+  // any day already closed, nothing changes — v82-open-until-closed holds those two guards.
+  check('Kerja: a past chit nobody asked to fix is open too, while its day is not closed',
+    opts.some(o => /^MC-OLD/.test(o)), JSON.stringify(opts));
+  check('Kerja: 5 days back is the far edge of the window, still open',
+    opts.some(o => /^MC-5/.test(o)), JSON.stringify(opts));
+  check('Kerja: 6 days back is past the window and stays shut',
+    !opts.some(o => /^MC-6/.test(o)), JSON.stringify(opts));
   if (await p.$('#wk-chit')) { await p.selectOption('#wk-chit', 'MC-FIX'); await p.waitForTimeout(500); }
   check('the yellow band says "Betulkan · <day>"', await p.isVisible('#wk-fixband') && /Betulkan · /.test(await p.innerText('#wk-fixband')));
   check('it tells the staff the chit changed and to CORRECT', await p.isVisible('#wk-chitfixed') && await p.isVisible('#wk-fix'));

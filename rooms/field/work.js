@@ -59,8 +59,13 @@
   }
 
   // ---------- which chit ----------
+  // v1.75: which days Kerja LISTS and which days it lets this phone KEY are two different questions, and
+  // running them off one answer made a day vanish the moment it was closed — the staff closes 17 Nov, comes
+  // back to Kerja, and his work is simply gone from the screen. A day inside the window is always listed, so
+  // its card can say "✓ Hari ditutup"; whether he may change it is workChitOpen's business, asked separately.
+  function inWindow(c) { return !!c && c.date <= EA.today() && c.date >= daysAgo(OPEN_BACK); }
   function chitsFor(estate) {
-    return EA.fh.allChits().filter(function (c) { return c.estate === estate && EA.fh.workChitOpen(c); })
+    return EA.fh.allChits().filter(function (c) { return c.estate === estate && (inWindow(c) || EA.fh.workChitOpen(c)); })
       .sort(function (a, b) { return (a.date + a.confirmedAt) < (b.date + b.confirmedAt) ? 1 : -1; });
   }
   // v1.35 C2 · Betulkan kerja hari (Yu Chen, 24 Oct): an older day's work opens again only when its chit was
@@ -73,9 +78,9 @@
     var s = savedFor(c.chit);
     return !!(c.fixAsk || (c.rev || 1) > 1) && !!s && (s.chitRev || 1) < (c.rev || 1);
   }
-  // v1.40 E · Rancang & sahkan: a planned leave day confirmed on return opens for its work (up to 3 days back),
-  // until that work is saved; after that it changes only through the clerk's request, like any other day.
-  function planOpen(c) { return !!c && !!c.fromPlan && c.date >= daysAgo(3) && !savedFor(c.chit); }
+  // v1.40 E · Rancang & sahkan: a planned leave day confirmed on return opened for its work up to 3 days back,
+  // until that work was saved. v1.75 folded that into the one rule below — a planned day that is not closed is
+  // open like any other unclosed day — so planOpen is gone rather than left sitting unused beside it (Rule 5).
   // v1.72: the one place that says whether this phone may still key a day's work. TUTUP HARI asks it before it
   // offers a red line that jumps to Kerja, because since 1.71 the close reaches back 40 days.
   //
@@ -367,6 +372,15 @@
       el.innerHTML = head + chooser +
         fixBand() + '<p class="msg ok-msg"><span class="bm">Kerja harian untuk chit ini sudah disimpan.</span><span class="en">The day\'s work for this chit is saved.</span></p>' +
         savedCard(done);
+      wireTop();
+      return;
+    }
+    // v1.75: listed but not keyable — the day is closed (and nothing was saved against this chit, e.g. it was
+    // closed as "tiada kerja"), so it is shown and not opened. A closed day changes only through the clerk.
+    if (!EA.fh.workChitOpen(chit)) {
+      el.innerHTML = head + chooser +
+        '<div class="card"><p class="warn">' + EA.t('Hari ini sudah ditutup. Untuk mengubahnya, minta kerani tekan MINTA BETULKAN CHIT.',
+          'This day is closed. To change it, ask the clerk to tap MINTA BETULKAN CHIT.') + '</p></div>';
       wireTop();
       return;
     }

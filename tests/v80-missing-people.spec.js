@@ -67,4 +67,4 @@ check('the under-80% note is untouched', /return 'Bawah 80% sasaran: ' \+ draft\
 check('the day close counts a zero line as a work line, so the day can close',
   /if \(!ls\.length\) \{ out\.noLine\.push\(r\.worker_id\); return; \}/.test(dc), 'noLine is only a MISSING line');
 check('the zero question has a style', /\.mx-zero \{/.test(css), 'css');
-check('version 1.74 (122)', /EA\.RELEASE = '1\.74'/.test(v) && /EA\.VERSION = 122/.test(v), 'version');
+check('version 1.75 (123)', /EA\.RELEASE = '1\.75'/.test(v) && /EA\.VERSION = 123/.test(v), 'version');

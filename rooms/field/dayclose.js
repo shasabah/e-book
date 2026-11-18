@@ -86,7 +86,7 @@
     // On the estate list but on no chit that day: the day cannot settle his pay. Sunday is a rest day: only those
     // who came are on the chit, so no one is missing (public holidays the same once HQ gives the list).
     var rest = new Date(c.date + 'T00:00:00').getDay() === 0 || (EA.lists.holidays && EA.lists.holidays.indexOf(c.date) >= 0);
-    // v1.69: a worker is only expected on a chit from the day he started. Without this a man keyed today was
+    // v1.71: a worker is only expected on a chit from the day he started. Without this a man keyed today was
     // demanded on every past day as well, so one late registration could lock every day of the month — two
     // Sugut workers registered on 16 Nov with a start of 12 Nov blocked all eleven unclosed days back to 2 Nov.
     // No start date (the workers loaded before WORKER_LOG existed) means expected on every day, as before.
@@ -121,7 +121,7 @@
   function openDays(estate) {
     var seen = {}, out = [], today = EA.today(), f = from();
     EA.fh.allChits().forEach(function (c) {
-      // v1.69: 40 days, the same window the phone keeps its chits for, instead of 7. The chit was always
+      // v1.71: 40 days, the same window the phone keeps its chits for, instead of 7. The chit was always
       // there; only this list refused to offer it, so a day older than a week could not be closed by anyone
       // — the staff had no line to press and the office has no close of its own. On 17 Nov that left eight
       // November days on the Owner's board with nobody able to clear them. Closing an old day is not
@@ -153,11 +153,17 @@
     var c = closes().filter(function (s) { return s.estate === estate && s.date < date; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; })[0];
     return c ? { date: c.date, mm: c.rainMm == null ? '' : String(c.rainMm), time: c.rainTime || '' } : null;
   };
-  function rainDayCard(d, fromWork) {
+  // v1.71 (Ferezelly, 18 Nov 2026: "Rainfall 17/11 ialah 35, sy isi 13 sebab saya sangka close kerja 17
+  // E-Book minta rainfall tanggal 16"). The card said "Hujan siang ini" — rain today — but a day is almost
+  // always closed the next morning, so "ini" pointed at the wrong day and he keyed the day before's reading.
+  // The gauge reading belongs to the day being closed, and the card now says which day that is, by name.
+  function rainDayCard(d, fromWork, date) {
     var mm = String(d.rainMm == null ? '' : d.rainMm), dry = mm === '0', wet = !dry && (d.rainWet || Number(mm) > 0);
     var picked = String(d.rainTime || '').split(/[ ,]+/).filter(Boolean);
-    return '<div class="card rain-q' + (dayRainOk(d) ? ' done' : '') + '" id="dc-rainq"><h2>' + EA.t('Hujan siang ini', 'Rain today') + '</h2>' +
-      '<p class="hint">' + EA.t('6 pagi hingga 6 petang. Baca tolok, kemudian kosongkan.', '6 am to 6 pm. Read the gauge, then empty it.') + '</p>' +
+    var day = date ? niceDate(date) : '';
+    return '<div class="card rain-q' + (dayRainOk(d) ? ' done' : '') + '" id="dc-rainq"><h2>' +
+      (day ? EA.t('Hujan hari ' + day, 'Rain on ' + day) : EA.t('Hujan hari ini', 'Rain today')) + '</h2>' +
+      '<p class="hint">' + EA.t('Hujan pada hari yang ditutup, bukan hari ini. 6 pagi hingga 6 petang. Baca tolok, kemudian kosongkan.', 'The rain on the day being closed, not today. 6 am to 6 pm. Read the gauge, then empty it.') + '</p>' +
       '<div class="rain-row"><button type="button" class="btn' + (dry ? ' btn-ok' : ' btn-ghost') + '" id="dc-rain-no" aria-pressed="' + dry + '">NO RAIN<small>TIADA HUJAN</small></button>' +
       '<button type="button" class="btn' + (wet ? ' btn-wait' : ' btn-ghost') + '" id="dc-rain-yes" aria-pressed="' + wet + '">IT RAINED<small>ADA HUJAN</small></button></div>' +
       (wet ? '<div class="field"><label><span class="bm">Bacaan tolok (mm)</span><span class="en">Gauge reading (mm)</span></label>' +
@@ -209,8 +215,10 @@
     // 7 · v1.52.3: Membaja / CPS lots already done this round keyed again. It never stops the close; it shows the lots
     // and the reason picked on the chit, so a repeat is seen the same day (Blk 01, 27 Oct–3 Nov).
     // 8 · v1.61: the day's rain reading (the morning self-close skips it; the reading is then "tiada bacaan")
-    if (!d.autoClose) out.push(dayRainOk(d) ? { n: 8, ok: true, bm: 'Hujan siang: ' + dayRainText(d.rainMm, d.rainTime), en: 'Day rain: ' + dayRainText(d.rainMm, d.rainTime), sub: '' }
-      : { n: 8, ok: false, bm: 'Hujan siang belum dijawab', en: 'Day rain not answered', sub: EA.t('TIADA HUJAN, atau mm dan bila (di atas)', 'NO RAIN, or the mm and when (above)'), go: '#field-harvest/close' });
+    // v1.71: the check names the day too, for the same reason the card above does.
+    var rday = c && c.date ? niceDate(c.date) : '';
+    if (!d.autoClose) out.push(dayRainOk(d) ? { n: 8, ok: true, bm: 'Hujan ' + rday + ': ' + dayRainText(d.rainMm, d.rainTime), en: 'Rain ' + rday + ': ' + dayRainText(d.rainMm, d.rainTime), sub: '' }
+      : { n: 8, ok: false, bm: 'Hujan ' + rday + ' belum dijawab', en: 'Rain ' + rday + ' not answered', sub: EA.t('TIADA HUJAN, atau mm dan bila (di atas). Hujan hari itu, bukan hari ini.', 'NO RAIN, or the mm and when (above). The rain on that day, not today.'), go: '#field-harvest/close' });
     var rep = EA.fh.roundRepeats ? EA.fh.roundRepeats(estate, c) : [];
     if (rep.length) out.push({ n: 7, ok: true, warn: true, soft: true, bm: rep.length + ' petak sudah siap pusingan ini dikunci lagi', en: rep.length + ' lots already done this round keyed again',
       sub: rep.map(function (x) { return x.task + ' ' + x.lot + ' (' + EA.t('siap ', 'done ') + x.on.slice(8, 10) + '/' + x.on.slice(5, 7) + (x.why ? ' · ' + x.why : EA.t(' · tiada sebab', ' · no reason')) + ')'; }).join(' · ') });
@@ -271,7 +279,7 @@
       if (day.reopened) html += '<p class="warn"><b>' + EA.t('Dibuka semula · ', 'Reopened · ') + esc(niceDate(day.date)) + '</b> <span class="bm">Kerani minta pembetulan. Selepas pembetulan dikunci, tutup hari ini semula.</span></p>';
       var wr = rainFromWork(workOf(day.chit));
       if (wr.lots && String(d.rainMm == null ? '' : d.rainMm) === '' && !d.rainTime && !d.rainSeen) { d.rainWet = true; d.rainTime = '06-12'; d.rainSeen = true; keepDraft(day.date, d); ck = checks(ctx.estate, day.chit, d); bad = ck.filter(function (x) { return !x.ok; }); }
-      html += rainDayCard(d, wr.lots > 0 && d.rainTime === '06-12');
+      html += rainDayCard(d, wr.lots > 0 && d.rainTime === '06-12', day.date);
       html += '<div class="card"><h2>' + esc(niceDate(day.date)) + ' · ' + EA.t('Semakan sebelum tutup', 'Checks before closing') + '</h2>' +
         '<ol class="dc-list">' + ck.map(function (x) {
           return '<li class="dc-it ' + (x.ok ? (x.warn ? 'dc-warn' : x.drop ? 'dc-drop' : 'dc-ok') : 'dc-bad') + '">' + (x.go && !x.ok ? '<button type="button" class="link-btn dc-go" data-go="' + esc(x.go) + '">' : '<span>') +

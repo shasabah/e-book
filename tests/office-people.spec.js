@@ -18,7 +18,7 @@ const ctx = { SpreadsheetApp: { openById: () => ({ getSheetByName: n => ({ LIST_
 vm.createContext(ctx); vm.runInContext(code, ctx);
 const r = ctx.people_({ estates: ['SSGT'], role: 'Staff' });
 check('office people: only active people of the user\'s estates (a correction to inactive drops X-002)', r.people.map(x => x.id).join(',') === 'X-001', JSON.stringify(r.people));
-// v1.69 adds 'start', the day the worker began, because the day close has to know not to demand a man on a
+// v1.71 adds 'start', the day the worker began, because the day close has to know not to demand a man on a
 // chit from before he was hired. It is an employment date, not a personal paper: the guard below still holds.
 check('office people: no other columns than name, job, code, gang, sex, start',
   Object.keys(r.people[0]).sort().join(',') === 'estate,gang,id,job,mdr,name,sex,start', JSON.stringify(Object.keys(r.people[0]).sort()));

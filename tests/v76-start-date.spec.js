@@ -55,3 +55,21 @@ check('BETULKAN opens whichever of those days was tapped, not today\'s',
 check('each line names its day, now that the card holds more than one',
   /esc\(dayDm\(c\.date\)\)/.test(ms), 'day on the line');
 check('today is still first in the list', /return a\.date < b\.date \? 1 : -1;/.test(ms), 'newest first');
+
+// 6 · the rain reading at the close belongs to the day being closed, and the card says which day
+// (Ferezelly, 18 Nov 2026: he closed 17 Nov on the morning of 18 Nov, read "Hujan siang ini" as the day
+// before, and keyed 16 Nov's 13 mm where 17 Nov's 35 mm belonged.)
+check('the rain card no longer says "ini" (today)', !/'Hujan siang ini'/.test(dc), 'Hujan siang ini is gone');
+check('the rain card names the day being closed',
+  /function rainDayCard\(d, fromWork, date\)/.test(dc) && /var day = date \? niceDate\(date\) : '';/.test(dc)
+  && /'Hujan hari ' \+ day/.test(dc), 'rainDayCard takes the date');
+check('the screen passes the day being closed to the card',
+  /rainDayCard\(d, wr\.lots > 0 && d\.rainTime === '06-12', day\.date\)/.test(dc), 'caller');
+check('the hint says the rain is that day\'s, not today\'s',
+  /Hujan pada hari yang ditutup, bukan hari ini/.test(dc), 'hint');
+check('check 8 names the day too', /'Hujan ' \+ rday \+ ' belum dijawab'/.test(dc), 'check 8');
+check('the office can put 17 Nov right', /function fixSugutRain17Nov\(\)/.test(gs) && /row\.rain_mm = 35;/.test(gs), 'one-off');
+check('the office does not key 16 Nov for the staff',
+  !/'2026-11-16'[\s\S]{0,400}rain_mm/.test(gs.slice(gs.indexOf('function fixSugutRain17Nov'))), '16 Nov left to Ferezelly');
+check('the 17 Nov fix replaces, never deletes (Rule 4)',
+  /row\.replaces = c\.id; row\.status = 'active';/.test(gs.slice(gs.indexOf('function fixSugutRain17Nov'))), 'replaces');

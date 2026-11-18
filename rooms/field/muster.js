@@ -2088,7 +2088,7 @@
     }
   }
 
-  // v1.69 (Ferezelly, 18 Nov 2026: "tiada button ubah absen kepada pekerja yang tidak turun kerja"). A man who
+  // v1.71 (Ferezelly, 18 Nov 2026: "tiada button ubah absen kepada pekerja yang tidak turun kerja"). A man who
   // does not turn up is usually noticed when the day's work is keyed in the evening, or at the next morning's
   // muster — by then his chit is yesterday's, and this card only ever showed today's, so BETULKAN was gone and
   // there was no way to mark him away. He put 1 tandan instead, which is how four false attendance days reached

@@ -807,7 +807,7 @@ function people_(user) {
     standingRows_('LIST_PEOPLE', est).forEach(function (r) {
       if (String(r.active).toUpperCase() === 'N') return;
       if (!onMuster_(st[r.worker_id], today)) return;          // v1.25: resigned after the last day, or absconded (approved)
-      // v1.69: the day he started, from his own "new" line in WORKER_LOG. The day close needs it: a worker
+      // v1.71: the day he started, from his own "new" line in WORKER_LOG. The day close needs it: a worker
       // keyed today must not be demanded on a chit of a day before he was hired, which is what blocked every
       // unclosed day of November when two Sugut workers were registered on 16 Nov with a start of 12 Nov.
       // Blank for the workers loaded before E-Book had a WORKER_LOG: those are demanded on every day, as before.
@@ -3896,7 +3896,7 @@ function fixSugut16Nov() {
   return out;
 }
 
-// ---------------- v1.69 one-off: Sugut, the two men registered late (12–16 Nov) ----------------
+// ---------------- v1.71 one-off: Sugut, the two men registered late (12–16 Nov) ----------------
 // GOPAL BIN CONTOH (driver) and HAFIZ (harvester) both started work on 12 November, but they were only
 // keyed into E-Book on the evening of 16 November. So five days of their attendance and their work were
 // never on any chit: they are on no muster for 12, 13, 14, 15 or 16 November, and the days cannot close.
@@ -3907,9 +3907,15 @@ function fixSugut16Nov() {
 //   15/11  both did not come.
 //   16/11  GOPAL: Scot farm tractor blok 4 + loading at   HAFIZ: harvested 150 tandan, blok 4,
 //          the ramp.                                             petak 4-4 and 4-7.
-// Two holes are left open on purpose, because nobody said what they were, and during the trial a hole beats
-// a guess: the lots GOPAL's tractor covered, and how the 150 tandan split between 4-4 and 4-7. The lots
-// stay blank and the 150 stays on one line across both lots. Ferezelly can tell us later if it matters.
+// Yu Chen settled the two open points on 18 Nov:
+//  · GOPAL's tractor is not a second in-field transport tractor. The roads in that part of blok 4 are bad,
+//    so in rain a tractor has to escort the farm tractor while it loads. His lots are therefore the lots the
+//    farm tractor was loading that day: 12/11 petak 4-16 to 4-22, 16/11 petak 4-41 and 4-42, both read from
+//    the standing ITF work line of the same day. Still ITF, because it is the same job being made possible.
+//  · The 150 tandan cannot be traced lot by lot, so for the trial they are split by the number of palms
+//    ("since this is trial please split according to the numbers of palm"): petak 4-4 has 234 palms and 4-7
+//    has 32, so 234/266 of 150 is 132 and 32/266 is 18. That is 0.56 tandan a palm in both, which is the
+//    point of splitting this way. It is a split, not a count: the note on each line says so.
 // Note 16/11: HAFIZ harvested in blok 4 while the rest of the gang was in blok 3, so the day gets a second
 // harvest line of its own. That is how a new man on his own petak shows up, and it is kept separate so the
 // blok 3 line stays the three men who were there.
@@ -3919,8 +3925,9 @@ function fixSugut16Nov() {
 // gap for 14/11 rather than narrowing it.
 // Run once. Running it again changes nothing.
 var SSGT_LATE_TWO = [
-  { d: '2026-11-12', w: 'SSGTB261104', n: 'GOPAL', m: 'H', t: 'ITF', b: '04',
-    job: [{ t: 'ITF', b: '04', lot: '', qty: 1, u: 'day', why: 'Traktor ladang Scot, blok 4. Petak tidak dinyatakan.' }] },
+  { d: '2026-11-12', w: 'SSGTB261104', n: 'GOPAL', m: 'H', t: 'ITF', b: '04', lots: '4-16 4-17 4-18 4-19 4-20 4-21 4-22',
+    job: [{ t: 'ITF', b: '04', lot: '4-16 4-17 4-18 4-19 4-20 4-21 4-22', qty: 1, u: 'day',
+            why: 'Traktor mengiring traktor ladang semasa muat BTS: jalan di kawasan itu tidak baik, bila hujan traktor ladang perlu diiring. Petak sama seperti traktor ladang hari itu.' }] },
   { d: '2026-11-12', w: 'SSGTB261105', n: 'HAFIZ',   m: 'T', t: 'HA',  b: '' },
   { d: '2026-11-13', w: 'SSGTB261104', n: 'GOPAL', m: 'T', t: 'ITF', b: '' },
   { d: '2026-11-13', w: 'SSGTB261105', n: 'HAFIZ',   m: 'T', t: 'HA',  b: '' },
@@ -3929,11 +3936,13 @@ var SSGT_LATE_TWO = [
     job: [{ t: 'HA', b: '04', lot: '4-37', bun: 40, why: 'Tuai 14/11, blok 4 petak 4-37.' }] },
   { d: '2026-11-15', w: 'SSGTB261104', n: 'GOPAL', m: 'T', t: 'ITF', b: '' },
   { d: '2026-11-15', w: 'SSGTB261105', n: 'HAFIZ',   m: 'T', t: 'HA',  b: '' },
-  { d: '2026-11-16', w: 'SSGTB261104', n: 'GOPAL', m: 'H', t: 'ITF', b: '04',
-    job: [{ t: 'ITF', b: '04', lot: '', qty: 1, u: 'day', why: 'Traktor ladang Scot, blok 4. Petak tidak dinyatakan.' },
-           { t: 'LFR', b: '04', lot: '', qty: '', u: 'MT', why: 'Muat BTS di ramp. Dibayar dari tiket kilang, jadi kuantiti kosong.' }] },
+  { d: '2026-11-16', w: 'SSGTB261104', n: 'GOPAL', m: 'H', t: 'ITF', b: '04', lots: '4-41 4-42',
+    job: [{ t: 'ITF', b: '04', lot: '4-41 4-42', qty: 1, u: 'day',
+            why: 'Traktor mengiring traktor ladang semasa muat BTS: jalan di kawasan itu tidak baik, bila hujan traktor ladang perlu diiring. Petak sama seperti traktor ladang hari itu.' },
+           { t: 'LFR', b: '04', lot: '', qty: '', u: 'MT', why: 'Muat BTS di ramp. Dibayar dari tiket kilang, jadi kuantiti kosong. Ramp bukan petak.' }] },
   { d: '2026-11-16', w: 'SSGTB261105', n: 'HAFIZ',   m: 'H', t: 'HA',  b: '04', lots: '4-4 4-7',
-    job: [{ t: 'HA', b: '04', lot: '4-4 4-7', bun: 150, why: 'Tuai 16/11, blok 4 petak 4-4 dan 4-7. Pecahan antara dua petak tidak dinyatakan, jadi 150 tandan kekal pada satu baris.' }] }
+    job: [{ t: 'HA', b: '04', lot: '4-4', bun: 132, why: 'Tuai 16/11, blok 4. Jumlah sebenar 150 tandan bagi petak 4-4 dan 4-7 bersama; tidak dapat dikesan petak demi petak, jadi dibahagi ikut bilangan pokok (arahan Yu Chen 18/11). 4-4 ada 234 pokok daripada 266, jadi 132. Angka bahagian, bukan kiraan.' },
+           { t: 'HA', b: '04', lot: '4-7', bun: 18,  why: 'Tuai 16/11, blok 4. Jumlah sebenar 150 tandan bagi petak 4-4 dan 4-7 bersama; tidak dapat dikesan petak demi petak, jadi dibahagi ikut bilangan pokok (arahan Yu Chen 18/11). 4-7 ada 32 pokok daripada 266, jadi 18. Angka bahagian, bukan kiraan.' }] }
 ];
 // The day lines that change because of the rows above. "fix" replaces the standing line, "add" makes a new one.
 var SSGT_LATE_TWO_DAYS = [
@@ -3984,9 +3993,10 @@ function addSugutLateTwo18Nov() {
         out.did.push(tag + ': muster ' + p.m);
       }
       (p.job || []).forEach(function (j) {
+        // The lot is part of the test, because HAFIZ has two harvest lines on 16/11 (petak 4-4 and 4-7).
         var have = one_('FH_WORK', function (r) {
           return String(r.date).slice(0, 10) === p.d && String(r.worker_id) === p.w
-            && String(r.task_code) === j.t; });
+            && String(r.task_code) === j.t && String(r.lot) === String(j.lot); });
         if (have) { out.same.push(tag + ' ' + j.t + ': baris kerja sudah ada'); return; }
         add_('FH_WORK', { date: p.d, chit: chit_(p.d), worker_id: p.w, task_code: j.t, block: j.b,
           lot: j.lot, qty: j.qty === undefined ? '' : j.qty, unit: j.u || 'bunch',
@@ -4020,5 +4030,41 @@ function addSugutLateTwo18Nov() {
     });
   } finally { PRACTICE_ = was; BOOK_ = null; ROWS_MEMO_ = null; newGen_(); }
   Logger.log('addSugutLateTwo18Nov: ' + JSON.stringify(out));
+  return out;
+}
+
+// ---------------- v1.71 one-off: Sugut 17 Nov, the rain reading that was the day before's ----------------
+// Ferezelly, 18 Nov 2026: "Rainfall 17/11 ialah 35, sy isi 13 sebab saya sangka close kerja 17 E-Book minta
+// rainfall tanggal 16." The close card said "Hujan siang ini" — rain today — and he closed 17 November on
+// the morning of 18 November, so he read it as asking for the day before and keyed 16 November's 13 mm.
+// The reading on a close belongs to the day being closed. 17 November was 35 mm.
+// The card is fixed in the same release so this cannot happen again: it now names the day.
+// 16 November's own 13 mm is NOT keyed here. That day is still open, and Ferezelly keys its reading when he
+// closes it, the same as any other day. We do not put a figure in his close for him.
+// Nothing is deleted (Rule 4): the close is replaced by a corrected close carrying its own old note.
+// Run once. Running it again changes nothing.
+function fixSugutRain17Nov() {
+  var was = PRACTICE_, out = { book: '', did: [], same: [] };
+  try {
+    PRACTICE_ = false; BOOK_ = null; ROWS_MEMO_ = null;
+    var ss = book_(), now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');
+    try { out.book = ss.getName(); } catch (e) { out.book = '?'; }
+    var WHY = 'Betulkan hujan 17/11: 35 mm, bukan 13 mm. Ferezelly 18/11 — dia sangka skrin tutup hari minta hujan 16/11, jadi dia kunci bacaan 16/11. Bacaan pada penutupan adalah hujan hari yang ditutup. Sah Yu Chen 18/11.';
+    var c = standingRows_('FH_DAYCLOSE', 'SSGT').filter(function (r) {
+      return String(r.date).slice(0, 10) === '2026-11-17' && String(r.kind) === 'close'; })[0] || null;
+    if (!c) { out.same.push('17/11: tiada penutupan hari'); }
+    else if (Number(c.rain_mm) === 35) { out.same.push('17/11: hujan sudah 35 mm'); }
+    else {
+      var sh = roomTab_(ss, 'FH_DAYCLOSE'), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+      var row = {}; head.forEach(function (k) { row[k] = c[k] === undefined ? '' : c[k]; });
+      row.rain_mm = 35;
+      row.id = String(c.id) + '-R'; row.replaces = c.id; row.status = 'active';
+      row.keyed_by = 'OWNER-FIX'; row.keyed_at = now; row.received_at = now;
+      if (head.indexOf('note') >= 0) row.note = WHY + ' ' + String(c.note || '');
+      sh.appendRow(head.map(function (k) { return plain(row[k] === undefined ? '' : row[k]); }));
+      out.did.push('17/11: hujan ' + (c.rain_mm === '' ? 'kosong' : c.rain_mm) + ' mm → 35 mm');
+    }
+  } finally { PRACTICE_ = was; BOOK_ = null; ROWS_MEMO_ = null; newGen_(); }
+  Logger.log('fixSugutRain17Nov: ' + JSON.stringify(out));
   return out;
 }

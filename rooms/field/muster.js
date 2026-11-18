@@ -2088,15 +2088,28 @@
     }
   }
 
-  // ---------- today's chits on this phone ----------
+  // v1.69 (Ferezelly, 18 Nov 2026: "tiada button ubah absen kepada pekerja yang tidak turun kerja"). A man who
+  // does not turn up is usually noticed when the day's work is keyed in the evening, or at the next morning's
+  // muster — by then his chit is yesterday's, and this card only ever showed today's, so BETULKAN was gone and
+  // there was no way to mark him away. He put 1 tandan instead, which is how four false attendance days reached
+  // 16 Nov. The card now shows the last FIX_DAYS days, the same 3 days the office already allows a chit to be
+  // fixed in (server FIX_DAYS), so the screen and the rule finally agree. Older than that stays the Owner's.
+  var FIX_DAYS = 3;
+  function fixableChits() {
+    var from = EA.dayAgo(FIX_DAYS - 1);
+    return chits().filter(function (c) { return c.estate === ctx.estate && c.date >= from && c.date <= EA.today(); })
+      .sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+  }
+  // ---------- chits on this phone, today and the last few days ----------
   function todayCard() {
-    var list = todaysChits();
-    return '<section class="card" id="fh-today-card" aria-labelledby="fh-today"><h2 id="fh-today"><span class="inline"><span class="bm">Chit hari ini di telefon ini</span> · <span class="en">Today\'s chits on this phone</span></span></h2>' +
+    var list = fixableChits();
+    return '<section class="card" id="fh-today-card" aria-labelledby="fh-today"><h2 id="fh-today"><span class="inline"><span class="bm">Chit di telefon ini</span> · <span class="en">Chits on this phone</span></span></h2>' +
       (list.length ? '<div>' + list.map(function (c) {
         var s = summary(c.rows);
         var ids = c.rows.map(function (r) { return r.id; }).concat(c.chitRowId ? [c.chitRowId] : []);
         var waiting = ids.some(function (i) { return EA.isWaiting(i); });
-        return '<div class="list-line"><div><b>Chit ' + esc(c.chit.split('-').pop()) + '</b> · ' + esc(c.confirmedAt) + (c.rev > 1 ? ' · ' + EA.t('dibetulkan', 'corrected') : '') +
+        // The day is named on every line now that the card holds more than one: "Chit 1 · Selasa 17 Nov · 06:05".
+        return '<div class="list-line"><div><b>Chit ' + esc(c.chit.split('-').pop()) + '</b> · <b>' + esc(dayDm(c.date)) + '</b> · ' + esc(c.confirmedAt) + (c.rev > 1 ? ' · ' + EA.t('dibetulkan', 'corrected') : '') +
           '<span class="en">' + EA.t('Bekerja ', 'Working ') + s.tot(s.worked) + ' · ' + EA.t('Tidak bekerja ', 'Not working ') + s.tot(s.notw) + ' · ' + EA.t('Jumlah ', 'Total ') + s.tot(s.grand) + '</span></div>' +
           '<div class="acts"><span class="pill ' + (waiting ? 'wait">' + EA.t('Menunggu', 'Waiting') : 'ok">' + EA.t('Dihantar', 'Sent')) + '</span>' +
           '<button type="button" class="btn btn-ghost" data-view="' + esc(c.chit) + '">VIEW<small>Lihat</small></button>' +
@@ -2131,7 +2144,7 @@
     el.querySelectorAll('[data-view]').forEach(function (b) { b.onclick = function () { showChit(b.dataset.view); }; });
     el.querySelectorAll('[data-fix]').forEach(function (b) {
       b.onclick = function () {
-        var c = todaysChits().find(function (x) { return x.chit === b.dataset.fix; });
+        var c = fixableChits().find(function (x) { return x.chit === b.dataset.fix; });
         if (!c) return;
         startFix(c, null);
       };

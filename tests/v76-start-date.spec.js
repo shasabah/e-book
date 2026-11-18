@@ -40,3 +40,18 @@ check('the close list goes back as far as the chits are kept, not 7 days',
   keep === open && Number(open) === 40, 'chits kept ' + keep + ' days, close list offers ' + open);
 check('an old day still has to pass its checks: the close is unchanged otherwise',
   /state === 'ready'/.test(dc) && /out\.missing\.push\(\{ date: o\.date, bad: st\.bad \}\)/.test(dc), 'checks kept');
+
+// 5 · a chit can be corrected for 3 days, not only today (Ferezelly, 18 Nov 2026: "tiada button ubah absen")
+// He found two men had not turned up when he keyed the work next morning. By then the chit was yesterday's and
+// the card only ever listed today's, so BETULKAN was gone and he put 1 tandan instead. The office already lets
+// a chit be fixed for FIX_DAYS; the staff's own screen now matches it.
+const ms = fs.readFileSync(path.join(root, 'rooms', 'field', 'muster.js'), 'utf8');
+check('the chit card offers the last 3 days, not only today',
+  /var FIX_DAYS = 3;/.test(ms) && /function fixableChits\(\)/.test(ms) && /c\.date >= from && c\.date <= EA\.today\(\)/.test(ms), 'fixableChits');
+check('the same window as the office allows a chit to be fixed in',
+  (gs.match(/var FIX_DAYS = (\d+);/) || [])[1] === (ms.match(/var FIX_DAYS = (\d+);/) || [])[1], 'phone and office agree');
+check('BETULKAN opens whichever of those days was tapped, not today\'s',
+  /var c = fixableChits\(\)\.find/.test(ms), 'handler');
+check('each line names its day, now that the card holds more than one',
+  /esc\(dayDm\(c\.date\)\)/.test(ms), 'day on the line');
+check('today is still first in the list', /return a\.date < b\.date \? 1 : -1;/.test(ms), 'newest first');

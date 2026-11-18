@@ -47,4 +47,24 @@ check('the close still stops on a person present with no work line',
 
 check('the card has a style', /\.mx-away \{/.test(css) && /\.mx-row \{/.test(css), 'css');
 const v = fs.readFileSync(path.join(root, 'core', 'version.js'), 'utf8');
-check('version 1.73 (121)', /EA\.RELEASE = '1\.73'/.test(v) && /EA\.VERSION = 121/.test(v), v.match(/1\.\d+/)[0]);
+
+
+// 5 · a real zero (1.74). "Present and cut nothing" is the commonest thing on a rain day, and until now the
+// app had no way to say it: the only exits were a number nobody knew, or marking a man away who was there.
+check('a zero is an answer once it carries a reason',
+  /function zeroWhy\(w\)/.test(wk) && /num\(v\) === 0 && !!zeroWhy\(w\)/.test(wk), 'answered()');
+check('the reason list is the one approved on 11 Nov, not a new one',
+  /LOW_WHY\.map\(function \(y, i\) \{ return '<button type="button" class="pick" data-mz=/.test(wk), 'LOW_WHY reused');
+check('the question only appears when the number is zero',
+  /showZero\(w, v !== '' && num\(v\) === 0\)/.test(wk), 'showZero');
+check('typing a real number puts the question away and drops the reason',
+  /if \(!on && zeroWhy\(w\)\) \{ delete draft\.zero\[w\]; keepDraft\(\);/.test(wk), 'cleared');
+check('a zero with no reason is still unanswered, so it is not saved',
+  /if \(num\(v\) === 0 && !zeroWhy\(m\.w\)\) return;/.test(wk), 'no silent zero');
+check('marking a man away clears any zero reason he had', /if \(zeroWhy\(w\)\) delete draft\.zero\[w\];/.test(wk), 'away wins');
+check('the saved line says why it is zero', /return 'Hadir, tiada hasil: ' \+ zeroWhy\(w\);/.test(wk), 'note');
+check('the under-80% note is untouched', /return 'Bawah 80% sasaran: ' \+ draft\.low\[w\];/.test(wk), 'low note kept');
+check('the day close counts a zero line as a work line, so the day can close',
+  /if \(!ls\.length\) \{ out\.noLine\.push\(r\.worker_id\); return; \}/.test(dc), 'noLine is only a MISSING line');
+check('the zero question has a style', /\.mx-zero \{/.test(css), 'css');
+check('version 1.74 (122)', /EA\.RELEASE = '1\.74'/.test(v) && /EA\.VERSION = 122/.test(v), 'version');

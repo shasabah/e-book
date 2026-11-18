@@ -907,6 +907,9 @@ div.td-it { cursor: default; }
 .mx-away small { display: block; font-weight: 500; font-size: .62rem; opacity: .85; margin-top: 3px; }
 .mx-away[aria-pressed="true"] { background: var(--bad); color: #fff; }
 .mx-away[aria-pressed="true"] small { opacity: .95; }
+/* v1.73 · a zero asks why, in the row itself */
+.mx-zero { margin-top: 9px; background: var(--bad-soft); border-radius: 10px; padding: 8px 10px; }
+.mx-zh { margin: 0 0 6px; font-size: .78rem; font-weight: 700; }
 /* v1.72: a red check on TUTUP HARI that points at a card on the same screen scrolls to it and marks it for a
    moment, so the staff can see which card the line meant. */
 .look-here { animation: look-here 1.6s ease-out 1; }

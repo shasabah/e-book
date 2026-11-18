@@ -82,7 +82,10 @@ const { chromium } = require('playwright');
     return { none: f({}), dry: f({ rainMm: '0' }), wet: f({ rainMm: '12', rainTime: '06-12' }), wetNoTime: f({ rainMm: '12', rainTime: '' }), auto: f({ autoClose: true }) };
   });
   check('close: day rain not answered is a red check that sends back to the close', ck.none && ck.none.ok === false && ck.none.go === '#field-harvest/close', JSON.stringify(ck.none));
-  check('close: NO RAIN passes, "Hujan siang: tiada"', ck.dry && ck.dry.ok && ck.dry.bm === 'Hujan siang: tiada', JSON.stringify(ck.dry));
+  // v1.71: the check names the day being closed, not "siang ini" (Ferezelly, 18 Nov: he closed 17 Nov on the
+  // morning of 18 Nov and keyed the day before's reading, because the screen said "today").
+  check('close: NO RAIN passes, and the check names the day', ck.dry && ck.dry.ok
+    && /^Hujan \S+ \d+ \S+: tiada$/.test(ck.dry.bm), JSON.stringify(ck.dry));
   check('close: 12 mm with its period passes, "12 mm (6 pg–12 tgh)"', ck.wet && ck.wet.ok && /12 mm \(6 pg–12 tgh\)/.test(ck.wet.bm), JSON.stringify(ck.wet));
   check('close: mm without a period is not enough', ck.wetNoTime && ck.wetNoTime.ok === false);
   check('close: the morning self-close does not ask (no reading is "tiada bacaan")', ck.auto === null);

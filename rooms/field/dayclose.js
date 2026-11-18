@@ -140,7 +140,11 @@
   // ---------- v1.61 the day's rain reading (Yu Chen, 15 Nov 2026) ----------
   // Keyed at the close for 6 am–12 pm and 12 pm–6 pm: one mm figure as the gauge shows it, a tick for the period.
   // A lot stopped for rain in Kerja ticks 6 am–12 pm by itself (the work ends 1:30 pm), so the rain is keyed once.
-  var DAYP = [['06-12', '6 pg–12 tgh', '6 am–noon'], ['12-18', '12 tgh–6 ptg', 'noon–6 pm']];
+  // v1.72 (Yu Chen, 18 Nov 2026: "the selection 6am to noon? noon mean? shall we specific 6am - 12pm,
+  // 12pm - 6pm"). "Noon" and "midnight" are words a reader has to translate into a clock time, and the staff
+  // read these at 6 in the morning. Every period now shows the clock on both sides. The Bahasa wording was
+  // already exact (12 tgh is tengah hari, 12 mlm is malam) and is unchanged, as are the stored codes.
+  var DAYP = [['06-12', '6 pg–12 tgh', '6am–12pm'], ['12-18', '12 tgh–6 ptg', '12pm–6pm']];
   function dayRainOk(d) { var mm = String(d.rainMm == null ? '' : d.rainMm).trim(); return mm === '0' || (Number(mm) > 0 && !!String(d.rainTime || '').trim()); }
   function dayRainText(mm, time) {
     if (String(mm == null ? '' : mm).trim() === '') return 'tiada bacaan';
@@ -170,7 +174,7 @@
         '<input class="text-input qty" id="dc-rain-mm" inputmode="decimal" value="' + esc(Number(mm) > 0 ? mm : '') + '" placeholder="mm"></div>' +
         '<p class="hint">' + EA.t('Bila hujan turun? Tanda satu atau dua.', 'When did it rain? Tick one or both.') + '</p><div class="rain-row">' +
         DAYP.map(function (p) { var on = picked.indexOf(p[0]) >= 0; return '<button type="button" class="btn' + (on ? ' btn-wait' : ' btn-ghost') + '" data-drp="' + p[0] + '" aria-pressed="' + on + '">' + p[2] + '<small>' + p[1] + '</small></button>'; }).join('') + '</div>' +
-        (fromWork ? '<p class="hint">' + EA.t('6 pagi–12 tengah hari ditanda dari Kerja: petak berhenti kerana hujan. Hanya kunci mm.', '6 am–noon is ticked from Work: a lot stopped for rain. Only key the mm.') + '</p>' : '') : '') +
+        (fromWork ? '<p class="hint">' + EA.t('6 pagi–12 tengah hari ditanda dari Kerja: petak berhenti kerana hujan. Hanya kunci mm.', '6am–12pm is ticked from Work: a lot stopped for rain. Only key the mm.') + '</p>' : '') : '') +
       '</div>';
   }
 

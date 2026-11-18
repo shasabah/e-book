@@ -73,3 +73,18 @@ check('the office does not key 16 Nov for the staff',
   !/'2026-11-16'[\s\S]{0,400}rain_mm/.test(gs.slice(gs.indexOf('function fixSugutRain17Nov'))), '16 Nov left to Ferezelly');
 check('the 17 Nov fix replaces, never deletes (Rule 4)',
   /row\.replaces = c\.id; row\.status = 'active';/.test(gs.slice(gs.indexOf('function fixSugutRain17Nov'))), 'replaces');
+
+// 7 · the rain periods show the clock on both sides (Yu Chen, 18 Nov 2026: "the selection 6am to noon?
+// noon mean? shall we specific 6am - 12pm, 12pm - 6pm"). Bahasa was already exact and is unchanged.
+check('close: the day periods read 6am–12pm and 12pm–6pm',
+  /\['06-12', '6 pg–12 tgh', '6am–12pm'\]/.test(dc) && /\['12-18', '12 tgh–6 ptg', '12pm–6pm'\]/.test(dc), 'DAYP');
+// The word may still appear in a comment quoting the request; what matters is the text on the screen.
+const dcCode = dc.split('\n').filter(l => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+check('close: no "noon" left to translate on the screen', !/noon/.test(dcCode), 'noon is gone');
+check('chit: the night periods read 6pm–12am and 12am–6am',
+  /\['18-24', '6 ptg–12 mlm', '6pm–12am'\]/.test(ms) && /\['00-06', '12 mlm–6 pg', '12am–6am'\]/.test(ms), 'NIGHT');
+const msCode = ms.split('\n').filter(l => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+check('chit: no "midnight" left to translate on the screen', !/midnight/.test(msCode), 'midnight is gone');
+check('the stored codes are untouched, so old readings still read',
+  /'06-12'/.test(dc) && /'12-18'/.test(dc) && /'18-24'/.test(ms) && /'00-06'/.test(ms), 'codes');
+check('Bahasa unchanged', /'6 pg–12 tgh'/.test(dc) && /'12 mlm–6 pg'/.test(ms), 'bm');

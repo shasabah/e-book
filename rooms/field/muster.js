@@ -1469,7 +1469,9 @@
   // Two readings a day in four periods: the morning chit keys the night (6 pm–12 am, 12 am–6 am), Tutup hari keys the
   // day (6 am–12 pm, 12 pm–6 pm). No rain is one tap; rain is one mm figure as the gauge shows it, and a tick for the
   // period or periods it fell in — the mm is never split by guess. Stored on the chit as rain_mm and rain_time.
-  var NIGHT = [['18-24', '6 ptg–12 mlm', '6 pm–midnight'], ['00-06', '12 mlm–6 pg', 'midnight–6 am']];
+  // v1.72 (Yu Chen, 18 Nov 2026): the clock on both sides here too, so the night periods read the same way
+  // as the day ones on the close. Bahasa unchanged; the stored codes 18-24 and 00-06 unchanged.
+  var NIGHT = [['18-24', '6 ptg–12 mlm', '6pm–12am'], ['00-06', '12 mlm–6 pg', '12am–6am']];
   function rainOk(d) { d = d || draft; var mm = String(d.rain_mm == null ? '' : d.rain_mm).trim(); return mm === '0' || (Number(mm.replace(',', '.')) > 0 && !!String(d.rain_time || '').trim()); }
   function periodText(codes, list, en) {
     var c = String(codes || '').split(/[ ,]+/).filter(Boolean);

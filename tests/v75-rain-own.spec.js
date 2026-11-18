@@ -81,7 +81,11 @@ const { chromium } = require('playwright');
     const f = d => (EA.fh.dayclose.checks('SSGT', c, d).find(x => x.n === 8) || null);
     return { none: f({}), dry: f({ rainMm: '0' }), wet: f({ rainMm: '12', rainTime: '06-12' }), wetNoTime: f({ rainMm: '12', rainTime: '' }), auto: f({ autoClose: true }) };
   });
-  check('close: day rain not answered is a red check that sends back to the close', ck.none && ck.none.ok === false && ck.none.go === '#field-harvest/close', JSON.stringify(ck.none));
+  // v1.72: the line used to carry the close screen's own address, so pressing it set the hash to the hash it
+  // already had and nothing happened. It now points at the rain card on this same screen (Yu Chen, 18 Nov:
+  // "the red line cannot press to the direct issue").
+  check('close: day rain not answered is a red check that points at the rain card',
+    ck.none && ck.none.ok === false && ck.none.scrollTo === '#dc-rainq' && !ck.none.go, JSON.stringify(ck.none));
   // v1.71: the check names the day being closed, not "siang ini" (Ferezelly, 18 Nov: he closed 17 Nov on the
   // morning of 18 Nov and keyed the day before's reading, because the screen said "today").
   check('close: NO RAIN passes, and the check names the day', ck.dry && ck.dry.ok

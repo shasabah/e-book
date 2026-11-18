@@ -3895,3 +3895,130 @@ function fixSugut16Nov() {
   Logger.log('fixSugut16Nov: ' + JSON.stringify(out));
   return out;
 }
+
+// ---------------- v1.69 one-off: Sugut, the two men registered late (12–16 Nov) ----------------
+// GOPAL BIN CONTOH (driver) and HAFIZ (harvester) both started work on 12 November, but they were only
+// keyed into E-Book on the evening of 16 November. So five days of their attendance and their work were
+// never on any chit: they are on no muster for 12, 13, 14, 15 or 16 November, and the days cannot close.
+// Ferezelly answered for every one of those days on 18 November, and Yu Chen confirmed the blocks and lots:
+//   12/11  GOPAL: Scot farm tractor in blok 4.            HAFIZ: did not come.
+//   13/11  both did not come.
+//   14/11  GOPAL: did not come.                           HAFIZ: harvested 40 tandan, blok 4, petak 4-37.
+//   15/11  both did not come.
+//   16/11  GOPAL: Scot farm tractor blok 4 + loading at   HAFIZ: harvested 150 tandan, blok 4,
+//          the ramp.                                             petak 4-4 and 4-7.
+// Two holes are left open on purpose, because nobody said what they were, and during the trial a hole beats
+// a guess: the lots GOPAL's tractor covered, and how the 150 tandan split between 4-4 and 4-7. The lots
+// stay blank and the 150 stays on one line across both lots. Ferezelly can tell us later if it matters.
+// Note 16/11: HAFIZ harvested in blok 4 while the rest of the gang was in blok 3, so the day gets a second
+// harvest line of its own. That is how a new man on his own petak shows up, and it is kept separate so the
+// blok 3 line stays the three men who were there.
+// Nothing is deleted (Rule 4): the day lines are replaced by corrected ones that carry the old note.
+// 14/11 is already closed. The close stays as the record of what was closed that day; this correction is a
+// new record on top of it, and the day's tandan rise from 435 to 475, which widens the cut-against-ticket
+// gap for 14/11 rather than narrowing it.
+// Run once. Running it again changes nothing.
+var SSGT_LATE_TWO = [
+  { d: '2026-11-12', w: 'SSGTB261104', n: 'GOPAL', m: 'H', t: 'ITF', b: '04',
+    job: [{ t: 'ITF', b: '04', lot: '', qty: 1, u: 'day', why: 'Traktor ladang Scot, blok 4. Petak tidak dinyatakan.' }] },
+  { d: '2026-11-12', w: 'SSGTB261105', n: 'HAFIZ',   m: 'T', t: 'HA',  b: '' },
+  { d: '2026-11-13', w: 'SSGTB261104', n: 'GOPAL', m: 'T', t: 'ITF', b: '' },
+  { d: '2026-11-13', w: 'SSGTB261105', n: 'HAFIZ',   m: 'T', t: 'HA',  b: '' },
+  { d: '2026-11-14', w: 'SSGTB261104', n: 'GOPAL', m: 'T', t: 'ITF', b: '' },
+  { d: '2026-11-14', w: 'SSGTB261105', n: 'HAFIZ',   m: 'H', t: 'HA',  b: '04', lots: '4-37',
+    job: [{ t: 'HA', b: '04', lot: '4-37', bun: 40, why: 'Tuai 14/11, blok 4 petak 4-37.' }] },
+  { d: '2026-11-15', w: 'SSGTB261104', n: 'GOPAL', m: 'T', t: 'ITF', b: '' },
+  { d: '2026-11-15', w: 'SSGTB261105', n: 'HAFIZ',   m: 'T', t: 'HA',  b: '' },
+  { d: '2026-11-16', w: 'SSGTB261104', n: 'GOPAL', m: 'H', t: 'ITF', b: '04',
+    job: [{ t: 'ITF', b: '04', lot: '', qty: 1, u: 'day', why: 'Traktor ladang Scot, blok 4. Petak tidak dinyatakan.' },
+           { t: 'LFR', b: '04', lot: '', qty: '', u: 'MT', why: 'Muat BTS di ramp. Dibayar dari tiket kilang, jadi kuantiti kosong.' }] },
+  { d: '2026-11-16', w: 'SSGTB261105', n: 'HAFIZ',   m: 'H', t: 'HA',  b: '04', lots: '4-4 4-7',
+    job: [{ t: 'HA', b: '04', lot: '4-4 4-7', bun: 150, why: 'Tuai 16/11, blok 4 petak 4-4 dan 4-7. Pecahan antara dua petak tidak dinyatakan, jadi 150 tandan kekal pada satu baris.' }] }
+];
+// The day lines that change because of the rows above. "fix" replaces the standing line, "add" makes a new one.
+var SSGT_LATE_TWO_DAYS = [
+  { d: '2026-11-12', t: 'ITF', b: '04', how: 'fix', men: 2, qty: 2,   say: 'pemandu traktor kedua' },
+  { d: '2026-11-14', t: 'HA',  b: '04', how: 'fix', men: 4, bun: 475, say: 'HAFIZ 40 tandan' },
+  { d: '2026-11-16', t: 'ITF', b: '04', how: 'fix', men: 2, qty: 2,   say: 'pemandu traktor kedua' },
+  { d: '2026-11-16', t: 'LFR', b: '04', how: 'add', men: 1, qty: '',  u: 'MT',    lots: '', say: 'muat di ramp' },
+  { d: '2026-11-16', t: 'HA',  b: '04', how: 'add', men: 1, bun: 150, u: 'bunch', lots: '4-4 4-7', say: 'HAFIZ blok 4' }
+];
+function addSugutLateTwo18Nov() {
+  var was = PRACTICE_, out = { book: '', did: [], same: [] };
+  try {
+    PRACTICE_ = false; BOOK_ = null; ROWS_MEMO_ = null;
+    var ss = book_(), now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), n = 0;
+    try { out.book = ss.getName(); } catch (e) { out.book = '?'; }
+    var WHY = 'Dua pekerja didaftar lewat (mula 12/11, dikunci 16/11). Jawapan Ferezelly 18/11, sah Yu Chen 18/11.';
+    function chit_(d) { return 'MC-SSGT-P13-' + d.replace(/\D/g, '') + '-1'; }
+    function add_(tab, fields) {
+      var sh = roomTab_(ss, tab), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+      var row = {}; head.forEach(function (c) { row[c] = ''; });
+      row.id = 'OFC-SSGT-' + now.slice(0, 10).replace(/\D/g, '') + '-L' + (++n);
+      row.company = 'SPLT'; row.estate = 'SSGT'; row.keyed_by = 'OWNER-FIX'; row.keyed_at = now;
+      row.phone = 'OFFICE'; row.status = 'active'; row.replaces = ''; row.received_at = now;
+      row.confirmed_by = 'OWNER-FIX'; row.confirmed_at = now;
+      Object.keys(fields).forEach(function (k) { if (head.indexOf(k) >= 0) row[k] = fields[k]; });
+      sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); }));
+    }
+    function replaceWith_(tab, r, fields, why) {
+      var sh = roomTab_(ss, tab), head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+      var row = {}; head.forEach(function (c) { row[c] = r[c] === undefined ? '' : r[c]; });
+      Object.keys(fields).forEach(function (k) { row[k] = fields[k]; });
+      row.id = String(r.id) + '-L'; row.replaces = r.id; row.status = 'active';
+      row.keyed_by = 'OWNER-FIX'; row.keyed_at = now; row.received_at = now;
+      if (head.indexOf('note') >= 0) row.note = why;
+      sh.appendRow(head.map(function (c) { return plain(row[c] === undefined ? '' : row[c]); }));
+    }
+    function one_(tab, test) { return standingRows_(tab, 'SSGT').filter(test)[0] || null; }
+
+    // 1 · the muster mark for each man on each day, and his work line where he worked
+    SSGT_LATE_TWO.forEach(function (p) {
+      var tag = p.n + ' ' + p.d.slice(5);
+      var m = one_('FH_MUSTER', function (r) {
+        return String(r.date).slice(0, 10) === p.d && String(r.worker_id) === p.w; });
+      if (m) out.same.push(tag + ': sudah ada muster ' + m.muster);
+      else {
+        add_('FH_MUSTER', { date: p.d, chit: chit_(p.d), worker_id: p.w, task_code: p.t,
+          block: p.b || '', lots: p.lots || '', muster: p.m, note: WHY });
+        out.did.push(tag + ': muster ' + p.m);
+      }
+      (p.job || []).forEach(function (j) {
+        var have = one_('FH_WORK', function (r) {
+          return String(r.date).slice(0, 10) === p.d && String(r.worker_id) === p.w
+            && String(r.task_code) === j.t; });
+        if (have) { out.same.push(tag + ' ' + j.t + ': baris kerja sudah ada'); return; }
+        add_('FH_WORK', { date: p.d, chit: chit_(p.d), worker_id: p.w, task_code: j.t, block: j.b,
+          lot: j.lot, qty: j.qty === undefined ? '' : j.qty, unit: j.u || 'bunch',
+          bunches: j.bun === undefined ? '' : j.bun, note: WHY + ' ' + j.why });
+        out.did.push(tag + ' ' + j.t + (j.bun ? ' ' + j.bun + ' tandan' : '') + (j.lot ? ' petak ' + j.lot : ''));
+      });
+    });
+
+    // 2 · the day lines those rows change
+    SSGT_LATE_TWO_DAYS.forEach(function (r) {
+      var jd = one_('FH_JOBDAY', function (x) {
+        return String(x.date).slice(0, 10) === r.d && String(x.task_code) === r.t
+          && String(x.block) === r.b && (r.how === 'fix' || String(x.lots) === String(r.lots)); });
+      var tag = 'hari ' + r.d.slice(5) + ' ' + r.t + ' blok ' + r.b;
+      if (r.how === 'fix') {
+        if (!jd) { out.same.push(tag + ': tiada baris hari'); return; }
+        if (Number(jd.workers) >= r.men) { out.same.push(tag + ': sudah ' + jd.workers + ' orang'); return; }
+        var f = { workers: r.men };
+        if (r.bun !== undefined) f.bunches = r.bun;
+        if (r.qty !== undefined) f.qty = r.qty;
+        replaceWith_('FH_JOBDAY', jd, f, WHY + ' ' + r.say + '. ' + String(jd.note || ''));
+        out.did.push(tag + ': ' + jd.workers + ' orang → ' + r.men
+          + (r.bun !== undefined ? ', tandan ' + jd.bunches + ' → ' + r.bun : ''));
+      } else {
+        if (jd) { out.same.push(tag + ': baris hari sudah ada'); return; }
+        add_('FH_JOBDAY', { date: r.d, chit: chit_(r.d), task_code: r.t, block: r.b, lots: r.lots,
+          qty: r.qty, unit: r.u, bunches: r.bun === undefined ? '' : r.bun, workers: r.men,
+          job_status: 'done', note: WHY + ' ' + r.say + '.' });
+        out.did.push(tag + ': baris hari baharu (' + r.say + ')');
+      }
+    });
+  } finally { PRACTICE_ = was; BOOK_ = null; ROWS_MEMO_ = null; newGen_(); }
+  Logger.log('addSugutLateTwo18Nov: ' + JSON.stringify(out));
+  return out;
+}

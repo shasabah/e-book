@@ -1127,7 +1127,7 @@
     var waiting = ids.some(function (i) { return i && EA.isWaiting(i); });
     var notDone = s.rec.jobs.filter(function (j) { return j.status === 'not_done'; }).length;
     var chitFixed = chit && chit.chit === s.chit && (chit.rev || 1) > (s.chitRev || 1);
-    return (chitFixed ? '<p class="warn" id="wk-chitfixed"><span class="bm">Chit pagi ini dibetulkan selepas kerja harian disimpan. Tekan CORRECT untuk kemas kini.</span>' +
+    return (chitFixed ? '<p class="warn" id="wk-chitfixed"><span class="bm">Chit pagi ini dibetulkan selepas kerja harian disimpan. Tekan BETULKAN untuk kemas kini.</span>' +
       '<span class="en">The morning chit was corrected after the day\'s work was saved. Tap CORRECT to bring it up to date.</span></p>' : '') +
       '<section class="card" id="wk-saved"><div class="list-line"><div><b>' + esc(niceDate(s.date)) + ' · ' + esc(s.rec.at) + (s.rev > 1 ? ' · ' + EA.t('dibetulkan', 'corrected') : '') + '</b>' +
       '<span class="en">' + s.rec.jobs.length + EA.t(' kerja · ', ' jobs · ') + (s.rec.jobs.length - notDone) + EA.t(' siap · ', ' done · ') + notDone + EA.t(' belum siap', ' not done') + '</span></div>' +
@@ -1139,8 +1139,11 @@
   function closeRow(s) {
     var st = EA.fh.dayclose && EA.fh.dayclose.cardState ? EA.fh.dayclose.cardState(s.estate, ctx.user, s.date) : { state: 'none' };
     if (st.state === 'closed') return '<p class="wk-closed"><b>✓ ' + EA.t('Hari ditutup', 'Day closed') + (st.at ? ' · ' + esc(st.at) : '') + '</b></p>';
-    if (st.state === 'ready') return '<div class="actions"><button type="button" class="btn btn-ok" id="wk-close" data-date="' + esc(s.date) + '">TUTUP HARI<small>' + EA.t('Semua lengkap · tutup hari ini', 'All complete · close this day') + '</small></button></div>';
-    if (st.state === 'missing') return '<div class="actions"><button type="button" class="btn btn-ghost wk-close-wait" id="wk-close" data-date="' + esc(s.date) + '">TUTUP HARI<small>' + st.bad + EA.t(' perkara belum lengkap · lihat', ' things not complete · see') + '</small></button></div>';
+    // v1.75: the button keeps its name; what is left to do goes on the line under it, not inside it.
+    if (st.state === 'ready') return '<p class="hint">✓ ' + EA.t('Semua lengkap.', 'All complete.') + '</p>' +
+      '<div class="actions"><button type="button" class="btn btn-ok" id="wk-close" data-date="' + esc(s.date) + '">' + EA.t('TUTUP HARI', 'CLOSE THE DAY') + '</button></div>';
+    if (st.state === 'missing') return '<p class="hint">' + st.bad + EA.t(' perkara belum lengkap.', ' things not complete.') + '</p>' +
+      '<div class="actions"><button type="button" class="btn btn-ghost wk-close-wait" id="wk-close" data-date="' + esc(s.date) + '">' + EA.t('TUTUP HARI', 'CLOSE THE DAY') + '</button></div>';
     return '';
   }
 

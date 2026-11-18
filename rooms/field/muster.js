@@ -845,7 +845,9 @@
     var started = draft.jobs.length || Object.keys(draft.marks).length || draft.replacing || draft.newChit || draft.mode;
     if (todaysChits().length && !started) {
       el.innerHTML = head +
-        '<p class="msg ok-msg"><span class="bm">Chit hari ini sudah disimpan. Tekan VIEW untuk lihat, atau CORRECT untuk betulkan.</span>' +
+        // v1.75: name the buttons as this phone shows them. The Bahasa line used to say "Tekan VIEW ... CORRECT",
+        // but a Bahasa phone shows LIHAT and BETULKAN, so Ferezelly hunted for words that were not there (19 Nov).
+        '<p class="msg ok-msg"><span class="bm">Chit hari ini sudah disimpan. Tekan LIHAT untuk lihat, atau BETULKAN untuk betulkan.</span>' +
         '<span class="en">Today\'s chit is saved. Tap VIEW to see it, or CORRECT to fix it.</span></p>' +
         todayCard() + plansCard(true) + backlogCard(ctx.estate) + jenteraCard(ctx.estate) +
         '<button type="button" class="btn btn-ghost" id="fh-new">+ NEW CHIT<small>Chit baru (' + EA.t('jarang perlu', 'rarely needed') + ')</small></button>';
@@ -1103,7 +1105,7 @@
         '<div class="acts"><span class="pill plain">' + n + ' orang</span>' +
         '<button type="button" class="btn btn-ghost" data-pick="' + j.key + '">PICK<small>Pilih orang</small></button>' +
         '<button type="button" class="btn btn-ghost" data-edit="' + j.key + '">EDIT<small>Ubah</small></button></div></div>';
-    }).join('') : '<p class="hint">' + EA.t('Belum ada kerja. Tekan + ADD JOB untuk setiap kerja hari ini.', 'No jobs yet. Tap + ADD JOB for each job today.') + '</p>';
+    }).join('') : '<p class="hint">' + EA.t('Belum ada kerja. Tekan + TAMBAH KERJA untuk setiap kerja hari ini.', 'No jobs yet. Tap + ADD JOB for each job today.') + '</p>';
     el.querySelectorAll('#fh-jobs [data-edit]').forEach(function (b) { b.onclick = function () { editJob(b.dataset.edit); }; });
     el.querySelectorAll('#fh-jobs [data-pick]').forEach(function (b) { b.onclick = function () { pickPeople(b.dataset.pick); }; });
   }

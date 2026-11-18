@@ -311,7 +311,10 @@
           '<textarea class="text-input" rows="2" id="dc-field" placeholder="' + EA.t('cth: traktor rosak petang, kutip esok pagi', 'e.g. tractor broke down, collect tomorrow morning') + '">' + esc(d.fieldNote || '') + '</textarea></div>';
       }
       html += '<div class="field"><label><span class="bm">Catatan (pilihan)</span><span class="en">Note (optional)</span></label><input class="text-input" id="dc-note" maxlength="150" value="' + esc(d.note || '') + '"></div>' +
-        '<div class="actions"><button type="button" class="btn btn-ok" id="dc-close"' + (bad.length ? ' disabled' : '') + '>TUTUP HARI<small>' + EA.t('Kunci hari ' + niceDate(day.date), 'Close ' + niceDate(day.date)) + '</small></button></div>' +
+        // v1.75: one name, in the phone's language. Written as BAHASA<small>English</small> the app would read
+        // the small line as the Bahasa and show "KUNCI HARI RABU 18 NOV" instead of TUTUP HARI (Ferezelly, 19 Nov).
+        '<div class="actions"><button type="button" class="btn btn-ok" id="dc-close"' + (bad.length ? ' disabled' : '') + '>' + EA.t('TUTUP HARI', 'CLOSE THE DAY') + '</button></div>' +
+        '<p class="hint">' + EA.t('Mengunci hari ' + niceDate(day.date) + '.', 'Closes ' + niceDate(day.date) + '.') + '</p>' +
         (bad.length ? '<p class="hint">' + bad.length + EA.t(' perkara belum lengkap. Tekan baris merah untuk membetulkannya.', ' things not complete. Tap a red line to fix it.') + '</p>' : '<p class="hint">' + EA.t('Selepas ditutup, hari ini hanya boleh diubah melalui MINTA BETULKAN CHIT (kerani), dalam 3 hari.', 'After closing, this day changes only through MINTA BETULKAN CHIT (the clerk), within 3 days.') + '</p>') +
         '</div>';
     }
@@ -492,7 +495,7 @@
       if (!re.length) return '';
       return '<p class="plan-band due" id="wk-dayclose"><b>' + EA.t('Hari ' + niceDate(re[0].date) + ' dibuka semula', 'Day ' + niceDate(re[0].date) + ' reopened') + '</b>' +
         '<span>' + EA.t('Kerani minta pembetulan. Selepas dibetulkan, tutup hari itu semula.', 'The clerk asked for a fix. After fixing, close that day again.') + '</span>' +
-        '<a class="btn btn-ok" href="#field-harvest/close">TUTUP HARI<small>' + EA.t('Semak & tutup semula', 'Check & close again') + '</small></a></p>';
+        '<a class="btn btn-ok" href="#field-harvest/close">' + EA.t('TUTUP HARI', 'CLOSE THE DAY') + '</a></p>';
     } finally { ctx = keep; }
   };
 
@@ -510,8 +513,8 @@
       '<button type="button" class="btn btn-ok" id="dc-dry">NO RAIN · CLOSE<small>TIADA HUJAN · TUTUP</small></button></div></div>';
     else if (st.state === 'ready') html = '<div class="dc-ask" id="dc-ask"><b>✓ ' + EA.t('Semua lengkap. Tutup hari ' + niceDate(date) + '?', 'All complete. Close ' + niceDate(date) + '?') + '</b>' +
       '<small>' + EA.t('Selepas ditutup, hari ini hanya diubah melalui MINTA BETULKAN CHIT (kerani).', 'After closing, changes only through MINTA BETULKAN CHIT (the clerk).') + '</small>' +
-      '<div class="actions"><button type="button" class="btn btn-ghost" id="dc-later">NANTI<small>' + EA.t('Ada lagi untuk dikunci', 'More to key') + '</small></button>' +
-      '<button type="button" class="btn btn-ok" id="dc-yes">YA, TUTUP<small>' + EA.t('Tutup hari', 'Close the day') + '</small></button></div></div>';
+      '<div class="actions"><button type="button" class="btn btn-ghost" id="dc-later">' + EA.t('NANTI', 'LATER') + '</button>' +
+      '<button type="button" class="btn btn-ok" id="dc-yes">' + EA.t('YA, TUTUP', 'YES, CLOSE') + '</button></div></div>';
     else html = '<div class="dc-ask dc-wait" id="dc-ask"><b>' + EA.t('Tutup hari bila lengkap:', 'Close the day when complete:') + '</b>' +
       st.bad.map(function (x) { return '<button type="button" class="link-btn dc-go" data-go="' + esc(x.go || '#field-harvest/close') + '">• ' + esc(EA.t(x.bm, x.en)) + '</button>'; }).join('') + '</div>';
     return { state: st.state, html: html, wire: function (sh, after) {

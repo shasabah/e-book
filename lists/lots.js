@@ -354,6 +354,14 @@ EA.lists.lots = [
   { estate: 'PTAN', block: '04', lot: '4-53', ha: 0.14, palms: 18 , lat: 6.385563, lon: 117.339058 },
   { estate: 'PTAN', block: '04', lot: '4-54', ha: 0.16, palms: 13 , lat: 6.386692, lon: 117.339056 },
   { estate: 'PTAN', block: '9A', lot: '9A-1', ha: 3.64, palms: 495, planted: 2018 },
+  // Meliau (MELU), 18 Nov 2026: no lot map yet, so each block is one lot (as Paitan 9Ac) until HQ has one.
+  // Hectares and palms from HQ's MELU SUMMARY BUDGET 2026 (Brief_Data_Induk 4). The staff key by block.
+  { estate: 'MELU', block: '01', lot: '1-1', ha: 53.00, palms: 6321 },
+  { estate: 'MELU', block: '02', lot: '2-1', ha: 43.97, palms: 5614 },
+  { estate: 'MELU', block: '03', lot: '3-1', ha: 41.95, palms: 5130 },
+  { estate: 'MELU', block: '04', lot: '4-1', ha: 39.74, palms: 4891 },
+  { estate: 'MELU', block: '05', lot: '5-1', ha: 41.28, palms: 5375 },
+  { estate: 'MELU', block: '06', lot: '6-1', ha: 60.72, palms: 7575 },
   // TKRS (PJSB) and 43 Acres (43AC), added 14 Nov 2026 for the Paitan group's one chit: one worker team
   // over three pieces (Brief_Data_Induk 2.2-2.4, signed 13 Nov). They sit under estate PTAN, because people
   // and the chit belong to the estate while land belongs to the piece. The block code carries the piece:

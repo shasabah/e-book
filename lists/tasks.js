@@ -192,7 +192,10 @@ EA.lists.chitNames = {
 // RMH need approval. OPR (road & drain repair) and ETF (lorry to mill) stay main.
 EA.lists.mainJobs = { SSGT: ['HA', 'ITF', 'LFF', 'LF', 'DF', 'MDR', 'CA', 'WM', 'CPS', 'VOPS', 'MAN', 'SL', 'RP', 'AP', 'OPH', 'OPR', 'ETF'],
   // Paitan (13 Nov 2026; Brief_Data_Induk 2.6): the same as Sugut, without the durian job
-  PTAN: ['HA', 'ITF', 'LFF', 'LF', 'MDR', 'CA', 'WM', 'CPS', 'VOPS', 'MAN', 'SL', 'RP', 'AP', 'OPH', 'OPR', 'ETF'] };
+  PTAN: ['HA', 'ITF', 'LFF', 'LF', 'MDR', 'CA', 'WM', 'CPS', 'VOPS', 'MAN', 'SL', 'RP', 'AP', 'OPH', 'OPR', 'ETF'],
+  // Meliau (18 Nov 2026; Brief_Data_Induk 4): as Paitan — Sugut's list without the durian job. Like Paitan, Meliau
+  // keeps the whole "other work" list (no otherJobs line); the Pengurus still approves each one.
+  MELU: ['HA', 'ITF', 'LFF', 'LF', 'MDR', 'CA', 'WM', 'CPS', 'VOPS', 'MAN', 'SL', 'RP', 'AP', 'OPH', 'OPR', 'ETF'] };
 EA.lists.isMainJob = function (estate, code) { var m = EA.lists.mainJobs[estate]; return !m || m.indexOf(code) >= 0; };
 // v1.45 (Yu Chen, 27 Oct): the "+ Kerja lain · minta lulus" list shows only the other jobs the estate really does
 // (ticked by Yu Chen; CPT census palm and LG/UL loading fertiliser / seedlings added back from the Sugut piece rate list).
@@ -205,7 +208,7 @@ EA.lists.isOtherJob = function (estate, code) { var o = EA.lists.otherJobs[estat
 // in Nov-Dec (the 2 Nov plan: CPS 4 rounds, manuring round 4), so folding them away cost a tap every day.
 // They stay main jobs either way; this only moves which button they sit on. Taken off the row when the
 // rounds are done. moreJobsFor() takes them out of the folded list by itself.
-EA.lists.dailyJobs = { SSGT: ['HA', 'ITF', 'LFF', 'LF', 'CPS', 'MAN', 'DF', 'MDR', 'CA', 'WM'], PTAN: ['HA', 'ITF', 'LFF', 'LF', 'CPS', 'MAN', 'MDR', 'CA', 'WM'] };
+EA.lists.dailyJobs = { SSGT: ['HA', 'ITF', 'LFF', 'LF', 'CPS', 'MAN', 'DF', 'MDR', 'CA', 'WM'], PTAN: ['HA', 'ITF', 'LFF', 'LF', 'CPS', 'MAN', 'MDR', 'CA', 'WM'], MELU: ['HA', 'ITF', 'LFF', 'LF', 'CPS', 'MAN', 'MDR', 'CA', 'WM'] };
 EA.lists.quickJobs = EA.lists.dailyJobs;
 EA.lists.quickJobsFor = function (estate) { return EA.lists.dailyJobs[estate] || EA.lists.mainJobs[estate] || ['HA', 'LF', 'ITF', 'MAN', 'CPS', 'RP', 'SL', 'WM', 'CA', 'RMH']; };
 // The three operator codes show as one button "OP · Operator jentera"; the phone then asks what the work is for.

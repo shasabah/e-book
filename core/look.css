@@ -889,6 +889,10 @@ div.td-it { cursor: default; }
 .rain-row { display: flex; gap: 8px; margin: 6px 0 10px; }
 .rain-row .btn { flex: 1; min-width: 0; }
 .rain-q.done { box-shadow: inset 4px 0 0 var(--ok); }
+/* v1.72: a red check on TUTUP HARI that points at a card on the same screen scrolls to it and marks it for a
+   moment, so the staff can see which card the line meant. */
+.look-here { animation: look-here 1.6s ease-out 1; }
+@keyframes look-here { 0%, 100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); } 20%, 60% { box-shadow: 0 0 0 3px var(--bad); } }
 .today-card h2 { margin-bottom: 6px; }
 .today-steps { list-style: none; margin: 0; padding: 0; }
 .today-steps li { display: flex; gap: 10px; align-items: center; padding: 7px 0; }

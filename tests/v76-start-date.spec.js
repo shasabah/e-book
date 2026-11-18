@@ -88,3 +88,30 @@ check('chit: no "midnight" left to translate on the screen', !/midnight/.test(ms
 check('the stored codes are untouched, so old readings still read',
   /'06-12'/.test(dc) && /'12-18'/.test(dc) && /'18-24'/.test(ms) && /'00-06'/.test(ms), 'codes');
 check('Bahasa unchanged', /'6 pg–12 tgh'/.test(dc) && /'12 mlm–6 pg'/.test(ms), 'bm');
+
+// 8 · a red line on TUTUP HARI only looks pressable when pressing it lands somewhere
+// (Yu Chen, 18 Nov 2026, practice login on 27 Okt: "the red line cannot press to the direct issue").
+// Two faults: 1.71 let the close reach back 40 days while Kerja still only opens today, yesterday, a chit
+// the clerk asked to fix, or a planned day — so the jump opened a different day's chit; and the rain line
+// carried the close screen's own address, so pressing it changed the hash to the hash it already had.
+const wkjs = fs.readFileSync(path.join(root, 'rooms', 'field', 'work.js'), 'utf8');
+check('one rule for whether this phone may key a day\'s work, exported from Kerja',
+  /EA\.fh\.workChitOpen = function \(c\)/.test(wkjs)
+  && /c\.date === t \|\| c\.date === yd \|\| fixOpen\(c\) \|\| planOpen\(c\)/.test(wkjs), 'workChitOpen');
+check('Kerja\'s own list uses that one rule, not a second copy (Rule 5)',
+  /c\.estate === estate && EA\.fh\.workChitOpen\(c\)/.test(wkjs), 'chitsFor');
+check('the close asks before it offers a jump to Kerja',
+  /var canKey = EA\.fh\.workChitOpen \? EA\.fh\.workChitOpen\(c\) : true;/.test(dc), 'canKey');
+check('too old to key: no button, and the line says to ask the office',
+  /if \(canKey\) \{ o\.go = '#field-harvest\/work'; return o; \}/.test(dc)
+  && /terlalu lama untuk dikunci di telefon — minta pejabat/.test(dc), 'toWork');
+check('the rain line points at its own card, not at the screen it is already on',
+  /scrollTo: '#dc-rainq'/.test(dc) && !/go: '#field-harvest\/close' \}\);/.test(dc), 'scrollTo');
+check('a line with nowhere to go is not drawn as a button',
+  /var btn = x\.ok \? '' : x\.go \? /.test(dc) && /\(btn \|\| '<span>'\)/.test(dc) && /\(btn \? '<\/button>' : '<\/span>'\)/.test(dc), 'btn');
+check('pressing a card line scrolls to the card and marks it',
+  /if \(b\.dataset\.scroll\)/.test(dc) && /scrollIntoView/.test(dc) && /look-here/.test(dc), 'handler');
+const css = fs.readFileSync(path.join(root, 'core', 'look.css'), 'utf8');
+check('the mark has a style', /\.look-here \{/.test(css) && /@keyframes look-here/.test(css), 'css');
+check('the 24 Oct rule is not widened: Kerja still stops at 3 days',
+  /c\.date >= daysAgo\(1\) \|\| c\.date < daysAgo\(3\)/.test(wkjs), 'fixOpen unchanged');

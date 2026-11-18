@@ -182,13 +182,21 @@
   // Each check: { n, ok, bm, en, sub, go } — go is the screen that fixes it.
   function checks(estate, c, d) {
     var out = [], w = workOf(c), lines = (w && w.rec && w.rec.lines) || [], jobs = (w && w.rec && w.rec.jobs) || [];
+    // v1.72: a red line is only a button when pressing it can land somewhere useful. Since 1.71 the close
+    // reaches back 40 days, but Kerja still only opens today, yesterday, a chit the clerk asked to fix, or a
+    // planned day (24 Oct). For an older day the jump used to go to Kerja and quietly open a different day's
+    // chit. Now the line carries no button and says plainly that the day's work is the office's.
+    var canKey = EA.fh.workChitOpen ? EA.fh.workChitOpen(c) : true;
+    var toWork = function (o) { if (canKey) { o.go = '#field-harvest/work'; return o; }
+      o.sub = (o.sub ? o.sub + ' · ' : '') + EA.t('Hari ini terlalu lama untuk dikunci di telefon — minta pejabat', 'This day is too old to key on the phone — ask the office');
+      return o; };
     var present = (c.rows || []).filter(function (r) { return r.status !== 'removed' && r.muster === 'H'; });
     // 1 · v1.51: every worker on the list has a pay line (a letter, and a quantity or a day)
     var pl = payLines(estate, c, lines), names = function (ids) { return ids.slice(0, 4).map(person).join(', ') + (ids.length > 4 ? ' +' + (ids.length - 4) : ''); };
-    if (!w) out.push({ n: 1, ok: false, bm: 'Kerja harian belum dikunci', en: 'The day\'s work is not keyed', sub: present.length + EA.t(' orang hadir di chit', ' people present on the chit'), go: '#field-harvest/work' });
+    if (!w) out.push(toWork({ n: 1, ok: false, bm: 'Kerja harian belum dikunci', en: 'The day\'s work is not keyed', sub: present.length + EA.t(' orang hadir di chit', ' people present on the chit') }));
     else if (pl.missing.length) out.push({ n: 1, ok: false, bm: pl.missing.length + ' orang dalam senarai tiada dalam chit', en: pl.missing.length + ' on the list but not on the chit', sub: names(pl.missing) + EA.t(' · betulkan chit: hadir dengan kerja, atau S / C / T', ' · fix the chit: present with a job, or S / C / T'), go: '#field-harvest' });
-    else if (pl.noLine.length) out.push({ n: 1, ok: false, bm: pl.noLine.length + ' orang hadir tiada baris kerja', en: pl.noLine.length + ' present with no work line', sub: names(pl.noLine), go: '#field-harvest/work' });
-    else if (pl.badDay.length) out.push({ n: 1, ok: false, bm: pl.badDay.length + ' orang kerja harian tanpa 1 / ½ hari', en: pl.badDay.length + ' day workers without 1 / ½ day', sub: names(pl.badDay) + EA.t(' · ladang durian dibayar ikut hari', ' · the durian farm is paid by the day'), go: '#field-harvest/work' });
+    else if (pl.noLine.length) out.push(toWork({ n: 1, ok: false, bm: pl.noLine.length + ' orang hadir tiada baris kerja', en: pl.noLine.length + ' present with no work line', sub: names(pl.noLine) }));
+    else if (pl.badDay.length) out.push(toWork({ n: 1, ok: false, bm: pl.badDay.length + ' orang kerja harian tanpa 1 / ½ hari', en: pl.badDay.length + ' day workers without 1 / ½ day', sub: names(pl.badDay) + EA.t(' · ladang durian dibayar ikut hari', ' · the durian farm is paid by the day') }));
     else out.push({ n: 1, ok: true, bm: pl.people.length + ' orang · semua ada kerja hari ini', en: pl.people.length + ' people · every one has work done today', sub: payCountText(pl), pay: pl });
     // 2 · harvest lots collected to the ramp, or explained
     var cut = 0, col = 0;
@@ -207,8 +215,8 @@
       : { n: 3, ok: true, bm: lorries.length ? lorries.length + ' lori keluar, semua ada DN' : 'Tiada lori hari ini', en: lorries.length ? lorries.length + ' lorries out, all with a DN' : 'No lorry today', sub: '' });
     // 4 · a job not finished has a reason; every job is answered
     var noAns = jobs.filter(function (j) { return !j.status; }), noWhy = jobs.filter(function (j) { return j.status === 'not_done' && String(j.reason || '').trim().length < 5; });
-    out.push(!w ? { n: 4, ok: false, bm: 'Siap / belum siap belum dijawab', en: 'Done / not done not answered', sub: '', go: '#field-harvest/work' }
-      : (noAns.length || noWhy.length) ? { n: 4, ok: false, bm: (noAns.length + noWhy.length) + ' kerja tanpa jawapan atau sebab', en: (noAns.length + noWhy.length) + ' jobs with no answer or reason', sub: noAns.concat(noWhy).slice(0, 3).map(function (j) { return shortName(j.task_code) + (j.block ? ' Blk ' + j.block : ''); }).join(', '), go: '#field-harvest/work' }
+    out.push(!w ? toWork({ n: 4, ok: false, bm: 'Siap / belum siap belum dijawab', en: 'Done / not done not answered', sub: '' })
+      : (noAns.length || noWhy.length) ? toWork({ n: 4, ok: false, bm: (noAns.length + noWhy.length) + ' kerja tanpa jawapan atau sebab', en: (noAns.length + noWhy.length) + ' jobs with no answer or reason', sub: noAns.concat(noWhy).slice(0, 3).map(function (j) { return shortName(j.task_code) + (j.block ? ' Blk ' + j.block : ''); }).join(', ') })
       : { n: 4, ok: true, bm: jobs.filter(function (j) { return j.status === 'done'; }).length + '/' + jobs.length + ' kerja siap' + (jobs.some(function (j) { return j.status === 'not_done'; }) ? ' · sebab ditulis' : ''), en: jobs.filter(function (j) { return j.status === 'done'; }).length + '/' + jobs.length + ' jobs done', sub: '' });
     // 5 · rain fits the jobs (see rainCheck)
     out.push(rainCheck(jobs, d, w));
@@ -222,7 +230,7 @@
     // v1.71: the check names the day too, for the same reason the card above does.
     var rday = c && c.date ? niceDate(c.date) : '';
     if (!d.autoClose) out.push(dayRainOk(d) ? { n: 8, ok: true, bm: 'Hujan ' + rday + ': ' + dayRainText(d.rainMm, d.rainTime), en: 'Rain ' + rday + ': ' + dayRainText(d.rainMm, d.rainTime), sub: '' }
-      : { n: 8, ok: false, bm: 'Hujan ' + rday + ' belum dijawab', en: 'Rain ' + rday + ' not answered', sub: EA.t('TIADA HUJAN, atau mm dan bila (di atas). Hujan hari itu, bukan hari ini.', 'NO RAIN, or the mm and when (above). The rain on that day, not today.'), go: '#field-harvest/close' });
+      : { n: 8, ok: false, bm: 'Hujan ' + rday + ' belum dijawab', en: 'Rain ' + rday + ' not answered', sub: EA.t('TIADA HUJAN, atau mm dan bila (di atas). Hujan hari itu, bukan hari ini.', 'NO RAIN, or the mm and when (above). The rain on that day, not today.'), scrollTo: '#dc-rainq' });
     var rep = EA.fh.roundRepeats ? EA.fh.roundRepeats(estate, c) : [];
     if (rep.length) out.push({ n: 7, ok: true, warn: true, soft: true, bm: rep.length + ' petak sudah siap pusingan ini dikunci lagi', en: rep.length + ' lots already done this round keyed again',
       sub: rep.map(function (x) { return x.task + ' ' + x.lot + ' (' + EA.t('siap ', 'done ') + x.on.slice(8, 10) + '/' + x.on.slice(5, 7) + (x.why ? ' · ' + x.why : EA.t(' · tiada sebab', ' · no reason')) + ')'; }).join(' · ') });
@@ -286,8 +294,13 @@
       html += rainDayCard(d, wr.lots > 0 && d.rainTime === '06-12', day.date);
       html += '<div class="card"><h2>' + esc(niceDate(day.date)) + ' · ' + EA.t('Semakan sebelum tutup', 'Checks before closing') + '</h2>' +
         '<ol class="dc-list">' + ck.map(function (x) {
-          return '<li class="dc-it ' + (x.ok ? (x.warn ? 'dc-warn' : x.drop ? 'dc-drop' : 'dc-ok') : 'dc-bad') + '">' + (x.go && !x.ok ? '<button type="button" class="link-btn dc-go" data-go="' + esc(x.go) + '">' : '<span>') +
-            '<b>' + (x.warn ? '⚠' : x.ok ? '✓' : '!') + ' ' + esc(EA.t(x.bm, x.en)) + '</b>' + (x.sub ? '<small>' + esc(x.sub) + '</small>' : '') + (x.go && !x.ok ? '</button>' : '</span>') + '</li>';
+          // v1.72: a line is a button when it can take you to the fix — another screen (data-go), or the card
+          // higher up this same screen (data-scroll). The rain line used to carry the close's own address, so
+          // pressing it set the hash to the hash it already had and nothing happened at all.
+          var btn = x.ok ? '' : x.go ? '<button type="button" class="link-btn dc-go" data-go="' + esc(x.go) + '">'
+            : x.scrollTo ? '<button type="button" class="link-btn dc-go" data-scroll="' + esc(x.scrollTo) + '">' : '';
+          return '<li class="dc-it ' + (x.ok ? (x.warn ? 'dc-warn' : x.drop ? 'dc-drop' : 'dc-ok') : 'dc-bad') + '">' + (btn || '<span>') +
+            '<b>' + (x.warn ? '⚠' : x.ok ? '✓' : '!') + ' ' + esc(EA.t(x.bm, x.en)) + '</b>' + (x.sub ? '<small>' + esc(x.sub) + '</small>' : '') + (btn ? '</button>' : '</span>') + '</li>';
         }).join('') + '</ol>';
       // v1.51: the day's work codes (Yu Chen, 5 Nov: closing settles the work, not yet the pay), by job (what the checkroll will be given), shown once every worker has his line.
       var c1 = ck.find(function (x) { return x.n === 1 && x.pay; });
@@ -330,7 +343,11 @@
     if (!day) { el.querySelectorAll('[data-sum]').forEach(function (b) { b.onclick = function () { showSummary(b.dataset.sum); }; }); return; }
     var d = draftFor(day.date);
     function upd(fn) { fn(d); keepDraft(day.date, d); render(el, ctx); }
-    el.querySelectorAll('.dc-go').forEach(function (b) { b.onclick = function () { EA.local.set('fh.workchit', day.chit.chit); location.hash = b.dataset.go; }; });
+    el.querySelectorAll('.dc-go').forEach(function (b) { b.onclick = function () {
+      // A line that points at a card on this screen scrolls to it; one that points at another screen hands
+      // that screen the chit of the day being closed, so it opens the right day and not today's.
+      if (b.dataset.scroll) { var t = el.querySelector(b.dataset.scroll); if (t) { t.scrollIntoView({ behavior: 'smooth', block: 'center' }); t.classList.add('look-here'); setTimeout(function () { t.classList.remove('look-here'); }, 1600); } return; }
+      EA.local.set('fh.workchit', day.chit.chit); location.hash = b.dataset.go; }; });
     var f = $('#dc-field'); if (f) { f.oninput = function () { d.fieldNote = f.value; keepDraft(day.date, d); }; f.onchange = function () { render(el, ctx); }; }
     var n = $('#dc-note'); if (n) n.oninput = function () { d.note = n.value; keepDraft(day.date, d); };
     var rn = $('#dc-rain-no'), ry = $('#dc-rain-yes'), rm = $('#dc-rain-mm');

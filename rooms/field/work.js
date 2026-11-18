@@ -60,8 +60,7 @@
 
   // ---------- which chit ----------
   function chitsFor(estate) {
-    var t = EA.today(), yd = daysAgo(1);     // the phone's own day (Malaysia), not UTC
-    return EA.fh.allChits().filter(function (c) { return c.estate === estate && (c.date === t || c.date === yd || fixOpen(c) || planOpen(c)); })
+    return EA.fh.allChits().filter(function (c) { return c.estate === estate && EA.fh.workChitOpen(c); })
       .sort(function (a, b) { return (a.date + a.confirmedAt) < (b.date + b.confirmedAt) ? 1 : -1; });
   }
   // v1.35 C2 · Betulkan kerja hari (Yu Chen, 24 Oct): an older day's work opens again only when its chit was
@@ -77,6 +76,17 @@
   // v1.40 E · Rancang & sahkan: a planned leave day confirmed on return opens for its work (up to 3 days back),
   // until that work is saved; after that it changes only through the clerk's request, like any other day.
   function planOpen(c) { return !!c && !!c.fromPlan && c.date >= daysAgo(3) && !savedFor(c.chit); }
+  // v1.72: the one place that says whether this phone may still key a day's work — today, yesterday, a chit
+  // the clerk asked to fix, or a planned day. TUTUP HARI asks this before it offers a red line that jumps to
+  // Kerja, because since 1.71 the close reaches back 40 days while Kerja still stops at the rules above.
+  // Without it the red line took the staff to Kerja and quietly opened a different day's chit (Yu Chen,
+  // 18 Nov 2026, from the practice login on 27 Okt: "the red line cannot press to the direct issue").
+  // The rule is not widened here: an old day's work stays the office's, as decided 24 Oct.
+  EA.fh.workChitOpen = function (c) {
+    if (!c) return false;
+    var t = EA.today(), yd = daysAgo(1);
+    return c.date === t || c.date === yd || fixOpen(c) || planOpen(c);
+  };
   // The jobs on a chit, each with the people present on it.
   function jobsOf(c) {
     var jobs = (c.jobs || []).map(function (j) { return { key: j.key, task: j.task, block: j.block, lots: j.lots || [], mandor: j.mandor, ask: j.ask || '', people: [], mandors: [] }; });

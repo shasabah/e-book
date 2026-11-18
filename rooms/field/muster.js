@@ -1631,7 +1631,7 @@
     var all = people.map(function (w) { return nameParts(w.name); });
     function common(x) { return all.filter(function (ps) { return ps.some(function (y) { return alike(x, y); }); }).length > 5; }
     // v1.32.1: a pair the staff already answered "ya, betul" in the last 7 days is not asked again
-    // (e.g. the Ahmad names at Sugut, asked every day while Ahmad Bin Contoh is on leave).
+    // (e.g. a near-identical pair of names at Sugut, asked every day while one of the two was on leave).
     var okPairs = EA.local.get('fh.okNames', {}) || {}, since = EA.dayAgo(7);
     on.forEach(function (a) {
       var pa = nameParts(a.name).filter(function (x) { return !common(x); });

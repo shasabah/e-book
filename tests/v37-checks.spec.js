@@ -22,8 +22,8 @@ const { chromium } = require('playwright');
     localStorage.clear(); localStorage.setItem('ea.phone', JSON.stringify('P13')); localStorage.setItem('ea.sendLink', JSON.stringify('https://script.google.com/macros/s/X/exec'));
     localStorage.setItem('ea.people.SSGT', JSON.stringify([
       { id: 'D1', name: 'Aco Bin Sapar', estate: 'SSGT', gang: 'Ladang durian · Durian farm', sex: 'M' },
-      { id: 'H1', name: 'Ahmad Bin Contoh', estate: 'SSGT', gang: 'Tuai · Harvest', sex: 'M' },
-      { id: 'H2', name: 'Bakar Bin Contoh', estate: 'SSGT', gang: 'Tuai · Harvest', sex: 'M' }]));
+      { id: 'H1', name: 'Acoh Bin Sapar', estate: 'SSGT', gang: 'Tuai · Harvest', sex: 'M' },
+      { id: 'H2', name: 'Bakar Bin Tahir', estate: 'SSGT', gang: 'Tuai · Harvest', sex: 'M' }]));
     localStorage.setItem('ea.people.at', JSON.stringify(Date.now()));
   });
   await p.reload(); await p.fill('#key', '123456'); await p.waitForSelector('#home:not([hidden])');
@@ -44,13 +44,13 @@ const { chromium } = require('playwright');
   check('harvest (HA): no durian farm in the block list', optsHA.indexOf('DR') < 0, optsHA.join(','));
   await p.selectOption('#jb-block', '01'); await p.waitForTimeout(100); await p.click('#jb-lots [data-lot="1-13"]'); await p.click('#jb-save'); await p.waitForTimeout(200);
   const jobs = await p.evaluate(() => JSON.parse(localStorage.getItem('fh.draft2')).SSGT.jobs.map(j => j.key + ':' + j.task + ':' + j.block));
-  // marks: Aco H on harvest (the mistake), Ahmad T, Bakar H on harvest
+  // marks: Aco H on harvest (the mistake), Acoh T, Bakar H on harvest
   await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('fh.draft2')); const s = d.SSGT; const ha = s.jobs.find(j => j.task === 'HA').key;
     s.marks = { D1: 'H', H1: 'T', H2: 'H' }; s.jobOf = { D1: ha, H2: ha }; localStorage.setItem('fh.draft2', JSON.stringify(d)); });
   await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(100); await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForTimeout(400);
   await (async () => { if (await p.$('#fh-rain-no') && await p.getAttribute('#fh-rain-no', 'aria-pressed') !== 'true') { await p.click('#fh-rain-no'); await p.waitForTimeout(150); } await p.click('#fh-check'); })(); await p.waitForTimeout(300);
   const sheet = await p.innerText('#sheet-back');
-  check('save: "Semak dulu · 2 perkara" — durian worker on harvest, and Ahmad / Sapar', /Semak dulu · 2/.test(sheet) && /Aco Bin Sapar · Ladang durian → Menuai/.test(sheet) && /Nama hampir sama: Aco Bin Sapar \(H\) · Ahmad B\. Muhammad \(T\)/.test(sheet), sheet.slice(0, 300));
+  check('save: "Semak dulu · 2 perkara" — durian worker on harvest, and Aco / Acoh', /Semak dulu · 2/.test(sheet) && /Aco Bin Sapar · Ladang durian → Menuai/.test(sheet) && /Nama hampir sama: Aco Bin Sapar \(H\) · Acoh Bin Sapar \(T\)/.test(sheet), sheet.slice(0, 300));
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v37-check.png' });
   await p.click('#ck-back'); await p.waitForTimeout(200);
   check('FIX goes back: nothing saved', await p.evaluate(() => (JSON.parse(localStorage.getItem('ea.queue') || '[]')).length) === 0);

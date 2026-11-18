@@ -30,8 +30,8 @@ const { chromium } = require('playwright');
     localStorage.setItem('ea.people.SSGT', JSON.stringify([
       { id: 'H1', name: 'Ahmad Bin Contoh', estate: 'SSGT', gang: 'Tuai · Harvest', sex: 'M' },
       { id: 'H2', name: 'Bakar Bin Contoh', estate: 'SSGT', gang: 'Tuai · Harvest', sex: 'M' },
-      { id: 'S1', name: 'Imran Bin Contoh', estate: 'SSGT', gang: 'Racun · Spray', sex: 'M' },
-      { id: 'D1', name: 'Aco Bin Sapar', estate: 'SSGT', gang: 'Ladang durian · Durian farm', sex: 'M' }]));
+      { id: 'S1', name: 'Chandra Bin Contoh', estate: 'SSGT', gang: 'Racun · Spray', sex: 'M' },
+      { id: 'D1', name: 'Daud Bin Contoh', estate: 'SSGT', gang: 'Ladang durian · Durian farm', sex: 'M' }]));
     localStorage.setItem('ea.people.at', JSON.stringify(Date.now()));
     localStorage.setItem('fh.dayclose.office.SSGT', JSON.stringify({ at: Date.now(), from: '2020-01-01', days: [] }));
     // yesterday's chit: 2 harvesters H, 1 sprayer H, 1 durian worker H (work in the DMS), 1 absent

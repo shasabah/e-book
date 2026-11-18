@@ -77,7 +77,7 @@ check('poor grading to explain shows for the staff', ids(as(f, 'todo')).includes
 // Clerk
 addRow('FH_TICKET', { date: ago(1), ticket_no: 'TK2', mill: 'SKPOM', nett_mt: 20 });
 addRow('FH_DISPATCH', { date: ago(1), trip: 'TRIP1', dn_no: '3975', block: '01', bunches: 300, mill: 'SKPOM', lorry: 'SA1' });
-addRow('FH_ALERT', { date: today, kind: 'check', detail: 'Nama hampir sama: Ahmad / Endra', staff_note: 'Ya, betul' });
+addRow('FH_ALERT', { date: today, kind: 'check', detail: 'Nama hampir sama: Ahmad / Ahmed', staff_note: 'Ya, betul' });
 addRow('FH_ALERT', { date: today, kind: 'absent3', ref: 'NONE', detail: 'T' });
 const c1 = as(ck, 'todo');
 check('clerk: ticket with no grading, DN with no ticket, "semak dulu" saved anyway', ['UG', 'DN', 'CK'].every(k => ids(c1).includes(k)), ids(c1).join());

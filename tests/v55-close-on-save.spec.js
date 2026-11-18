@@ -40,7 +40,7 @@ function seed(date, dn) {
   const T = seed(today, '8524'), Y = seed(yd, ''), Z = seed(d2, '8510');
   await p.evaluate(({ T, Y, Z }) => {
     localStorage.clear(); localStorage.setItem('ea.phone', JSON.stringify('P13')); localStorage.setItem('ea.sendLink', JSON.stringify('https://script.google.com/macros/s/X/exec'));
-    localStorage.setItem('ea.people.SSGT', JSON.stringify([{ id: 'H1', name: 'Ahmad Bin Contoh', estate: 'SSGT', gang: 'Tuai · Harvest', sex: 'M' }, { id: 'S1', name: 'Imran Bin Contoh', estate: 'SSGT', gang: 'Racun · Spray', sex: 'M' }]));
+    localStorage.setItem('ea.people.SSGT', JSON.stringify([{ id: 'H1', name: 'Ahmad Bin Contoh', estate: 'SSGT', gang: 'Tuai · Harvest', sex: 'M' }, { id: 'S1', name: 'Chandra Bin Contoh', estate: 'SSGT', gang: 'Racun · Spray', sex: 'M' }]));
     localStorage.setItem('ea.people.at', JSON.stringify(Date.now()));
     localStorage.setItem('fh.dayclose.office.SSGT', JSON.stringify({ at: Date.now(), from: '2020-01-01', days: [] }));
     localStorage.setItem('fh.chits2', JSON.stringify([T.chit]));

@@ -20,7 +20,7 @@ const ago = n => { const x = new Date(Date.now() - n * 864e5); return x.getFullY
     rt.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
   });
   await p.goto('http://localhost:8765/index.html');
-  await p.evaluate(({ d2, d5 }) => {
+  await p.evaluate(({ d2, d5, d6 }) => {
     localStorage.clear(); localStorage.setItem('ea.phone', JSON.stringify('P13')); localStorage.setItem('ea.sendLink', JSON.stringify('https://script.google.com/macros/s/X/exec'));
     localStorage.setItem('ea.people.SSGT', JSON.stringify([
       { id: 'H1', name: 'Penuai Contoh Satu', estate: 'SSGT', gang: 'Tuai · Harvest', sex: 'M' }, { id: 'T1', name: 'Pemandu Contoh', estate: 'SSGT', gang: 'Pemandu · Driver', sex: 'M' },

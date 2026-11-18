@@ -76,16 +76,25 @@
   // v1.40 E · Rancang & sahkan: a planned leave day confirmed on return opens for its work (up to 3 days back),
   // until that work is saved; after that it changes only through the clerk's request, like any other day.
   function planOpen(c) { return !!c && !!c.fromPlan && c.date >= daysAgo(3) && !savedFor(c.chit); }
-  // v1.72: the one place that says whether this phone may still key a day's work — today, yesterday, a chit
-  // the clerk asked to fix, or a planned day. TUTUP HARI asks this before it offers a red line that jumps to
-  // Kerja, because since 1.71 the close reaches back 40 days while Kerja still stops at the rules above.
-  // Without it the red line took the staff to Kerja and quietly opened a different day's chit (Yu Chen,
-  // 18 Nov 2026, from the practice login on 27 Okt: "the red line cannot press to the direct issue").
-  // The rule is not widened here: an old day's work stays the office's, as decided 24 Oct.
+  // v1.72: the one place that says whether this phone may still key a day's work. TUTUP HARI asks it before it
+  // offers a red line that jumps to Kerja, because since 1.71 the close reaches back 40 days.
+  //
+  // v1.75 (Yu Chen, 19 Nov 2026: "i wan him able to open and close the chit, especially 17 and 18 closing").
+  // The old rule was today, yesterday, a clerk-asked fix, or a planned day. A day whose chit was saved but whose
+  // work was never keyed matched none of them, so it locked after one night: on 19 Nov Ferezelly could key
+  // 18 Nov and nothing else, and 15, 16 and 17 Nov could not be closed by him, by Ria, or by anybody.
+  //
+  // The rule is now the one people already use in their heads: **a day that is not closed yet is still open.**
+  // Open on the phone for OPEN_BACK days; once it is closed it changes only through the clerk's MINTA BETULKAN
+  // CHIT, exactly as decided 24 Oct. Closing is the lock, not the clock.
+  var OPEN_BACK = 5;
   EA.fh.workChitOpen = function (c) {
     if (!c) return false;
-    var t = EA.today(), yd = daysAgo(1);
-    return c.date === t || c.date === yd || fixOpen(c) || planOpen(c);
+    if (c.date > EA.today()) return false;                 // a plan for a day ahead is not keyable
+    if (c.date === EA.today()) return true;
+    if (c.date < daysAgo(OPEN_BACK)) return false;         // older than the window: the office's
+    var closed = EA.fh.dayclose && EA.fh.dayclose.isClosed ? EA.fh.dayclose.isClosed(c.estate, c.date) : false;
+    return closed ? fixOpen(c) : true;                     // closed → only the clerk's ask reopens it
   };
   // The jobs on a chit, each with the people present on it.
   function jobsOf(c) {

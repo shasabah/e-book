@@ -110,6 +110,13 @@
   function closedLocal(estate, date) { return closes().find(function (s) { return s.estate === estate && s.date === date && !s.reopened; }) || null; }
   function officeDays(estate) { var o = EA.local.get(K.office + estate, null); return (o && o.days) || []; }
   function officeState(estate, date) { var d = officeDays(estate).find(function (x) { return x.date === date; }); return d ? d.state : ''; }
+  // v1.75: the one place that says whether a day is already closed. Kerja asks this before it opens a day
+  // for keying (Yu Chen, 19 Nov: a day that is not closed yet stays open on the phone for 5 days; once it is
+  // closed it changes only through the clerk's MINTA BETULKAN CHIT, as decided 24 Oct). Built once (Rule 5).
+  function isClosed(estate, date) {
+    var l = closedLocal(estate, date), st = officeState(estate, date);
+    return !!((l && st !== 'reopened' && st !== 'fixing') || st === 'closed');
+  }
   function chitOf(estate, date) {
     return EA.fh.allChits().filter(function (c) { return c.estate === estate && c.date === date; })
       .sort(function (a, b) { return (a.confirmedAt || '') < (b.confirmedAt || '') ? 1 : -1; })[0] || null;
@@ -573,5 +580,5 @@
       return { state: cs.state, bad: cs.bad ? cs.bad.length : 0 };
     } finally { ctx = keep; }
   }
-  EA.fh.dayclose = { render: render, summaryText: summaryText, showSummary: showSummary, checks: checks, rainCheck: rainCheck, rainFromWork: rainFromWork, closeChit: closeChit, closeState: closeState, cardState: cardState };
+  EA.fh.dayclose = { render: render, summaryText: summaryText, showSummary: showSummary, checks: checks, rainCheck: rainCheck, rainFromWork: rainFromWork, closeChit: closeChit, closeState: closeState, cardState: cardState, isClosed: isClosed };
 })();

@@ -889,6 +889,24 @@ div.td-it { cursor: default; }
 .rain-row { display: flex; gap: 8px; margin: 6px 0 10px; }
 .rain-row .btn { flex: 1; min-width: 0; }
 .rain-q.done { box-shadow: inset 4px 0 0 var(--ok); }
+/* v1.73 · Belum lengkap: for each person with no quantity, the amount OR why he was away. */
+.mx-note { background: var(--bad-soft); border-radius: 12px; padding: 10px 12px; margin: 2px 0 6px; }
+.mx-head { font-weight: 700; font-size: .82rem; opacity: .75; margin: 14px 0 2px; }
+.mx-row { padding: 10px 0 12px; border-bottom: 1px solid rgba(0,0,0,.09); }
+.mx-row:last-of-type { border-bottom: 0; }
+.mx-row.done .mx-q { opacity: .35; }
+.mx-name b { font-size: 1rem; }
+.mx-q { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.mx-qty { width: 88px; flex: none; }
+.mx-day { flex: none; }
+.mx-unit { font-size: .8rem; opacity: .6; }
+.mx-or { display: flex; align-items: center; gap: 7px; margin-top: 9px; }
+.mx-ortext { font-size: .75rem; opacity: .5; flex: none; }
+.mx-away { flex: 1; border: 1.5px solid var(--bad); color: var(--bad); background: transparent;
+  border-radius: 999px; padding: 8px 4px; font-weight: 700; font-size: .78rem; }
+.mx-away small { display: block; font-weight: 500; font-size: .62rem; opacity: .85; margin-top: 3px; }
+.mx-away[aria-pressed="true"] { background: var(--bad); color: #fff; }
+.mx-away[aria-pressed="true"] small { opacity: .95; }
 /* v1.72: a red check on TUTUP HARI that points at a card on the same screen scrolls to it and marks it for a
    moment, so the staff can see which card the line meant. */
 .look-here { animation: look-here 1.6s ease-out 1; }

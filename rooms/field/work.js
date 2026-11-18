@@ -670,11 +670,13 @@
           if (lone.length) p.push([shortName(j.task) + ': petak ' + lone.join(', ') + ' siap tetapi tiada orang', 'A lot done but nobody on it']);
         }
       } else if (k !== 'ticket') {
-        var empty = j.people.filter(function (w) {
+        // v1.73: a person with no lot picked still stops the save — the app cannot guess which lot he worked.
+        // A person with no quantity does not: he is asked about on the card instead (see missingPeople).
+        var noLot = j.people.filter(function (w) {
           var ls = draft.lines[w] || [];
-          return !ls.length || ls.some(function (l) { return (j.lots.length > 1 && !l.lot) || !(num(k === 'bunches' ? l.bunches : l.qty) > 0); });
+          return ls.length && j.lots.length > 1 && ls.some(function (l) { return !l.lot; });
         });
-        if (empty.length) p.push([shortName(j.task) + (j.block ? ' Blk ' + j.block : '') + ': belum lengkap untuk ' + empty.map(person).join(', '), 'Quantity or lot missing']);
+        if (noLot.length) p.push([shortName(j.task) + (j.block ? ' Blk ' + j.block : '') + ': tekan petak untuk ' + noLot.map(person).join(', '), 'Tap the lot each person worked']);
       }
       if (isBagJob(j)) {
         var nob = j.people.filter(function (w) { return !(num(pbags(j)[w]) > 0); });
@@ -693,7 +695,102 @@
     return p;
   }
 
-  function check(jobs) {
+  // v1.73 (Yu Chen, 18 Nov 2026: "it might be miss out. so ask him quatity of work or absent").
+  // Everyone on the chit who has no quantity yet. A blank does NOT mean the man did not come — it may simply
+  // not be keyed. So the app never decides: it asks, and offers both answers on the same card.
+  function missingPeople(jobs) {
+    var out = [];
+    jobs.forEach(function (j) {
+      var k = kind(j.task, j.block);
+      if (auto(j) || k === 'ticket' || isOp(j)) return;
+      j.people.forEach(function (w) {
+        var ls = draft.lines[w] || [];
+        var blank = !ls.length || ls.every(function (l) { return !(num(k === 'bunches' ? l.bunches : l.qty) > 0); });
+        if (blank) out.push({ job: j, w: w, k: k, unit: k === 'bunches' ? EA.t('tandan', 'bunches') : k === 'day' ? EA.t('hari', 'day') : (task(j.task) && task(j.task).unit) || '' });
+      });
+    });
+    return out;
+  }
+  var AWAY_MARKS = [['T', 'Tidak hadir', 'Absent'], ['S', 'Sakit', 'Sick'], ['C', 'Cuti', 'Leave']];
+  // The card. It is not a wall: SIMPAN is never refused because somebody is still unanswered (15 Nov rule —
+  // an app that will not save pushes the staff to make up a number, which is where "1 tandan" came from).
+  // The day close is what insists, so an unanswered person cannot be forgotten either.
+  function askMissing(jobs, miss) {
+    draft.away = draft.away || {};
+    var byJob = [];
+    miss.forEach(function (m) {
+      var g = byJob.find(function (x) { return x.key === m.job.key; });
+      if (!g) { g = { key: m.job.key, head: shortName(m.job.task) + (m.job.block ? ' · Blok ' + m.job.block : '') + (m.job.lots.length ? ' · petak ' + m.job.lots.join(', ') : ''), rows: [] }; byJob.push(g); }
+      g.rows.push(m);
+    });
+    function rowHtml(m) {
+      var a = draft.away[m.w] || '';
+      var box = m.k === 'day'
+        ? '<div class="seg mx-day"><button type="button" data-mq="' + esc(m.w) + '" data-v="1">1</button><button type="button" data-mq="' + esc(m.w) + '" data-v="0.5">½</button></div><span class="mx-unit">' + EA.t('hari', 'day') + '</span>'
+        : '<input class="text-input mx-qty" inputmode="decimal" data-mq="' + esc(m.w) + '" value="" placeholder="0"><span class="mx-unit">' + esc(m.unit) + '</span>';
+      return '<div class="mx-row' + (a ? ' done' : '') + '" data-mxrow="' + esc(m.w) + '">' +
+        '<div class="mx-name"><b>' + esc(person(m.w)) + '</b></div>' +
+        '<div class="mx-q">' + box + '</div>' +
+        '<div class="mx-or"><span class="mx-ortext">' + EA.t('atau', 'or') + '</span>' +
+        AWAY_MARKS.map(function (x) { return '<button type="button" class="mx-away" data-mw="' + esc(m.w) + '" data-mk="' + x[0] + '" aria-pressed="' + (a === x[0]) + '">' + x[0] + '<small>' + EA.t(x[1], x[2]) + '</small></button>'; }).join('') +
+        '</div></div>';
+    }
+    ui().openSheet('<h2 id="sheet-title"><span class="bm">Belum lengkap</span><span class="en">Not complete yet</span></h2>' +
+      '<div class="mx-note"><span class="bm">' + miss.length + ' orang tiada jumlah. <b>Kosong bukan bermakna tidak hadir</b> — mungkin belum diisi. Isi jumlah kerjanya, atau tanda dia tidak turun kerja.</span>' +
+      '<span class="en">' + miss.length + ' people have no quantity. <b>Blank does not mean absent</b> — it may just not be keyed yet. Key the amount, or mark why he was away.</span></div>' +
+      byJob.map(function (g) { return '<p class="mx-head">' + esc(g.head) + '</p>' + g.rows.map(rowHtml).join(''); }).join('') +
+      '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="mx-back">‹ CHANGE<small>‹ UBAH</small></button>' +
+      '<button class="btn btn-ok" type="button" id="mx-ok">SAVE<small>Simpan</small></button></div>',
+      function (sh) {
+        sh.querySelector('#mx-back').onclick = ui().closeSheet;
+        function setAway(w, mk) {
+          if (draft.away[w] === mk) delete draft.away[w]; else draft.away[w] = mk;
+          var on = draft.away[w] || '';
+          sh.querySelectorAll('[data-mw="' + w + '"]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.mk === on); });
+          var r = sh.querySelector('[data-mxrow="' + w + '"]'); if (r) r.classList.toggle('done', !!on);
+          if (on) sh.querySelectorAll('[data-mq="' + w + '"]').forEach(function (q) { if (q.tagName === 'INPUT') q.value = ''; q.setAttribute('aria-pressed', 'false'); });
+          keepDraft();
+        }
+        sh.querySelectorAll('[data-mw]').forEach(function (b) { b.onclick = function () { setAway(b.dataset.mw, b.dataset.mk); }; });
+        sh.querySelectorAll('input[data-mq]').forEach(function (q) { q.oninput = function () { if (q.value !== '' && draft.away[q.dataset.mq]) setAway(q.dataset.mq, draft.away[q.dataset.mq]); }; });
+        sh.querySelectorAll('button[data-mq]').forEach(function (b) { b.onclick = function () {
+          var w = b.dataset.mq;
+          if (draft.away[w]) setAway(w, draft.away[w]);
+          sh.querySelectorAll('button[data-mq="' + w + '"]').forEach(function (o) { o.setAttribute('aria-pressed', o === b); });
+          b.dataset.picked = '1';
+        }; });
+        sh.querySelector('#mx-ok').onclick = function () {
+          // 1 · what he keyed goes onto the lines, exactly as the screen itself would have put it
+          miss.forEach(function (m) {
+            if (draft.away[m.w]) return;
+            var v = '';
+            if (m.k === 'day') { var hit = sh.querySelector('button[data-mq="' + m.w + '"][aria-pressed="true"]'); v = hit ? hit.dataset.v : ''; }
+            else { var inp = sh.querySelector('input[data-mq="' + m.w + '"]'); v = inp ? String(inp.value).trim() : ''; }
+            if (v === '' || !(num(v) > 0)) return;
+            var ls = draft.lines[m.w] || [];
+            if (!ls.length) ls = [{ lot: m.job.lots.length === 1 ? m.job.lots[0] : (m.k === 'day' ? m.job.lots.join(' ') : ''), qty: '', bunches: '' }];
+            if (m.k === 'bunches') ls[0].bunches = String(num(v)); else ls[0].qty = String(num(v));
+            draft.lines[m.w] = ls;
+          });
+          keepDraft();
+          // 2 · the ones who did not come go onto the chit, as one correction (Rule 4: the old chit stays)
+          var marks = Object.keys(draft.away).filter(function (w) { return miss.some(function (m) { return m.w === w; }); })
+            .map(function (w) { return { worker: w, mark: draft.away[w] }; });
+          ui().closeSheet();
+          if (marks.length && EA.fh.markAway && chit && EA.fh.markAway(chit.chit, marks)) {
+            marks.forEach(function (m) { delete draft.away[m.worker]; delete draft.lines[m.worker]; });
+            keepDraft();
+            ui().toast(EA.t(marks.length + ' orang ditanda di chit · tekan SIMPAN sekali lagi', marks.length + ' marked on the chit · press SAVE again'));
+            render(el, ctx); window.scrollTo(0, 0);
+            return;
+          }
+          // 3 · nothing left to tell the chit: carry on to the usual check, and never refuse the save
+          check(jobs, true);
+        };
+      });
+  }
+
+  function check(jobs, skipMissing) {
     var p = problems(jobs);
     if (p.length) {
       ui().openSheet('<h2 id="sheet-title"><span class="bm">Belum lengkap</span><span class="en">Not complete yet</span></h2>' +
@@ -702,6 +799,7 @@
         function (s) { s.querySelector('#wp-ok').onclick = ui().closeSheet; });
       return;
     }
+    if (!skipMissing) { var miss = missingPeople(jobs); if (miss.length) { askMissing(jobs, miss); return; } }
     var red = [];
     jobs.forEach(function (j) { jobTotals(j).flags.forEach(function (f) { if (f.bad) red.push(f.text); }); });
     // v1.27 A · Semak sebelum simpan: a harvester's bunches far too few or far too many on a lot.

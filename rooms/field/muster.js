@@ -1777,7 +1777,7 @@
     showChitObj(planAsChit(p));
   }
 
-  function save() {
+  function save(quiet) {
     var confirmedAt = EA.ui.hhmm(new Date());
     var old = draft.replacing ? chits().find(function (c) { return c.estate === ctx.estate && c.chit === draft.replacing; }) : null;
     var c = buildChit(old ? old.chit : newChitId(draft.date || EA.today()), confirmedAt, draft.checker);
@@ -1903,6 +1903,8 @@
       (workToo ? EA.t(' · Sekarang betulkan Kerja hari itu', ' · Now fix that day\'s work') : '') +
       (planned ? EA.t(' · Sekarang kunci kerja ' + dm(c.date), ' · Now key the work of ' + dm(c.date)) : ''));
     if (navigator.onLine && EA.sendLink()) EA.send();
+    // v1.73: a correction made from another screen (Kerja marking who did not come) saves and stays there.
+    if (quiet) return;
     render(el, ctx);
     showChit(c.chit);
   }
@@ -2153,7 +2155,9 @@
     });
   }
   // A correction draft from a saved chit (today's, or v1.32 a past one the clerk asked to fix).
-  function startFix(c, ask) {
+  function startFix(c, ask) { draft = fixDraft(c, ask); keepDraft(); render(el, ctx); window.scrollTo(0, 0); }
+  // v1.73: the draft on its own, so Kerja can correct one mark without opening this screen (Rule 5).
+  function fixDraft(c, ask) {
         var d = blankDraft();
         if (ask) { d.date = c.date; d.fixAsk = ask; }
         d.alertNotes = {}; (c.alerts || []).forEach(function (a) { d.alertNotes[a.key] = a.note; });
@@ -2169,8 +2173,33 @@
           if (!j) { j = { key: 'j' + (d.nextJob++), task: r.task_code, block: r.block, lots: r.lots ? r.lots.split(' ') : [], mandor: r.mandor }; d.jobs.push(j); }
           d.jobOf[r.worker_id] = j.key;
         });
-        draft = d; keepDraft(); render(el, ctx); window.scrollTo(0, 0);
+        return d;
   }
+
+  // v1.73 (Yu Chen, 18 Nov 2026). Kerja found people with no quantity and asked whether each one was missed
+  // out or did not come; these are the ones who did not come. One correction carries them all, so the chit
+  // gets one new version and not one per person. It writes through the same save as any other correction —
+  // nothing is deleted, the old chit stays on record — and it never opens this screen or touches a chit the
+  // staff happens to be part way through making.
+  EA.fh = EA.fh || {};
+  EA.fh.markAway = function (chitId, marks) {
+    if (!marks || !marks.length) return false;
+    var c = chits().find(function (x) { return x.estate === ctx.estate && x.chit === chitId; });
+    if (!c) return false;
+    var keep = draft;
+    try {
+      var d = fixDraft(c, null);
+      var did = 0;
+      marks.forEach(function (m) {
+        if (d.marks[m.worker] === undefined || d.marks[m.worker] === m.mark) return;
+        d.marks[m.worker] = m.mark; delete d.jobOf[m.worker]; did++;
+      });
+      if (!did) { draft = keep; return false; }
+      draft = d;
+      save(true);
+      return true;
+    } catch (e) { draft = keep; return false; }
+  };
 
   EA.roomViews['field-harvest'] = { render: render, chitText: chitText, summary: summary };
   // Shared with the room's other screens (rooms/field/work.js).

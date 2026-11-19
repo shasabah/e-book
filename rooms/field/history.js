@@ -330,7 +330,10 @@
       jobsCard(d, chit) + (harv.length ? harvCard(harv) : '') + lorryCard(d, f);
     if (f.corrected) h += '<button type="button" class="card rk-fix" id="rk-fix"><span>' + EA.t('Chit dibetulkan ', 'Chit corrected ') + f.corrected + '×</span><b>' + EA.t('LIHAT ›', 'SEE ›') + '</b></button>';
     // v1.32 C: the clerk (or the Owner) asks the staff to fix a chit of the last 3 days.
-    var canAsk = chit && !chit.imp && /^(Clerk|Owner)$/.test(ctx.user.role) && d.date >= EA.dayAgo(3);
+    // v1.76: was EA.dayAgo(3), so the clerk's own MINTA BETULKAN CHIT button vanished after 3 days while
+    // the phone and the office had both moved to 5 on 19 Nov. Ria could not ask for a fix on a day
+    // Ferezelly was still allowed to make.
+    var canAsk = chit && !chit.imp && /^(Clerk|Owner)$/.test(ctx.user.role) && d.date >= (EA.fh.fixFrom ? EA.fh.fixFrom() : EA.dayAgo(4));
     if (canAsk) h += '<button type="button" class="btn btn-ghost rk-ask" id="rk-ask">ASK TO FIX THIS CHIT<small>Minta betulkan chit</small></button>';
     if (chit && chit.raw) h += '<button type="button" class="btn btn-ghost rk-wa" data-wa="' + esc(chit.id) + '">WHATSAPP TEXT<small>Lihat teks WhatsApp</small></button>';
     el.innerHTML = h;
@@ -402,10 +405,10 @@
   }
   function askFix(d, chit) {
     var s0 = chit.rows ? chit.rows.filter(function (r) { return r.status !== 'removed'; }).length : 0;
-    ui().openSheet('<h2 id="sheet-title">ASK TO FIX THIS CHIT<small>Minta betulkan chit</small></h2>' +
+    ui().openSheet('<h2 id="sheet-title"><span class="bm">Minta betulkan chit</span><span class="en">Ask to fix this chit</span></h2>' +
       '<p class="hint">' + esc(dayLabel(d.date)) + ' · ' + esc(chit.byName || chit.by || '') + (s0 ? ' · ' + s0 + EA.t(' pekerja', ' workers') : '') + '</p>' +
       '<div class="field"><label for="ak-note">' + EA.t('Apa yang salah? (cth. Pekerja Contoh 3 tanda H, sepatutnya T)', 'What is wrong? (e.g. Pekerja Contoh 3 marked H, should be T)') + ' *</label><textarea id="ak-note" class="text-input" rows="3" maxlength="200"></textarea></div>' +
-      '<p class="note-sun">' + EA.t('Hanya chit 3 hari terakhir. Staf nampak di "Perlu tindakan". Pengurus diberitahu bila dibetulkan.', 'Only chits of the last 3 days. The staff sees it in "Needs action". The manager is told when it is fixed.') + '</p>' +
+      '<p class="note-sun">' + EA.t('Hanya chit ' + (EA.fh.FIX_DAYS || 5) + ' hari terakhir. Staf nampak di "Perlu tindakan". Pengurus diberitahu bila dibetulkan.', 'Only chits of the last ' + (EA.fh.FIX_DAYS || 5) + ' days. The staff sees it in "Needs action". The manager is told when it is fixed.') + '</p>' +
       '<p class="msg" id="ak-err" hidden></p><div class="actions"><button class="btn btn-ghost btn-back" type="button" id="ak-no">‹ BACK<small>‹ BALIK</small></button>' +
       '<button class="btn btn-main" type="button" id="ak-ok">SEND<small>Hantar</small></button></div>',
       function (s) {
@@ -419,7 +422,7 @@
           var j = await EA.askFull('chitAsk', { estate: ctx.estate, chit: chit.id, note: n });
           if (!j || !j.ok) {
             this.disabled = false;
-            var E = { already: ['Sudah diminta dan menunggu Staf.', 'Already asked and waiting for the staff.'], too_old: ['Chit lebih 3 hari. Beritahu Pengurus.', 'The chit is over 3 days old. Tell the manager.'], no_chit: ['Chit belum sampai di pejabat.', 'The chit has not reached the office yet.'] }[(j && j.error) || ''];
+            var E = { already: ['Sudah diminta dan menunggu Staf.', 'Already asked and waiting for the staff.'], too_old: ['Chit lebih ' + (EA.fh && EA.fh.FIX_DAYS || 5) + ' hari. Beritahu Pengurus.', 'The chit is over ' + (EA.fh && EA.fh.FIX_DAYS || 5) + ' days old. Tell the manager.'], no_chit: ['Chit belum sampai di pejabat.', 'The chit has not reached the office yet.'] }[(j && j.error) || ''];
             return show(E ? EA.t(E[0], E[1]) : EA.t('Tidak dihantar: ', 'Not sent: ') + ((j && j.error) || 'busy'));
           }
           ui().closeSheet(); ui().toast(EA.t('Dihantar · Staf akan nampak', 'Sent · the staff will see it'));

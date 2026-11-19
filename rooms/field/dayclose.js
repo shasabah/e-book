@@ -322,7 +322,7 @@
         // the small line as the Bahasa and show "KUNCI HARI RABU 18 NOV" instead of TUTUP HARI (Ferezelly, 19 Nov).
         '<div class="actions"><button type="button" class="btn btn-ok" id="dc-close"' + (bad.length ? ' disabled' : '') + '>' + EA.t('TUTUP HARI', 'CLOSE THE DAY') + '</button></div>' +
         '<p class="hint">' + EA.t('Mengunci hari ' + niceDate(day.date) + '.', 'Closes ' + niceDate(day.date) + '.') + '</p>' +
-        (bad.length ? '<p class="hint">' + bad.length + EA.t(' perkara belum lengkap. Tekan baris merah untuk membetulkannya.', ' things not complete. Tap a red line to fix it.') + '</p>' : '<p class="hint">' + EA.t('Selepas ditutup, hari ini hanya boleh diubah melalui MINTA BETULKAN CHIT (kerani), dalam 3 hari.', 'After closing, this day changes only through MINTA BETULKAN CHIT (the clerk), within 3 days.') + '</p>') +
+        (bad.length ? '<p class="hint">' + bad.length + EA.t(' perkara belum lengkap. Tekan baris merah untuk membetulkannya.', ' things not complete. Tap a red line to fix it.') + '</p>' : '<p class="hint">' + EA.t('Selepas ditutup, hari ini hanya boleh diubah melalui MINTA BETULKAN CHIT (kerani), dalam ' + (EA.fh && EA.fh.FIX_DAYS || 5) + ' hari.', 'After closing, this day changes only through MINTA BETULKAN CHIT (the clerk), within ' + (EA.fh && EA.fh.FIX_DAYS || 5) + ' days.') + '</p>') +
         '</div>';
     }
     if (done.length) html += '<div class="card"><h2>' + EA.t('Hari ditutup', 'Days closed') + '</h2>' + done.map(function (s) {

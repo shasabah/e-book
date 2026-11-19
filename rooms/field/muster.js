@@ -40,7 +40,7 @@
     // v1.32: a correction of a past chit (asked by the clerk) stays a draft while that chit is within 3 days.
     // v1.40: a plan for a leave day (date ahead) or the confirmation of one (date back, up to 3 days) stays a draft too.
     // v1.52: the same-day confirmation of last night's plan (mode confirm, date today) is a draft too.
-    var keep = d && ((d.date === EA.today() && !d.mode) || (d.fixAsk && d.date >= EA.dayAgo(3)) ||
+    var keep = d && ((d.date === EA.today() && !d.mode) || (d.fixAsk && d.date >= EA.fh.fixFrom()) ||
       (d.mode === 'plan' && d.date > EA.today()) || (d.mode === 'confirm' && d.date <= EA.today() && d.date >= EA.dayAgo(PLAN_BACK)));
     if (!keep) return blankDraft();
     // A draft saved by an older version may lack newer parts (e.g. alert notes): fill them in.
@@ -802,8 +802,8 @@
     if (go && go.estate === ctx.estate) {
       EA.local.del('fh.fixGo');
       var fc = chits().find(function (x) { return x.estate === ctx.estate && x.chit === go.chit; });
-      if (fc && fc.date >= EA.dayAgo(3)) { startFix(fc, { ref: go.ref, note: go.note, by: go.by }); return; }
-      el.innerHTML = head + '<div class="card"><p class="warn">' + EA.t('Chit ini tiada di telefon ini (atau lebih 3 hari). Beritahu kerani.', 'This chit is not on this phone (or is over 3 days old). Tell the clerk.') + '</p></div>' + todayCard();
+      if (fc && fc.date >= EA.fh.fixFrom()) { startFix(fc, { ref: go.ref, note: go.note, by: go.by }); return; }
+      el.innerHTML = head + '<div class="card"><p class="warn">' + EA.t('Chit ini tiada di telefon ini (atau lebih ' + FIX_DAYS + ' hari). Beritahu kerani.', 'This chit is not on this phone (or is over ' + FIX_DAYS + ' days old). Tell the clerk.') + '</p></div>' + todayCard();
       wireCommon(); return;
     }
     // v1.40: a planned leave day gone by comes first: confirm it and key its work, then today's chit opens.
@@ -2217,6 +2217,10 @@
   // v1.75: one window for correcting a chit, read by Kerja too, so the number cannot drift between screens
   // the way the phone's 3 and the office's 3 did (Rule 5).
   EA.fh.FIX_DAYS = FIX_DAYS;
+  // v1.76: the oldest day a chit may still be corrected, as a date. Every screen that asks "is this chit
+  // still open to a correction?" calls this, instead of writing EA.dayAgo(3) of its own. Four places were
+  // doing that and all four were missed when the window went 3 -> 5 on 19 Nov (Rule 5).
+  EA.fh.fixFrom = function () { return EA.dayAgo(FIX_DAYS - 1); };
   EA.fh.rainPeriods = { night: NIGHT, text: periodText };   // v1.61
   EA.fh.rainLines = rainLines;
   EA.fh.roundRepeats = roundRepeats;

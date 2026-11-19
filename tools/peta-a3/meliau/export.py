@@ -60,7 +60,9 @@ for i, (blk, ha, palms, ids) in enumerate(groups):
         polys.append(Polygon([px2utm(p[0][0] + 0.5, p[0][1] + 0.5) for p in c]).buffer(0))
     poly = unary_union(polys)
     simp = poly.simplify(1.5, preserve_topology=True)
-    geoms = list(simp.geoms) if simp.geom_type == 'MultiPolygon' else [simp]
+    geoms = [g_ for g_ in (list(simp.geoms) if hasattr(simp, 'geoms') else [simp]) if g_.geom_type == 'Polygon' and not g_.is_empty]
+    if not geoms or poly.is_empty:
+        print('skip', ids); continue
     rings = []
     for gm in geoms:
         rr = [[round(a, 6), round(b, 6)] for a, b in (wgs.transform(x, y) for x, y in gm.exterior.coords)]

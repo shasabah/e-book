@@ -74,17 +74,19 @@ rep("""    keys += ['<i class="sw rd"></i>Jalan <small>road</small>', '<i class=
 
 rep("""        rows = ''.join('<tr><td>%s</td><td>%.2f</td><td>%d</td></tr>' % (k, L[k]['ha'], L[k]['palms']) for k in keys)
 """, '')
-tail = '''
+tail = """
 if __name__ == '__main__':
-    T = 'SPLT.MELIAU \\u00b7 PETA PETAK'; ST = 'Lot map \\u00b7 nombor petak dan hektar \\u00b7 DRAF untuk semakan'
+    T = 'SPLT.MELIAU \u00b7 PETA PETAK'; ST = 'Lot map \u00b7 nombor petak dan hektar \u00b7 DRAF untuk semakan'
     jobs = []
+    jobs.append(sheet('MELU_Blok_01', ['01'], T, ST, True, (400, 205), 5))
     jobs.append(sheet('MELU_Blok_02', ['02'], T, ST, True, (400, 205), 4))
     jobs.append(sheet('MELU_Blok_03', ['03'], T, ST, True, (400, 200), 4))
     jobs.append(sheet('MELU_Blok_04', ['04'], T, ST, True, (400, 205), 4))
     jobs.append(sheet('MELU_Blok_05', ['05'], T, ST, False, (277, 300), 4))
-    jobs.append(sheet('MELU_Semua_Blok', ['02', '03', '04', '05'], 'SPLT.MELIAU \\u00b7 PETA LADANG',
-                      'Seluruh ladang \\u00b7 whole estate \\u00b7 Blok 01 dan 06 belum siap', True, (400, 200), 0, extra=('01', '06')))
+    jobs.append(sheet('MELU_Blok_06', ['06'], T, ST, False, (277, 290), 5))
+    jobs.append(sheet('MELU_Semua_Blok', ['01', '02', '03', '04', '05', '06'], 'SPLT.MELIAU \u00b7 PETA LADANG',
+                      'Seluruh ladang \u00b7 whole estate \u00b7 6 blok', True, (400, 205), 0))
     print(json.dumps(jobs))
-'''
+"""
 open(S + 'meliau_sheets.py', 'w').write(head + body + tail)
 print('ok')

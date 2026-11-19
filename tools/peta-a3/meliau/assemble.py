@@ -7,10 +7,10 @@ from pyproj import Transformer
 S='/tmp/claude-0/-home-claude/01d13f32-4712-5ae2-857d-66f6462d3c59/scratchpad/'
 u=Transformer.from_crs('EPSG:4326','EPSG:32650',always_xy=True)
 blk={k:Polygon([u.transform(*p) for p in v['ring']]) for k,v in json.load(open(S+'melmap/melu_shapes.json')).items()}
-pages={'02':2,'03':3,'04':4,'05':5}
+pages={'01':[1],'02':[2],'03':[3],'04':[4],'05':[5],'06':[5,1]}
 allL={}
 for b,p in pages.items():
-    L=[l for l in json.load(open(S+'mlots/lots%d.json'%p)) if l['block']==b]
+    L=[l for pp in p for l in json.load(open(S+'mlots/lots%d.json'%pp)) if l['block']==b]
     for l in L:
         if l['rings']:
             P=Polygon([u.transform(*q) for q in l['rings'][0]])

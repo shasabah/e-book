@@ -11,8 +11,11 @@ palms, the traced Ha, outline (WGS84 lon/lat) and a centre point inside the lot.
 - Lots with no label on the map (the drawing program hides labels that would overlap): Ha measured, palms
   unknown (`ha: null`). Not guessed.
 - 5-19 (0.50 Ha, 72 palms) and 5-20 (0.15 Ha, 22 palms): on the map but too thin to trace.
-- Blocks 01 and 06: not done. Many hidden labels (about 750 and 1,090 palms) and lots cut by the river near the
-  ramp. Needs the source file from Christy / Pi X Ventures, or a walk with Ramnah.
+- Blocks 01 and 06 (added the same day, Yu Chen: "block 1 and 6 is missing"): every outline traced; labels matched
+  only where the map is clear. Block 01: 15 of 22 labels placed, 9 lots with no label, 7 labels not yet matched
+  (2.55/362, 2.75/350, 1.83/222, 2.25/288, 2.17/295, 3.44/410, 0.92/105). Block 06: 26 of 28 placed, 4 lots with
+  no label, 2 not matched (0.39/49, a thin strip not drawn; 0.72/106). Block 06's north half from page 5, south
+  half from page 1, checked for no overlap.
 
 Numbers are NOT agreed. Nothing here goes into `lists/lots.js` until Yu Chen and Ramnah agree the numbers
 (Rule 10: brief first). g2–g5.json = which traced pieces make each lot (page, region ids).

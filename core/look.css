@@ -78,6 +78,12 @@ html[data-lang="bm"] .btn .l-bm, html[data-lang="en"] .btn .l-en { display: inli
 .btn-ghost { background: transparent; border-color: currentColor; color: inherit; min-height: 42px; padding: 4px 12px; font-size: .85rem; }
 .btn:disabled { opacity: .5; cursor: default; }
 .link-btn { background: none; border: 0; padding: 8px 0; cursor: pointer; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+/* v1.75: "tidak hadir / tiada kerja" on a worker's own row. Findable without shouting — it sits beside
+   "+ petak lain", not above the quantity box, because the common answer is still a number. */
+.wk-away { margin-left: 14px; }
+.wk-away::before { content: "✕"; margin-right: 5px; font-size: .9em; text-decoration: none; display: inline-block; }
+.wrow .wk-away { color: var(--bad, #a8332a); opacity: .85; }
+.wrow .wk-away:hover, .wrow .wk-away:focus-visible { opacity: 1; }
 
 /* Status pills */
 .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: .82rem; font-weight: 600; white-space: nowrap; }

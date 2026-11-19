@@ -413,8 +413,12 @@
     if (chit && chit.fromPlan && !savedFor(chit.chit)) return '<p class="plan-band due" id="wk-planband"><b>' + EA.t('KERJA SEBENAR · ', 'ACTUAL WORK · ') + esc(niceDate(chit.date)) + '</b>' +
       '<span>' + EA.t('Hari dirancang, chit sudah disahkan. Kunci kerja sebenar hari itu dari kertas; selepas itu chit hari ini dibuka.', 'A planned day, its chit confirmed. Key that day\'s actual work from the paper; then today\'s chit opens.') + '</span></p>';
     if (!past(chit)) return '';
-    return '<p class="warn fix-band" id="wk-fixband"><b>' + EA.t('Betulkan · ', 'Fixing · ') + esc(niceDate(chit.date)) + '</b> <span class="bm">Chit hari itu sudah dibetulkan atas permintaan kerani. Kemas kini kerja supaya sama dengan chit. Boleh dibuat dalam 3 hari sahaja.</span>' +
-      '<span class="en">That day\'s chit was fixed at the clerk\'s request. Bring the work up to date so it matches the chit. Open for 3 days only.</span></p>';
+    // v1.75: the number comes from the one window, not from a 3 typed into the sentence. It said "3 days"
+    // for the whole afternoon after the window became 5 — the same fault as a Bahasa line naming an English
+    // button: wording that tells the staff something the screen no longer does.
+    var n = windowDays();
+    return '<p class="warn fix-band" id="wk-fixband"><b>' + EA.t('Betulkan · ', 'Fixing · ') + esc(niceDate(chit.date)) + '</b> <span class="bm">Chit hari itu sudah dibetulkan atas permintaan kerani. Kemas kini kerja supaya sama dengan chit. Boleh dibuat dalam ' + n + ' hari sahaja.</span>' +
+      '<span class="en">That day\'s chit was fixed at the clerk\'s request. Bring the work up to date so it matches the chit. Open for ' + n + ' days only.</span></p>';
   }
 
   function progBlock(j) {
@@ -486,12 +490,20 @@
             j.lots.map(function (n) { return '<option' + (n === l.lot ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select>' : (j.lots[0] ? '<span class="mono">' + esc(j.lots[0]) + '</span>' : '');
           var input = k === 'day'
             ? '<div class="seg"><button type="button" data-w="' + w + '" data-i="' + i + '" data-day="1" aria-pressed="' + (l.qty === '1') + '">1</button><button type="button" data-w="' + w + '" data-i="' + i + '" data-day="0.5" aria-pressed="' + (l.qty === '0.5') + '">½</button></div> hari'
-            : '<input class="qty" inputmode="decimal" data-w="' + w + '" data-i="' + i + '" data-f="' + (k === 'bunches' ? 'bunches' : 'qty') + '" value="' + esc(k === 'bunches' ? l.bunches : l.qty) + '" placeholder="0"> ' + esc(unitLabel(j.task, j.block));
+            // v1.75: an empty box used to show a grey 0, which reads as a keyed zero (Yu Chen, 19 Nov: the
+            // boxes looked already answered). Blank now looks blank; a real zero still needs a reason.
+            : '<input class="qty" inputmode="decimal" data-w="' + w + '" data-i="' + i + '" data-f="' + (k === 'bunches' ? 'bunches' : 'qty') + '" value="' + esc(k === 'bunches' ? l.bunches : l.qty) + '" placeholder=""> ' + esc(unitLabel(j.task, j.block));
           var meter = isOp(j) ? '<div class="wline"><label class="inline-label">' + EA.t('Meter jam mula ', 'Hour meter start ') + '<input class="qty" inputmode="decimal" data-w="' + w + '" data-i="' + i + '" data-f="ms" value="' + esc(l.ms || '') + '"></label>' +
             '<label class="inline-label">' + EA.t(' tamat ', ' end ') + '<input class="qty" inputmode="decimal" data-w="' + w + '" data-i="' + i + '" data-f="me" value="' + esc(l.me || '') + '"></label>' +
             '<span class="mono" data-hrs="' + w + '|' + i + '">= ' + hoursOf(l) + EA.t(' jam', ' hours') + '</span></div>' : '';
           return '<div class="wline">' + lotSel + input + (i > 0 ? '<button type="button" class="link-btn" data-w="' + w + '" data-del="' + i + '">' + EA.t('buang', 'remove') + '</button>' : '') + '</div>' + meter;
-        }).join('') + (j.lots.length > 1 && k !== 'day' ? '<button type="button" class="link-btn" data-w="' + w + '" data-add="1">' + EA.t('+ petak lain', '+ another lot') + '</button>' : '') + bagBox(j, w);
+        }).join('') + (j.lots.length > 1 && k !== 'day' ? '<button type="button" class="link-btn" data-w="' + w + '" data-add="1">' + EA.t('+ petak lain', '+ another lot') + '</button>' : '') + bagBox(j, w) +
+        // v1.75 (Yu Chen, 19 Nov: "Say I wan to change this havestor to no work. No button."). The T/S/C
+        // choice existed since 1.74 but only appeared AFTER pressing SIMPAN, and only for a man whose box was
+        // left empty — so standing in front of his name there was nothing to press, and "1 tandan" was the
+        // cheaper path. The row now carries the same question. It opens the same card and writes the same
+        // correction to the same morning chit; BETULKAN is unchanged. Two doors, one room.
+        (askable(j) ? '<button type="button" class="link-btn wk-away" data-awayw="' + esc(w) + '" data-awayj="' + esc(j.key) + '">' + EA.t('tidak hadir / tiada kerja', 'absent / no work') + '</button>' : '');
       return '<div class="wrow"><div class="who-w"><b>' + esc(person(w)) + '</b><span class="en">' + esc(w) + '</span></div><div></div><div class="job" style="display:block">' + rows + '</div></div>';
     }).join('');
     lines = j.mandors.map(function (m) {
@@ -570,6 +582,14 @@
     });
     el.querySelectorAll('[data-del]').forEach(function (b) {
       b.onclick = function () { draft.lines[b.dataset.w].splice(Number(b.dataset.del), 1); keepDraft(); render(el, ctx); };
+    });
+    // v1.75: the row's own "tidak hadir / tiada kerja" opens the SAME card SIMPAN opens, for this one man.
+    el.querySelectorAll('[data-awayw]').forEach(function (b) {
+      b.onclick = function () {
+        var j = jobs.find(function (x) { return x.key === b.dataset.awayj; });
+        if (!j) return;
+        askMissing(jobs, [missEntry(j, b.dataset.awayw)], b.dataset.awayw);
+      };
     });
     el.querySelectorAll('[data-fillgo]').forEach(function (b) {
       b.onclick = function () {
@@ -741,14 +761,21 @@
       return num(v) > 0 || (num(v) === 0 && !!zeroWhy(w));
     });
   }
+  // v1.75: one description of a person who still owes an answer, built in one place, so the row's own
+  // TIDAK HADIR opens exactly the card SIMPAN opens (Rule 5) instead of a second copy that can drift.
+  function missEntry(j, w) {
+    var k = kind(j.task, j.block);
+    return { job: j, w: w, k: k, unit: k === 'bunches' ? EA.t('tandan', 'bunches') : k === 'day' ? EA.t('hari', 'day') : (task(j.task) && task(j.task).unit) || '' };
+  }
+  function askable(j) { var k = kind(j.task, j.block); return !(auto(j) || k === 'ticket' || isOp(j)); }
   function missingPeople(jobs) {
     var out = [];
     jobs.forEach(function (j) {
+      if (!askable(j)) return;
       var k = kind(j.task, j.block);
-      if (auto(j) || k === 'ticket' || isOp(j)) return;
       j.people.forEach(function (w) {
         if (answered(w, k)) return;
-        out.push({ job: j, w: w, k: k, unit: k === 'bunches' ? EA.t('tandan', 'bunches') : k === 'day' ? EA.t('hari', 'day') : (task(j.task) && task(j.task).unit) || '' });
+        out.push(missEntry(j, w));
       });
     });
     return out;
@@ -757,7 +784,7 @@
   // The card. It is not a wall: SIMPAN is never refused because somebody is still unanswered (15 Nov rule —
   // an app that will not save pushes the staff to make up a number, which is where "1 tandan" came from).
   // The day close is what insists, so an unanswered person cannot be forgotten either.
-  function askMissing(jobs, miss) {
+  function askMissing(jobs, miss, one) {
     draft.away = draft.away || {};
     var byJob = [];
     miss.forEach(function (m) {
@@ -769,7 +796,7 @@
       var a = draft.away[m.w] || '';
       var box = m.k === 'day'
         ? '<div class="seg mx-day"><button type="button" data-mq="' + esc(m.w) + '" data-v="1">1</button><button type="button" data-mq="' + esc(m.w) + '" data-v="0.5">½</button></div><span class="mx-unit">' + EA.t('hari', 'day') + '</span>'
-        : '<input class="text-input mx-qty" inputmode="decimal" data-mq="' + esc(m.w) + '" value="" placeholder="0"><span class="mx-unit">' + esc(m.unit) + '</span>';
+        : '<input class="text-input mx-qty" inputmode="decimal" data-mq="' + esc(m.w) + '" value="" placeholder=""><span class="mx-unit">' + esc(m.unit) + '</span>';
       var z = zeroWhy(m.w);
       return '<div class="mx-row' + (a ? ' done' : '') + '" data-mxrow="' + esc(m.w) + '">' +
         '<div class="mx-name"><b>' + esc(person(m.w)) + '</b></div>' +
@@ -782,9 +809,15 @@
         AWAY_MARKS.map(function (x) { return '<button type="button" class="mx-away" data-mw="' + esc(m.w) + '" data-mk="' + x[0] + '" aria-pressed="' + (a === x[0]) + '">' + x[0] + '<small>' + EA.t(x[1], x[2]) + '</small></button>'; }).join('') +
         '</div></div>';
     }
-    ui().openSheet('<h2 id="sheet-title"><span class="bm">Belum lengkap</span><span class="en">Not complete yet</span></h2>' +
-      '<div class="mx-note"><span class="bm">' + miss.length + ' orang tiada jumlah. <b>Kosong bukan bermakna tidak hadir</b> — mungkin belum diisi. Isi jumlah kerjanya, atau tanda dia tidak turun kerja.</span>' +
-      '<span class="en">' + miss.length + ' people have no quantity. <b>Blank does not mean absent</b> — it may just not be keyed yet. Key the amount, or mark why he was away.</span></div>' +
+    // Opened from a row, the staff already knows who he means, so the card does not lecture him about blanks.
+    var head = one
+      ? '<h2 id="sheet-title"><span class="bm">' + esc(person(one)) + '</span><span class="en">' + esc(person(one)) + '</span></h2>' +
+        '<div class="mx-note"><span class="bm">Isi jumlah kerjanya, atau tanda dia tidak turun kerja.</span>' +
+        '<span class="en">Key his amount, or mark why he was away.</span></div>'
+      : '<h2 id="sheet-title"><span class="bm">Belum lengkap</span><span class="en">Not complete yet</span></h2>' +
+        '<div class="mx-note"><span class="bm">' + miss.length + ' orang tiada jumlah. <b>Kosong bukan bermakna tidak hadir</b> — mungkin belum diisi. Isi jumlah kerjanya, atau tanda dia tidak turun kerja.</span>' +
+        '<span class="en">' + miss.length + ' people have no quantity. <b>Blank does not mean absent</b> — it may just not be keyed yet. Key the amount, or mark why he was away.</span></div>';
+    ui().openSheet(head +
       byJob.map(function (g) { return '<p class="mx-head">' + esc(g.head) + '</p>' + g.rows.map(rowHtml).join(''); }).join('') +
       '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="mx-back">‹ CHANGE<small>‹ UBAH</small></button>' +
       '<button class="btn btn-ok" type="button" id="mx-ok">SAVE<small>Simpan</small></button></div>',

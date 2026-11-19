@@ -47,3 +47,13 @@ Block 01 east cluster settled by palm counts and the label pointers: the ring + 
 edge uncertain; the earlier match of 0.92 to the triangle is withdrawn); 1-5 = 2.75/350; a west lot with no label
 added (1.87 Ha, about 83 palms counted). Block 01 lots renumbered (26). Lots now cover 43.0 of 53.0 Ha; about 4 Ha
 along the south boundary is outside every lot line (not a lot). Still unmatched: 2.55/362, 1.83/222.
+
+## Position check, 19 Nov evening (Yu Chen: "cross check again meliau map error")
+Each lot-map page was 20-45 m off from the roads drawn on the overview GeoPDF (my reading of the printed grid
+labels, not the drawing). Matched each page to the overview roads (chamfer.py): mean distance to road fell from
+14-19 m to 5-12 m. Shifts (m east, m north): p1 -28,-30; p2 -24,-17; p3 -19,+4; p4 -20,-28; p5 -18,-40 (page_fit.json).
+All lot outlines and centre points moved by their page shift. Palm counts unchanged (counted in the map frame).
+Result: the "4 Ha not a lot" strip in Block 01 was this error and is gone; blocks now covered 92-93%.
+Still outside the estate line: parts of 1-12, 1-20, 1-26, 2-23, 4-2, 5-1; 2-19 almost all (about 5 palms, likely not
+a lot). Small overlaps at page seams: 1-16/1-18 0.04 Ha, 6-14/6-16 0.05, 6-15/6-17 0.11.
+The six block outlines on meliau-land (from the overview GeoPDF) were right and are unchanged.

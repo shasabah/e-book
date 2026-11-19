@@ -19,3 +19,12 @@ palms, the traced Ha, outline (WGS84 lon/lat) and a centre point inside the lot.
 
 Numbers are NOT agreed. Nothing here goes into `lists/lots.js` until Yu Chen and Ramnah agree the numbers
 (Rule 10: brief first). g2–g5.json = which traced pieces make each lot (page, region ids).
+
+## Second pass, 19 Nov (Yu Chen: "try trace the map again and anywhere to fill up the gap")
+Palms counted from the big drone map (BlockMap LA1, 6 pages A1): every healthy or abnormal palm is a drawn
+circle; the circles inside each traced lot were counted (palms.py, count.py; tune.py set the circle size per page).
+Checked on the labelled lots: the count is within about 5% of the label on average. Overplanted palms are not
+drawn on that map, so a count is low where there is overplanting (Block 01 has 496).
+- Lots with no label now carry `est` = counted palms (shown as "≈" on the sheets). Not a label value.
+- 1-13 = 2.17 Ha / 295 and 1-18 = 0.92 Ha / 105, matched by size and count (`matched`).
+- Still not matched: Block 01 2.55/362, 2.75/350, 1.83/222, 2.25/288, 3.44/410; Block 06 0.39/49, 0.72/106.

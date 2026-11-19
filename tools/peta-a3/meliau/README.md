@@ -57,3 +57,12 @@ Result: the "4 Ha not a lot" strip in Block 01 was this error and is gone; block
 Still outside the estate line: parts of 1-12, 1-20, 1-26, 2-23, 4-2, 5-1; 2-19 almost all (about 5 palms, likely not
 a lot). Small overlaps at page seams: 1-16/1-18 0.04 Ha, 6-14/6-16 0.05, 6-15/6-17 0.11.
 The six block outlines on meliau-land (from the overview GeoPDF) were right and are unchanged.
+
+## Repair pass, 19 Nov 9:30 pm (Yu Chen: "cross again all the map over again and see another chance to repair the error")
+- Palms drawn light blue on the drone map are palms outside the block line; counting them too (run3.py) confirms the
+  labels of the edge lots 2-23, 4-2, 5-1 (they reach past the block line on the drone map itself).
+- Block 05 thin strip traced: 0.50/72 and 0.15/22 (split point estimated). Block 06 east strip traced: 0.39/49.
+- Block 06: the 0.20/29 label line points to a wedge by the road junction, now traced; the piece called 6-27 before
+  (about 6 palms) is not a lot and is dropped. 0.72/106 set on the lot it sits on (drawn 1.22 Ha: may hold a second lot).
+- Block 01: two brown pieces split by their own label text joined = 2.55/362; 1.83/222 on the lot of that size.
+- Overlaps at page seams taken out. All 120 labels on the map now sit on a lot; none used twice. Lots renumbered.

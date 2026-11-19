@@ -63,7 +63,7 @@
   // running them off one answer made a day vanish the moment it was closed — the staff closes 17 Nov, comes
   // back to Kerja, and his work is simply gone from the screen. A day inside the window is always listed, so
   // its card can say "✓ Hari ditutup"; whether he may change it is workChitOpen's business, asked separately.
-  function inWindow(c) { return !!c && c.date <= EA.today() && c.date >= daysAgo(OPEN_BACK); }
+  function inWindow(c) { return !!c && c.date <= EA.today() && c.date >= oldestOpen(); }
   function chitsFor(estate) {
     return EA.fh.allChits().filter(function (c) { return c.estate === estate && (inWindow(c) || EA.fh.workChitOpen(c)); })
       .sort(function (a, b) { return (a.date + a.confirmedAt) < (b.date + b.confirmedAt) ? 1 : -1; });
@@ -73,8 +73,15 @@
   // (so the fix replaces the old lines, never adds a second copy). The staff cannot open an old day herself:
   // a past chit can only change through the clerk's request (v1.32).
   function past(c) { return !!c && c.date < daysAgo(1); }
+  // v1.75: the window comes from the chit screen, which owns it (EA.fh.FIX_DAYS), instead of a 3 written here
+  // as well. The office holds the matching number (server FIX_DAYS) and the three must always move together.
+  // "5 days" counts TODAY: on 19 Nov the oldest day anyone may touch is 15 Nov, not 14. Correcting a chit and
+  // keying its work must reach exactly the same day, or the staff can key work for a day whose chit he cannot
+  // fix — which is the trap Ferezelly was already in, one day further back.
+  function windowDays() { return EA.fh && EA.fh.FIX_DAYS ? EA.fh.FIX_DAYS : 5; }
+  function oldestOpen() { return daysAgo(windowDays() - 1); }
   function fixOpen(c) {
-    if (!c || c.date >= daysAgo(1) || c.date < daysAgo(3)) return false;
+    if (!c || c.date >= daysAgo(1) || c.date < oldestOpen()) return false;
     var s = savedFor(c.chit);
     return !!(c.fixAsk || (c.rev || 1) > 1) && !!s && (s.chitRev || 1) < (c.rev || 1);
   }
@@ -90,14 +97,14 @@
   // 18 Nov and nothing else, and 15, 16 and 17 Nov could not be closed by him, by Ria, or by anybody.
   //
   // The rule is now the one people already use in their heads: **a day that is not closed yet is still open.**
-  // Open on the phone for OPEN_BACK days; once it is closed it changes only through the clerk's MINTA BETULKAN
+  // Open on the phone for the shared window (EA.fh.FIX_DAYS days, counting today); once it is closed it
+  // changes only through the clerk's MINTA BETULKAN
   // CHIT, exactly as decided 24 Oct. Closing is the lock, not the clock.
-  var OPEN_BACK = 5;
   EA.fh.workChitOpen = function (c) {
     if (!c) return false;
     if (c.date > EA.today()) return false;                 // a plan for a day ahead is not keyable
     if (c.date === EA.today()) return true;
-    if (c.date < daysAgo(OPEN_BACK)) return false;         // older than the window: the office's
+    if (c.date < oldestOpen()) return false;               // older than the window: the office's
     var closed = EA.fh.dayclose && EA.fh.dayclose.isClosed ? EA.fh.dayclose.isClosed(c.estate, c.date) : false;
     return closed ? fixOpen(c) : true;                     // closed → only the clerk's ask reopens it
   };

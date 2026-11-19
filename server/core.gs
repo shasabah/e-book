@@ -2709,7 +2709,11 @@ function todoDirect_(user, req) {
 // v1.32 C · Betulkan chit semalam: the clerk (or the Owner) asks the staff to fix a chit of the last 3 days.
 // The ask is an alert line kind "fixask" (ref = the chit, detail = what is wrong); the staff's phone writes
 // "fixdone" (ref = the ask) when the corrected chit is saved. The Pengurus is told; nobody approves.
-var FIX_DAYS = 3;
+// v1.75, 19 Nov 2026: 3 becomes 5, to match the phone (rooms/field/muster.js FIX_DAYS) and the 5-day work
+// window Yu Chen set the same morning. The two numbers must move together: a phone offering BETULKAN on a
+// day the office then refuses as too_old is worse than no button, because the staff keys the correction,
+// is told it is saved, and it is thrown away at the office.
+var FIX_DAYS = 5;
 function chitAsk_(user, req) {
   CLOSED_MEMO_ = null;   // v1.43: the day locks are read fresh in every call
   if (user.role !== 'Clerk' && user.role !== 'Owner') return { ok: false, error: 'not_allowed' };

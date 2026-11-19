@@ -66,7 +66,10 @@ const root = path.resolve(__dirname, '..');
   check('2 days back, NOT closed, no work ever keyed: open (this is 17 Nov)',
     on(ago[3]).open === true && on(ago[3]).closed === false, JSON.stringify(on(ago[3])));
   check('4 days back, not closed: open (this is 15 Nov)', on(ago[4]).open === true, JSON.stringify(on(ago[4])));
-  check('5 days back, not closed: open — the far edge of the window', on(ago[5]).open === true, JSON.stringify(on(ago[5])));
+  // "5 days" counts today, so on 19 Nov the oldest open day is 15 Nov (4 back). 14 Nov is already the
+  // office's. The chit's BETULKAN window reaches exactly the same day — v83 holds the two together.
+  check('4 days back is the far edge of the window', on(ago[4]).open === true, JSON.stringify(on(ago[4])));
+  check('5 days back: shut, the office\'s', on(ago[5]).open === false, JSON.stringify(on(ago[5])));
   check('6 days back: shut, the office\'s', on(ago[6]).open === false, JSON.stringify(on(ago[6])));
   check('a CLOSED day is shut even though it is only 2 days back (24 Oct rule kept)',
     on(ago[2]).closed === true && on(ago[2]).open === false, JSON.stringify(on(ago[2])));
@@ -78,7 +81,7 @@ const root = path.resolve(__dirname, '..');
   const listed = d => r.txt.indexOf(d.slice(8).replace(/^0/, '') + ' ') >= 0;
   check('Kerja lists every day in the window, the closed one included',
     listed(ago[1]) && listed(ago[2]) && listed(ago[3]) && listed(ago[4]), r.txt.slice(0, 260));
-  check('Kerja does not list a day past the window', !listed(ago[6]), r.txt.slice(0, 260));
+  check('Kerja does not list a day past the window', !listed(ago[5]) && !listed(ago[6]), r.txt.slice(0, 260));
 
   // opening the closed day shows it, and refuses to change it
   await p.evaluate(() => { EA.local.set('fh.workchit', 'CH-2'); location.hash = ''; });
@@ -93,7 +96,10 @@ const root = path.resolve(__dirname, '..');
 
   // the window is one number, in one place
   const wk = fs.readFileSync(path.join(root, 'rooms', 'field', 'work.js'), 'utf8');
-  check('the window is a named number, not scattered', /var OPEN_BACK = 5;/.test(wk), 'OPEN_BACK');
+  check('the window is read from the chit screen, not written again here (Rule 5)',
+    /function windowDays\(\) \{ return EA\.fh && EA\.fh\.FIX_DAYS/.test(wk)
+    && /function oldestOpen\(\) \{ return daysAgo\(windowDays\(\) - 1\); \}/.test(wk)
+    && !/OPEN_BACK/.test(wk), 'windowDays/oldestOpen');
   check('Kerja asks dayclose whether the day is closed, it does not decide for itself (Rule 5)',
     /EA\.fh\.dayclose\.isClosed\(c\.estate, c\.date\)/.test(wk), 'isClosed');
   const dc = fs.readFileSync(path.join(root, 'rooms', 'field', 'dayclose.js'), 'utf8');

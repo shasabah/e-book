@@ -2098,9 +2098,15 @@
   // does not turn up is usually noticed when the day's work is keyed in the evening, or at the next morning's
   // muster — by then his chit is yesterday's, and this card only ever showed today's, so BETULKAN was gone and
   // there was no way to mark him away. He put 1 tandan instead, which is how four false attendance days reached
-  // 16 Nov. The card now shows the last FIX_DAYS days, the same 3 days the office already allows a chit to be
-  // fixed in (server FIX_DAYS), so the screen and the rule finally agree. Older than that stays the Owner's.
-  var FIX_DAYS = 3;
+  // 16 Nov. The card shows the last FIX_DAYS days, the same window the office allows a chit to be fixed in
+  // (server FIX_DAYS), so the screen and the rule agree. Older than that stays the Owner's.
+  //
+  // v1.75, 19 Nov: 3 becomes 5. Ferezelly, through Yu Chen: "he wan to change the workers to tidak hadir, but
+  // no button." For 15 and 16 Nov there was no BETULKAN at all — not greyed, not hidden, simply not drawn —
+  // and those were the two days he had to clear. The work window became 5 days the same morning; leaving the
+  // chit at 3 would have let him key the work for 15 Nov and still not mark the men who never turned up.
+  // One number for both, so there is one rule to remember. The office moves with it (server FIX_DAYS).
+  var FIX_DAYS = 5;
   function fixableChits() {
     var from = EA.dayAgo(FIX_DAYS - 1);
     return chits().filter(function (c) { return c.estate === ctx.estate && c.date >= from && c.date <= EA.today(); })
@@ -2208,6 +2214,9 @@
   EA.fh = EA.fh || {};
   EA.fh.viewOnly = viewOnly;
   EA.fh.allChits = chits;
+  // v1.75: one window for correcting a chit, read by Kerja too, so the number cannot drift between screens
+  // the way the phone's 3 and the office's 3 did (Rule 5).
+  EA.fh.FIX_DAYS = FIX_DAYS;
   EA.fh.rainPeriods = { night: NIGHT, text: periodText };   // v1.61
   EA.fh.rainLines = rainLines;
   EA.fh.roundRepeats = roundRepeats;

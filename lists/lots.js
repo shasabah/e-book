@@ -354,14 +354,16 @@ EA.lists.lots = [
   { estate: 'PTAN', block: '04', lot: '4-53', ha: 0.14, palms: 18 , lat: 6.385563, lon: 117.339058 },
   { estate: 'PTAN', block: '04', lot: '4-54', ha: 0.16, palms: 13 , lat: 6.386692, lon: 117.339056 },
   { estate: 'PTAN', block: '9A', lot: '9A-1', ha: 3.64, palms: 495, planted: 2018 },
-  // Meliau (MELU), 18 Nov 2026: no lot map yet, so each block is one lot (as Paitan 9Ac) until HQ has one.
+  // Meliau (MELU), 18 Nov 2026: no lots inside the blocks yet, so each block is one lot (as Paitan 9Ac) until HQ has them.
   // Hectares and palms from HQ's MELU SUMMARY BUDGET 2026 (Brief_Data_Induk 4). The staff key by block.
-  { estate: 'MELU', block: '01', lot: '1-1', ha: 53.00, palms: 6321 },
-  { estate: 'MELU', block: '02', lot: '2-1', ha: 43.97, palms: 5614 },
-  { estate: 'MELU', block: '03', lot: '3-1', ha: 41.95, palms: 5130 },
-  { estate: 'MELU', block: '04', lot: '4-1', ha: 39.74, palms: 4891 },
-  { estate: 'MELU', block: '05', lot: '5-1', ha: 41.28, palms: 5375 },
-  { estate: 'MELU', block: '06', lot: '6-1', ha: 60.72, palms: 7575 },
+  // 19 Nov 2026: lat/lon = a point inside each block, from the 2022 drone map traced in lists/lot-shapes.js; the same
+  // Ha and palms are on that map (healthy + abnormal + overplanted palms = the palms here, every block).
+  { estate: 'MELU', block: '01', lot: '1-1', ha: 53.00, palms: 6321, lat: 5.730200, lon: 117.185508 },
+  { estate: 'MELU', block: '02', lot: '2-1', ha: 43.97, palms: 5614, lat: 5.735360, lon: 117.170730 },
+  { estate: 'MELU', block: '03', lot: '3-1', ha: 41.95, palms: 5130, lat: 5.737513, lon: 117.163905 },
+  { estate: 'MELU', block: '04', lot: '4-1', ha: 39.74, palms: 4891, lat: 5.736945, lon: 117.176945 },
+  { estate: 'MELU', block: '05', lot: '5-1', ha: 41.28, palms: 5375, lat: 5.736572, lon: 117.185252 },
+  { estate: 'MELU', block: '06', lot: '6-1', ha: 60.72, palms: 7575, lat: 5.732446, lon: 117.189250 },
   // TKRS (PJSB) and 43 Acres (43AC), added 14 Nov 2026 for the Paitan group's one chit: one worker team
   // over three pieces (Brief_Data_Induk 2.2-2.4, signed 13 Nov). They sit under estate PTAN, because people
   // and the chit belong to the estate while land belongs to the piece. The block code carries the piece:

@@ -1,5 +1,5 @@
 // E-Book test (Meliau land, 18 Nov 2026) Meliau's six blocks go in as lists only (Brief_Data_Induk 4), from HQ's
-// MELU SUMMARY BUDGET 2026: 280.66 Ha, 34,906 palms, no lot map yet, so each block is one lot. Main jobs as Paitan
+// MELU SUMMARY BUDGET 2026: 280.66 Ha, 34,906 palms, no lots inside the blocks yet, so each block is one lot. Main jobs as Paitan
 // (Sugut's without durian). Sugut and Paitan are unchanged. Made-up names only.
 const check = (name, ok, detail) => { console.log((ok ? 'PASS ' : 'FAIL ') + name + (detail ? ' — ' + detail : '')); if (!ok) process.exitCode = 1; };
 const { chromium } = require('playwright');
@@ -67,7 +67,10 @@ const { chromium } = require('playwright');
   check('Senarai at Meliau shows the lot map and the holidays', await p.locator('[data-ref="map"]').count() === 1 && await p.locator('[data-ref="hol"]').count() === 1);
   await p.click('[data-ref="map"]'); await p.waitForTimeout(400);
   const mt = await p.innerText('#sheet');
-  check('the lot list opens without coordinates and shows 280.66 Ha', /280[.,]66/.test(mt) && s.errs.length === 0, mt.replace(/\n+/g, ' | ').slice(0, 200) + ' ' + s.errs.join(' | '));
+  check('the lot map opens and shows 280.66 Ha', /280[.,]66/.test(mt) && s.errs.length === 0, mt.replace(/\n+/g, ' | ').slice(0, 200) + ' ' + s.errs.join(' | '));
+  // 19 Nov 2026: the six block outlines from the 2022 drone map are in, so every block draws, none says "no map yet".
+  const maps = await p.locator('#sheet svg.pg-map').count(), none = /Belum ada peta|No map for this block/.test(mt);
+  check('every Meliau block draws its outline (six maps, no "no map yet")', maps === 6 && !none, maps + ' maps');
   const wide = await p.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
   check('nothing wider than the phone', wide[0] <= wide[1] + 1, wide.join(' '));
   await s.cx.close();

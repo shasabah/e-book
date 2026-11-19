@@ -28,3 +28,8 @@ drawn on that map, so a count is low where there is overplanting (Block 01 has 4
 - Lots with no label now carry `est` = counted palms (shown as "≈" on the sheets). Not a label value.
 - 1-13 = 2.17 Ha / 295 and 1-18 = 0.92 Ha / 105, matched by size and count (`matched`).
 - Still not matched: Block 01 2.55/362, 2.75/350, 1.83/222, 2.25/288, 3.44/410; Block 06 0.39/49, 0.72/106.
+
+## Third pass, 19 Nov: BlockMap(LA1)_Meliau_13092023.pdf (Drive, 7 pages)
+The same drone map as the second pass, a clearer copy (page 1 is there twice). No lot labels in it. Counts redone
+(count_v2.py): median error against the labelled lots 2-4% per page. `est` updated. Suggestions only, not filled:
+1-5 = 2.75/350, 1-10 = 2.25/288.

@@ -64,7 +64,13 @@ check('a zero with no reason is still unanswered, so it is not saved',
 check('marking a man away clears any zero reason he had', /if \(zeroWhy\(w\)\) delete draft\.zero\[w\];/.test(wk), 'away wins');
 check('the saved line says why it is zero', /return 'Hadir, tiada hasil: ' \+ zeroWhy\(w\);/.test(wk), 'note');
 check('the under-80% note is untouched', /return 'Bawah 80% sasaran: ' \+ draft\.low\[w\];/.test(wk), 'low note kept');
+// 1.79 gave this gate a second line (a mandor is present and is not asked for a line, see
+// v88-mandor-needs-no-line), so the shape changed. What this check holds is unchanged: the only way into
+// noLine is having NO line at all, so a zero with a reason is a line and the day can close.
 check('the day close counts a zero line as a work line, so the day can close',
-  /if \(!ls\.length\) \{ out\.noLine\.push\(r\.worker_id\); return; \}/.test(dc), 'noLine is only a MISSING line');
+  /if \(!ls\.length\) \{/.test(dc)
+  && (dc.match(/out\.noLine\.push\(/g) || []).length === 1
+  && /if \(!ls\.length\) \{[\s\S]{0,320}?out\.noLine\.push\(r\.worker_id\); return;\n      \}/.test(dc),
+  'noLine is only a MISSING line');
 check('the zero question has a style', /\.mx-zero \{/.test(css), 'css');
 check('version 1.79 (127)', /EA\.RELEASE = '1\.79'/.test(v) && /EA\.VERSION = 127/.test(v), 'version');

@@ -40,3 +40,10 @@ lines there do not close on the picture (the map also draws "Land Use" outlines 
 unmatched Block 01 labels add to 12.82 Ha. Crop Jan-18 Nov 2026 by block (tonnage book split) / land-list Ha:
 B1 737.00/53.00=13.9, B2 657.34/43.97=15.0, B3 495.88/41.95=11.8, B4 776.20/39.74=19.5, B5 578.43/41.28=14.0,
 B6 819.86/60.72=13.5 MT/Ha; estate 14.5.
+
+## Gap fill, 19 Nov 12:30 (Yu Chen: "is that anywhere to close the gap for map? can you add for me")
+Block 01 east cluster settled by palm counts and the label pointers: the ring + lens = 3.44/410 (counted 412 on
+3.52 Ha); blob + triangle = 2.25/288, two parts; the strip between the lens and the long road lot = 0.92/105 (lower
+edge uncertain; the earlier match of 0.92 to the triangle is withdrawn); 1-5 = 2.75/350; a west lot with no label
+added (1.87 Ha, about 83 palms counted). Block 01 lots renumbered (26). Lots now cover 43.0 of 53.0 Ha; about 4 Ha
+along the south boundary is outside every lot line (not a lot). Still unmatched: 2.55/362, 1.83/222.

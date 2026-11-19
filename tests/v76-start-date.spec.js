@@ -10,7 +10,9 @@ const root = path.resolve(__dirname, '..');
 
 // 1 · the office sends the start date with every worker
 const gs = fs.readFileSync(path.join(root, 'server', 'core.gs'), 'utf8');
-const people = gs.slice(gs.indexOf('function people_'), gs.indexOf('function people_') + 1400);
+// v1.78: read to the end of the function, not a fixed 1400 characters. A comment added above the code
+// pushed the line this checks outside the window and the check went red while the code was untouched.
+const people = gs.slice(gs.indexOf('function people_'), gs.indexOf('\nfunction ', gs.indexOf('function people_') + 10));
 check('the office sends each worker his start date', /start: \(st\[r\.worker_id\] && st\[r\.worker_id\]\.start\) \|\| ''/.test(people), 'people_ start');
 check('the start date comes from his own "new" line, not from the people list',
   /o\.start = String\(r\.day\)/.test(gs), 'workerStates_ start');

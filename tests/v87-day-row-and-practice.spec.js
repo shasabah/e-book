@@ -106,11 +106,15 @@ const root = path.resolve(__dirname, '..');
   await p.close();
   await b.close();
 
-  // ---- practice reads the real worker list ----
+  // ---- practice and the worker list ----
+  // Yu Chen asked at 00:58 for practice to read the real roll. It was built, and v34-practice went red:
+  // "made-up workers only" is his own decision of 21 Oct 2026, in the Decisions Log and the Field & Harvest
+  // Brief ("Mod Latihan"). So the office change was taken back out, and it stays out until he reverses that
+  // decision deliberately. The test that stopped it is doing its job; this one holds the same line.
   const gs = fs.readFileSync(path.join(root, 'server', 'core.gs'), 'utf8');
   const code = gs.split('\n').filter(l => !/^\s*(\/\/|\*)/.test(l)).join('\n');
-  check('the office no longer sends a practice login an empty worker list',
-    !/if \(isPracticeCode_\(user\.user_code\)\) return \{ ok: true, people: \[\], practice: true \};/.test(code), 'people_');
+  check('practice still gets made-up workers, as decided 21 Oct — not changed quietly',
+    /if \(isPracticeCode_\(user\.user_code\)\) return \{ ok: true, people: \[\], practice: true \};/.test(code), 'people_');
   check('practice records still go to their own book, not the real one',
     /if \(user && isPracticeCode_\(user\.user_code\)\) \{ PRACTICE_ = true; BOOK_ = null; \}/.test(code), 'PRACTICE_');
   const sync = fs.readFileSync(path.join(root, 'core', 'sync.js'), 'utf8');

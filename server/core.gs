@@ -800,7 +800,12 @@ function dmsRain_(estate, now) {
 // The people list for the user's estates (active only), for the phones' muster and day's work.
 function people_(user) {
   var out = [];
-  if (isPracticeCode_(user.user_code)) return { ok: true, people: [], practice: true };   // made-up workers on the phone
+  // v1.78 (Yu Chen, 20 Nov 2026 00:58: "I wan the pratice mode same like actually the real one... I wan the
+  // exactly same like the name list and all"). This used to send a practice login nothing, and the phone fell
+  // back to 22 made-up workers — so practice never looked like the day it was meant to rehearse. Every other
+  // list (tasks, blocks, lots, estates, targets, calendar) was already shared; the roll was the odd one out.
+  // Practice still keeps its own RECORDS, in its own book, which is the point of practice and does not change:
+  // the phone stores them under L: and PRACTICE_ keeps the office off the real book. Only the reading changes.
   var today = todayKL_();
   user.estates.forEach(function (est) {
     var st = workerStates_(est);

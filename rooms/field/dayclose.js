@@ -25,6 +25,9 @@
   function $(sel) { return el.querySelector(sel); }
   function num(v) { var n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isFinite(n) ? n : 0; }
   function niceDate(iso) { var d = new Date(iso + 'T00:00:00'); return ui().dayBm[d.getDay()] + ' ' + d.getDate() + ' ' + ui().monBm[d.getMonth()]; }
+  // v1.78: the day row needs the date short and the day name under it — 20/11 above Jumaat.
+  function dayDm(iso) { var d = new Date(iso + 'T00:00:00'); return d.getDate() + '/' + (d.getMonth() + 1); }
+  function dayName(iso) { return ui().dayBm[new Date(iso + 'T00:00:00').getDay()]; }
   function addDays(date, n) { var d = new Date(date + 'T00:00:00'); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function task(code) { return EA.lists.task(code); }
   function shortName(code) { return (EA.lists.chitNames && EA.lists.chitNames[code]) || (task(code) ? task(code).en : code); }
@@ -293,8 +296,23 @@
         EA.t('Hari dengan chit pagi dari ', 'Days with a morning chit from ') + esc(niceDate(from())) + EA.t(' muncul di sini selepas kerja dikunci. Tutup hari sebelum chit esok pagi.', ' appear here once the work is keyed. Close the day before tomorrow\'s chit.') + '</p></div>';
     } else {
       var d = draftFor(day.date), ck = checks(ctx.estate, day.chit, d), bad = ck.filter(function (x) { return !x.ok; });
-      html += (open.length > 1 ? '<div class="field"><label><span class="bm">Hari</span><span class="en">Day</span></label><select class="text-input" id="dc-pick">' +
-        open.map(function (o) { return '<option value="' + o.date + '"' + (o.date === day.date ? ' selected' : '') + '>' + esc(niceDate(o.date)) + (o.reopened ? EA.t(' · DIBUKA SEMULA', ' · REOPENED') : '') + '</option>'; }).join('') + '</select></div>' : '');
+      // v1.78 (Yu Chen, 20 Nov 2026: "I can't find the selection day for closing. I believe ferezelly facing
+      // the same"). This was a grey select, drawn ONLY when more than one day was open. Two faults in that.
+      // It read as a label rather than a choice, and it scrolled away while the card heading below kept
+      // shouting a different date — so the screen looked as if it were demanding the oldest day first, which
+      // it never was. Worse, with one day open it did not exist at all, so nobody ever learnt it was there;
+      // they met it for the first time on the morning four days were open and they were already in trouble.
+      // Now it is always drawn, as the days themselves, and it says how many are waiting.
+      html += '<div class="card dc-days"><h2>' + EA.t('Hari mana?', 'Which day?') + '</h2>' +
+        '<div class="dc-dayrow">' + open.map(function (o) {
+          return '<button type="button" class="dc-day' + (o.date === day.date ? ' on' : '') + (o.reopened ? ' re' : '') +
+            '" data-day="' + o.date + '"><b>' + esc(dayDm(o.date)) + '</b><small>' + esc(dayName(o.date)) +
+            (o.reopened ? EA.t(' · buka semula', ' · reopened') : '') + '</small></button>';
+        }).join('') + '</div>' +
+        '<p class="hint">' + (open.length > 1
+          ? EA.t(open.length + ' hari belum ditutup. Pilih mana-mana — tidak perlu ikut turutan.',
+                 open.length + ' days not closed. Pick any one — they do not have to be in order.')
+          : EA.t('1 hari belum ditutup.', '1 day not closed.')) + '</p></div>';
       if (day.reopened) html += '<p class="warn"><b>' + EA.t('Dibuka semula · ', 'Reopened · ') + esc(niceDate(day.date)) + '</b> <span class="bm">Kerani minta pembetulan. Selepas pembetulan dikunci, tutup hari ini semula.</span></p>';
       var wr = rainFromWork(workOf(day.chit));
       if (wr.lots && String(d.rainMm == null ? '' : d.rainMm) === '' && !d.rainTime && !d.rainSeen) { d.rainWet = true; d.rainTime = '06-12'; d.rainSeen = true; keepDraft(day.date, d); ck = checks(ctx.estate, day.chit, d); bad = ck.filter(function (x) { return !x.ok; }); }
@@ -349,7 +367,9 @@
 
   function wire() {
     $('#dc-back').onclick = function () { location.hash = '#field-harvest/work'; };
-    var p = $('#dc-pick'); if (p) p.onchange = function () { EA.local.set('fh.daypick', p.value); render(el, ctx); };
+    el.querySelectorAll('[data-day]').forEach(function (b) {
+      b.onclick = function () { EA.local.set('fh.daypick', b.dataset.day); render(el, ctx); window.scrollTo(0, 0); };
+    });
     if (!day) { el.querySelectorAll('[data-sum]').forEach(function (b) { b.onclick = function () { showSummary(b.dataset.sum); }; }); return; }
     var d = draftFor(day.date);
     function upd(fn) { fn(d); keepDraft(day.date, d); render(el, ctx); }

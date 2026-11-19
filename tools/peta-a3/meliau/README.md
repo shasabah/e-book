@@ -33,3 +33,10 @@ drawn on that map, so a count is low where there is overplanting (Block 01 has 4
 The same drone map as the second pass, a clearer copy (page 1 is there twice). No lot labels in it. Counts redone
 (count_v2.py): median error against the labelled lots 2-4% per page. `est` updated. Suggestions only, not filled:
 1-5 = 2.75/350, 1-10 = 2.25/288.
+
+## Cross-check, 19 Nov (hectares by block against crop)
+Block 01 is NOT complete: about 13 Ha inside the block outline has no traced lot (gaps01.json), because the lot
+lines there do not close on the picture (the map also draws "Land Use" outlines in the same blue). The five
+unmatched Block 01 labels add to 12.82 Ha. Crop Jan-18 Nov 2026 by block (tonnage book split) / land-list Ha:
+B1 737.00/53.00=13.9, B2 657.34/43.97=15.0, B3 495.88/41.95=11.8, B4 776.20/39.74=19.5, B5 578.43/41.28=14.0,
+B6 819.86/60.72=13.5 MT/Ha; estate 14.5.

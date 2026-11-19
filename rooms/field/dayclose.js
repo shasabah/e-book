@@ -69,7 +69,18 @@
     rows.forEach(function (r) {
       if (r.muster !== 'H') { var a = AWAY[r.muster] || 'X'; out.count[a]++; out.people.push({ w: r.worker_id, letter: a }); return; }
       var ls = byW[r.worker_id] || [];
-      if (!ls.length) { out.noLine.push(r.worker_id); return; }
+      // v1.79 (Yu Chen, 20 Nov 2026: "It wouldn't let me close for full this. But I already key all havestor
+      // individually different number"). He had. The man with no line was the MANDOR. Kerja has always known
+      // a mandor has nothing to key — rooms/field/work.js puts him in j.mandors, not j.people, "a mandor
+      // supervises: nothing to key for him" — but the close did not, and demanded a work line for him. The
+      // two screens disagreed about the same man, and nothing in the app could settle it: Kerja offered no
+      // row to key, the close would not pass without one. He is present and he is working; he is simply not
+      // on piece rate. He counts as present and is not asked for a line.
+      if (!ls.length) {
+        var w = EA.lists.worker(r.worker_id);
+        if (w && w.mdr) { out.count.P++; out.people.push({ w: r.worker_id, letter: 'P' }); return; }
+        out.noLine.push(r.worker_id); return;
+      }
       var k = payKind(estate, ls[0]), letter = 'P';
       if (k === 'day') {
         var d = ls.reduce(function (a, l) { return a + num(l.qty); }, 0);

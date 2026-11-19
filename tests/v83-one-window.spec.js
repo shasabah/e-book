@@ -82,7 +82,13 @@ const root = path.resolve(__dirname, '..');
   check('the office allows the same window as the phone offers',
     office === phone && Number(phone) === N, 'office ' + office + ' · phone ' + phone + ' · running ' + N);
   check('the office still refuses anything older, rather than silently accepting it',
-    /if \(String\(c\.date\) < daysAgo_\(FIX_DAYS\)\) return \{ ok: false, error: 'too_old' \};/.test(gs), 'chitFix_');
+    /if \(String\(c\.date\) < fixFrom_\(\)\) return \{ ok: false, error: 'too_old' \};/.test(gs), 'chitFix_');
+  // The same NUMBER is not enough: the office counted daysAgo_(FIX_DAYS) while the phone counted
+  // FIX_DAYS - 1, so with 5 in both the office accepted 14 Nov and the phone would not open it. The clerk
+  // could then ask for a fix on a day the staff could never act on — a red line he cannot clear.
+  check('the office counts the window the same way the phone does, not one day wider',
+    /function fixFrom_\(\) \{ return daysAgo_\(FIX_DAYS - 1\); \}/.test(gs)
+    && !/daysAgo_\(FIX_DAYS\)/.test(gs.replace(/^\s*\/\/.*$/gm, '')), 'fixFrom_');
 
   // 4 · one copy of the number (Rule 5)
   check('Kerja reads the window instead of writing its own',

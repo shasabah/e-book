@@ -1,5 +1,6 @@
 // E-Book test (Meliau land, 18 Nov 2026) Meliau's six blocks go in as lists only (Brief_Data_Induk 4), from HQ's
-// MELU SUMMARY BUDGET 2026: 280.66 Ha, 34,906 palms, no lots inside the blocks yet, so each block is one lot. Main jobs as Paitan
+// MELU SUMMARY BUDGET 2026: 280.66 Ha, 34,906 palms. 21 Nov 2026: the 173 lots from Christy's QGIS lot layer (Dec 2023),
+// 262.45 Ha planted, 34,849 palms, replace the one-lot-per-block of 18 Nov. Main jobs as Paitan
 // (Sugut's without durian). Sugut and Paitan are unchanged. Made-up names only.
 const check = (name, ok, detail) => { console.log((ok ? 'PASS ' : 'FAIL ') + name + (detail ? ' — ' + detail : '')); if (!ok) process.exitCode = 1; };
 const { chromium } = require('playwright');
@@ -41,8 +42,8 @@ const { chromium } = require('playwright');
     ss: EA.lists.lotsFor('SSGT').length, pt: EA.lists.lotsFor('PTAN').length, cal: !!(EA.lists.calendarFor && EA.lists.calendarFor('MELU'))
   }));
   check('Meliau has six blocks with the budget\'s hectares', L.blocks === '01:53.00 02:43.97 03:41.95 04:39.74 05:41.28 06:60.72', L.blocks);
-  check('each block is one lot until a map exists: 1-1 to 6-1', L.lots === '1-1,2-1,3-1,4-1,5-1,6-1', L.lots);
-  check('the lots add to 280.66 Ha and 34,906 palms, the file\'s own totals', L.ha === '280.66' && L.palms === 34906, L.ha + ' ' + L.palms);
+  check('173 lots, Christy\'s numbers (1-1 .. 1-31, …, 6-1 .. 6-38)', L.lots.split(',').length === 173 && L.lots.startsWith('1-1,1-2,') && L.lots.endsWith(',6-38'), L.lots.slice(0, 60));
+  check('the lots add to 262.45 Ha planted and 34,849 palms, the lot file\'s own totals', L.ha === '262.45' && L.palms === 34849, L.ha + ' ' + L.palms);
   check('the estate is named Meliau', L.name === 'Meliau', L.name);
   check('main jobs as Paitan: Sugut\'s without durian', L.df < 0 && L.mj === L.pmj, L.mj);
   check('Sugut and Paitan keep their own lots (164 and 209)', L.ss === 164 && L.pt === 209, L.ss + ' ' + L.pt);
@@ -57,7 +58,7 @@ const { chromium } = require('playwright');
   check('the block list is Meliau\'s six', bo.join() === '01,02,03,04,05,06', bo.join());
   await p.selectOption('#jb-block', '06'); await p.waitForTimeout(250);
   const l6 = await p.$$eval('#jb-lots .pick[data-lot]', a => a.map(x => x.dataset.lot));
-  check('Block 06 offers its one lot', l6.join() === '6-1', l6.join());
+  check('Block 06 offers its 38 lots, 6-1 to 6-38', l6.length === 38 && l6[0] === '6-1' && l6.includes('6-38'), l6.join());
   await p.evaluate(() => EA.ui.closeSheet && EA.ui.closeSheet());
   for (const h of ['field-harvest/work', 'field-harvest/collect', 'field-harvest/close', 'field-harvest/history']) { await goRoom(p, h); }
   check('Kerja, Ramp, Tutup hari and Rekod open for Meliau with no errors', s.errs.length === 0, s.errs.join(' | '));
@@ -67,7 +68,7 @@ const { chromium } = require('playwright');
   check('Senarai at Meliau shows the lot map and the holidays', await p.locator('[data-ref="map"]').count() === 1 && await p.locator('[data-ref="hol"]').count() === 1);
   await p.click('[data-ref="map"]'); await p.waitForTimeout(400);
   const mt = await p.innerText('#sheet');
-  check('the lot map opens and shows 280.66 Ha', /280[.,]66/.test(mt) && s.errs.length === 0, mt.replace(/\n+/g, ' | ').slice(0, 200) + ' ' + s.errs.join(' | '));
+  check('the lot map opens and shows 173 lots, 262.45 Ha', /173 petak/.test(mt) && /262[.,]45/.test(mt) && s.errs.length === 0, mt.replace(/\n+/g, ' | ').slice(0, 200) + ' ' + s.errs.join(' | '));
   // 19 Nov 2026: the six block outlines from the 2022 drone map are in, so every block draws, none says "no map yet".
   const maps = await p.locator('#sheet svg.pg-map').count(), none = /Belum ada peta|No map for this block/.test(mt);
   check('every Meliau block draws its outline (six maps, no "no map yet")', maps === 6 && !none, maps + ' maps');

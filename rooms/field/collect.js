@@ -50,10 +50,29 @@
       .filter(isDriver).map(function (w) { return { id: w.id, name: w.name, job: w.job || '', estate: ctx.estate }; });
   }
   function here(x) { return x.estate === ctx.estate; }
+  // v3 of the sample (Yu Chen, 20 Nov 2026): "sjq6259 support paitan and sugut, 2 vehicle in melu one as
+  // standby, kwnn bigger area so 3 lorrys to cover". So a lorry is offered where it actually WORKS, not
+  // where it sleeps, and the note never mixes in a lorry that has no business at this estate. One rule for
+  // every estate; the mapping is the only thing that differs, and it lives in the office list, not in code.
+  function serves(x) {
+    var s = x.serves;
+    if (!s) return here(x);                                  // nothing said yet: fall back to the home estate
+    if (typeof s === 'string') s = s.split(/[,;\s]+/);
+    return s.indexOf(ctx.estate) >= 0;
+  }
   function group(label, list, draw) { return list.length ? '<optgroup label="' + label + '">' + list.map(draw).join('') + '</optgroup>' : ''; }
 
   function driverOpts(d) {
-    var drv = allDrivers(), mine = drv.filter(here), theirs = drv.filter(function (x) { return !here(x); });
+    // A driver belongs on this note if he is this estate's own man, or if he is from an estate whose lorry
+    // serves this estate. Meliau's drivers never appear at Sugut, because Meliau's lorries never come here.
+    var from = {};
+    allLorries().filter(serves).forEach(function (x) { from[x.estate] = 1; });
+    // From another estate, only a LORRY driver: a Paitan backhoe driver will never take Sugut's fruit to the
+    // mill, and a stand-in on the day would be one of this estate's own men, who are all listed below anyway.
+    var drv = allDrivers().filter(function (x) {
+      return here(x) || (from[x.estate] && /lori|lorry/i.test(x.job || ''));
+    });
+    var mine = drv.filter(here), theirs = drv.filter(function (x) { return !here(x); });
     var rest = ((EA.lists.workersFor(ctx.estate) || []).concat(EA.lists.mandorsFor(ctx.estate) || []))
       .filter(function (w) { return !isDriver(w); });
     var pick = function (id) { return d.driver_id === id ? ' selected' : ''; };
@@ -72,7 +91,7 @@
       .map(function (m) { return { reg: m.reg || m.name || '', estate: ctx.estate }; });
   }
   function lorryOpts(d) {
-    var l = allLorries(), mine = l.filter(here), theirs = l.filter(function (x) { return !here(x); });
+    var l = allLorries().filter(serves), mine = l.filter(here), theirs = l.filter(function (x) { return !here(x); });
     var known = l.some(function (x) { return x.reg === d.lorry; });
     var one = function (x, withEst) { return '<option value="' + esc(x.reg) + '"' + (d.lorry === x.reg ? ' selected' : '') + '>' + esc(x.reg) + (withEst ? ' · ' + esc(x.estate) : '') + '</option>'; };
     return { known: known,

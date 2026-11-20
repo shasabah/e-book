@@ -40,7 +40,7 @@
     // v1.32: a correction of a past chit (asked by the clerk) stays a draft while that chit is within 3 days.
     // v1.40: a plan for a leave day (date ahead) or the confirmation of one (date back, up to 3 days) stays a draft too.
     // v1.52: the same-day confirmation of last night's plan (mode confirm, date today) is a draft too.
-    var keep = d && ((d.date === EA.today() && !d.mode) || (d.fixAsk && d.date >= EA.dayAgo(3)) ||
+    var keep = d && ((d.date === EA.today() && !d.mode) || (d.fixAsk && d.date >= EA.fh.fixFrom()) ||
       (d.mode === 'plan' && d.date > EA.today()) || (d.mode === 'confirm' && d.date <= EA.today() && d.date >= EA.dayAgo(PLAN_BACK)));
     if (!keep) return blankDraft();
     // A draft saved by an older version may lack newer parts (e.g. alert notes): fill them in.
@@ -802,8 +802,8 @@
     if (go && go.estate === ctx.estate) {
       EA.local.del('fh.fixGo');
       var fc = chits().find(function (x) { return x.estate === ctx.estate && x.chit === go.chit; });
-      if (fc && fc.date >= EA.dayAgo(3)) { startFix(fc, { ref: go.ref, note: go.note, by: go.by }); return; }
-      el.innerHTML = head + '<div class="card"><p class="warn">' + EA.t('Chit ini tiada di telefon ini (atau lebih 3 hari). Beritahu kerani.', 'This chit is not on this phone (or is over 3 days old). Tell the clerk.') + '</p></div>' + todayCard();
+      if (fc && fc.date >= EA.fh.fixFrom()) { startFix(fc, { ref: go.ref, note: go.note, by: go.by }); return; }
+      el.innerHTML = head + '<div class="card"><p class="warn">' + EA.t('Chit ini tiada di telefon ini (atau lebih ' + FIX_DAYS + ' hari). Beritahu kerani.', 'This chit is not on this phone (or is over ' + FIX_DAYS + ' days old). Tell the clerk.') + '</p></div>' + todayCard();
       wireCommon(); return;
     }
     // v1.40: a planned leave day gone by comes first: confirm it and key its work, then today's chit opens.
@@ -845,7 +845,9 @@
     var started = draft.jobs.length || Object.keys(draft.marks).length || draft.replacing || draft.newChit || draft.mode;
     if (todaysChits().length && !started) {
       el.innerHTML = head +
-        '<p class="msg ok-msg"><span class="bm">Chit hari ini sudah disimpan. Tekan VIEW untuk lihat, atau CORRECT untuk betulkan.</span>' +
+        // v1.75: name the buttons as this phone shows them. The Bahasa line used to say "Tekan VIEW ... CORRECT",
+        // but a Bahasa phone shows LIHAT and BETULKAN, so Ferezelly hunted for words that were not there (19 Nov).
+        '<p class="msg ok-msg"><span class="bm">Chit hari ini sudah disimpan. Tekan LIHAT untuk lihat, atau BETULKAN untuk betulkan.</span>' +
         '<span class="en">Today\'s chit is saved. Tap VIEW to see it, or CORRECT to fix it.</span></p>' +
         todayCard() + plansCard(true) + backlogCard(ctx.estate) + jenteraCard(ctx.estate) +
         '<button type="button" class="btn btn-ghost" id="fh-new">+ NEW CHIT<small>Chit baru (' + EA.t('jarang perlu', 'rarely needed') + ')</small></button>';
@@ -1103,7 +1105,7 @@
         '<div class="acts"><span class="pill plain">' + n + ' orang</span>' +
         '<button type="button" class="btn btn-ghost" data-pick="' + j.key + '">PICK<small>Pilih orang</small></button>' +
         '<button type="button" class="btn btn-ghost" data-edit="' + j.key + '">EDIT<small>Ubah</small></button></div></div>';
-    }).join('') : '<p class="hint">' + EA.t('Belum ada kerja. Tekan + ADD JOB untuk setiap kerja hari ini.', 'No jobs yet. Tap + ADD JOB for each job today.') + '</p>';
+    }).join('') : '<p class="hint">' + EA.t('Belum ada kerja. Tekan + TAMBAH KERJA untuk setiap kerja hari ini.', 'No jobs yet. Tap + ADD JOB for each job today.') + '</p>';
     el.querySelectorAll('#fh-jobs [data-edit]').forEach(function (b) { b.onclick = function () { editJob(b.dataset.edit); }; });
     el.querySelectorAll('#fh-jobs [data-pick]').forEach(function (b) { b.onclick = function () { pickPeople(b.dataset.pick); }; });
   }
@@ -2096,9 +2098,15 @@
   // does not turn up is usually noticed when the day's work is keyed in the evening, or at the next morning's
   // muster — by then his chit is yesterday's, and this card only ever showed today's, so BETULKAN was gone and
   // there was no way to mark him away. He put 1 tandan instead, which is how four false attendance days reached
-  // 16 Nov. The card now shows the last FIX_DAYS days, the same 3 days the office already allows a chit to be
-  // fixed in (server FIX_DAYS), so the screen and the rule finally agree. Older than that stays the Owner's.
-  var FIX_DAYS = 3;
+  // 16 Nov. The card shows the last FIX_DAYS days, the same window the office allows a chit to be fixed in
+  // (server FIX_DAYS), so the screen and the rule agree. Older than that stays the Owner's.
+  //
+  // v1.75, 19 Nov: 3 becomes 5. Ferezelly, through Yu Chen: "he wan to change the workers to tidak hadir, but
+  // no button." For 15 and 16 Nov there was no BETULKAN at all — not greyed, not hidden, simply not drawn —
+  // and those were the two days he had to clear. The work window became 5 days the same morning; leaving the
+  // chit at 3 would have let him key the work for 15 Nov and still not mark the men who never turned up.
+  // One number for both, so there is one rule to remember. The office moves with it (server FIX_DAYS).
+  var FIX_DAYS = 5;
   function fixableChits() {
     var from = EA.dayAgo(FIX_DAYS - 1);
     return chits().filter(function (c) { return c.estate === ctx.estate && c.date >= from && c.date <= EA.today(); })
@@ -2206,6 +2214,13 @@
   EA.fh = EA.fh || {};
   EA.fh.viewOnly = viewOnly;
   EA.fh.allChits = chits;
+  // v1.75: one window for correcting a chit, read by Kerja too, so the number cannot drift between screens
+  // the way the phone's 3 and the office's 3 did (Rule 5).
+  EA.fh.FIX_DAYS = FIX_DAYS;
+  // v1.76: the oldest day a chit may still be corrected, as a date. Every screen that asks "is this chit
+  // still open to a correction?" calls this, instead of writing EA.dayAgo(3) of its own. Four places were
+  // doing that and all four were missed when the window went 3 -> 5 on 19 Nov (Rule 5).
+  EA.fh.fixFrom = function () { return EA.dayAgo(FIX_DAYS - 1); };
   EA.fh.rainPeriods = { night: NIGHT, text: periodText };   // v1.61
   EA.fh.rainLines = rainLines;
   EA.fh.roundRepeats = roundRepeats;

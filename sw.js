@@ -36,10 +36,38 @@ var FILES = [
   'lists/people.js', 'lists/calendar.js'
 ];
 
+// v1.77 (Yu Chen, 19 Nov 2026: "we have difficulty and delay time of loading a new version").
+// Every release used to pull all 44 files again — 1.6 MB — even when 230 lines had changed, because
+// cache: 'reload' means "ignore anything you have, send it again". The icons alone are 366 KB and had not
+// changed in four weeks. Worse, addAll is one batch: ONE file dropping out on an estate line failed the whole
+// install, so the phone silently stayed on the old version with nothing to show for the wait.
+//
+// Two changes. cache: 'no-cache' still checks the site every time — it never serves a stale file — but an
+// unchanged file answers "not changed" in about 200 bytes instead of resending itself. And each file is
+// fetched on its own, falling back to the copy already on the phone, so a dropout costs one file, not the
+// release. Pictures may fail outright: a missing icon must never stop an update.
+var MUST = FILES.filter(function (f) { return !/\.(png|svg)$/.test(f); });
+
+function keep(c, f) {
+  return fetch(new Request(f, { cache: 'no-cache' })).then(function (res) {
+    if (!res || !res.ok) throw new Error('bad status');
+    return c.put(f, res);
+  }).catch(function (err) {
+    // No signal, or this one file failed: use the copy the phone already has, from any older version.
+    return caches.match(f, { ignoreSearch: true }).then(function (old) {
+      if (old) return c.put(f, old);
+      throw err;
+    });
+  });
+}
+
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) {
-    // cache: 'reload' so the copy is fresh from the site, not an old browser copy
-    return c.addAll(FILES.map(function (f) { return new Request(f, { cache: 'reload' }); }));
+    var must = MUST.map(function (f) { return keep(c, f); });
+    // Pictures are allowed to fail; the app works without them and they are the biggest files here.
+    var extra = FILES.filter(function (f) { return MUST.indexOf(f) < 0; })
+      .map(function (f) { return keep(c, f).catch(function () {}); });
+    return Promise.all(must.concat(extra));
   }).then(function () { return self.skipWaiting(); }));
 });
 

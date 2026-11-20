@@ -10,7 +10,9 @@ const root = path.resolve(__dirname, '..');
 
 // 1 · the office sends the start date with every worker
 const gs = fs.readFileSync(path.join(root, 'server', 'core.gs'), 'utf8');
-const people = gs.slice(gs.indexOf('function people_'), gs.indexOf('function people_') + 1400);
+// v1.78: read to the end of the function, not a fixed 1400 characters. A comment added above the code
+// pushed the line this checks outside the window and the check went red while the code was untouched.
+const people = gs.slice(gs.indexOf('function people_'), gs.indexOf('\nfunction ', gs.indexOf('function people_') + 10));
 check('the office sends each worker his start date', /start: \(st\[r\.worker_id\] && st\[r\.worker_id\]\.start\) \|\| ''/.test(people), 'people_ start');
 check('the start date comes from his own "new" line, not from the people list',
   /o\.start = String\(r\.day\)/.test(gs), 'workerStates_ start');
@@ -46,8 +48,12 @@ check('an old day still has to pass its checks: the close is unchanged otherwise
 // the card only ever listed today's, so BETULKAN was gone and he put 1 tandan instead. The office already lets
 // a chit be fixed for FIX_DAYS; the staff's own screen now matches it.
 const ms = fs.readFileSync(path.join(root, 'rooms', 'field', 'muster.js'), 'utf8');
-check('the chit card offers the last 3 days, not only today',
-  /var FIX_DAYS = 3;/.test(ms) && /function fixableChits\(\)/.test(ms) && /c\.date >= from && c\.date <= EA\.today\(\)/.test(ms), 'fixableChits');
+// v1.75, 19 Nov: 3 becomes 5. Ferezelly, through Yu Chen: "he wan to change the workers to tidak hadir, but
+// no button." On 15 and 16 Nov there was no BETULKAN drawn at all, and those were the days he had to clear.
+// The number counts today, so 5 reaches 15 Nov when today is the 19th, and it is the same number the work
+// window uses — v82 proves the two land on the same days.
+check('the chit card offers the last 5 days, not only today',
+  /var FIX_DAYS = 5;/.test(ms) && /function fixableChits\(\)/.test(ms) && /c\.date >= from && c\.date <= EA\.today\(\)/.test(ms), 'fixableChits');
 check('the same window as the office allows a chit to be fixed in',
   (gs.match(/var FIX_DAYS = (\d+);/) || [])[1] === (ms.match(/var FIX_DAYS = (\d+);/) || [])[1], 'phone and office agree');
 check('BETULKAN opens whichever of those days was tapped, not today\'s',
@@ -95,11 +101,19 @@ check('Bahasa unchanged', /'6 pg–12 tgh'/.test(dc) && /'12 mlm–6 pg'/.test(m
 // the clerk asked to fix, or a planned day — so the jump opened a different day's chit; and the rain line
 // carried the close screen's own address, so pressing it changed the hash to the hash it already had.
 const wkjs = fs.readFileSync(path.join(root, 'rooms', 'field', 'work.js'), 'utf8');
+// v1.75 rewrote the body of that one rule: today, yesterday, a clerk-asked fix or a planned day became
+// "not closed yet, within 5 days" (Yu Chen, 19 Nov). What 1.72 was about — ONE rule, exported, so the close
+// and Kerja cannot drift apart — is unchanged, and that is what this still checks.
 check('one rule for whether this phone may key a day\'s work, exported from Kerja',
   /EA\.fh\.workChitOpen = function \(c\)/.test(wkjs)
-  && /c\.date === t \|\| c\.date === yd \|\| fixOpen\(c\) \|\| planOpen\(c\)/.test(wkjs), 'workChitOpen');
-check('Kerja\'s own list uses that one rule, not a second copy (Rule 5)',
-  /c\.estate === estate && EA\.fh\.workChitOpen\(c\)/.test(wkjs), 'chitsFor');
+  && /function oldestOpen\(\)/.test(wkjs)
+  && /closed \? fixOpen\(c\) : true;/.test(wkjs), 'workChitOpen');
+// v1.75: the list also carries days it may NOT key — a day closed an hour ago still has to appear, or the
+// staff's work vanishes off the screen the moment he closes it. That is a second question, not a second copy:
+// the list still asks workChitOpen, and inWindow leans on the same OPEN_BACK rather than its own number.
+check('Kerja\'s own list still asks that one rule, not a second copy of it (Rule 5)',
+  /c\.estate === estate && \(inWindow\(c\) \|\| EA\.fh\.workChitOpen\(c\)\)/.test(wkjs)
+  && /function inWindow\(c\) \{[^}]*oldestOpen\(\)/.test(wkjs), 'chitsFor');
 check('the close asks before it offers a jump to Kerja',
   /var canKey = EA\.fh\.workChitOpen \? EA\.fh\.workChitOpen\(c\) : true;/.test(dc), 'canKey');
 check('too old to key: no button, and the line says to ask the office',
@@ -113,5 +127,11 @@ check('pressing a card line scrolls to the card and marks it',
   /if \(b\.dataset\.scroll\)/.test(dc) && /scrollIntoView/.test(dc) && /look-here/.test(dc), 'handler');
 const css = fs.readFileSync(path.join(root, 'core', 'look.css'), 'utf8');
 check('the mark has a style', /\.look-here \{/.test(css) && /@keyframes look-here/.test(css), 'css');
-check('the 24 Oct rule is not widened: Kerja still stops at 3 days',
-  /c\.date >= daysAgo\(1\) \|\| c\.date < daysAgo\(3\)/.test(wkjs), 'fixOpen unchanged');
+// v1.75: the 24 Oct rule now covers CLOSED days only, and there it is untouched — a closed day still reopens
+// only through the clerk's ask, still within 3 days. What was widened, on Yu Chen's word of 19 Nov, is days
+// that were never closed. Saying "not widened" of the whole rule would now be a false comfort.
+// v1.75, later on 19 Nov: the clerk's window moved from 3 to 5 with everything else, because the phone and
+// the office each held their own 3 and Ferezelly had no BETULKAN at all on 15 and 16 Nov. What still holds is
+// the shape: a closed day reopens only through the clerk, and only inside the one shared window.
+check('a closed day still reopens only through the clerk, inside the shared window',
+  /c\.date >= daysAgo\(1\) \|\| c\.date < oldestOpen\(\)/.test(wkjs), 'fixOpen');

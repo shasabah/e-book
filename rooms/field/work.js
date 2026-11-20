@@ -59,8 +59,13 @@
   }
 
   // ---------- which chit ----------
+  // v1.75: which days Kerja LISTS and which days it lets this phone KEY are two different questions, and
+  // running them off one answer made a day vanish the moment it was closed — the staff closes 17 Nov, comes
+  // back to Kerja, and his work is simply gone from the screen. A day inside the window is always listed, so
+  // its card can say "✓ Hari ditutup"; whether he may change it is workChitOpen's business, asked separately.
+  function inWindow(c) { return !!c && c.date <= EA.today() && c.date >= oldestOpen(); }
   function chitsFor(estate) {
-    return EA.fh.allChits().filter(function (c) { return c.estate === estate && EA.fh.workChitOpen(c); })
+    return EA.fh.allChits().filter(function (c) { return c.estate === estate && (inWindow(c) || EA.fh.workChitOpen(c)); })
       .sort(function (a, b) { return (a.date + a.confirmedAt) < (b.date + b.confirmedAt) ? 1 : -1; });
   }
   // v1.35 C2 · Betulkan kerja hari (Yu Chen, 24 Oct): an older day's work opens again only when its chit was
@@ -68,24 +73,40 @@
   // (so the fix replaces the old lines, never adds a second copy). The staff cannot open an old day herself:
   // a past chit can only change through the clerk's request (v1.32).
   function past(c) { return !!c && c.date < daysAgo(1); }
+  // v1.75: the window comes from the chit screen, which owns it (EA.fh.FIX_DAYS), instead of a 3 written here
+  // as well. The office holds the matching number (server FIX_DAYS) and the three must always move together.
+  // "5 days" counts TODAY: on 19 Nov the oldest day anyone may touch is 15 Nov, not 14. Correcting a chit and
+  // keying its work must reach exactly the same day, or the staff can key work for a day whose chit he cannot
+  // fix — which is the trap Ferezelly was already in, one day further back.
+  function windowDays() { return EA.fh && EA.fh.FIX_DAYS ? EA.fh.FIX_DAYS : 5; }
+  function oldestOpen() { return daysAgo(windowDays() - 1); }
   function fixOpen(c) {
-    if (!c || c.date >= daysAgo(1) || c.date < daysAgo(3)) return false;
+    if (!c || c.date >= daysAgo(1) || c.date < oldestOpen()) return false;
     var s = savedFor(c.chit);
     return !!(c.fixAsk || (c.rev || 1) > 1) && !!s && (s.chitRev || 1) < (c.rev || 1);
   }
-  // v1.40 E · Rancang & sahkan: a planned leave day confirmed on return opens for its work (up to 3 days back),
-  // until that work is saved; after that it changes only through the clerk's request, like any other day.
-  function planOpen(c) { return !!c && !!c.fromPlan && c.date >= daysAgo(3) && !savedFor(c.chit); }
-  // v1.72: the one place that says whether this phone may still key a day's work — today, yesterday, a chit
-  // the clerk asked to fix, or a planned day. TUTUP HARI asks this before it offers a red line that jumps to
-  // Kerja, because since 1.71 the close reaches back 40 days while Kerja still stops at the rules above.
-  // Without it the red line took the staff to Kerja and quietly opened a different day's chit (Yu Chen,
-  // 18 Nov 2026, from the practice login on 27 Okt: "the red line cannot press to the direct issue").
-  // The rule is not widened here: an old day's work stays the office's, as decided 24 Oct.
+  // v1.40 E · Rancang & sahkan: a planned leave day confirmed on return opened for its work up to 3 days back,
+  // until that work was saved. v1.75 folded that into the one rule below — a planned day that is not closed is
+  // open like any other unclosed day — so planOpen is gone rather than left sitting unused beside it (Rule 5).
+  // v1.72: the one place that says whether this phone may still key a day's work. TUTUP HARI asks it before it
+  // offers a red line that jumps to Kerja, because since 1.71 the close reaches back 40 days.
+  //
+  // v1.75 (Yu Chen, 19 Nov 2026: "i wan him able to open and close the chit, especially 17 and 18 closing").
+  // The old rule was today, yesterday, a clerk-asked fix, or a planned day. A day whose chit was saved but whose
+  // work was never keyed matched none of them, so it locked after one night: on 19 Nov Ferezelly could key
+  // 18 Nov and nothing else, and 15, 16 and 17 Nov could not be closed by him, by Ria, or by anybody.
+  //
+  // The rule is now the one people already use in their heads: **a day that is not closed yet is still open.**
+  // Open on the phone for the shared window (EA.fh.FIX_DAYS days, counting today); once it is closed it
+  // changes only through the clerk's MINTA BETULKAN
+  // CHIT, exactly as decided 24 Oct. Closing is the lock, not the clock.
   EA.fh.workChitOpen = function (c) {
     if (!c) return false;
-    var t = EA.today(), yd = daysAgo(1);
-    return c.date === t || c.date === yd || fixOpen(c) || planOpen(c);
+    if (c.date > EA.today()) return false;                 // a plan for a day ahead is not keyable
+    if (c.date === EA.today()) return true;
+    if (c.date < oldestOpen()) return false;               // older than the window: the office's
+    var closed = EA.fh.dayclose && EA.fh.dayclose.isClosed ? EA.fh.dayclose.isClosed(c.estate, c.date) : false;
+    return closed ? fixOpen(c) : true;                     // closed → only the clerk's ask reopens it
   };
   // The jobs on a chit, each with the people present on it.
   function jobsOf(c) {
@@ -361,6 +382,15 @@
       wireTop();
       return;
     }
+    // v1.75: listed but not keyable — the day is closed (and nothing was saved against this chit, e.g. it was
+    // closed as "tiada kerja"), so it is shown and not opened. A closed day changes only through the clerk.
+    if (!EA.fh.workChitOpen(chit)) {
+      el.innerHTML = head + chooser +
+        '<div class="card"><p class="warn">' + EA.t('Hari ini sudah ditutup. Untuk mengubahnya, minta kerani tekan MINTA BETULKAN CHIT.',
+          'This day is closed. To change it, ask the clerk to tap MINTA BETULKAN CHIT.') + '</p></div>';
+      wireTop();
+      return;
+    }
     if (!canKey(ctx.user)) { el.innerHTML = head + '<div class="card"><p class="hint">' + EA.t('Pandangan pejabat akan datang kemudian.', 'The office view comes later.') + '</p></div>'; wireTop(); return; }
 
     var jobs = jobsOf(chit);
@@ -383,8 +413,12 @@
     if (chit && chit.fromPlan && !savedFor(chit.chit)) return '<p class="plan-band due" id="wk-planband"><b>' + EA.t('KERJA SEBENAR · ', 'ACTUAL WORK · ') + esc(niceDate(chit.date)) + '</b>' +
       '<span>' + EA.t('Hari dirancang, chit sudah disahkan. Kunci kerja sebenar hari itu dari kertas; selepas itu chit hari ini dibuka.', 'A planned day, its chit confirmed. Key that day\'s actual work from the paper; then today\'s chit opens.') + '</span></p>';
     if (!past(chit)) return '';
-    return '<p class="warn fix-band" id="wk-fixband"><b>' + EA.t('Betulkan · ', 'Fixing · ') + esc(niceDate(chit.date)) + '</b> <span class="bm">Chit hari itu sudah dibetulkan atas permintaan kerani. Kemas kini kerja supaya sama dengan chit. Boleh dibuat dalam 3 hari sahaja.</span>' +
-      '<span class="en">That day\'s chit was fixed at the clerk\'s request. Bring the work up to date so it matches the chit. Open for 3 days only.</span></p>';
+    // v1.75: the number comes from the one window, not from a 3 typed into the sentence. It said "3 days"
+    // for the whole afternoon after the window became 5 — the same fault as a Bahasa line naming an English
+    // button: wording that tells the staff something the screen no longer does.
+    var n = windowDays();
+    return '<p class="warn fix-band" id="wk-fixband"><b>' + EA.t('Betulkan · ', 'Fixing · ') + esc(niceDate(chit.date)) + '</b> <span class="bm">Chit hari itu sudah dibetulkan atas permintaan kerani. Kemas kini kerja supaya sama dengan chit. Boleh dibuat dalam ' + n + ' hari sahaja.</span>' +
+      '<span class="en">That day\'s chit was fixed at the clerk\'s request. Bring the work up to date so it matches the chit. Open for ' + n + ' days only.</span></p>';
   }
 
   function progBlock(j) {
@@ -456,16 +490,28 @@
             j.lots.map(function (n) { return '<option' + (n === l.lot ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select>' : (j.lots[0] ? '<span class="mono">' + esc(j.lots[0]) + '</span>' : '');
           var input = k === 'day'
             ? '<div class="seg"><button type="button" data-w="' + w + '" data-i="' + i + '" data-day="1" aria-pressed="' + (l.qty === '1') + '">1</button><button type="button" data-w="' + w + '" data-i="' + i + '" data-day="0.5" aria-pressed="' + (l.qty === '0.5') + '">½</button></div> hari'
-            : '<input class="qty" inputmode="decimal" data-w="' + w + '" data-i="' + i + '" data-f="' + (k === 'bunches' ? 'bunches' : 'qty') + '" value="' + esc(k === 'bunches' ? l.bunches : l.qty) + '" placeholder="0"> ' + esc(unitLabel(j.task, j.block));
+            // v1.75: an empty box used to show a grey 0, which reads as a keyed zero (Yu Chen, 19 Nov: the
+            // boxes looked already answered). Blank now looks blank; a real zero still needs a reason.
+            : '<input class="qty" inputmode="decimal" data-w="' + w + '" data-i="' + i + '" data-f="' + (k === 'bunches' ? 'bunches' : 'qty') + '" value="' + esc(k === 'bunches' ? l.bunches : l.qty) + '" placeholder=""> ' + esc(unitLabel(j.task, j.block));
           var meter = isOp(j) ? '<div class="wline"><label class="inline-label">' + EA.t('Meter jam mula ', 'Hour meter start ') + '<input class="qty" inputmode="decimal" data-w="' + w + '" data-i="' + i + '" data-f="ms" value="' + esc(l.ms || '') + '"></label>' +
             '<label class="inline-label">' + EA.t(' tamat ', ' end ') + '<input class="qty" inputmode="decimal" data-w="' + w + '" data-i="' + i + '" data-f="me" value="' + esc(l.me || '') + '"></label>' +
             '<span class="mono" data-hrs="' + w + '|' + i + '">= ' + hoursOf(l) + EA.t(' jam', ' hours') + '</span></div>' : '';
           return '<div class="wline">' + lotSel + input + (i > 0 ? '<button type="button" class="link-btn" data-w="' + w + '" data-del="' + i + '">' + EA.t('buang', 'remove') + '</button>' : '') + '</div>' + meter;
-        }).join('') + (j.lots.length > 1 && k !== 'day' ? '<button type="button" class="link-btn" data-w="' + w + '" data-add="1">' + EA.t('+ petak lain', '+ another lot') + '</button>' : '') + bagBox(j, w);
+        }).join('') + (j.lots.length > 1 && k !== 'day' ? '<button type="button" class="link-btn" data-w="' + w + '" data-add="1">' + EA.t('+ petak lain', '+ another lot') + '</button>' : '') + bagBox(j, w) +
+        // v1.75 (Yu Chen, 19 Nov: "Say I wan to change this havestor to no work. No button."). The T/S/C
+        // choice existed since 1.74 but only appeared AFTER pressing SIMPAN, and only for a man whose box was
+        // left empty — so standing in front of his name there was nothing to press, and "1 tandan" was the
+        // cheaper path. The row now carries the same question. It opens the same card and writes the same
+        // correction to the same morning chit; BETULKAN is unchanged. Two doors, one room.
+        (askable(j) ? '<button type="button" class="link-btn wk-away" data-awayw="' + esc(w) + '" data-awayj="' + esc(j.key) + '">' + EA.t('tidak hadir / tiada kerja', 'absent / no work') + '</button>' : '');
       return '<div class="wrow"><div class="who-w"><b>' + esc(person(w)) + '</b><span class="en">' + esc(w) + '</span></div><div></div><div class="job" style="display:block">' + rows + '</div></div>';
     }).join('');
+    // v1.80: the mandor has no box, and now the screen says so. He sat directly under the ISI box with
+    // nothing to press and no word of explanation, so the box read as his — which is exactly how Yu Chen
+    // read it. The close was taught the same rule in 1.79; this is the staff's side of it.
     lines = j.mandors.map(function (m) {
-      return '<div class="wrow"><div class="who-w"><b>' + esc(person(m)) + '</b><span class="en">' + esc(m) + ' · Mandor · ' + EA.t('ikut kumpulan', 'goes by the gang') + '</span></div><div></div></div>';
+      return '<div class="wrow"><div class="who-w"><b>' + esc(person(m)) + '</b><span class="en">' + esc(m) + ' · Mandor · ' + EA.t('ikut kumpulan', 'goes by the gang') + '</span>' +
+        '<span class="hint wk-nobox">' + EA.t('Tiada angka untuk mandor — dia menyelia.', 'No number to key for the mandor — he supervises.') + '</span></div><div></div></div>';
     }).join('') + lines;
     return '<section class="card" data-job="' + j.key + '"><h2>' + esc(sec.code + '. ' + jobName(j.task)) + (j.block ? ' · Blok ' + esc(j.block) : '') + '</h2>' +
       '<p class="hint">' + esc(j.task) + (lotsText ? ' · ' + esc(lotsText) : '') + (j.mandor ? ' · Mandor ' + esc(person(j.mandor)) : '') + '</p>' +
@@ -476,9 +522,22 @@
         '<div class="wline"><span class="hint">' + (auto(j) ? EA.t('Tekan petak yang dibuat oleh setiap orang. Petak yang dikongsi dibahagi antara mereka.', 'Tap the lots each person worked. A shared lot is split among them.') : EA.t('Ha diisi seorang-seorang.', 'Ha keyed per person.')) + '</span>' +
         (auto(j) && j.people.length > 1 ? '<button type="button" class="btn btn-ghost" data-allwho="' + j.key + '">SAME FOR ALL<small>Sama semua petak</small></button>' : '') +
         '<button type="button" class="btn btn-ghost" data-manual="' + j.key + '">' + (auto(j) ? 'KEY HA<small>Isi Ha sendiri</small>' : 'BY LOT<small>Ikut petak</small>') + '</button></div>' : '') +
-      (k !== 'ticket' && k !== 'day' && !auto(j) && !isHa(j) ? '<div class="wline"><span class="hint">' + EA.t('Isi sama untuk semua yang kosong:', 'Fill the same for everyone empty:') + '</span><input class="qty" inputmode="decimal" data-fill="' + j.key + '" placeholder="0"> ' + esc(unitLabel(j.task, j.block)) + '<button type="button" class="btn btn-ghost" data-fillgo="' + j.key + '">FILL<small>Isi</small></button></div>' : '') +
+      // v1.80 (Yu Chen, 20 Nov 2026, looking at Blok 02: "Is this to fill mandore? It should total up the
+      // number by the whole harvesting Geng"). Two answers, both on this line and the next.
+      // ISI copies ONE number into every empty box. On harvesting that can only ever be wrong: every
+      // harvester cuts a different number, which is what piece rate means. The screen was inviting the gang
+      // total to be typed here — 872 tandan into 16 men is 13,952 tandan and it is pay. So k !== 'bunches'.
+      (k !== 'ticket' && k !== 'day' && k !== 'bunches' && !auto(j) && !isHa(j) ? '<div class="wline"><span class="hint">' + EA.t('Isi sama untuk semua yang kosong:', 'Fill the same for everyone empty:') + '</span><input class="qty" inputmode="decimal" data-fill="' + j.key + '" placeholder="0"> ' + esc(unitLabel(j.task, j.block)) + '<button type="button" class="btn btn-ghost" data-fillgo="' + j.key + '">FILL<small>Isi</small></button></div>' : '') +
+      // The gang total he was looking for already existed — measured 2,500px below this point, past all
+      // sixteen men, where nobody on a phone has ever scrolled. It comes up here, under the block heading,
+      // so it adds up in front of the mandor as he keys and he can check it against his own paper before
+      // SIMPAN. Same element, same updater; only where it sits has changed.
+      // Only the total comes up. The flags stayed behind on purpose: they are one amber line per man who is
+      // under target, so on a poor day sixteen of them would sit between the heading and the first name and
+      // push the men off the screen — the very fault being fixed. They belong at the end, where they are read.
+      '<p class="wk-total" data-tot="' + j.key + '"></p>' +
       '<div class="rows">' + lines + '</div>' +
-      '<p class="hint" data-tot="' + j.key + '"></p><div data-flags="' + j.key + '"></div>' +
+      '<div data-flags="' + j.key + '"></div>' +
       (isHa(j) ? '<p class="hint" data-hastat="' + j.key + '"></p>' : '<div class="field"><span class="inline"><span class="bm">Kerja ini</span> · <span class="en">This job</span></span>' +
         '<div class="seg"><button type="button" data-st="' + j.key + '" data-v="Y" aria-pressed="' + (st.done === 'Y') + '" style="min-width:110px">' + EA.t('SIAP', 'DONE') + '</button>' +
         '<button type="button" data-st="' + j.key + '" data-v="N" aria-pressed="' + (st.done === 'N') + '" style="min-width:140px">' + EA.t('BELUM SIAP', 'NOT DONE') + '</button></div></div>' +
@@ -540,6 +599,14 @@
     });
     el.querySelectorAll('[data-del]').forEach(function (b) {
       b.onclick = function () { draft.lines[b.dataset.w].splice(Number(b.dataset.del), 1); keepDraft(); render(el, ctx); };
+    });
+    // v1.75: the row's own "tidak hadir / tiada kerja" opens the SAME card SIMPAN opens, for this one man.
+    el.querySelectorAll('[data-awayw]').forEach(function (b) {
+      b.onclick = function () {
+        var j = jobs.find(function (x) { return x.key === b.dataset.awayj; });
+        if (!j) return;
+        askMissing(jobs, [missEntry(j, b.dataset.awayw)], b.dataset.awayw);
+      };
     });
     el.querySelectorAll('[data-fillgo]').forEach(function (b) {
       b.onclick = function () {
@@ -711,14 +778,21 @@
       return num(v) > 0 || (num(v) === 0 && !!zeroWhy(w));
     });
   }
+  // v1.75: one description of a person who still owes an answer, built in one place, so the row's own
+  // TIDAK HADIR opens exactly the card SIMPAN opens (Rule 5) instead of a second copy that can drift.
+  function missEntry(j, w) {
+    var k = kind(j.task, j.block);
+    return { job: j, w: w, k: k, unit: k === 'bunches' ? EA.t('tandan', 'bunches') : k === 'day' ? EA.t('hari', 'day') : (task(j.task) && task(j.task).unit) || '' };
+  }
+  function askable(j) { var k = kind(j.task, j.block); return !(auto(j) || k === 'ticket' || isOp(j)); }
   function missingPeople(jobs) {
     var out = [];
     jobs.forEach(function (j) {
+      if (!askable(j)) return;
       var k = kind(j.task, j.block);
-      if (auto(j) || k === 'ticket' || isOp(j)) return;
       j.people.forEach(function (w) {
         if (answered(w, k)) return;
-        out.push({ job: j, w: w, k: k, unit: k === 'bunches' ? EA.t('tandan', 'bunches') : k === 'day' ? EA.t('hari', 'day') : (task(j.task) && task(j.task).unit) || '' });
+        out.push(missEntry(j, w));
       });
     });
     return out;
@@ -727,7 +801,7 @@
   // The card. It is not a wall: SIMPAN is never refused because somebody is still unanswered (15 Nov rule —
   // an app that will not save pushes the staff to make up a number, which is where "1 tandan" came from).
   // The day close is what insists, so an unanswered person cannot be forgotten either.
-  function askMissing(jobs, miss) {
+  function askMissing(jobs, miss, one) {
     draft.away = draft.away || {};
     var byJob = [];
     miss.forEach(function (m) {
@@ -739,7 +813,7 @@
       var a = draft.away[m.w] || '';
       var box = m.k === 'day'
         ? '<div class="seg mx-day"><button type="button" data-mq="' + esc(m.w) + '" data-v="1">1</button><button type="button" data-mq="' + esc(m.w) + '" data-v="0.5">½</button></div><span class="mx-unit">' + EA.t('hari', 'day') + '</span>'
-        : '<input class="text-input mx-qty" inputmode="decimal" data-mq="' + esc(m.w) + '" value="" placeholder="0"><span class="mx-unit">' + esc(m.unit) + '</span>';
+        : '<input class="text-input mx-qty" inputmode="decimal" data-mq="' + esc(m.w) + '" value="" placeholder=""><span class="mx-unit">' + esc(m.unit) + '</span>';
       var z = zeroWhy(m.w);
       return '<div class="mx-row' + (a ? ' done' : '') + '" data-mxrow="' + esc(m.w) + '">' +
         '<div class="mx-name"><b>' + esc(person(m.w)) + '</b></div>' +
@@ -752,9 +826,15 @@
         AWAY_MARKS.map(function (x) { return '<button type="button" class="mx-away" data-mw="' + esc(m.w) + '" data-mk="' + x[0] + '" aria-pressed="' + (a === x[0]) + '">' + x[0] + '<small>' + EA.t(x[1], x[2]) + '</small></button>'; }).join('') +
         '</div></div>';
     }
-    ui().openSheet('<h2 id="sheet-title"><span class="bm">Belum lengkap</span><span class="en">Not complete yet</span></h2>' +
-      '<div class="mx-note"><span class="bm">' + miss.length + ' orang tiada jumlah. <b>Kosong bukan bermakna tidak hadir</b> — mungkin belum diisi. Isi jumlah kerjanya, atau tanda dia tidak turun kerja.</span>' +
-      '<span class="en">' + miss.length + ' people have no quantity. <b>Blank does not mean absent</b> — it may just not be keyed yet. Key the amount, or mark why he was away.</span></div>' +
+    // Opened from a row, the staff already knows who he means, so the card does not lecture him about blanks.
+    var head = one
+      ? '<h2 id="sheet-title"><span class="bm">' + esc(person(one)) + '</span><span class="en">' + esc(person(one)) + '</span></h2>' +
+        '<div class="mx-note"><span class="bm">Isi jumlah kerjanya, atau tanda dia tidak turun kerja.</span>' +
+        '<span class="en">Key his amount, or mark why he was away.</span></div>'
+      : '<h2 id="sheet-title"><span class="bm">Belum lengkap</span><span class="en">Not complete yet</span></h2>' +
+        '<div class="mx-note"><span class="bm">' + miss.length + ' orang tiada jumlah. <b>Kosong bukan bermakna tidak hadir</b> — mungkin belum diisi. Isi jumlah kerjanya, atau tanda dia tidak turun kerja.</span>' +
+        '<span class="en">' + miss.length + ' people have no quantity. <b>Blank does not mean absent</b> — it may just not be keyed yet. Key the amount, or mark why he was away.</span></div>';
+    ui().openSheet(head +
       byJob.map(function (g) { return '<p class="mx-head">' + esc(g.head) + '</p>' + g.rows.map(rowHtml).join(''); }).join('') +
       '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="mx-back">‹ CHANGE<small>‹ UBAH</small></button>' +
       '<button class="btn btn-ok" type="button" id="mx-ok">SAVE<small>Simpan</small></button></div>',
@@ -1127,7 +1207,7 @@
     var waiting = ids.some(function (i) { return i && EA.isWaiting(i); });
     var notDone = s.rec.jobs.filter(function (j) { return j.status === 'not_done'; }).length;
     var chitFixed = chit && chit.chit === s.chit && (chit.rev || 1) > (s.chitRev || 1);
-    return (chitFixed ? '<p class="warn" id="wk-chitfixed"><span class="bm">Chit pagi ini dibetulkan selepas kerja harian disimpan. Tekan CORRECT untuk kemas kini.</span>' +
+    return (chitFixed ? '<p class="warn" id="wk-chitfixed"><span class="bm">Chit pagi ini dibetulkan selepas kerja harian disimpan. Tekan BETULKAN untuk kemas kini.</span>' +
       '<span class="en">The morning chit was corrected after the day\'s work was saved. Tap CORRECT to bring it up to date.</span></p>' : '') +
       '<section class="card" id="wk-saved"><div class="list-line"><div><b>' + esc(niceDate(s.date)) + ' · ' + esc(s.rec.at) + (s.rev > 1 ? ' · ' + EA.t('dibetulkan', 'corrected') : '') + '</b>' +
       '<span class="en">' + s.rec.jobs.length + EA.t(' kerja · ', ' jobs · ') + (s.rec.jobs.length - notDone) + EA.t(' siap · ', ' done · ') + notDone + EA.t(' belum siap', ' not done') + '</span></div>' +
@@ -1139,8 +1219,11 @@
   function closeRow(s) {
     var st = EA.fh.dayclose && EA.fh.dayclose.cardState ? EA.fh.dayclose.cardState(s.estate, ctx.user, s.date) : { state: 'none' };
     if (st.state === 'closed') return '<p class="wk-closed"><b>✓ ' + EA.t('Hari ditutup', 'Day closed') + (st.at ? ' · ' + esc(st.at) : '') + '</b></p>';
-    if (st.state === 'ready') return '<div class="actions"><button type="button" class="btn btn-ok" id="wk-close" data-date="' + esc(s.date) + '">TUTUP HARI<small>' + EA.t('Semua lengkap · tutup hari ini', 'All complete · close this day') + '</small></button></div>';
-    if (st.state === 'missing') return '<div class="actions"><button type="button" class="btn btn-ghost wk-close-wait" id="wk-close" data-date="' + esc(s.date) + '">TUTUP HARI<small>' + st.bad + EA.t(' perkara belum lengkap · lihat', ' things not complete · see') + '</small></button></div>';
+    // v1.75: the button keeps its name; what is left to do goes on the line under it, not inside it.
+    if (st.state === 'ready') return '<p class="hint">✓ ' + EA.t('Semua lengkap.', 'All complete.') + '</p>' +
+      '<div class="actions"><button type="button" class="btn btn-ok" id="wk-close" data-date="' + esc(s.date) + '">' + EA.t('TUTUP HARI', 'CLOSE THE DAY') + '</button></div>';
+    if (st.state === 'missing') return '<p class="hint">' + st.bad + EA.t(' perkara belum lengkap.', ' things not complete.') + '</p>' +
+      '<div class="actions"><button type="button" class="btn btn-ghost wk-close-wait" id="wk-close" data-date="' + esc(s.date) + '">' + EA.t('TUTUP HARI', 'CLOSE THE DAY') + '</button></div>';
     return '';
   }
 

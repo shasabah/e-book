@@ -156,7 +156,7 @@ function dayCloses_(estate) {
   });
   // A fix ask (C · Betulkan chit) that still stands opens the day for FIX_DAYS, even without a reopen row.
   var fixOpen = {};
-  standingRows_('FH_ALERT', estate).forEach(function (a) { if (a.kind === 'fixask' && String(a.date) >= daysAgo_(FIX_DAYS)) fixOpen[String(a.date)] = true; });
+  standingRows_('FH_ALERT', estate).forEach(function (a) { if (a.kind === 'fixask' && String(a.date) >= fixFrom_()) fixOpen[String(a.date)] = true; });
   Object.keys(out).forEach(function (d) { if (fixOpen[d]) out[d].fixOpen = true; });
   CLOSED_MEMO_ = CLOSED_MEMO_ || {};
   return (CLOSED_MEMO_[estate] = out);
@@ -2226,7 +2226,7 @@ function todo_(user, req) {
   var fixes = chitFixes_(est);
   if (r === 'Staff') {
     fixes.forEach(function (x) {
-      if (x.done || String(x.ask.date) < daysAgo_(FIX_DAYS)) return;
+      if (x.done || String(x.ask.date) < fixFrom_()) return;
       var by = un[x.ask.keyed_by] || 'Kerani';
       add({ id: 'FA:' + x.ask.id, p: 1, ls: dayAdd_(String(x.ask.keyed_at || x.ask.date).slice(0, 10), 1), ic: '!', bm: by + ' minta betulkan chit ' + shortD_(x.ask.date), en: by + ' asks you to fix the chit of ' + shortD_(x.ask.date),
         sub: '"' + x.ask.detail + '"', go: 'fix', fix: { chit: String(x.ask.chit), ref: x.ask.id, note: String(x.ask.detail), by: by, date: String(x.ask.date) } });
@@ -2709,7 +2709,16 @@ function todoDirect_(user, req) {
 // v1.32 C · Betulkan chit semalam: the clerk (or the Owner) asks the staff to fix a chit of the last 3 days.
 // The ask is an alert line kind "fixask" (ref = the chit, detail = what is wrong); the staff's phone writes
 // "fixdone" (ref = the ask) when the corrected chit is saved. The Pengurus is told; nobody approves.
-var FIX_DAYS = 3;
+// v1.75, 19 Nov 2026: 3 becomes 5, to match the phone (rooms/field/muster.js FIX_DAYS) and the 5-day work
+// window Yu Chen set the same morning. The two numbers must move together: a phone offering BETULKAN on a
+// day the office then refuses as too_old is worse than no button, because the staff keys the correction,
+// is told it is saved, and it is thrown away at the office.
+var FIX_DAYS = 5;
+// The window counts TODAY, exactly as the phone counts it (rooms/field/work.js oldestOpen), so 5 means today
+// and the 4 days before it: 15 Nov when today is the 19th. Counting daysAgo_(FIX_DAYS) instead made the
+// office one day WIDER than the phone, which sounds harmless and is not: the clerk could ask for a fix on a
+// day the staff's phone will not open, and he would get a red line he can never clear.
+function fixFrom_() { return daysAgo_(FIX_DAYS - 1); }
 function chitAsk_(user, req) {
   CLOSED_MEMO_ = null;   // v1.43: the day locks are read fresh in every call
   if (user.role !== 'Clerk' && user.role !== 'Owner') return { ok: false, error: 'not_allowed' };
@@ -2722,7 +2731,7 @@ function chitAsk_(user, req) {
     ROWS_MEMO_ = null;
     var c = standingRows_('FH_CHIT', est).find(function (r) { return String(r.chit) === chit; });
     if (!c) return { ok: false, error: 'no_chit' };
-    if (String(c.date) < daysAgo_(FIX_DAYS)) return { ok: false, error: 'too_old' };
+    if (String(c.date) < fixFrom_()) return { ok: false, error: 'too_old' };
     var al = standingRows_('FH_ALERT', est), done = {};
     al.forEach(function (a) { if (a.kind === 'fixdone') done[String(a.ref)] = true; });
     if (al.some(function (a) { return a.kind === 'fixask' && String(a.ref) === chit && !done[a.id]; })) return { ok: false, error: 'already' };

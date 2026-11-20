@@ -78,6 +78,35 @@ html[data-lang="bm"] .btn .l-bm, html[data-lang="en"] .btn .l-en { display: inli
 .btn-ghost { background: transparent; border-color: currentColor; color: inherit; min-height: 42px; padding: 4px 12px; font-size: .85rem; }
 .btn:disabled { opacity: .5; cursor: default; }
 .link-btn { background: none; border: 0; padding: 8px 0; cursor: pointer; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+/* v1.78: the day row on TUTUP HARI. The days themselves, as buttons, always drawn — so which day you are
+   closing is the first thing on the screen and changing it needs no hunting. */
+.dc-days h2 { margin-bottom: 8px; }
+.dc-dayrow { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+/* five days must fit a 390px phone without scrolling: the day he wants is usually today, and today is
+   last in the row. Narrow enough for five, and it still scrolls if a week is open. */
+.dc-day { flex: 1 1 0; min-width: 58px; max-width: 96px; min-height: 56px; padding: 7px 4px; cursor: pointer;
+  border: 1.5px solid var(--line, rgba(0,0,0,.18)); border-radius: var(--r, 12px); background: #fff;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+.dc-day b { font-size: .95rem; font-weight: 800; letter-spacing: .01em; }
+.dc-day small { font-size: .66rem; opacity: .7; font-weight: 500; }
+.dc-day.on { background: var(--ok, #1b6b3a); border-color: var(--ok, #1b6b3a); color: #fff; }
+.dc-day.on small { opacity: .9; }
+.dc-day.re { border-color: var(--amber, #b06a00); color: var(--amber, #b06a00); }
+.dc-day.re.on { background: var(--amber, #b06a00); border-color: var(--amber, #b06a00); color: #fff; }
+
+/* v1.75: "tidak hadir / tiada kerja" on a worker's own row. Findable without shouting — it sits beside
+   "+ petak lain", not above the quantity box, because the common answer is still a number. */
+/* v1.80 the gang total, moved up under the block heading where the mandor is looking. It was a grey hint
+   line at the very bottom of the card and nobody ever scrolled to it. It has to read as a figure, not as a
+   note, because he checks it against his own paper before pressing SIMPAN. */
+.wk-total { margin: 10px 0 2px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--paper); color: var(--ink); font-weight: 600; font-size: 1.02rem; line-height: 1.35; }
+.wk-total:empty { display: none; }
+.wk-nobox { display: block; margin-top: 3px; font-style: italic; }
+.wk-away { margin-left: 14px; }
+.wk-away::before { content: "✕"; margin-right: 5px; font-size: .9em; text-decoration: none; display: inline-block; }
+.wrow .wk-away { color: var(--bad, #a8332a); opacity: .85; }
+.wrow .wk-away:hover, .wrow .wk-away:focus-visible { opacity: 1; }
 
 /* Status pills */
 .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: .82rem; font-weight: 600; white-space: nowrap; }

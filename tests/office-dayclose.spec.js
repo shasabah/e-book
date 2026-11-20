@@ -72,7 +72,12 @@ check('after the fix ask the day takes the correction rows', r.ok && r.results[0
 t = ctx.todo_(staff, { estate: 'SSGT' });
 check('Staff: "dibuka semula · tutup semula" line for the reopened day', t.items.some(x => x.id === 'TH:' + D(1) && /dibuka semula/.test(x.bm) && x.go === '#field-harvest/close'), JSON.stringify(t.items.filter(x => /^TH:/.test(x.id))));
 t = ctx.todo_(mgr, { estate: 'SSGT' });
-check('Pengurus: red line, day not closed by the staff', t.items.some(x => x.id === 'TH:' + D(1)), JSON.stringify(t.items.map(x => x.id)));
+// 1.58 (11 Nov 2026, "the manager's three buttons") folds a line that has reached the Pengurus into one
+// carrying his own prefix: the plain TH: row is removed and MG:TH: takes its place. This check still looked
+// for the old id, so it has been red since 1.58 and fifteen releases went out past it (found 19 Nov 2026).
+// What matters is that the Pengurus gets a line for the day the staff did not close, under either name.
+check('Pengurus: red line, day not closed by the staff',
+  t.items.some(x => x.id === 'TH:' + D(1) || x.id === 'MG:TH:' + D(1)), JSON.stringify(t.items.map(x => x.id)));
 t = ctx.todo_(owner, { estate: 'SSGT' });
 check('Owner: no line yet (open under 2 days)', !t.items.some(x => /^TO:/.test(x.id)), JSON.stringify(t.items.map(x => x.id)));
 // close D(1) again (replacing the first close) → closed again

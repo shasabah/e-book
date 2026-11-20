@@ -82,7 +82,14 @@ const OFF = new Date().getDay() === 1 ? 86400000 : 0;
   await p.evaluate(() => { localStorage.setItem('fh.workchit', JSON.stringify('CH-SSGT-P13-1')); location.hash = ''; }); await p.waitForTimeout(100);
   await p.evaluate(() => { location.hash = 'field-harvest/work'; }); await p.waitForSelector('#wk-saved');
   const btn = await p.$eval('#wk-close', b => b.innerText).catch(() => '');
-  check('Kerja: the saved day shows TUTUP HARI · all complete', /TUTUP HARI/i.test(btn) && /(Semua lengkap|All complete)/i.test(btn), btn);
+  const savedCard = await p.innerText('#wk-saved').catch(() => '');
+  // v1.75: the button keeps its own name and nothing else. "Semua lengkap" used to live inside it as the
+  // <small>, which core/lang.js then read as the Bahasa and showed INSTEAD of the name — so a Bahasa phone
+  // never saw the words TUTUP HARI (Ferezelly, 19 Nov). The sentence is now a hint line above the button.
+  check('Kerja: the saved day\'s button says TUTUP HARI and nothing else',
+    /^TUTUP HARI$/i.test(btn.trim()), btn);
+  check('Kerja: the saved day still says all complete, on the line above the button',
+    /(Semua lengkap|All complete)/i.test(savedCard), savedCard.slice(0, 200));
   await p.click('#wk-close'); await p.waitForSelector('#dc-close'); if (await p.$('#dc-rain-no') && await p.getAttribute('#dc-rain-no', 'aria-pressed') !== 'true') { await p.click('#dc-rain-no'); await p.waitForTimeout(150); } await p.waitForTimeout(200);
   check('TUTUP HARI on the card opens the close screen for that day', /field-harvest\/close$/.test(await p.evaluate(() => location.hash)));
   await p.click('#dc-close'); await p.waitForTimeout(400);

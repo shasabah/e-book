@@ -25,6 +25,9 @@
   function $(sel) { return el.querySelector(sel); }
   function num(v) { var n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isFinite(n) ? n : 0; }
   function niceDate(iso) { var d = new Date(iso + 'T00:00:00'); return ui().dayBm[d.getDay()] + ' ' + d.getDate() + ' ' + ui().monBm[d.getMonth()]; }
+  // v1.78: the day row needs the date short and the day name under it — 20/11 above Jumaat.
+  function dayDm(iso) { var d = new Date(iso + 'T00:00:00'); return d.getDate() + '/' + (d.getMonth() + 1); }
+  function dayName(iso) { return ui().dayBm[new Date(iso + 'T00:00:00').getDay()]; }
   function addDays(date, n) { var d = new Date(date + 'T00:00:00'); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function task(code) { return EA.lists.task(code); }
   function shortName(code) { return (EA.lists.chitNames && EA.lists.chitNames[code]) || (task(code) ? task(code).en : code); }
@@ -66,7 +69,18 @@
     rows.forEach(function (r) {
       if (r.muster !== 'H') { var a = AWAY[r.muster] || 'X'; out.count[a]++; out.people.push({ w: r.worker_id, letter: a }); return; }
       var ls = byW[r.worker_id] || [];
-      if (!ls.length) { out.noLine.push(r.worker_id); return; }
+      // v1.79 (Yu Chen, 20 Nov 2026: "It wouldn't let me close for full this. But I already key all havestor
+      // individually different number"). He had. The man with no line was the MANDOR. Kerja has always known
+      // a mandor has nothing to key — rooms/field/work.js puts him in j.mandors, not j.people, "a mandor
+      // supervises: nothing to key for him" — but the close did not, and demanded a work line for him. The
+      // two screens disagreed about the same man, and nothing in the app could settle it: Kerja offered no
+      // row to key, the close would not pass without one. He is present and he is working; he is simply not
+      // on piece rate. He counts as present and is not asked for a line.
+      if (!ls.length) {
+        var w = EA.lists.worker(r.worker_id);
+        if (w && w.mdr) { out.count.P++; out.people.push({ w: r.worker_id, letter: 'P' }); return; }
+        out.noLine.push(r.worker_id); return;
+      }
       var k = payKind(estate, ls[0]), letter = 'P';
       if (k === 'day') {
         var d = ls.reduce(function (a, l) { return a + num(l.qty); }, 0);
@@ -110,6 +124,13 @@
   function closedLocal(estate, date) { return closes().find(function (s) { return s.estate === estate && s.date === date && !s.reopened; }) || null; }
   function officeDays(estate) { var o = EA.local.get(K.office + estate, null); return (o && o.days) || []; }
   function officeState(estate, date) { var d = officeDays(estate).find(function (x) { return x.date === date; }); return d ? d.state : ''; }
+  // v1.75: the one place that says whether a day is already closed. Kerja asks this before it opens a day
+  // for keying (Yu Chen, 19 Nov: a day that is not closed yet stays open on the phone for 5 days; once it is
+  // closed it changes only through the clerk's MINTA BETULKAN CHIT, as decided 24 Oct). Built once (Rule 5).
+  function isClosed(estate, date) {
+    var l = closedLocal(estate, date), st = officeState(estate, date);
+    return !!((l && st !== 'reopened' && st !== 'fixing') || st === 'closed');
+  }
   function chitOf(estate, date) {
     return EA.fh.allChits().filter(function (c) { return c.estate === estate && c.date === date; })
       .sort(function (a, b) { return (a.confirmedAt || '') < (b.confirmedAt || '') ? 1 : -1; })[0] || null;
@@ -286,8 +307,23 @@
         EA.t('Hari dengan chit pagi dari ', 'Days with a morning chit from ') + esc(niceDate(from())) + EA.t(' muncul di sini selepas kerja dikunci. Tutup hari sebelum chit esok pagi.', ' appear here once the work is keyed. Close the day before tomorrow\'s chit.') + '</p></div>';
     } else {
       var d = draftFor(day.date), ck = checks(ctx.estate, day.chit, d), bad = ck.filter(function (x) { return !x.ok; });
-      html += (open.length > 1 ? '<div class="field"><label><span class="bm">Hari</span><span class="en">Day</span></label><select class="text-input" id="dc-pick">' +
-        open.map(function (o) { return '<option value="' + o.date + '"' + (o.date === day.date ? ' selected' : '') + '>' + esc(niceDate(o.date)) + (o.reopened ? EA.t(' · DIBUKA SEMULA', ' · REOPENED') : '') + '</option>'; }).join('') + '</select></div>' : '');
+      // v1.78 (Yu Chen, 20 Nov 2026: "I can't find the selection day for closing. I believe ferezelly facing
+      // the same"). This was a grey select, drawn ONLY when more than one day was open. Two faults in that.
+      // It read as a label rather than a choice, and it scrolled away while the card heading below kept
+      // shouting a different date — so the screen looked as if it were demanding the oldest day first, which
+      // it never was. Worse, with one day open it did not exist at all, so nobody ever learnt it was there;
+      // they met it for the first time on the morning four days were open and they were already in trouble.
+      // Now it is always drawn, as the days themselves, and it says how many are waiting.
+      html += '<div class="card dc-days"><h2>' + EA.t('Hari mana?', 'Which day?') + '</h2>' +
+        '<div class="dc-dayrow">' + open.map(function (o) {
+          return '<button type="button" class="dc-day' + (o.date === day.date ? ' on' : '') + (o.reopened ? ' re' : '') +
+            '" data-day="' + o.date + '"><b>' + esc(dayDm(o.date)) + '</b><small>' + esc(dayName(o.date)) +
+            (o.reopened ? EA.t(' · buka semula', ' · reopened') : '') + '</small></button>';
+        }).join('') + '</div>' +
+        '<p class="hint">' + (open.length > 1
+          ? EA.t(open.length + ' hari belum ditutup. Pilih mana-mana — tidak perlu ikut turutan.',
+                 open.length + ' days not closed. Pick any one — they do not have to be in order.')
+          : EA.t('1 hari belum ditutup.', '1 day not closed.')) + '</p></div>';
       if (day.reopened) html += '<p class="warn"><b>' + EA.t('Dibuka semula · ', 'Reopened · ') + esc(niceDate(day.date)) + '</b> <span class="bm">Kerani minta pembetulan. Selepas pembetulan dikunci, tutup hari ini semula.</span></p>';
       var wr = rainFromWork(workOf(day.chit));
       if (wr.lots && String(d.rainMm == null ? '' : d.rainMm) === '' && !d.rainTime && !d.rainSeen) { d.rainWet = true; d.rainTime = '06-12'; d.rainSeen = true; keepDraft(day.date, d); ck = checks(ctx.estate, day.chit, d); bad = ck.filter(function (x) { return !x.ok; }); }
@@ -311,8 +347,11 @@
           '<textarea class="text-input" rows="2" id="dc-field" placeholder="' + EA.t('cth: traktor rosak petang, kutip esok pagi', 'e.g. tractor broke down, collect tomorrow morning') + '">' + esc(d.fieldNote || '') + '</textarea></div>';
       }
       html += '<div class="field"><label><span class="bm">Catatan (pilihan)</span><span class="en">Note (optional)</span></label><input class="text-input" id="dc-note" maxlength="150" value="' + esc(d.note || '') + '"></div>' +
-        '<div class="actions"><button type="button" class="btn btn-ok" id="dc-close"' + (bad.length ? ' disabled' : '') + '>TUTUP HARI<small>' + EA.t('Kunci hari ' + niceDate(day.date), 'Close ' + niceDate(day.date)) + '</small></button></div>' +
-        (bad.length ? '<p class="hint">' + bad.length + EA.t(' perkara belum lengkap. Tekan baris merah untuk membetulkannya.', ' things not complete. Tap a red line to fix it.') + '</p>' : '<p class="hint">' + EA.t('Selepas ditutup, hari ini hanya boleh diubah melalui MINTA BETULKAN CHIT (kerani), dalam 3 hari.', 'After closing, this day changes only through MINTA BETULKAN CHIT (the clerk), within 3 days.') + '</p>') +
+        // v1.75: one name, in the phone's language. Written as BAHASA<small>English</small> the app would read
+        // the small line as the Bahasa and show "KUNCI HARI RABU 18 NOV" instead of TUTUP HARI (Ferezelly, 19 Nov).
+        '<div class="actions"><button type="button" class="btn btn-ok" id="dc-close"' + (bad.length ? ' disabled' : '') + '>' + EA.t('TUTUP HARI', 'CLOSE THE DAY') + '</button></div>' +
+        '<p class="hint">' + EA.t('Mengunci hari ' + niceDate(day.date) + '.', 'Closes ' + niceDate(day.date) + '.') + '</p>' +
+        (bad.length ? '<p class="hint">' + bad.length + EA.t(' perkara belum lengkap. Tekan baris merah untuk membetulkannya.', ' things not complete. Tap a red line to fix it.') + '</p>' : '<p class="hint">' + EA.t('Selepas ditutup, hari ini hanya boleh diubah melalui MINTA BETULKAN CHIT (kerani), dalam ' + (EA.fh && EA.fh.FIX_DAYS || 5) + ' hari.', 'After closing, this day changes only through MINTA BETULKAN CHIT (the clerk), within ' + (EA.fh && EA.fh.FIX_DAYS || 5) + ' days.') + '</p>') +
         '</div>';
     }
     if (done.length) html += '<div class="card"><h2>' + EA.t('Hari ditutup', 'Days closed') + '</h2>' + done.map(function (s) {
@@ -339,7 +378,9 @@
 
   function wire() {
     $('#dc-back').onclick = function () { location.hash = '#field-harvest/work'; };
-    var p = $('#dc-pick'); if (p) p.onchange = function () { EA.local.set('fh.daypick', p.value); render(el, ctx); };
+    el.querySelectorAll('[data-day]').forEach(function (b) {
+      b.onclick = function () { EA.local.set('fh.daypick', b.dataset.day); render(el, ctx); window.scrollTo(0, 0); };
+    });
     if (!day) { el.querySelectorAll('[data-sum]').forEach(function (b) { b.onclick = function () { showSummary(b.dataset.sum); }; }); return; }
     var d = draftFor(day.date);
     function upd(fn) { fn(d); keepDraft(day.date, d); render(el, ctx); }
@@ -492,7 +533,7 @@
       if (!re.length) return '';
       return '<p class="plan-band due" id="wk-dayclose"><b>' + EA.t('Hari ' + niceDate(re[0].date) + ' dibuka semula', 'Day ' + niceDate(re[0].date) + ' reopened') + '</b>' +
         '<span>' + EA.t('Kerani minta pembetulan. Selepas dibetulkan, tutup hari itu semula.', 'The clerk asked for a fix. After fixing, close that day again.') + '</span>' +
-        '<a class="btn btn-ok" href="#field-harvest/close">TUTUP HARI<small>' + EA.t('Semak & tutup semula', 'Check & close again') + '</small></a></p>';
+        '<a class="btn btn-ok" href="#field-harvest/close">' + EA.t('TUTUP HARI', 'CLOSE THE DAY') + '</a></p>';
     } finally { ctx = keep; }
   };
 
@@ -510,8 +551,8 @@
       '<button type="button" class="btn btn-ok" id="dc-dry">NO RAIN · CLOSE<small>TIADA HUJAN · TUTUP</small></button></div></div>';
     else if (st.state === 'ready') html = '<div class="dc-ask" id="dc-ask"><b>✓ ' + EA.t('Semua lengkap. Tutup hari ' + niceDate(date) + '?', 'All complete. Close ' + niceDate(date) + '?') + '</b>' +
       '<small>' + EA.t('Selepas ditutup, hari ini hanya diubah melalui MINTA BETULKAN CHIT (kerani).', 'After closing, changes only through MINTA BETULKAN CHIT (the clerk).') + '</small>' +
-      '<div class="actions"><button type="button" class="btn btn-ghost" id="dc-later">NANTI<small>' + EA.t('Ada lagi untuk dikunci', 'More to key') + '</small></button>' +
-      '<button type="button" class="btn btn-ok" id="dc-yes">YA, TUTUP<small>' + EA.t('Tutup hari', 'Close the day') + '</small></button></div></div>';
+      '<div class="actions"><button type="button" class="btn btn-ghost" id="dc-later">' + EA.t('NANTI', 'LATER') + '</button>' +
+      '<button type="button" class="btn btn-ok" id="dc-yes">' + EA.t('YA, TUTUP', 'YES, CLOSE') + '</button></div></div>';
     else html = '<div class="dc-ask dc-wait" id="dc-ask"><b>' + EA.t('Tutup hari bila lengkap:', 'Close the day when complete:') + '</b>' +
       st.bad.map(function (x) { return '<button type="button" class="link-btn dc-go" data-go="' + esc(x.go || '#field-harvest/close') + '">• ' + esc(EA.t(x.bm, x.en)) + '</button>'; }).join('') + '</div>';
     return { state: st.state, html: html, wire: function (sh, after) {
@@ -570,5 +611,5 @@
       return { state: cs.state, bad: cs.bad ? cs.bad.length : 0 };
     } finally { ctx = keep; }
   }
-  EA.fh.dayclose = { render: render, summaryText: summaryText, showSummary: showSummary, checks: checks, rainCheck: rainCheck, rainFromWork: rainFromWork, closeChit: closeChit, closeState: closeState, cardState: cardState };
+  EA.fh.dayclose = { render: render, summaryText: summaryText, showSummary: showSummary, checks: checks, rainCheck: rainCheck, rainFromWork: rainFromWork, closeChit: closeChit, closeState: closeState, cardState: cardState, isClosed: isClosed };
 })();

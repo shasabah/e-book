@@ -51,7 +51,20 @@
   }
   function here(x) { return x.estate === ctx.estate; }
   // v3 of the sample (Yu Chen, 20 Nov 2026): "sjq6259 support paitan and sugut, 2 vehicle in melu one as
-  // standby, kwnn bigger area so 3 lorrys to cover". So a lorry is offered where it actually WORKS, not
+  // standby, kwnn bigger area so 3 lorrys to cover", then "paitan is howo and support sugut. meliau nissan
+  // is the standby one". The whole mapping, in his words:
+  //
+  //   SJQ6259   Howo Sinotruck TX371 2026   PTAN   serves PTAN + SSGT   (Sugut owns no lorry at all)
+  //   SS6586X   Hino 500 8 TON 2016         MELU   serves MELU
+  //   SS2797L   Nissan MK210 6 TON 2008     MELU   serves MELU - STANDBY
+  //   SSA4785A  Hino 500 10 TON 2018        KWNN   serves KWNN   (bigger area, three to cover it)
+  //   SMB9857   Hino 500 10 TON 2020        KWNN   serves KWNN
+  //   SMG5058   Nissan RJ 10 TON 2022       KWNN   serves KWNN
+  //
+  // Standby changes nothing on the note - both Meliau lorries serve Meliau - but it belongs in Fleet, where
+  // a lorry standing still is not a breakdown. It is written here so it is not lost before Fleet is built.
+  //
+  // So a lorry is offered where it actually WORKS, not
   // where it sleeps, and the note never mixes in a lorry that has no business at this estate. One rule for
   // every estate; the mapping is the only thing that differs, and it lives in the office list, not in code.
   function serves(x) {

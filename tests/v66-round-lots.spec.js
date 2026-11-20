@@ -1,7 +1,7 @@
 // E-Book test (1.52.3). Membaja and CPS: lots already done this round (Sugut Blk 01, 27 Oct–3 Nov: the same lots keyed
 // 2–3 times). Tambah kerja shows them grey with the date; tapping one asks once, with a reason, and can be cancelled;
 // COPY CHIT drops them; TUTUP HARI check 7 lists any picked again, with the reason. A lot not finished yesterday
-// (belum siap) is not grey. CPS: grey only under 60 days. Made-up workers.
+// (belum siap) is not grey. CPS: grey only under 90 days (1.81; was 60). Made-up workers.
 const check = (name, ok, detail) => { console.log((ok ? 'PASS ' : 'FAIL ') + name + (detail ? ' — ' + detail : '')); if (!ok) process.exitCode = 1; };
 const { chromium } = require('playwright');
 const ago = n => { const x = new Date(Date.now() - n * 864e5); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); };
@@ -20,12 +20,12 @@ const dm = d => d.slice(8, 10) + '/' + d.slice(5, 7);
     rt.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
   });
   await p.goto('http://localhost:8765/index.html');
-  await p.evaluate(({ d0, d1, d3, d20, d70 }) => {
+  await p.evaluate(({ d0, d1, d3, d20, d100 }) => {
     localStorage.clear(); localStorage.setItem('ea.phone', JSON.stringify('P13')); localStorage.setItem('ea.sendLink', JSON.stringify('https://script.google.com/macros/s/X/exec'));
     localStorage.setItem('ea.people.SSGT', JSON.stringify([['M1', 'Pembaja Satu'], ['M2', 'Pembaja Dua']].map(x => ({ id: x[0], name: x[1], estate: 'SSGT', gang: 'Am · General', sex: 'M' }))));
     localStorage.setItem('ea.people.at', JSON.stringify(Date.now()));
-    // the office: SEMAK PETAK / daily work say MAN 2-1, 2-2 done 3 days ago; CPS 1-9 sprayed 20 days ago, 1-10 70 days ago
-    localStorage.setItem('fh.prog.SSGT.' + d0.slice(0, 7), JSON.stringify({ lotJobs: { MAN: { '2-1': d3, '2-2': d3 }, CPS: { '1-9': d20, '1-10': d70 } } }));
+    // the office: SEMAK PETAK / daily work say MAN 2-1, 2-2 done 3 days ago; CPS 1-9 sprayed 20 days ago, 1-10 100 days ago
+    localStorage.setItem('fh.prog.SSGT.' + d0.slice(0, 7), JSON.stringify({ lotJobs: { MAN: { '2-1': d3, '2-2': d3 }, CPS: { '1-9': d20, '1-10': d100 } } }));
     // yesterday's chit: MAN Blk 02 on 2-1 2-3 2-4 2-5 2-6; Kerja: 2-3 and 2-4 siap, 2-5 belum siap (rain), 2-6 not touched
     const lots = ['2-1', '2-3', '2-4', '2-5', '2-6'];
     const row = (id, w) => ({ id, worker_id: w, muster: 'H', task_code: 'MAN', block: '02', lots: lots.join(' '), mandor: '' });
@@ -33,7 +33,7 @@ const dm = d => d.slice(8, 10) + '/' + d.slice(5, 7);
       jobs: [{ key: 'j1', task: 'MAN', block: '02', lots, mandor: '' }], rows: [row('R1', 'M1'), row('R2', 'M2')] }]));
     localStorage.setItem('fh.work', JSON.stringify([{ chit: 'MC-Y', date: d1, estate: 'SSGT', rec: { chit: 'MC-Y', date: d1, estate: 'SSGT', lines: [],
       jobs: [{ key: 'j1', task_code: 'MAN', block: '02', lots: lots.join(' '), progress: '2-3 siap, 2-4 siap, 2-5 belum siap (Hujan · sambung)' }] } }]));
-  }, { d0: ago(0), d1: ago(1), d3: ago(3), d20: ago(20), d70: ago(70) });
+  }, { d0: ago(0), d1: ago(1), d3: ago(3), d20: ago(20), d100: ago(100) });
   await p.reload(); await p.fill('#key', '123456'); await p.waitForSelector('#home:not([hidden])');
   await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForTimeout(900);
 
@@ -63,10 +63,10 @@ const dm = d => d.slice(8, 10) + '/' + d.slice(5, 7);
   await p.click('#jb-lots [data-lot="2-6"]'); await p.waitForTimeout(150);
   check('a lot not done picks at once', !(await p.$('#jb-repeat')) && (await p.getAttribute('#jb-lots [data-lot="2-6"]', 'aria-pressed')) === 'true');
 
-  // 4 · CPS Blk 01: grey only under 60 days
+  // 4 · CPS Blk 01: grey only under 90 days
   await job('CPS'); await p.selectOption('#jb-block', '01'); await p.waitForTimeout(200);
   const cg = await p.$$eval('#jb-lots .lot-round', a => a.map(x => x.dataset.lot).join(' '));
-  check('CPS: 1-9 (20 days) grey, 1-10 (70 days) open', cg === '1-9', cg);
+  check('CPS: 1-9 (20 days) grey, 1-10 (100 days) open', cg === '1-9', cg);
 
   // 5 · back to MAN Blk 02 with the reason, save: the job keeps the reason
   await job('MAN'); await p.selectOption('#jb-block', '02'); await p.waitForTimeout(150);

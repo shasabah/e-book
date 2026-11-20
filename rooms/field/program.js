@@ -11,9 +11,10 @@
 //   Then Disiplin harian — days closed, ramp with no fruit from an earlier day, work keyed the same day.
 // Lot states come from the office in one call (program_): last harvest per lot and bunches, last CPS date per lot,
 // manuring round done per lot (LIST_LOTSTART marked by Ferezelly on 5 Nov 2026, then the daily keying by lot).
-// CPS rule (Yu Chen, 3 Nov 2026): the target is 4 rounds a year, about 90 days apart. 60 days is the earliest a lot may
-// be sprayed again (under that the circle is still clean and the chemical is wasted), so a lot turns amber "boleh racun"
-// at 60 days — which is what lets Sugut catch up this year — and red "lewat" past 120 days, a round missed. Harvest round: ready 10–15 days, late over 15 (lists/tasks.js lotRound).
+// CPS rule (Yu Chen, 3 Nov 2026): the target is 4 rounds a year, about 90 days apart, and red "lewat" past 120 days, a
+// round missed. 20 Nov 2026 (Yu Chen, after the references were cross-checked: "keep 90/120. 60 is too early unless we
+// are in imature"): a mature lot may be sprayed again from 90 days, not 60, so it turns amber "boleh racun" at 90; only a
+// block marked immature in lists/estates.js (immature: true) keeps 60. No block is marked today. Harvest round: ready 10–15 days, late over 15 (lists/tasks.js lotRound).
 // Tonnes stay at block level; a lot shows days and bunches only (exact numbers). Pruning, VOP spray and slashing are
 // not ranked (old data, by block only); they show grey in the block's job table.
 (function () {
@@ -25,7 +26,23 @@
   // Nov–Dec outstanding list is real and 2027 can be planned per lot. tick[job.block] = { set: {lot: 'y'|'n'}, month }.
   var tick = {};
   var TICKABLE = { CPS: 1, MAN: 1 };
-  var CPS_RULE = { target: 90, again: 60, late: 120 };   // target gap 90 days (4 rounds a year); earliest 60; late past 120
+  var CPS_RULE = { target: 90, again: 90, againImmature: 60, late: 120 };   // 4 rounds a year; again from 90 (immature 60); late past 120
+  // The gap before a lot may be sprayed again: 90 days, or 60 on a block marked immature.
+  function cpsAgain(estate, block) {
+    var b = (EA.lists.blocksFor(estate) || []).find(function (x) { return x.block === block; });
+    return b && b.immature ? CPS_RULE.againImmature : CPS_RULE.again;
+  }
+  // v1.81 (Yu Chen, 20 Nov 2026: "we should give indication in the apps map"): a colour key under every lot map and
+  // lot list, written for the job shown. The days come from the same rules the colours use, so they cannot disagree.
+  function key(estate, code, block) {
+    // 20 Nov (Yu Chen: "make the color indication smaller, it just show. the main still the map"): one short line.
+    var r = EA.lists.lotRound.HA, rows, none = EA.t('tiada rekod', 'no record'), d = EA.t(' hari', ' days');
+    if (code === 'HA') rows = [['g', '< ' + r.ready + d], ['a', r.ready + '–' + r.late + d], ['r', '> ' + r.late + d], ['x', none]];
+    else if (code === 'CPS') { var ag = cpsAgain(estate, block); rows = [['g', '< ' + ag + d], ['a', ag + '–' + CPS_RULE.late + d], ['r', '> ' + CPS_RULE.late + d], ['x', none]]; }
+    else if (code === 'MAN') rows = [['g', EA.t('siap', 'done')], ['x', none]];
+    else return '';
+    return '<p class="pg-key">' + rows.map(function (x) { return '<span><i class="' + x[0] + '"></i>' + x[1] + '</span>'; }).join('') + '</p>';
+  }
   function esc(s) { return EA.ui.esc(s); }
   function f1(v) { return (Math.round(v * 10) / 10).toFixed(1); }
   function f2(v) { return (Math.round(v * 100) / 100).toFixed(2); }
@@ -120,7 +137,7 @@
     var d = data.lotJobs && data.lotJobs.MAN ? data.lotJobs.MAN[l.lot] : '';
     return { k: d ? 'g' : 'x', date: d || '', act: !d };
   }
-  // CPS: days since the lot's last spray. g under 60 (wait), a 60–120 (can spray), r over 120 or no record.
+  // CPS: days since the lot's last spray. g under 90 (wait; 60 on an immature block), a to 120 (can spray), r over 120.
   function cpsState(data, l, estate) {
     var d = data.lotJobs && data.lotJobs.CPS ? data.lotJobs.CPS[l.lot] : '', est = false;
     var off = data.lotJobs && data.lotJobs.off && data.lotJobs.off.CPS && data.lotJobs.off.CPS[l.lot];
@@ -129,7 +146,7 @@
       if (t && t[l.block]) { d = t[l.block]; est = true; }
     }
     var age = d ? daysBetween(d, EA.today()) : -1;
-    var k = age < 0 ? 'x' : age > CPS_RULE.late ? 'r' : age >= CPS_RULE.again ? 'a' : 'g';
+    var k = age < 0 ? 'x' : age > CPS_RULE.late ? 'r' : age >= cpsAgain(estate || (data && data.estate), l.block) ? 'a' : 'g';
     return { k: k, age: age, date: d, est: est, act: k !== 'g' };
   }
   function noLotData(data) { return !data.lotJobs; }
@@ -202,6 +219,7 @@
       (ticking ? tickBar(estate, code, b, id) : '') +
       (hasMap && !ticking ? '<div class="seg pg-seg"><button type="button" data-pgmap="' + esc(id) + '" data-v="map" aria-pressed="' + map + '">' + EA.t('PETA', 'MAP') + '</button><button type="button" data-pgmap="' + esc(id) + '" data-v="list" aria-pressed="' + !map + '">' + EA.t('SENARAI', 'LIST') + '</button></div>' : '') +
       ((map || ticking) && hasMap ? lotMap(estate, b, st, ticking ? id : '') : lotList(shown, ticking ? id : '')) +
+      (ticking ? '' : key(estate, code, b)) +
       (ticking ? '<p class="pg-note">' + EA.t('Tekan petak untuk tukar siap / belum. Hijau = sudah buat pusingan ini.', 'Tap a lot to switch done / not done. Green = this round is done.') + '</p>' : (foot ? '<p class="pg-note">' + foot + '</p>' : '')) +
       (canTick && !ticking ? '<button type="button" class="link-btn pg-more" data-pgtick="' + esc(id) + '">' + EA.t('SEMAK PETAK ›', 'CHECK LOTS ›') + '</button>' : '') +
       '</div>';
@@ -293,8 +311,7 @@
     var lines = bl.map(function (p) {
       var k = p.ha > 0.05 ? (p.ha > blockHa(estate, p.b) * 0.5 ? 'r' : 'a') : 'g';
       var gap = p.lotHa - p.ha, note = p.ha > 0.05
-        ? EA.t('kelabu = belum ada rekod petak · hijau = sudah dibaja · Ha · beg', 'grey = no lot record yet · green = manured · Ha · bags') +
-          (p.unknown ? '<br>' + EA.t(p.unknown + ' petak belum ditanda (' + f1(p.lotHa) + ' Ha). Rekod blok kata ' + f1(p.ha) + ' Ha lagi — tekan SEMAK PETAK untuk tanda petak mana sudah siap.',
+        ? (p.unknown ? EA.t(p.unknown + ' petak belum ditanda (' + f1(p.lotHa) + ' Ha). Rekod blok kata ' + f1(p.ha) + ' Ha lagi — tekan SEMAK PETAK untuk tanda petak mana sudah siap.',
                                      p.unknown + ' lots not ticked yet (' + f1(p.lotHa) + ' Ha). The block record says ' + f1(p.ha) + ' Ha left — tap CHECK LOTS to mark which are done.') : '')
         : '';
       return blockLine(estate, 'MAN', p.b, k, 'Blk ' + p.b + ' · ' + (p.ha > 0.05 ? f1(p.ha) + EA.t(' Ha lagi', ' Ha left') : EA.t('siap', 'done')), p.pd ? '≈ ' + Math.ceil(p.pd) + EA.t(' o-h', ' p-d') : '', states, p.items, note, states, canTick(estate));
@@ -320,11 +337,11 @@
     var lines = bl.map(function (p) {
       var k = p.late > 0.05 ? 'r' : p.can > 0.05 ? 'a' : 'g', text, right = p.pd ? '≈ ' + Math.ceil(p.pd) + EA.t(' o-h', ' p-d') : '';
       if (p.can > 0.05) text = 'Blk ' + p.b + ' · ' + EA.t('boleh racun ', 'can spray ') + f1(p.can) + ' Ha';
-      else { var nx = p.nextDate ? new Date(p.nextDate + 'T00:00:00') : null; if (nx) nx.setDate(nx.getDate() + CPS_RULE.again); text = 'Blk ' + p.b + ' · ' + EA.t('tunggu', 'wait') + (nx ? ' · ' + EA.t('boleh dari ', 'from ') + dm(ym(nx) + '-' + String(nx.getDate()).padStart(2, '0')) : ''); right = ''; }
-      return blockLine(estate, 'CPS', p.b, k, text, right, states, p.items, p.can > 0.05 || p.est ? (p.est ? EA.t('* anggaran: rekod blok, bukan petak (Status Ladang 29.10.2026) — betulkan dengan SEMAK PETAK<br>', '* estimated from the block record, not the lot (estate status 29.10.2026) — correct it with CHECK LOTS<br>') : '') + EA.t('hari sejak racun · kuning = boleh racun (' + CPS_RULE.again + ' hari ke atas) · merah = lewat (' + CPS_RULE.late + ' hari) atau tiada rekod', 'days since spray · amber = may spray (' + CPS_RULE.again + ' days or more) · red = late (' + CPS_RULE.late + ' days) or no record') : '', states, canTick(estate));
+      else { var nx = p.nextDate ? new Date(p.nextDate + 'T00:00:00') : null; if (nx) nx.setDate(nx.getDate() + cpsAgain(estate, p.b)); text = 'Blk ' + p.b + ' · ' + EA.t('tunggu', 'wait') + (nx ? ' · ' + EA.t('boleh dari ', 'from ') + dm(ym(nx) + '-' + String(nx.getDate()).padStart(2, '0')) : ''); right = ''; }
+      return blockLine(estate, 'CPS', p.b, k, text, right, states, p.items, p.est ? EA.t('* anggaran: rekod blok, bukan petak (Status Ladang 29.10.2026) — betulkan dengan SEMAK PETAK', '* estimated from the block record, not the lot (estate status 29.10.2026) — correct it with CHECK LOTS') : '', states, canTick(estate));
     });
     var nodata = noLotData(data) ? '<p class="pg-note">' + EA.t('Peta petak terisi sendiri apabila kerja dikunci ikut petak. Jumlah Ha di atas sudah betul.', 'The lot map fills itself as work is keyed by lot. The Ha above are already right.') + '</p>' : '';
-    return '<div class="card pg-card"><h2>' + EA.t('CPS · racun bulatan', 'CPS · circle spray') + '<small>' + EA.t('sasaran ' + rounds + ' pusingan setahun (±' + CPS_RULE.target + ' hari) · paling awal ' + CPS_RULE.again + ' hari selepas racun lepas', 'target ' + rounds + ' rounds a year (±' + CPS_RULE.target + ' days) · at the earliest ' + CPS_RULE.again + ' days after the last spray') + '</small></h2>' + lines.join('') +
+    return '<div class="card pg-card"><h2>' + EA.t('CPS · racun bulatan', 'CPS · circle spray') + '<small>' + EA.t('sasaran ' + rounds + ' pusingan setahun · racun semula selepas ' + CPS_RULE.again + ' hari · lewat lebih ' + CPS_RULE.late + ' hari', 'target ' + rounds + ' rounds a year · spray again after ' + CPS_RULE.again + ' days · late over ' + CPS_RULE.late + ' days') + '</small></h2>' + lines.join('') +
       (nowHa > 0.05 ? '<p class="pg-note">' + EA.t('Boleh racun sekarang ', 'Can spray now ') + f1(nowHa) + ' Ha · ' + gangLine('CPS', pd, left, data) + '</p>' : '') + nodata + '</div>';
   }
   function apCard(estate, data) {
@@ -370,7 +387,8 @@
           var old = RANKED.indexOf(c) < 0, t = tone(x.gap);
           return '<tr class="' + (old ? 'pg-old' : '') + '"><td>' + esc(job(c)) + ' <small>' + esc(c) + (old ? ' · ' + EA.t('data lama', 'old data') : '') + '</small></td><td>' + f1(x.rounds) + '</td><td>' + x.due + '</td><td>' + x.all + '</td><td class="st">' + dot(old ? 'x' : t) + '</td></tr>';
         }).join('') + '</table>';
-    }).join('') + '<p class="pg-note">' + EA.t('Pusingan hingga akhir ' + mon(prev) + '. Merah = satu pusingan atau lebih di belakang. Cantas, VOP dan tebas: rekod lama ikut blok, tidak disusun.', 'Rounds to the end of ' + mon(prev) + '. Red = a round or more behind. Pruning, VOP and slashing: old block records, not ranked.') + '</p>';
+    }).join('') + '<p class="pg-note">' + EA.t('Pusingan hingga akhir ' + mon(prev) + '. Cantas, VOP dan tebas: rekod lama ikut blok, tidak disusun.', 'Rounds to the end of ' + mon(prev) + '. Pruning, VOP and slashing: old block records, not ranked.') + '</p>' +
+      '<p class="pg-key dots"><span><i class="g"></i>' + EA.t('ikut rancangan', 'on plan') + '</span><span><i class="a"></i>' + EA.t('< 1 pusingan', '< 1 round') + '</span><span><i class="r"></i>' + EA.t('≥ 1 pusingan', '≥ 1 round') + '</span><span><i class="x"></i>' + EA.t('data lama', 'old data') + '</span></p>';
   }
   function daysCard(month, data) {
     var d = data.days || [], judged = d.filter(function (x) { return x.closed; }), closed = judged.filter(function (x) { return x.closed === 'Y'; }).length;
@@ -472,5 +490,5 @@
     quietly(redraw);
   }
   function lastDayOf(m) { var x = new Date(m + '-01T00:00:00'), e = daysIn(m), today = EA.today(); var d = m + '-' + String(e).padStart(2, '0'); return d > today ? today : d; }
-  EA.fh.program = { lotMap: lotMap, html: html, wire: wire, calc: calc, refresh: refresh, states: { harvest: harvestState, man: manState, cps: cpsState }, CPS_RULE: CPS_RULE };
+  EA.fh.program = { lotMap: lotMap, html: html, wire: wire, calc: calc, refresh: refresh, states: { harvest: harvestState, man: manState, cps: cpsState }, CPS_RULE: CPS_RULE, cpsAgain: cpsAgain, key: key };
 })();

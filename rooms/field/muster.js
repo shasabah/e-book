@@ -233,12 +233,12 @@
   var REPEAT_WHY = [['Baja tambahan', 'Extra dose'], ['Sambung · belum siap', 'Carry on · not finished'], ['Ulang · tak cukup', 'Redo · not enough'], ['Salah rekod', 'Wrong record']];
   function dm2(d) { return String(d).slice(8, 10) + '/' + String(d).slice(5, 7); }
   // Lots of this job and block done this round before the chit's day: the office's lot records (daily work after the round
-  // started, and the SEMAK PETAK ticks), plus lots this phone saved as siap and has not sent yet. CPS: sprayed under 60 days.
+  // started, and the SEMAK PETAK ticks), plus lots this phone saved as siap and has not sent yet. CPS: sprayed under 90 days (60 on an immature block).
   function roundDone(estate, code, block, upTo) {
     if (!ROUND_JOBS[code] || !block) return {};
     upTo = upTo || EA.today();
     var out = {}, data = EA.local.get('fh.prog.' + estate + '.' + upTo.slice(0, 7), null) || EA.local.get('fh.prog.' + estate + '.' + EA.today().slice(0, 7), null);
-    var lj = (data && data.lotJobs && data.lotJobs[code]) || {}, again = (EA.fh.program && EA.fh.program.CPS_RULE && EA.fh.program.CPS_RULE.again) || 60;
+    var lj = (data && data.lotJobs && data.lotJobs[code]) || {}, again = (EA.fh.program && EA.fh.program.cpsAgain) ? EA.fh.program.cpsAgain(estate, block) : 90;
     (EA.lists.lotsFor(estate, block) || []).forEach(function (l) {
       var d = String(lj[l.lot] || '').slice(0, 10);
       if (!d || d >= upTo) return;

@@ -28,16 +28,56 @@
   function blank() { return { v: 22, date: EA.today(), estate: ctx.estate, lots: {}, dispatch: blankDis() }; }
   function blankDis() { return { on: false, lot: {}, extra: {}, lorry: '', mill: EA.lists.millsFor(ctx.estate)[0], dn: '', driver: '', driver_id: '', ramp_cleared: '', replacing: '' }; }
   function sumOf(o) { return Object.keys(o || {}).reduce(function (a, b) { return a + num(o[b]); }, 0); }
-  // SAMPLE (branch pemandu-pilih) — the estate's own people, drivers at the top. A man whose job or gang
-  // says pemandu / driver / operator is a driver; everyone else is still on the list underneath, because a
-  // stand-in on the day must never be impossible to key.
+  // SAMPLE (branch pemandu-pilih, 2nd design, 20 Nov 2026).
+  //
+  // The first design offered the estate's OWN workers, and the Sugut book showed why that is wrong: in 19
+  // delivery notes since 23 Oct, Ferezelly has keyed the same driver every time, and that man is not on
+  // Sugut's list at all — he is Paitan's lorry driver, on Paitan's payroll, driving Paitan's lorry
+  // (SJQ6259, home estate PTAN). Sugut owns no lorry. Offering Sugut's own people would have made
+  // Ferezelly press "Lain-lain" and type the name every single day: worse than the box he has now.
+  //
+  // One rule for every estate (Yu Chen, 20 Nov: "possible i wan all the estate the same unless they have
+  // different in structure"): the note offers who SERVES this estate, which is this estate's own first,
+  // then the rest of the group. An estate with its own lorry leads with it; an estate without one leads
+  // with its neighbour's. The structure difference shows itself — no estate is a special case.
+  //
+  // The office would send these two short lists to every phone: 14 drivers and 6 lorries in the whole group
+  // today. Until it does, this falls back to the estate's own people, which is what the phone already holds.
   function isDriver(w) { return /pemandu|driver|operator/i.test((w.job || '') + ' ' + (w.gang || '')); }
+  function allDrivers() {
+    if (EA.lists.drivers && EA.lists.drivers.length) return EA.lists.drivers;
+    return ((EA.lists.workersFor(ctx.estate) || []).concat(EA.lists.mandorsFor(ctx.estate) || []))
+      .filter(isDriver).map(function (w) { return { id: w.id, name: w.name, job: w.job || '', estate: ctx.estate }; });
+  }
+  function here(x) { return x.estate === ctx.estate; }
+  function group(label, list, draw) { return list.length ? '<optgroup label="' + label + '">' + list.map(draw).join('') + '</optgroup>' : ''; }
+
   function driverOpts(d) {
-    var all = (EA.lists.workersFor(ctx.estate) || []).concat(EA.lists.mandorsFor(ctx.estate) || []);
-    var drv = all.filter(isDriver), rest = all.filter(function (w) { return !isDriver(w); });
-    var opt = function (w) { return '<option value="' + esc(w.id) + '"' + (d.driver_id === w.id ? ' selected' : '') + '>' + esc(w.name) + (w.job ? ' · ' + esc(w.job) : '') + '</option>'; };
-    return (drv.length ? '<optgroup label="' + EA.t('Pemandu', 'Drivers') + '">' + drv.map(opt).join('') + '</optgroup>' : '') +
-      (rest.length ? '<optgroup label="' + EA.t('Pekerja lain', 'Other workers') + '">' + rest.map(opt).join('') + '</optgroup>' : '');
+    var drv = allDrivers(), mine = drv.filter(here), theirs = drv.filter(function (x) { return !here(x); });
+    var rest = ((EA.lists.workersFor(ctx.estate) || []).concat(EA.lists.mandorsFor(ctx.estate) || []))
+      .filter(function (w) { return !isDriver(w); });
+    var pick = function (id) { return d.driver_id === id ? ' selected' : ''; };
+    var one = function (x, withEst) { return '<option value="' + esc(x.id) + '"' + pick(x.id) + '>' + esc(x.name) +
+      (x.job ? ' · ' + esc(x.job) : '') + (withEst ? ' · ' + esc(x.estate) : '') + '</option>'; };
+    return group(EA.t('Pemandu ladang ini', 'This estate\'s drivers'), mine, function (x) { return one(x, false); }) +
+      group(EA.t('Pemandu ladang lain', 'Drivers from other estates'), theirs, function (x) { return one(x, true); }) +
+      group(EA.t('Pekerja lain', 'Other workers'), rest, function (w) { return one({ id: w.id, name: w.name, job: w.job || '' }, false); });
+  }
+
+  // The same rule for the lorry. It also closes a drift already running: the machine list holds SJQ6259 and
+  // the staff types "SJQ 6259", one space apart, so no report will ever join those two by itself.
+  function allLorries() {
+    if (EA.lists.lorries && EA.lists.lorries.length) return EA.lists.lorries;
+    return (EA.lists.machinesFor(ctx.estate) || []).filter(function (m) { return /lori|lorry/i.test(m.kind || m.id || ''); })
+      .map(function (m) { return { reg: m.reg || m.name || '', estate: ctx.estate }; });
+  }
+  function lorryOpts(d) {
+    var l = allLorries(), mine = l.filter(here), theirs = l.filter(function (x) { return !here(x); });
+    var known = l.some(function (x) { return x.reg === d.lorry; });
+    var one = function (x, withEst) { return '<option value="' + esc(x.reg) + '"' + (d.lorry === x.reg ? ' selected' : '') + '>' + esc(x.reg) + (withEst ? ' · ' + esc(x.estate) : '') + '</option>'; };
+    return { known: known,
+      html: group(EA.t('Lori ladang ini', 'This estate\'s lorries'), mine, function (x) { return one(x, false); }) +
+        group(EA.t('Lori ladang lain', 'Lorries from other estates'), theirs, function (x) { return one(x, true); }) };
   }
   function loadDraft() {
     var all = EA.local.get(K.draft, {}), d = all[ctx.estate];
@@ -149,7 +189,11 @@
       (lorryOn() ? '<section class="card" aria-labelledby="cl-s2"><h2 id="cl-s2"><span class="step">2</span><span class="inline"><span class="bm">Nota hantar (DN)</span> · <span class="en">Delivery note</span></span></h2>' +
       '<div class="fields">' +
         '<div class="field"><label for="cl-dn"><span class="bm">No. nota hantar (DN)</span><span class="en">Delivery note no.</span></label><input id="cl-dn" class="text-input" inputmode="numeric" value="' + esc(d.dn) + '"></div>' +
-        '<div class="field"><label for="cl-lr"><span class="bm">No. lori</span><span class="en">Lorry number</span></label><input id="cl-lr" class="text-input" value="' + esc(d.lorry) + '"></div>' +
+        (function (lo) { return '<div class="field"><label for="cl-lr"><span class="bm">No. lori</span><span class="en">Lorry number</span></label><select id="cl-lr" class="text-input">' +
+          '<option value=""' + (d.lorry ? '' : ' selected') + '>' + EA.t('— pilih —', '— choose —') + '</option>' + lo.html +
+          '<option value="LAIN"' + (d.lorry && !lo.known ? ' selected' : '') + '>' + EA.t('Lain-lain · tulis no.', 'Another lorry · type the number') + '</option>' +
+        '</select></div>' +
+        '<div class="field" id="cl-lrother"' + (d.lorry && !lo.known ? '' : ' hidden') + '><label for="cl-lrno"><span class="bm">No. lori</span><span class="en">Lorry number</span></label><input id="cl-lrno" class="text-input" value="' + esc(lo.known ? '' : d.lorry) + '"></div>'; })(lorryOpts(d)) +
         // SAMPLE (branch pemandu-pilih, 20 Nov 2026) — not published. The driver was a typed box, so the man
         // on the muster and the loads he carried never joined up and the app could not count his trips or his
         // tonnes for the monthly claim sheet. Picked from the estate's own list instead, drivers first.
@@ -188,7 +232,13 @@
         keepDraft();
       };
       $('#cl-drname').oninput = function () { draft.dispatch.driver = this.value; draft.dispatch.driver_id = ''; keepDraft(); };
-      $('#cl-lr').oninput = function () { draft.dispatch.lorry = this.value.toUpperCase(); keepDraft(); };
+      $('#cl-lr').onchange = function () {
+        var v = this.value, dd = draft.dispatch;
+        if (v === 'LAIN') { dd.lorry = ''; $('#cl-lrother').hidden = false; $('#cl-lrno').focus(); }
+        else { dd.lorry = v; $('#cl-lrno').value = ''; $('#cl-lrother').hidden = true; }
+        keepDraft();
+      };
+      $('#cl-lrno').oninput = function () { draft.dispatch.lorry = this.value.toUpperCase(); keepDraft(); };
       $('#cl-ml').onchange = function () { draft.dispatch.mill = this.value; keepDraft(); };
       $('#cl-rc').onchange = function () { draft.dispatch.ramp_cleared = this.checked ? 'Y' : ''; keepDraft(); };
     }

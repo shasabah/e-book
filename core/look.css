@@ -96,6 +96,13 @@ html[data-lang="bm"] .btn .l-bm, html[data-lang="en"] .btn .l-en { display: inli
 
 /* v1.75: "tidak hadir / tiada kerja" on a worker's own row. Findable without shouting — it sits beside
    "+ petak lain", not above the quantity box, because the common answer is still a number. */
+/* v1.80 the gang total, moved up under the block heading where the mandor is looking. It was a grey hint
+   line at the very bottom of the card and nobody ever scrolled to it. It has to read as a figure, not as a
+   note, because he checks it against his own paper before pressing SIMPAN. */
+.wk-total { margin: 10px 0 2px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--paper); color: var(--ink); font-weight: 600; font-size: 1.02rem; line-height: 1.35; }
+.wk-total:empty { display: none; }
+.wk-nobox { display: block; margin-top: 3px; font-style: italic; }
 .wk-away { margin-left: 14px; }
 .wk-away::before { content: "✕"; margin-right: 5px; font-size: .9em; text-decoration: none; display: inline-block; }
 .wrow .wk-away { color: var(--bad, #a8332a); opacity: .85; }

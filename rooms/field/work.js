@@ -506,8 +506,12 @@
         (askable(j) ? '<button type="button" class="link-btn wk-away" data-awayw="' + esc(w) + '" data-awayj="' + esc(j.key) + '">' + EA.t('tidak hadir / tiada kerja', 'absent / no work') + '</button>' : '');
       return '<div class="wrow"><div class="who-w"><b>' + esc(person(w)) + '</b><span class="en">' + esc(w) + '</span></div><div></div><div class="job" style="display:block">' + rows + '</div></div>';
     }).join('');
+    // v1.80: the mandor has no box, and now the screen says so. He sat directly under the ISI box with
+    // nothing to press and no word of explanation, so the box read as his — which is exactly how Yu Chen
+    // read it. The close was taught the same rule in 1.79; this is the staff's side of it.
     lines = j.mandors.map(function (m) {
-      return '<div class="wrow"><div class="who-w"><b>' + esc(person(m)) + '</b><span class="en">' + esc(m) + ' · Mandor · ' + EA.t('ikut kumpulan', 'goes by the gang') + '</span></div><div></div></div>';
+      return '<div class="wrow"><div class="who-w"><b>' + esc(person(m)) + '</b><span class="en">' + esc(m) + ' · Mandor · ' + EA.t('ikut kumpulan', 'goes by the gang') + '</span>' +
+        '<span class="hint wk-nobox">' + EA.t('Tiada angka untuk mandor — dia menyelia.', 'No number to key for the mandor — he supervises.') + '</span></div><div></div></div>';
     }).join('') + lines;
     return '<section class="card" data-job="' + j.key + '"><h2>' + esc(sec.code + '. ' + jobName(j.task)) + (j.block ? ' · Blok ' + esc(j.block) : '') + '</h2>' +
       '<p class="hint">' + esc(j.task) + (lotsText ? ' · ' + esc(lotsText) : '') + (j.mandor ? ' · Mandor ' + esc(person(j.mandor)) : '') + '</p>' +
@@ -518,9 +522,22 @@
         '<div class="wline"><span class="hint">' + (auto(j) ? EA.t('Tekan petak yang dibuat oleh setiap orang. Petak yang dikongsi dibahagi antara mereka.', 'Tap the lots each person worked. A shared lot is split among them.') : EA.t('Ha diisi seorang-seorang.', 'Ha keyed per person.')) + '</span>' +
         (auto(j) && j.people.length > 1 ? '<button type="button" class="btn btn-ghost" data-allwho="' + j.key + '">SAME FOR ALL<small>Sama semua petak</small></button>' : '') +
         '<button type="button" class="btn btn-ghost" data-manual="' + j.key + '">' + (auto(j) ? 'KEY HA<small>Isi Ha sendiri</small>' : 'BY LOT<small>Ikut petak</small>') + '</button></div>' : '') +
-      (k !== 'ticket' && k !== 'day' && !auto(j) && !isHa(j) ? '<div class="wline"><span class="hint">' + EA.t('Isi sama untuk semua yang kosong:', 'Fill the same for everyone empty:') + '</span><input class="qty" inputmode="decimal" data-fill="' + j.key + '" placeholder="0"> ' + esc(unitLabel(j.task, j.block)) + '<button type="button" class="btn btn-ghost" data-fillgo="' + j.key + '">FILL<small>Isi</small></button></div>' : '') +
+      // v1.80 (Yu Chen, 20 Nov 2026, looking at Blok 02: "Is this to fill mandore? It should total up the
+      // number by the whole harvesting Geng"). Two answers, both on this line and the next.
+      // ISI copies ONE number into every empty box. On harvesting that can only ever be wrong: every
+      // harvester cuts a different number, which is what piece rate means. The screen was inviting the gang
+      // total to be typed here — 872 tandan into 16 men is 13,952 tandan and it is pay. So k !== 'bunches'.
+      (k !== 'ticket' && k !== 'day' && k !== 'bunches' && !auto(j) && !isHa(j) ? '<div class="wline"><span class="hint">' + EA.t('Isi sama untuk semua yang kosong:', 'Fill the same for everyone empty:') + '</span><input class="qty" inputmode="decimal" data-fill="' + j.key + '" placeholder="0"> ' + esc(unitLabel(j.task, j.block)) + '<button type="button" class="btn btn-ghost" data-fillgo="' + j.key + '">FILL<small>Isi</small></button></div>' : '') +
+      // The gang total he was looking for already existed — measured 2,500px below this point, past all
+      // sixteen men, where nobody on a phone has ever scrolled. It comes up here, under the block heading,
+      // so it adds up in front of the mandor as he keys and he can check it against his own paper before
+      // SIMPAN. Same element, same updater; only where it sits has changed.
+      // Only the total comes up. The flags stayed behind on purpose: they are one amber line per man who is
+      // under target, so on a poor day sixteen of them would sit between the heading and the first name and
+      // push the men off the screen — the very fault being fixed. They belong at the end, where they are read.
+      '<p class="wk-total" data-tot="' + j.key + '"></p>' +
       '<div class="rows">' + lines + '</div>' +
-      '<p class="hint" data-tot="' + j.key + '"></p><div data-flags="' + j.key + '"></div>' +
+      '<div data-flags="' + j.key + '"></div>' +
       (isHa(j) ? '<p class="hint" data-hastat="' + j.key + '"></p>' : '<div class="field"><span class="inline"><span class="bm">Kerja ini</span> · <span class="en">This job</span></span>' +
         '<div class="seg"><button type="button" data-st="' + j.key + '" data-v="Y" aria-pressed="' + (st.done === 'Y') + '" style="min-width:110px">' + EA.t('SIAP', 'DONE') + '</button>' +
         '<button type="button" data-st="' + j.key + '" data-v="N" aria-pressed="' + (st.done === 'N') + '" style="min-width:140px">' + EA.t('BELUM SIAP', 'NOT DONE') + '</button></div></div>' +

@@ -26,8 +26,19 @@
   function saved() { var from = EA.dayAgo(40); return EA.local.get(K.saved, []).filter(function (s) { return s.date >= from; }); }
   function todays() { return saved().filter(function (s) { return s.estate === ctx.estate && s.date === EA.today(); }); }
   function blank() { return { v: 22, date: EA.today(), estate: ctx.estate, lots: {}, dispatch: blankDis() }; }
-  function blankDis() { return { on: false, lot: {}, extra: {}, lorry: '', mill: EA.lists.millsFor(ctx.estate)[0], dn: '', driver: '', ramp_cleared: '', replacing: '' }; }
+  function blankDis() { return { on: false, lot: {}, extra: {}, lorry: '', mill: EA.lists.millsFor(ctx.estate)[0], dn: '', driver: '', driver_id: '', ramp_cleared: '', replacing: '' }; }
   function sumOf(o) { return Object.keys(o || {}).reduce(function (a, b) { return a + num(o[b]); }, 0); }
+  // SAMPLE (branch pemandu-pilih) — the estate's own people, drivers at the top. A man whose job or gang
+  // says pemandu / driver / operator is a driver; everyone else is still on the list underneath, because a
+  // stand-in on the day must never be impossible to key.
+  function isDriver(w) { return /pemandu|driver|operator/i.test((w.job || '') + ' ' + (w.gang || '')); }
+  function driverOpts(d) {
+    var all = (EA.lists.workersFor(ctx.estate) || []).concat(EA.lists.mandorsFor(ctx.estate) || []);
+    var drv = all.filter(isDriver), rest = all.filter(function (w) { return !isDriver(w); });
+    var opt = function (w) { return '<option value="' + esc(w.id) + '"' + (d.driver_id === w.id ? ' selected' : '') + '>' + esc(w.name) + (w.job ? ' · ' + esc(w.job) : '') + '</option>'; };
+    return (drv.length ? '<optgroup label="' + EA.t('Pemandu', 'Drivers') + '">' + drv.map(opt).join('') + '</optgroup>' : '') +
+      (rest.length ? '<optgroup label="' + EA.t('Pekerja lain', 'Other workers') + '">' + rest.map(opt).join('') + '</optgroup>' : '');
+  }
   function loadDraft() {
     var all = EA.local.get(K.draft, {}), d = all[ctx.estate];
     if (!d || d.date !== EA.today() || d.v !== 22) return blank();     // a draft from an older version starts fresh
@@ -139,7 +150,16 @@
       '<div class="fields">' +
         '<div class="field"><label for="cl-dn"><span class="bm">No. nota hantar (DN)</span><span class="en">Delivery note no.</span></label><input id="cl-dn" class="text-input" inputmode="numeric" value="' + esc(d.dn) + '"></div>' +
         '<div class="field"><label for="cl-lr"><span class="bm">No. lori</span><span class="en">Lorry number</span></label><input id="cl-lr" class="text-input" value="' + esc(d.lorry) + '"></div>' +
-        '<div class="field"><label for="cl-dr"><span class="bm">Pemandu</span><span class="en">Driver</span></label><input id="cl-dr" class="text-input" value="' + esc(d.driver) + '"></div>' +
+        // SAMPLE (branch pemandu-pilih, 20 Nov 2026) — not published. The driver was a typed box, so the man
+        // on the muster and the loads he carried never joined up and the app could not count his trips or his
+        // tonnes for the monthly claim sheet. Picked from the estate's own list instead, drivers first.
+        // The typed name is still kept, so every delivery note already keyed stays exactly as it is (Rule 4).
+        '<div class="field"><label for="cl-dr"><span class="bm">Pemandu</span><span class="en">Driver</span></label><select id="cl-dr" class="text-input">' +
+          '<option value=""' + (d.driver_id || d.driver ? '' : ' selected') + '>' + EA.t('— pilih —', '— choose —') + '</option>' +
+          driverOpts(d) +
+          '<option value="LAIN"' + (!d.driver_id && d.driver ? ' selected' : '') + '>' + EA.t('Lain-lain · tulis nama', 'Someone else · type the name') + '</option>' +
+        '</select></div>' +
+        '<div class="field" id="cl-drother"' + (!d.driver_id && d.driver ? '' : ' hidden') + '><label for="cl-drname"><span class="bm">Nama pemandu</span><span class="en">Driver\'s name</span></label><input id="cl-drname" class="text-input" value="' + esc(d.driver) + '"></div>' +
         '<div class="field"><label for="cl-ml"><span class="bm">Kilang</span><span class="en">Mill or collecting centre</span></label><select id="cl-ml" class="text-input">' +
           EA.lists.millsFor(ctx.estate).concat(['Lain-lain · Other']).map(function (m) { return '<option' + (m === d.mill ? ' selected' : '') + '>' + esc(m) + '</option>'; }).join('') + '</select></div>' +
       '</div>' +
@@ -160,7 +180,14 @@
     });
     if ($('#cl-dn')) {
       $('#cl-dn').oninput = function () { draft.dispatch.dn = this.value.replace(/\s/g, ''); keepDraft(); };
-      $('#cl-dr').oninput = function () { draft.dispatch.driver = this.value; keepDraft(); };
+      $('#cl-dr').onchange = function () {
+        var v = this.value, dd = draft.dispatch;
+        if (v === 'LAIN') { dd.driver_id = ''; $('#cl-drother').hidden = false; $('#cl-drname').focus(); }
+        else if (!v) { dd.driver_id = ''; dd.driver = ''; $('#cl-drname').value = ''; $('#cl-drother').hidden = true; }
+        else { dd.driver_id = v; dd.driver = person(v); $('#cl-drother').hidden = true; }
+        keepDraft();
+      };
+      $('#cl-drname').oninput = function () { draft.dispatch.driver = this.value; draft.dispatch.driver_id = ''; keepDraft(); };
       $('#cl-lr').oninput = function () { draft.dispatch.lorry = this.value.toUpperCase(); keepDraft(); };
       $('#cl-ml').onchange = function () { draft.dispatch.mill = this.value; keepDraft(); };
       $('#cl-rc').onchange = function () { draft.dispatch.ramp_cleared = this.checked ? 'Y' : ''; keepDraft(); };

@@ -37,6 +37,8 @@ const { chromium } = require('playwright');
     await p.locator('#tiles-ref [data-ref]').count() === 4 && await p.locator('#tiles-lists [data-adm]').count() === 4 && await p.locator('#tiles-lists [data-room="admin"]').count() === 0,
     await p.$$eval('#pane-lists .tile:not([hidden]) .name', a => a.map(x => x.innerText.trim()).join(' | ')));
   await p.click('[data-ref="map"]'); await p.waitForTimeout(200);
+  check('1.84: the Owner starts from all estates', await p.locator('#land-all tr.tap').count() >= 3);
+  await p.evaluate(() => [...document.querySelectorAll('#land-all tr.tap')].find(tr => /^Sugut/.test(tr.cells[0].textContent)).click()); await p.waitForTimeout(200);
   check('1.65 Peta petak, 1.84 Tanah & peta: the estate\'s four blocks on one table, view only; a block opens its own map', await p.locator('#land-est tr[data-landblk]').count() === 4 && await p.locator('#sheet input').count() === 0);
   await p.click('#land-est tr[data-landblk]'); await p.waitForTimeout(200);
   check('1.84: the block shows one map and its lots', await p.locator('#sheet svg.pg-map').count() === 1 && await p.locator('#land-lots tr[data-landlot]').count() > 1);

@@ -70,7 +70,13 @@ const { chromium } = require('playwright');
   const mt = await p.innerText('#sheet');
   check('the lot map opens and shows 173 lots, 280.66 Ha', /173 petak/.test(mt) && /280[.,]66/.test(mt) && s.errs.length === 0, mt.replace(/\n+/g, ' | ').slice(0, 200) + ' ' + s.errs.join(' | '));
   // 19 Nov 2026: the six block outlines from the 2022 drone map are in, so every block draws, none says "no map yet".
-  const maps = await p.locator('#sheet svg.pg-map').count(), none = /Belum ada peta|No map for this block/.test(mt);
+  // 1.84 (21 Nov): the table comes first and each block opens its own map, so the six maps are opened one by one.
+  let maps = 0, none = false;
+  for (const bk of ['01', '02', '03', '04', '05', '06']) {
+    await p.click('[data-landblk="' + bk + '"]'); await p.waitForTimeout(150);
+    maps += await p.locator('#sheet svg.pg-map').count(); none = none || /Belum ada peta|No map for this block/.test(await p.innerText('#sheet'));
+    await p.click('#land-up'); await p.waitForTimeout(150);
+  }
   check('every Meliau block draws its outline (six maps, no "no map yet")', maps === 6 && !none, maps + ' maps');
   const wide = await p.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
   check('nothing wider than the phone', wide[0] <= wide[1] + 1, wide.join(' '));

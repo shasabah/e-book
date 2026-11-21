@@ -1030,6 +1030,17 @@ body:has(#home-bar.botbar) .sheet-back:not([hidden]) ~ .toast { bottom: auto; to
 
 /* v1.67 the working calendar in Senarai › Cuti umum */
 .ref-list li.past { color: var(--muted); }
+/* 1.84 Tanah & peta: the land table, and one block's map with its lots. */
+.land-tab { width: 100%; border-collapse: collapse; font-size: .86rem; margin: 4px 0 8px; }
+.land-tab th { font-size: .72rem; font-weight: 600; color: var(--muted); text-align: right; padding: 7px 5px; border-bottom: 1px solid var(--line); }
+.land-tab td { text-align: right; padding: 10px 5px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.land-tab th:first-child, .land-tab td:first-child { text-align: left; padding-left: 8px; }
+.land-tab tr.tap { cursor: pointer; } .land-tab .chev { color: var(--muted); }
+.land-tab tr.tot td { font-weight: 800; background: var(--ok-soft); border-bottom: 0; }
+.land-tab tr.sel td { background: var(--wait-soft); font-weight: 800; }
+.land-map .pg-map path { cursor: pointer; } .land-map .pg-map path.sel { fill: var(--sun); stroke: var(--ink); stroke-width: 2; }
+.land-pick { display: inline-block; margin: 0 0 6px; padding: 5px 12px; border-radius: 999px; background: var(--wait-soft); border: 1px solid var(--sun); font-weight: 700; font-size: .85rem; }
+.land-up { min-height: 40px; padding: 6px 12px; justify-self: start; }
 .ref-tab { width: 100%; border-collapse: collapse; font-size: .78rem; margin: 4px 0 8px; } .ref-tab th, .ref-tab td { border: 1px solid var(--line); padding: 3px 2px; text-align: center; } .ref-tab td:first-child { text-align: left; padding-left: 5px; font-weight: 700; }
 
 /* v1.70: the rate list (Owner and HQ) — the words on the left, the rate on the right, nothing wider than the phone */

@@ -43,7 +43,7 @@ const { chromium } = require('playwright');
   }));
   check('Meliau has six blocks with the budget\'s hectares', L.blocks === '01:53.00 02:43.97 03:41.95 04:39.74 05:41.28 06:60.72', L.blocks);
   check('173 lots, Christy\'s numbers (1-1 .. 1-31, …, 6-1 .. 6-38)', L.lots.split(',').length === 173 && L.lots.startsWith('1-1,1-2,') && L.lots.endsWith(',6-38'), L.lots.slice(0, 60));
-  check('the lots add to 262.45 Ha planted and 34,849 palms, the lot file\'s own totals', L.ha === '262.45' && L.palms === 34849, L.ha + ' ' + L.palms);
+  check('the lots add to the budget\'s 280.66 Ha (map Ha stretched by block, 21 Nov) and the map\'s 34,849 palms', L.ha === '280.66' && L.palms === 34849, L.ha + ' ' + L.palms);
   check('the estate is named Meliau', L.name === 'Meliau', L.name);
   check('main jobs as Paitan: Sugut\'s without durian', L.df < 0 && L.mj === L.pmj, L.mj);
   check('Sugut and Paitan keep their own lots (164 and 209)', L.ss === 164 && L.pt === 209, L.ss + ' ' + L.pt);
@@ -68,7 +68,7 @@ const { chromium } = require('playwright');
   check('Senarai at Meliau shows the lot map and the holidays', await p.locator('[data-ref="map"]').count() === 1 && await p.locator('[data-ref="hol"]').count() === 1);
   await p.click('[data-ref="map"]'); await p.waitForTimeout(400);
   const mt = await p.innerText('#sheet');
-  check('the lot map opens and shows 173 lots, 262.45 Ha', /173 petak/.test(mt) && /262[.,]45/.test(mt) && s.errs.length === 0, mt.replace(/\n+/g, ' | ').slice(0, 200) + ' ' + s.errs.join(' | '));
+  check('the lot map opens and shows 173 lots, 280.66 Ha', /173 petak/.test(mt) && /280[.,]66/.test(mt) && s.errs.length === 0, mt.replace(/\n+/g, ' | ').slice(0, 200) + ' ' + s.errs.join(' | '));
   // 19 Nov 2026: the six block outlines from the 2022 drone map are in, so every block draws, none says "no map yet".
   const maps = await p.locator('#sheet svg.pg-map').count(), none = /Belum ada peta|No map for this block/.test(mt);
   check('every Meliau block draws its outline (six maps, no "no map yet")', maps === 6 && !none, maps + ' maps');

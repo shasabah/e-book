@@ -24,10 +24,11 @@
   function esc(s) { return EA.ui.esc(s); }
   function $(sel) { return el.querySelector(sel); }
   function num(v) { var n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isFinite(n) ? n : 0; }
-  function niceDate(iso) { var d = new Date(iso + 'T00:00:00'); return ui().dayBm[d.getDay()] + ' ' + d.getDate() + ' ' + ui().monBm[d.getMonth()]; }
+  // v1.81 Rule 7: the day and month follow the phone's language (see muster.js dayDm).
+  function niceDate(iso) { var d = new Date(iso + 'T00:00:00'); return EA.t(ui().dayBm, ui().dayEn)[d.getDay()] + ' ' + d.getDate() + ' ' + EA.t(ui().monBm, ui().monEn)[d.getMonth()]; }
   // v1.78: the day row needs the date short and the day name under it — 20/11 above Jumaat.
   function dayDm(iso) { var d = new Date(iso + 'T00:00:00'); return d.getDate() + '/' + (d.getMonth() + 1); }
-  function dayName(iso) { return ui().dayBm[new Date(iso + 'T00:00:00').getDay()]; }
+  function dayName(iso) { return EA.t(ui().dayBm, ui().dayEn)[new Date(iso + 'T00:00:00').getDay()]; }
   function addDays(date, n) { var d = new Date(date + 'T00:00:00'); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function task(code) { return EA.lists.task(code); }
   function shortName(code) { return (EA.lists.chitNames && EA.lists.chitNames[code]) || (task(code) ? task(code).en : code); }
@@ -207,15 +208,32 @@
     // reaches back 40 days, but Kerja still only opens today, yesterday, a chit the clerk asked to fix, or a
     // planned day (24 Oct). For an older day the jump used to go to Kerja and quietly open a different day's
     // chit. Now the line carries no button and says plainly that the day's work is the office's.
+    // v1.81 (Yu Chen, 21 Nov 2026, from Ferezelly on 16 Nov: "he press the red highlight button but never
+    // see the info to be fix"). The 1.72 guard above was written for the WORK checks only, and three other
+    // red lines kept their jump: check 1's "on the list but not on the chit", and checks 2 and 3, which go to
+    // the Ramp. For a day past the window that jump is not merely useless, it is a RING: the chit screen
+    // answers with a band saying "Hari 16/11 belum lengkap" and a LENGKAPKAN button that sends him straight
+    // back to this screen. Round and round, and the names he needs are shown on neither screen.
+    //
+    // So the rule is written ONCE here and every red line asks it (Rule 5): a line is a button only when
+    // pressing it lands somewhere that can still show this day. Nothing about this is estate-specific — it
+    // is the same rule at Sugut, Paitan, Meliau and Kawananan, and for every day, not just 16 Nov.
     var canKey = EA.fh.workChitOpen ? EA.fh.workChitOpen(c) : true;
-    var toWork = function (o) { if (canKey) { o.go = '#field-harvest/work'; return o; }
-      o.sub = (o.sub ? o.sub + ' · ' : '') + EA.t('Hari ini terlalu lama untuk dikunci di telefon — minta pejabat', 'This day is too old to key on the phone — ask the office');
-      return o; };
+    var TOO_OLD = ['Hari ini terlalu lama untuk dikunci di telefon — minta pejabat',
+                   'This day is too old to key on the phone — ask the office'];
+    var only = function (o, hash) {
+      if (canKey) { o.go = hash; return o; }
+      o.sub = (o.sub ? o.sub + ' · ' : '') + EA.t(TOO_OLD[0], TOO_OLD[1]);
+      return o;
+    };
+    var toWork = function (o) { return only(o, '#field-harvest/work'); };
+    var toChit = function (o) { return only(o, '#field-harvest'); };
+    var toRamp = function (o) { return only(o, '#field-harvest/collect'); };
     var present = (c.rows || []).filter(function (r) { return r.status !== 'removed' && r.muster === 'H'; });
     // 1 · v1.51: every worker on the list has a pay line (a letter, and a quantity or a day)
     var pl = payLines(estate, c, lines), names = function (ids) { return ids.slice(0, 4).map(person).join(', ') + (ids.length > 4 ? ' +' + (ids.length - 4) : ''); };
     if (!w) out.push(toWork({ n: 1, ok: false, bm: 'Kerja harian belum dikunci', en: 'The day\'s work is not keyed', sub: present.length + EA.t(' orang hadir di chit', ' people present on the chit') }));
-    else if (pl.missing.length) out.push({ n: 1, ok: false, bm: pl.missing.length + ' orang dalam senarai tiada dalam chit', en: pl.missing.length + ' on the list but not on the chit', sub: names(pl.missing) + EA.t(' · betulkan chit: hadir dengan kerja, atau S / C / T', ' · fix the chit: present with a job, or S / C / T'), go: '#field-harvest' });
+    else if (pl.missing.length) out.push(toChit({ n: 1, ok: false, bm: pl.missing.length + ' orang dalam senarai tiada dalam chit', en: pl.missing.length + ' on the list but not on the chit', sub: names(pl.missing) + EA.t(' · betulkan chit: hadir dengan kerja, atau S / C / T', ' · fix the chit: present with a job, or S / C / T') }));
     else if (pl.noLine.length) out.push(toWork({ n: 1, ok: false, bm: pl.noLine.length + ' orang hadir tiada baris kerja', en: pl.noLine.length + ' present with no work line', sub: names(pl.noLine) }));
     else if (pl.badDay.length) out.push(toWork({ n: 1, ok: false, bm: pl.badDay.length + ' orang kerja harian tanpa 1 / ½ hari', en: pl.badDay.length + ' day workers without 1 / ½ day', sub: names(pl.badDay) + EA.t(' · ladang durian dibayar ikut hari', ' · the durian farm is paid by the day') }));
     else out.push({ n: 1, ok: true, bm: pl.people.length + ' orang · semua ada kerja hari ini', en: pl.people.length + ' people · every one has work done today', sub: payCountText(pl), pay: pl });
@@ -227,12 +245,12 @@
     var fieldOld = bl && Array.isArray(bl.field) ? bl.field.filter(function (x) { return x.since && x.since <= c.date; }).reduce(function (a, x) { return a + (Number(x.bunches) || 0); }, 0) : 0;
     var left = Math.max(fieldLeft, fieldOld);
     if (!cut) out.push({ n: 2, ok: true, bm: 'Tiada tuaian hari ini', en: 'No harvest today', sub: '' });
-    else if (left > 0 && !String(d.fieldNote || '').trim()) out.push({ n: 2, ok: false, bm: left + ' tandan dituai belum ke ramp', en: left + ' bunches cut, not yet at the ramp', sub: EA.t('Tekan SEMUA KE RAMP, atau tulis sebab di bawah', 'Press ALL TO RAMP, or write why below'), go: '#field-harvest/collect', note: 'field' });
+    else if (left > 0 && !String(d.fieldNote || '').trim()) out.push(toRamp({ n: 2, ok: false, bm: left + ' tandan dituai belum ke ramp', en: left + ' bunches cut, not yet at the ramp', sub: EA.t('Tekan SEMUA KE RAMP, atau tulis sebab di bawah', 'Press ALL TO RAMP, or write why below'), note: 'field' }));
     else out.push({ n: 2, ok: true, bm: cut + ' tandan dituai' + (left > 0 ? ' · ' + left + ' belum ke ramp (sebab ditulis)' : ' · semua ke ramp'), en: cut + ' bunches cut' + (left > 0 ? ' · ' + left + ' not at the ramp (reason given)' : ' · all at the ramp'), sub: '' });
     // 3 · every lorry has its delivery note
     var lorries = collectsOf(estate, c.date).filter(function (s) { return s.dispatch && !s.dispatch.replacedBy; });
     var noDn = lorries.filter(function (s) { return !String(s.dispatch.dn || '').trim(); });
-    out.push(noDn.length ? { n: 3, ok: false, bm: noDn.length + ' lori tiada nota hantar (DN)', en: noDn.length + ' lorry without a delivery note', sub: EA.t('Isi nombor DN di skrin Ramp', 'Key the DN number on the Ramp screen'), go: '#field-harvest/collect' }
+    out.push(noDn.length ? toRamp({ n: 3, ok: false, bm: noDn.length + ' lori tiada nota hantar (DN)', en: noDn.length + ' lorry without a delivery note', sub: EA.t('Isi nombor DN di skrin Ramp', 'Key the DN number on the Ramp screen') })
       : { n: 3, ok: true, bm: lorries.length ? lorries.length + ' lori keluar, semua ada DN' : 'Tiada lori hari ini', en: lorries.length ? lorries.length + ' lorries out, all with a DN' : 'No lorry today', sub: '' });
     // 4 · a job not finished has a reason; every job is answered
     var noAns = jobs.filter(function (j) { return !j.status; }), noWhy = jobs.filter(function (j) { return j.status === 'not_done' && String(j.reason || '').trim().length < 5; });

@@ -73,4 +73,4 @@ check('the day close counts a zero line as a work line, so the day can close',
   && /if \(!ls\.length\) \{[\s\S]{0,320}?out\.noLine\.push\(r\.worker_id\); return;\n      \}/.test(dc),
   'noLine is only a MISSING line');
 check('the zero question has a style', /\.mx-zero \{/.test(css), 'css');
-check('version 1.80 (128)', /EA\.RELEASE = '1\.80'/.test(v) && /EA\.VERSION = 128/.test(v), 'version');
+check('version 1.81 (129)', /EA\.RELEASE = '1\.81'/.test(v) && /EA\.VERSION = 129/.test(v), 'version');

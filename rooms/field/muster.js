@@ -2181,7 +2181,18 @@
   // v1.73: the draft on its own, so Kerja can correct one mark without opening this screen (Rule 5).
   function fixDraft(c, ask) {
         var d = blankDraft();
-        if (ask) { d.date = c.date; d.fixAsk = ask; }
+        // v1.81 (Ferezelly, 21 Nov 09:01 and 09:04, correcting the 17 and 18 Nov chits). The date was copied
+        // from the chit ONLY when the clerk had asked for the fix. blankDraft() starts at EA.today(), and
+        // EA.save falls back to today when no date is passed, so a correction the STAFF started himself —
+        // BETULKAN, or the row-level "tidak hadir" added in 1.76 — was written onto TODAY.
+        //
+        // What that did: the 17 Nov chit row was replaced by a row dated 21 Nov. 17 Nov then had no standing
+        // chit at all and fell out of Rekod entirely ("tiada rekod"), while 21 Nov picked up three chits and
+        // showed 48/75 present. The day did not just read wrong, it disappeared.
+        //
+        // A correction belongs to the day it corrects. Always. Whoever started it.
+        d.date = c.date;
+        if (ask) { d.fixAsk = ask; }
         d.alertNotes = {}; (c.alerts || []).forEach(function (a) { d.alertNotes[a.key] = a.note; });
         d.replacing = c.chit; d.rain_mm = c.rain_mm; d.rain_time = c.rain_time; d.checker = c.checker;
         d.jobs = JSON.parse(JSON.stringify(c.jobs || []));

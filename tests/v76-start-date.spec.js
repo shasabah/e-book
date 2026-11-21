@@ -116,9 +116,14 @@ check('Kerja\'s own list still asks that one rule, not a second copy of it (Rule
   && /function inWindow\(c\) \{[^}]*oldestOpen\(\)/.test(wkjs), 'chitsFor');
 check('the close asks before it offers a jump to Kerja',
   /var canKey = EA\.fh\.workChitOpen \? EA\.fh\.workChitOpen\(c\) : true;/.test(dc), 'canKey');
+// 1.81 moved this rule out of toWork into one shared only(), because three other red lines kept a jump
+// that toWork never covered and sent the staff round a ring (see v90-no-dead-button). What this check
+// holds is unchanged: too old to key means no button, and the line says to ask the office.
 check('too old to key: no button, and the line says to ask the office',
-  /if \(canKey\) \{ o\.go = '#field-harvest\/work'; return o; \}/.test(dc)
-  && /terlalu lama untuk dikunci di telefon — minta pejabat/.test(dc), 'toWork');
+  /if \(canKey\) \{ o\.go = hash; return o; \}/.test(dc)
+  && /terlalu lama untuk dikunci di telefon — minta pejabat/.test(dc), 'the guard');
+check('and the work door still goes through that one guard',
+  /var toWork = function \(o\) \{ return only\(o, '#field-harvest\/work'\); \}/.test(dc), 'toWork');
 check('the rain line points at its own card, not at the screen it is already on',
   /scrollTo: '#dc-rainq'/.test(dc) && !/go: '#field-harvest\/close' \}\);/.test(dc), 'scrollTo');
 check('a line with nowhere to go is not drawn as a button',

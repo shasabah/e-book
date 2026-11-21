@@ -53,7 +53,7 @@ const _OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30
   await p.click('[data-pg="HA.01"]'); await p.waitForTimeout(400);
   const kh = await keyOf();
   check('harvest map: a key of four colours under the map, the same days as the rule (10 and 15)', kh && kh.length === 4 && kh.join('|') === 'g:< 10 hari|a:10–15 hari|r:> 15 hari|x:tiada rekod', JSON.stringify(kh));
-  { const bx = await p.$('.pg-lotbox'); if (bx) await bx.screenshot({ path: (process.argv[2] || '/tmp') + '/v90-key-harvest.png' }); }
+  { const bx = await p.$('.pg-lotbox'); if (bx) await bx.screenshot({ path: (process.argv[2] || '/tmp') + '/v92-key-harvest.png' }); }
   const small = await p.evaluate(() => { const k = document.querySelector('.pg-lotbox .pg-key'), m = document.querySelector('.pg-map'); return { h: k.getBoundingClientRect().height, mh: m.getBoundingClientRect().height, fs: parseFloat(getComputedStyle(k).fontSize) }; });
   check('the key is small: one line, under 11px type, far smaller than the map (the map stays the main thing)', small.h <= 18 && small.fs <= 11 && small.h * 10 < small.mh, JSON.stringify(small));
   const under = await p.evaluate(() => { const m = document.querySelector('.pg-map'), k = document.querySelector('.pg-key'); return !!(m && k && (m.compareDocumentPosition(k) & Node.DOCUMENT_POSITION_FOLLOWING)); });
@@ -65,7 +65,7 @@ const _OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30
   await p.click('[data-pg="CPS.01"]'); await p.waitForTimeout(400);
   const kc = await keyOf();
   check('CPS key: wait under 90 days, may spray 90–120, late over 120', kc && kc.length === 4 && kc.join('|') === 'g:< 90 hari|a:90–120 hari|r:> 120 hari|x:tiada rekod', JSON.stringify(kc));
-  { const bx = await p.$('.pg-lotbox'); if (bx) await bx.screenshot({ path: (process.argv[2] || '/tmp') + '/v90-key-cps.png' }); }
+  { const bx = await p.$('.pg-lotbox'); if (bx) await bx.screenshot({ path: (process.argv[2] || '/tmp') + '/v92-key-cps.png' }); }
   const cpsMap = await p.evaluate(() => { const o = {}; document.querySelectorAll('.pg-map path').forEach(el => { const lot = (el.querySelector('title') || {}).textContent.split(' ')[0]; if (['1-1', '1-2', '1-3'].includes(lot)) o[lot] = el.getAttribute('class'); }); return o; });
   check('CPS map: 70 days green (wait), 100 amber (may spray), 130 red (late)', cpsMap['1-1'] === 'g' && cpsMap['1-2'] === 'a' && cpsMap['1-3'] === 'r', JSON.stringify(cpsMap));
   const box = await p.innerText('#pg-box');
@@ -101,7 +101,7 @@ const _OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30
   check('a block marked immature: 70 days may spray (again from 60), and its key says 60', im.young.k === 'a' && im.young.again === 60 && /< 60 hari/.test(im.young.key) && /60–120 hari/.test(im.young.key), JSON.stringify({ k: im.young.k, again: im.young.again }));
   check('the job picker (muster) takes the same gap: it asks EA.fh.program.cpsAgain', /EA\.fh\.program\.cpsAgain\(estate, block\)/.test(require('fs').readFileSync(require('path').resolve(__dirname, '..', 'rooms', 'field', 'muster.js'), 'utf8')));
   check('one office call for the page', asks === 1, String(asks));
-  await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v90-key.png', fullPage: true });
+  await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v92-key.png', fullPage: true });
   check('no page errors', errs.length === 0, errs.join(' | '));
   await b.close();
 })();

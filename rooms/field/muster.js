@@ -76,7 +76,10 @@
   function restBm(date) { return new Date(date + 'T00:00:00').getDay() === 0 ? 'Hari Ahad' : 'Cuti umum'; }
   function restEn(date) { return new Date(date + 'T00:00:00').getDay() === 0 ? 'Sunday' : 'Public holiday'; }
   function dm(date) { var d = new Date(date + 'T00:00:00'); return d.getDate() + '/' + (d.getMonth() + 1); }
-  function dayDm(date) { var d = new Date(date + 'T00:00:00'); return ui().dayBm[d.getDay()] + ' ' + dm(date); }
+  // v1.81 Rule 7: the day's name follows the phone's language. It was always Bahasa, so an English phone
+  // read "Day Isnin 16/11 not closed" - a Bahasa word inside an English sentence. core/workers.js has
+  // always done this correctly; this is the same line. Every estate, every screen that shows a day here.
+  function dayDm(date) { var d = new Date(date + 'T00:00:00'); return EA.t(ui().dayBm, ui().dayEn)[d.getDay()] + ' ' + dm(date); }
   function addDays(date, n) { var d = new Date(date + 'T00:00:00'); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function workSavedOn(date) {
     var ids = chitsOn(date).map(function (c) { return c.chit; });
@@ -837,9 +840,20 @@
     if (!draft.mode && EA.fh.autoCloseOld) {
       try {
         var ac = EA.fh.autoCloseOld(ctx.estate, ctx.user);
-        if (ac.missing.length) head += '<p class="plan-band due" id="fh-dcmiss"><b>' + EA.t('Hari ' + ac.missing.map(function (m) { return dayDm(m.date); }).join(', ') + ' belum lengkap', 'Day ' + ac.missing.map(function (m) { return dayDm(m.date); }).join(', ') + ' not complete') + '</b>' +
-          '<span>' + esc(ac.missing[0].bad.map(function (x) { return EA.t(x.bm, x.en); }).join(' · ')) + '</span>' +
+        // v1.81: this band was the far side of the ring. A red line on the close sent the staff here, and
+        // this band sent him straight back with LENGKAPKAN, for a day neither screen could open. Now the
+        // days are split by the one rule the close uses: a day he can still key keeps LENGKAPKAN, and a day
+        // past the window says in words that it is the office's, with nothing to press.
+        var canKeyDay = function (m) {
+          return EA.fh.workChitOpen ? EA.fh.workChitOpen({ date: m.date, estate: ctx.estate }) : true;
+        };
+        var mine = ac.missing.filter(canKeyDay), office = ac.missing.filter(function (m) { return !canKeyDay(m); });
+        var dayList = function (ms) { return ms.map(function (m) { return dayDm(m.date); }).join(', '); };
+        if (mine.length) head += '<p class="plan-band due" id="fh-dcmiss"><b>' + EA.t('Hari ' + dayList(mine) + ' belum lengkap', 'Day ' + dayList(mine) + ' not complete') + '</b>' +
+          '<span>' + esc(mine[0].bad.map(function (x) { return EA.t(x.bm, x.en); }).join(' · ')) + '</span>' +
           '<a class="btn" href="#field-harvest/close">' + EA.t('LENGKAPKAN', 'COMPLETE IT') + '<small>' + EA.t('Lengkapkan & tutup hari', 'Complete & close the day') + '</small></a></p>';
+        if (office.length) head += '<p class="plan-band" id="fh-dcold"><b>' + EA.t('Hari ' + dayList(office) + ' belum ditutup', 'Day ' + dayList(office) + ' not closed') + '</b>' +
+          '<span>' + EA.t('Terlalu lama untuk dibetulkan di telefon — minta pejabat.', 'Too old to fix on the phone — ask the office.') + '</span></p>';
       } catch (e) {}
     }
     var started = draft.jobs.length || Object.keys(draft.marks).length || draft.replacing || draft.newChit || draft.mode;
@@ -2167,7 +2181,18 @@
   // v1.73: the draft on its own, so Kerja can correct one mark without opening this screen (Rule 5).
   function fixDraft(c, ask) {
         var d = blankDraft();
-        if (ask) { d.date = c.date; d.fixAsk = ask; }
+        // v1.81 (Ferezelly, 21 Nov 09:01 and 09:04, correcting the 17 and 18 Nov chits). The date was copied
+        // from the chit ONLY when the clerk had asked for the fix. blankDraft() starts at EA.today(), and
+        // EA.save falls back to today when no date is passed, so a correction the STAFF started himself —
+        // BETULKAN, or the row-level "tidak hadir" added in 1.76 — was written onto TODAY.
+        //
+        // What that did: the 17 Nov chit row was replaced by a row dated 21 Nov. 17 Nov then had no standing
+        // chit at all and fell out of Rekod entirely ("tiada rekod"), while 21 Nov picked up three chits and
+        // showed 48/75 present. The day did not just read wrong, it disappeared.
+        //
+        // A correction belongs to the day it corrects. Always. Whoever started it.
+        d.date = c.date;
+        if (ask) { d.fixAsk = ask; }
         d.alertNotes = {}; (c.alerts || []).forEach(function (a) { d.alertNotes[a.key] = a.note; });
         d.replacing = c.chit; d.rain_mm = c.rain_mm; d.rain_time = c.rain_time; d.checker = c.checker;
         d.jobs = JSON.parse(JSON.stringify(c.jobs || []));

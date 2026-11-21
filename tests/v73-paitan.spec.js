@@ -54,9 +54,9 @@ const { chromium } = require('playwright');
   check('the estate is named Paitan', L.name === 'Paitan', L.name);
   // v1.59: the lots have their own centre points now (from the survey shapefiles), so standing in a lot names that lot
   check('standing in a lot, the nearest lot is that lot', L.here === '2-9|0', L.here);
-  // far away it still answers, so whoever asks must look at the metres: 12 km is not "you are in this lot"
+  // far away it still answers, so whoever asks must look at the metres: 5 km and more is not "you are in this lot"
   check('far from the estate the answer carries the distance, so a wrong lot cannot pass as right',
-    !!L.gps && L.gps.metres > 10000, JSON.stringify(L.gps));
+    !!L.gps && L.gps.metres > 5000,   // 21 Nov: TKRS has centre points now, and it lies between Paitan and Sugut JSON.stringify(L.gps));
   check('Block 9Ac has no coordinates, because it has no map: no guess', L.noCoord === '9A-1', L.noCoord);
 
   // ---------- the chit ----------

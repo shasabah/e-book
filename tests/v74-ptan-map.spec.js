@@ -12,7 +12,7 @@ const lots = EA.lists.lots.filter(l => l.estate === 'PTAN');
 const rings = g => Array.isArray(g[0][0]) ? g : [g];
 
 check('Paitan has its own outlines, and Sugut still has its own',
-  !!S.PTAN && Object.keys(S.PTAN).length === 170 && Object.keys(S.SSGT).length > 150,
+  !!S.PTAN && Object.keys(S.PTAN).length === 208 &&   /* 170 surveyed Paitan lots + 38 traced TKRS and 43 Acres lots (21 Nov) */ Object.keys(S.SSGT).length > 150,
   'PTAN ' + Object.keys(S.PTAN || {}).length + ' · SSGT ' + Object.keys(S.SSGT || {}).length);
 check('every outline belongs to a lot on the Paitan land list — nothing invented',
   Object.keys(S.PTAN).every(k => lots.some(l => l.lot === k)),
@@ -24,10 +24,10 @@ check('every Paitan lot has an outline except 9A-1, which has no map',
 check('the four blocks hold 43, 33, 40 and 54 lots',
   ['01', '02', '03', '04'].map(b => EA.lists.lotsFor('PTAN', b).filter(l => S.PTAN[l.lot]).length).join(',') === '43,33,40,54',
   ['01', '02', '03', '04'].map(b => EA.lists.lotsFor('PTAN', b).filter(l => S.PTAN[l.lot]).length).join(','));
-check('every outline is a closed ring of at least 4 points, in Paitan (6.38–6.40 N, 117.33–117.38 E)',
+check('every outline is a closed ring of at least 4 points, in the Paitan group (6.38–6.47 N, 117.32–117.38 E)',
   Object.keys(S.PTAN).every(k => rings(S.PTAN[k]).every(r =>
     r.length >= 4 && r[0][0] === r[r.length - 1][0] && r[0][1] === r[r.length - 1][1]
-    && r.every(p => p[0] > 117.3 && p[0] < 117.4 && p[1] > 6.37 && p[1] < 6.41))), 'rings');
+    && r.every(p => p[0] > 117.3 && p[0] < 117.4 && p[1] > 6.37 && p[1] < 6.47))), 'rings');
 check('no outline strays into Sugut (6.11–6.14 N), so the two estates cannot be mixed up',
   Object.keys(S.SSGT).every(k => rings(S.SSGT[k])[0][0][1] < 6.2) && Object.keys(S.PTAN).every(k => rings(S.PTAN[k])[0][0][1] > 6.3), 'apart');
 

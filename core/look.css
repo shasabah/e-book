@@ -793,7 +793,11 @@ div.td-it { cursor: default; }
 .pg-map { display: block; width: 100%; height: auto; margin-top: 6px; }
 .pg-map path { stroke: #fff; stroke-width: 1.2; fill: var(--ok); }
 .pg-map path.a { fill: var(--wait); } .pg-map path.r { fill: var(--bad); } .pg-map path.x { fill: var(--muted); }
-.pg-map text { font: 600 9px -apple-system, system-ui, sans-serif; fill: #17301f; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.pg-map text { font: 700 9px -apple-system, system-ui, sans-serif; fill: var(--ink); text-anchor: middle; dominant-baseline: middle; pointer-events: none;
+  /* 1.85 (Yu Chen, 21 Nov: "No indication lot number in map"): the number was a fixed dark green, so on a phone in dark
+     mode it sat dark on a dark lot and could not be seen. It now takes the ink colour of the phone's mode, with a thin
+     halo of the page colour round each figure, so it reads on any lot colour (green, amber, red, grey, picked). */
+  stroke: var(--surface); stroke-width: 2.4px; stroke-linejoin: round; paint-order: stroke; }
 .pg-bt { margin-top: 8px; }
 .pg-bt th:first-child small { font-weight: 400; color: var(--muted); }
 .pg-t tr.pg-old td { color: var(--muted); }

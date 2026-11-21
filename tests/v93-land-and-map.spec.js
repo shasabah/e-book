@@ -67,6 +67,18 @@ const { chromium } = require('playwright');
   sel = await p.evaluate(() => ({ map: [...document.querySelectorAll('.land-map path.sel')].map(e => e.dataset.pglot), row: [...document.querySelectorAll('#land-lots tr.sel')].map(e => e.dataset.landlot), pick: document.getElementById('land-pick').textContent, nums: document.querySelectorAll('.land-map svg text').length }));
   check('tap lot 1-4 on the map: the list follows, and only one lot is lit', sel.map.join() === 'land|1-4' && sel.row.join() === '1-4' && /^Petak 1-4 · /.test(sel.pick), JSON.stringify(sel));
   check('the lot numbers stay on the map after a pick', sel.nums >= 31, String(sel.nums));
+  // 1.85: the numbers must stand apart from the lot colour, in light mode and in dark mode
+  const contrast = async () => p.evaluate(() => {
+    const rgb = s => (s.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number);
+    const lum = c => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; const [r, g, b] = c.map(f); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+    const t = document.querySelector('.land-map svg text'), pa = document.querySelector('.land-map path:not(.sel)');
+    const a = lum(rgb(getComputedStyle(t).fill)), b = lum(rgb(getComputedStyle(pa).fill));
+    return Math.round((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) * 10) / 10; });
+  const cLight = await contrast();
+  await p.emulateMedia({ colorScheme: 'dark' }); await p.waitForTimeout(150);
+  const cDark = await contrast();
+  await p.emulateMedia({ colorScheme: 'light' });
+  check('1.85: a lot number stands well apart from its lot, in light mode and in dark mode (contrast 4.5 or more)', cLight >= 4.5 && cDark >= 4.5, 'light ' + cLight + ' · dark ' + cDark);
   await p.click('#land-up'); await p.waitForTimeout(200);
   check('the button above goes back to the estate\'s table', await p.locator('#land-est').count() === 1 && await p.locator('#land-up').count() === 0);
   await p.click('#sheet-x'); await p.waitForTimeout(100);

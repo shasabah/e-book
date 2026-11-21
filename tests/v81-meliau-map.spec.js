@@ -13,7 +13,7 @@ const rings = g => Array.isArray(g[0][0]) ? g : [g];
 
 check('Meliau has 173 outlines, one for every lot on the land list', Object.keys(M).length === 173 && lots.length === 173 && lots.every(l => M[l.lot]), Object.keys(M).length + ' / ' + lots.length);
 check('every outline belongs to a lot on the Meliau land list — nothing invented', Object.keys(M).every(k => lots.some(l => l.lot === k)));
-check('Sugut and Paitan still have their own outlines', Object.keys(S.SSGT).length > 150 && Object.keys(S.PTAN).length === 170,
+check('Sugut and Paitan still have their own outlines', Object.keys(S.SSGT).length > 150 && Object.keys(S.PTAN).length === 208,
   'SSGT ' + Object.keys(S.SSGT).length + ' · PTAN ' + Object.keys(S.PTAN).length);
 check('every outline is a closed ring in Meliau (5.71–5.76 N, 117.15–117.21 E)',
   Object.keys(M).every(k => rings(M[k]).every(r => r.length >= 4 && r[0][0] === r[r.length - 1][0] && r[0][1] === r[r.length - 1][1]

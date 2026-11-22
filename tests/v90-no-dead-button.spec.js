@@ -145,5 +145,5 @@ function redLines(p) {
   check('the band asks the very same rule, it does not keep its own copy',
     /EA\.fh\.workChitOpen \? EA\.fh\.workChitOpen\(\{ date: m\.date, estate: ctx\.estate \}\)/.test(ms), 'muster.js');
   const v = fs.readFileSync(path.join(root, 'core', 'version.js'), 'utf8');
-  check('version 1.81 (129)', /EA\.RELEASE = '1\.81'/.test(v) && /EA\.VERSION = 129/.test(v), 'version');
+  check('version 1.82 (130)', /EA\.RELEASE = '1\.82'/.test(v) && /EA\.VERSION = 130/.test(v), 'version');
 })();

@@ -896,7 +896,8 @@
           var marks = Object.keys(draft.away).filter(function (w) { return miss.some(function (m) { return m.w === w; }); })
             .map(function (w) { return { worker: w, mark: draft.away[w] }; });
           ui().closeSheet();
-          if (marks.length && EA.fh.markAway && chit && EA.fh.markAway(chit.chit, marks)) {
+          // v1.81: Kerja passes its own estate, so the chit screen never has to have been opened first.
+          if (marks.length && EA.fh.markAway && chit && EA.fh.markAway(chit.chit, marks, ctx.estate)) {
             marks.forEach(function (m) { delete draft.away[m.worker]; delete draft.lines[m.worker]; });
             keepDraft();
             ui().toast(EA.t(marks.length + ' orang ditanda di chit · tekan SIMPAN sekali lagi', marks.length + ' marked on the chit · press SAVE again'));

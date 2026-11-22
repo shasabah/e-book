@@ -2215,23 +2215,41 @@
   // nothing is deleted, the old chit stays on record — and it never opens this screen or touches a chit the
   // staff happens to be part way through making.
   EA.fh = EA.fh || {};
-  EA.fh.markAway = function (chitId, marks) {
+  // v1.81 (Ferezelly, 22 Nov 2026: "yang tidak hadir sy tick... skrg sudah tick tidak hadir diminta
+  // masukkan jumlah karung juga knpa yaa"). He ticked TIDAK HADIR on a Loose Fruit job and the app still
+  // demanded the bag count, over and over.
+  //
+  // The cause: this function read ctx.estate. ctx belongs to the CHIT screen and is only set once that
+  // screen has been rendered. A staff member who opens the app and goes straight to Kerja — which is what
+  // everyone does — had no ctx at all, so the very first line threw, the marks never reached the chit, and
+  // pressing SIMPAN again brought the same card back. A ring, like the close screen's.
+  //
+  // The file already solves this for another screen's call (EA.fh.pendingPlans below): set ctx's estate for
+  // the length of the call and put it back after. The estate comes from the chit itself, which carries it,
+  // so nothing has to be guessed. The whole body is inside the try now: before, the lookup sat outside it,
+  // which is how the error escaped as a page error instead of a clean "no".
+  EA.fh.markAway = function (chitId, marks, estate) {
     if (!marks || !marks.length) return false;
-    var c = chits().find(function (x) { return x.estate === ctx.estate && x.chit === chitId; });
-    if (!c) return false;
-    var keep = draft;
+    var keepCtx = ctx, keepDraft = draft;
     try {
+      var c = chits().find(function (x) { return x.chit === chitId && (!estate || x.estate === estate); });
+      if (!c) return false;
+      // Everything this call reaches must be here: buildChit wants ctx.user.code and ctx.user.name as well
+      // as the estate, and with no chit screen ever rendered there is no ctx at all to inherit them from.
+      ctx = Object.assign({ user: EA.currentUser() }, ctx || {}, { estate: c.estate });
+      if (!ctx.user) return false;
       var d = fixDraft(c, null);
       var did = 0;
       marks.forEach(function (m) {
         if (d.marks[m.worker] === undefined || d.marks[m.worker] === m.mark) return;
         d.marks[m.worker] = m.mark; delete d.jobOf[m.worker]; did++;
       });
-      if (!did) { draft = keep; return false; }
+      if (!did) { draft = keepDraft; return false; }
       draft = d;
       save(true);
       return true;
-    } catch (e) { draft = keep; return false; }
+    } catch (e) { draft = keepDraft; return false; }
+    finally { ctx = keepCtx; }
   };
 
   EA.roomViews['field-harvest'] = { render: render, chitText: chitText, summary: summary };

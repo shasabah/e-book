@@ -141,5 +141,5 @@ function seed(p, lang) {
     /k !== 'ticket' && k !== 'day' && k !== 'bunches' && !auto\(j\) && !isHa\(j\)/.test(wk), 'the condition');
   check('the total and the note have a style', /\.wk-total \{/.test(css) && /\.wk-nobox \{/.test(css), 'css');
   const v = fs.readFileSync(path.join(root, 'core', 'version.js'), 'utf8');
-  check('version 1.81 (129)', /EA\.RELEASE = '1\.81'/.test(v) && /EA\.VERSION = 129/.test(v), 'version');
+  check('version 1.82 (130)', /EA\.RELEASE = '1\.82'/.test(v) && /EA\.VERSION = 130/.test(v), 'version');
 })();

@@ -29,7 +29,9 @@ check('a person with no LOT does still stop the save — the app cannot guess th
   /tekan petak untuk/.test(wk), 'noLot still blocks');
 
 // 3 · the away marks go onto the chit through the chit's own correction (Rule 5), not a second copy
-check('one function owns a chit correction, in the chit screen', /EA\.fh\.markAway = function \(chitId, marks\)/.test(ms), 'markAway');
+// 1.82 gave markAway the estate as a third argument, so Kerja no longer depends on the chit screen having
+// been opened first (v92). Still one function, still in the chit screen.
+check('one function owns a chit correction, in the chit screen', /EA\.fh\.markAway = function \(chitId, marks, estate\)/.test(ms), 'markAway');
 check('it reuses the same correction draft BETULKAN uses', /function fixDraft\(c, ask\)/.test(ms)
   && /function startFix\(c, ask\) \{ draft = fixDraft\(c, ask\);/.test(ms), 'fixDraft shared');
 check('it writes through the same save, so nothing is deleted (Rule 4)', /\n      save\(true\);/.test(ms), 'save(true)');
@@ -37,7 +39,7 @@ check('that save does not drag the staff off the Kerja screen', /if \(quiet\) re
 check('all the marks go in one correction, so the chit gets one new version, not one per person',
   /marks\.forEach\(function \(m\) \{[\s\S]{0,220}d\.marks\[m\.worker\] = m\.mark; delete d\.jobOf\[m\.worker\]; did\+\+;/.test(ms), 'one version');
 check('a chit the staff is part way through making is put back untouched',
-  /var keep = draft;/.test(ms) && /catch \(e\) \{ draft = keep; return false; \}/.test(ms), 'draft kept');
+  /var keepCtx = ctx, keepDraft = draft;/.test(ms) && /catch \(e\) \{ draft = keepDraft;[^\n]*return false; \}/.test(ms), 'draft kept');
 check('EA.fh exists before markAway is hung on it', ms.indexOf('EA.fh = EA.fh || {};') < ms.indexOf('EA.fh.markAway'), 'order');
 
 // 4 · the day close still insists, so an unanswered person cannot be quietly forgotten

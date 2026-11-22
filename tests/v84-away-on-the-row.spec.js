@@ -41,7 +41,7 @@ check('the description of a person who owes an answer is built once',
 check('opened for one man the card names him instead of counting strangers',
   /var head = one/.test(wk) && /esc\(person\(one\)\)/.test(wk), 'head');
 check('the away mark still goes to the morning chit as a correction, as before',
-  /EA\.fh\.markAway\(chit\.chit, marks\)/.test(wk), 'markAway');
+  /EA\.fh\.markAway\(chit\.chit, marks, ctx\.estate\)/.test(wk), 'markAway');
 check('the three marks are unchanged: T, S and C are paid differently',
   /\[\['T', 'Tidak hadir', 'Absent'\], \['S', 'Sakit', 'Sick'\], \['C', 'Cuti', 'Leave'\]\]/.test(wk), 'AWAY_MARKS');
 

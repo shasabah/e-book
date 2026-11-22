@@ -1,7 +1,7 @@
 // E-Book test (1.49). Rekod → PROGRAM · Rancangan vs sebenar (plan vs actual), read only, three levels.
 // - The numbers (EA.fh.program.calc) for October 2026 on Sugut's programme: rounds due to the end of September,
 //   rounds done, the gap, Ha behind and person-days; this month's work fills this month's programme first; next month.
-// - The lot states: harvest (days since, bunches), manuring (round done or not), CPS (60 / 120 day rule).
+// - The lot states: harvest (days since, bunches), manuring (round done or not), CPS (90 / 120 day rule; 60 on an immature block).
 // - The screen: level 1 (worst block, harvesters a day, crop), level 2 job cards with blocks ranked, level 3 lots as a
 //   list or a map (lot shapes), one office call (never a loop), taps never ask the office again; HARIAN comes back.
 const check = (name, ok, detail) => { console.log((ok ? 'PASS ' : 'FAIL ') + name + (detail ? ' — ' + detail : '')); if (!ok) process.exitCode = 1; };
@@ -28,7 +28,7 @@ const OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30'
   const now = D(0), m = now.slice(0, 7);
   const live = { ok: true, estate: 'SSGT', month: m, at: now + ' 21:30', from: '2020-01-01', programme: programme(m.slice(0, 4)),
     done: { ['CPS|01|' + m]: 5, ['MAN|01|' + m.slice(0, 4) + '-03']: 33.2, ['MAN|01|' + m.slice(0, 4) + '-06']: 33.2, ['MAN|01|' + m.slice(0, 4) + '-08']: 37.85 }, crop: [{ month: m, budget: 220, days: 26, mt: 150.25 }], gang: { CPS: 1, MAN: 1, SL: 1, DEC: 1, VOPS: 1, RP: 1, HA: 3.4 },
-    lots: { '1-1': D(2), '1-2': D(12), '1-3': D(20) }, lotJobs: { CPS: { '1-1': D(10), '1-2': D(70), '1-3': D(130) }, MAN: { '1-1': D(5) }, bunches: { '1-3': 118, '1-2': 90 } }, ap: { done: 58 },
+    lots: { '1-1': D(2), '1-2': D(12), '1-3': D(20) }, lotJobs: { CPS: { '1-1': D(10), '1-2': D(100), '1-3': D(130) }, MAN: { '1-1': D(5) }, bunches: { '1-3': 118, '1-2': 90 } }, ap: { done: 58 },
     days: [{ date: D(1), closed: 'Y', same: true, ramp: false }, { date: D(2), closed: 'N', same: false, ramp: true }],
     rain: [{ date: D(1), lost: 0.5, reason: 'HENTI', jobs: 'Circle Spraying (1 petak)' }] };
   await p.route('https://script.google.com/**', async rt => {
@@ -69,14 +69,14 @@ const OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30'
   // lot states
   const st = await p.evaluate(() => {
     const S = EA.fh.program.states, D = n => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
-    const data = { lots: { '1-1': D(2), '1-2': D(12), '1-3': D(20) }, lotJobs: { CPS: { '1-1': D(10), '1-2': D(70), '1-3': D(130) }, MAN: { '1-1': D(5) }, bunches: { '1-3': 118 } } };
+    const data = { lots: { '1-1': D(2), '1-2': D(12), '1-3': D(20) }, lotJobs: { CPS: { '1-1': D(10), '1-2': D(100), '1-3': D(130) }, MAN: { '1-1': D(5) }, bunches: { '1-3': 118 } } };
     const L = n => EA.lists.lot('SSGT', n);
     return { h1: S.harvest('SSGT', data, L('1-1')), h2: S.harvest('SSGT', data, L('1-2')), h3: S.harvest('SSGT', data, L('1-3')), h4: S.harvest('SSGT', data, L('1-4')),
       c1: S.cps(data, L('1-1'), 'SSGT'), c2: S.cps(data, L('1-2'), 'SSGT'), c3: S.cps(data, L('1-3'), 'SSGT'), c4: S.cps(data, L('1-4'), 'SSGT'),
       cNone: S.cps(data, L('1-4')), m1: S.man(data, L('1-1')), m2: S.man(data, L('1-2')), rule: EA.fh.program.CPS_RULE, fall: EA.lists.cpsLastRound.SSGT };
   });
   check('harvest: 2 days green, 12 amber (ready), 20 red (late) with 118 bunches last time, no record = x', st.h1.k === 'g' && st.h2.k === 'a' && st.h3.k === 'r' && st.h3.bunches === 118 && st.h4.k === 'x', JSON.stringify([st.h1, st.h2, st.h3, st.h4]));
-  check('CPS: 10 days wait (green), 70 can spray (amber), 130 late (red); rule: target 90, earliest 60, late 120', st.c1.k === 'g' && st.c2.k === 'a' && st.c3.k === 'r' && st.rule.again === 60 && st.rule.target === 90 && st.rule.late === 120, JSON.stringify([st.c1, st.c2, st.c3]));
+  check('CPS: 10 days wait (green), 100 can spray (amber), 130 late (red); rule: target 90, again from 90 (60 immature), late 120', st.c1.k === 'g' && st.c2.k === 'a' && st.c3.k === 'r' && st.rule.again === 90 && st.rule.againImmature === 60 && st.rule.target === 90 && st.rule.late === 120, JSON.stringify([st.c1, st.c2, st.c3]));
   check('a lot with no spray record of its own falls back to the month its block finished the round, and is marked an estimate', st.c4.est === true && st.c4.date === st.fall['01'] && st.c4.age > 0 && st.cNone.k === 'x' && !st.cNone.est, JSON.stringify(st.c4) + ' | fallback ' + st.fall['01']);
   check('the fallback dates come from the estate status report: Blk 01 and 03 October, Blk 02 and 04 September', st.fall['01'] === '2026-10-15' && st.fall['03'] === '2026-10-15' && st.fall['02'] === '2026-09-15' && st.fall['04'] === '2026-09-15', JSON.stringify(st.fall));
   check('manuring: round keyed = green; no lot record = grey, never red (block Ha stays the true figure)', st.m1.k === 'g' && !st.m1.act && st.m2.k === 'x' && st.m2.act);
@@ -97,7 +97,7 @@ const OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30'
   check('level 1: crop due by today in working days, actual 150.2 MT, year line', /patut hingga \d\d\/\d\d \(\d+ hari\)/.test(t1) && /150\.[23] MT · \d+%/.test(t1) && /Tahun \(Jan–/.test(t1), (t1.match(/Nov: [^\n]*|patut hingga[^\n]*/) || [''])[0]);
   check('level 2: Tuai card ranks on what can be acted on — late lots first, then ready, and no-record last', /Tuai · pusingan/.test(t1) && /Blk 01 · 1 petak lewat · 36 tiada rekod\n±118 tandan/.test(t1), (t1.match(/Blk 01 · [^\n]*\n[^\n]*/) || [''])[0]);
   check('level 2: Membaja Ha left comes from the block record (5 rounds × 33.2 Ha − 104.25 done = 61.8), not from the unticked lots', /Membaja · pusingan \d/.test(t1) && /Ha lagi ikut rekod blok/.test(t1) && /Blk 01 · 61\.8 Ha lagi/.test(t1) && /orang-hari · 1 orang → \d+ hari · (cukup|kurang \d+ hari)/.test(t1), (t1.match(/Blk 01 · 6[^\n]*|Ha lagi ikut[^\n]*/g) || []).join(' | '));
-  check('level 2: CPS card, target 90 days and earliest 60 in the heading; Blk 01 can spray (1-2 and 1-3 and the lots with no record)', /CPS · racun bulatan\nsasaran 4 pusingan setahun \(±90 hari\) · paling awal 60 hari/.test(t1) && /Blk 01 · boleh racun \d+\.\d Ha/.test(t1), (t1.match(/Blk 01 · boleh[^\n]*/) || [''])[0]);
+  check('level 2: CPS card, spray again after 90 days and late over 120 in the heading; Blk 01 can spray (1-2 and 1-3 and the lots with no record)', /CPS · racun bulatan\nsasaran 4 pusingan setahun · racun semula selepas 90 hari · lewat lebih 120 hari/.test(t1) && /Blk 01 · boleh racun \d+\.\d Ha/.test(t1), (t1.match(/Blk 01 · boleh[^\n]*/) || [''])[0]);
   check('level 2: abandoned palms 362 − 58 = 304 left, palms a day to 31/12', /304 pokok/.test(t1) && /Perlu sehari \(\d+ hari kerja\)\n\d+ pokok/.test(t1));
   check('daily keying: days closed 1 / 2, ramp 1 / 2, keyed same day 1 / 2; rain ½ day', (t1.match(/1 \/ 2 (hari|days)/g) || []).length === 3 && /½/.test(t1), (t1.match(/\d \/ \d (hari|days)/g) || []).join(' | '));
   check('one office call for the page (no loop)', asks === 1, String(asks));
@@ -166,7 +166,7 @@ const OCT = { ok: true, estate: 'SSGT', month: '2026-10', at: '2026-10-27 21:30'
   const cpsTicks = await p.evaluate(() => window.__saved);
   const two = cpsTicks.find(x => x.f.lot === '1-5') || { f: {} };
   const want2 = await p.evaluate(() => { const d = new Date(); d.setMonth(d.getMonth() - 2); return d.toISOString().slice(0, 7); });
-  check('a CPS tick carries the month chosen in "Racun bila?", so the 60-day clock starts from it', cpsTicks.length === n01 && two.f.task_code === 'CPS' && (two.f.done_on || '').slice(0, 7) === want2, JSON.stringify(two.f) + ' want ' + want2);
+  check('a CPS tick carries the month chosen in "Racun bila?", so the 90-day clock starts from it', cpsTicks.length === n01 && two.f.task_code === 'CPS' && (two.f.done_on || '').slice(0, 7) === want2, JSON.stringify(two.f) + ' want ' + want2);
   // v1.52.2: a CPS block where every lot is still green (nothing to spray yet) still opens, so its lots can be ticked
   await p.evaluate(() => { const d = new Date(); d.setDate(d.getDate() - 10); EA.lists.cpsLastRound.SSGT['03'] = d.toISOString().slice(0, 10); });
   await p.click('[data-pg="CPS.01"]'); await p.waitForTimeout(200); await p.click('[data-pg="CPS.01"]'); await p.waitForTimeout(200); await p.click('[data-pg="CPS.01"]'); await p.waitForTimeout(200);

@@ -27,7 +27,7 @@ const { chromium } = require('playwright');
   check('the estate picker does not offer Tekara', !/Tekara|TKRS/.test(pick) && /Paitan/.test(pick), pick);
   await p.click('#sheet [data-estate="MELU"]'); await p.waitForTimeout(300);
   await p.evaluate(() => EA.homePane('lists')); await p.waitForTimeout(300);
-  check('Meliau: the Cuti umum tile shows, its lots not yet in', await p.locator('[data-ref="hol"]').count() === 1 && await p.locator('[data-ref="map"]').count() === 0);
+  check('Meliau: the Cuti umum tile shows, and the lot map since its land went in (18 Nov)', await p.locator('[data-ref="hol"]').count() === 1 && await p.locator('[data-ref="map"]').count() === 1);
   await p.click('[data-ref="hol"]'); await p.waitForTimeout(200);
   check('Meliau: the sheet has its own calendar', /Meliau/.test(await p.textContent('#sheet-title')) && await p.locator('#sheet .ref-tab tr').count() === 14);
   // a login that is TKRS only is never stripped bare

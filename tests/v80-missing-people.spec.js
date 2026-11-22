@@ -29,7 +29,7 @@ check('a person with no LOT does still stop the save — the app cannot guess th
   /tekan petak untuk/.test(wk), 'noLot still blocks');
 
 // 3 · the away marks go onto the chit through the chit's own correction (Rule 5), not a second copy
-// 1.82 gave markAway the estate as a third argument, so Kerja no longer depends on the chit screen having
+// 1.86 gave markAway the estate as a third argument, so Kerja no longer depends on the chit screen having
 // been opened first (v92). Still one function, still in the chit screen.
 check('one function owns a chit correction, in the chit screen', /EA\.fh\.markAway = function \(chitId, marks, estate\)/.test(ms), 'markAway');
 check('it reuses the same correction draft BETULKAN uses', /function fixDraft\(c, ask\)/.test(ms)
@@ -75,4 +75,4 @@ check('the day close counts a zero line as a work line, so the day can close',
   && /if \(!ls\.length\) \{[\s\S]{0,320}?out\.noLine\.push\(r\.worker_id\); return;\n      \}/.test(dc),
   'noLine is only a MISSING line');
 check('the zero question has a style', /\.mx-zero \{/.test(css), 'css');
-check('version 1.82 (130)', /EA\.RELEASE = '1\.82'/.test(v) && /EA\.VERSION = 130/.test(v), 'version');
+check('version 1.80 (128) or later', Number((v.match(/EA\.VERSION = (\d+)/) || [])[1]) >= 128 && /EA\.RELEASE = '1\.\d+'/.test(v), 'version');

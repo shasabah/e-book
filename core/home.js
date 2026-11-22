@@ -240,6 +240,86 @@
       '<span class="when"><span class="bm">' + esc(sbm) + '</span><span class="en">' + esc(sen) + '</span></span></button>';
   }
   function f2(n) { return (Math.round(Number(n) * 100) / 100).toFixed(2); }
+  // ---- Tanah & peta (1.84): the land list as a table, then one block's map with its lots. Read only. ----
+  // Everything is read from lists/estates.js and lists/lots.js, the one land list (Rule 3); nothing is kept here.
+  function n0(n) { return String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function landRows(estate, piece) {
+    var L = EA.lists;
+    return (L.blocksFor ? L.blocksFor(estate) : []).filter(function (b) {
+      if (L.isDurian && L.isDurian(estate, b.block)) return false;
+      return piece == null || L.pieceOf(estate, b.block).piece === piece;
+    }).map(function (b) {
+      var ls = L.lotsFor(estate, b.block) || [], yrs = [];
+      ls.forEach(function (l) { if (l.planted && yrs.indexOf(l.planted) < 0) yrs.push(l.planted); });
+      return { block: b.block, name: b.name, ha: Number(b.ha) || 0, palms: ls.reduce(function (a, l) { return a + (Number(l.palms) || 0); }, 0), lots: ls.length, planted: yrs.sort().join('/') };
+    });
+  }
+  function landSum(rows) { return rows.reduce(function (a, r) { a.ha += r.ha; a.palms += r.palms; a.lots += r.lots; return a; }, { ha: 0, palms: 0, lots: 0 }); }
+  function sph(palms, ha) { return ha > 0 ? n0(palms / ha) : ''; }
+  // The pieces of land on the all-estates table: an estate, and inside the Paitan group its three pieces.
+  function landPieces() {
+    var L = EA.lists, out = [];
+    L.estatesLive().forEach(function (e) {
+      var seen = [];
+      (L.blocksFor ? L.blocksFor(e.code) : []).forEach(function (b) { var pc = L.pieceOf(e.code, b.block).piece; if (seen.indexOf(pc) < 0 && !(L.isDurian && L.isDurian(e.code, b.block))) seen.push(pc); });
+      seen.forEach(function (pc) { out.push({ estate: e.code, piece: pc, name: pc === e.code ? estName(e.code) : (pc === 'TKRS' ? 'TKRS' : pc === '43AC' ? '43 Acres' : pc) }); });
+    });
+    return out;
+  }
+  function landAll(back) {
+    var ps = landPieces(), tot = { ha: 0, palms: 0, lots: 0, blocks: 0 };
+    var body = ps.map(function (x, i) { var rows = landRows(x.estate, x.piece), s = landSum(rows);
+      tot.ha += s.ha; tot.palms += s.palms; tot.lots += s.lots; tot.blocks += rows.length;
+      return '<tr class="tap" data-land="' + i + '"><td>' + esc(x.name) + ' <span class="chev">›</span></td><td>' + rows.length + '</td><td>' + f2(s.ha) + '</td><td>' + n0(s.palms) + '</td><td>' + sph(s.palms, s.ha) + '</td><td>' + s.lots + '</td></tr>'; }).join('');
+    openSheet('<h2 id="sheet-title">' + EA.t('Tanah & peta · semua ladang', 'Land & map · all estates') + '</h2>' +
+      '<p class="hint">' + EA.t('Tekan ladang → blok → peta dan petak. Lihat sahaja.', 'Tap an estate → block → map and lots. View only.') + '</p>' +
+      '<table class="land-tab" id="land-all"><thead><tr><th>' + EA.t('Ladang', 'Estate') + '</th><th>' + EA.t('Blok', 'Blocks') + '</th><th>Ha</th><th>' + EA.t('Pokok', 'Palms') + '</th><th>' + EA.t('Pokok/Ha', 'Palms/Ha') + '</th><th>' + EA.t('Petak', 'Lots') + '</th></tr></thead><tbody>' + body +
+      '<tr class="tot"><td>' + EA.t('Jumlah', 'Total') + '</td><td>' + tot.blocks + '</td><td>' + f2(tot.ha) + '</td><td>' + n0(tot.palms) + '</td><td>' + sph(tot.palms, tot.ha) + '</td><td>' + tot.lots + '</td></tr></tbody></table>',
+      function (sh) { sh.querySelectorAll('[data-land]').forEach(function (tr) { tr.onclick = function () { var x = ps[Number(tr.dataset.land)]; landEstate(x.estate, x.piece, true); }; }); });
+  }
+  function landEstate(estate, piece, fromAll) {
+    var rows = landRows(estate, piece), s = landSum(rows), nm = piece && piece !== estate ? (piece === '43AC' ? '43 Acres' : piece) : estName(estate);
+    openSheet((fromAll ? '<button type="button" class="back-btn land-up" id="land-up">‹ ' + EA.t('Semua ladang', 'All estates') + '</button>' : '') +
+      '<h2 id="sheet-title">' + EA.t('Tanah & peta · ', 'Land & map · ') + esc(nm) + '</h2>' +
+      '<p class="hint">' + rows.length + EA.t(' blok · ', ' blocks · ') + s.lots + EA.t(' petak · tekan blok untuk peta dan petaknya. Lihat sahaja.', ' lots · tap a block for its map and lots. View only.') + '</p>' +
+      '<table class="land-tab" id="land-est"><thead><tr><th>' + EA.t('Blok', 'Block') + '</th><th>' + EA.t('Tanam', 'Planted') + '</th><th>Ha</th><th>' + EA.t('Pokok', 'Palms') + '</th><th>' + EA.t('Pokok/Ha', 'Palms/Ha') + '</th><th>' + EA.t('Petak', 'Lots') + '</th></tr></thead><tbody>' +
+      rows.map(function (r) { return '<tr class="tap" data-landblk="' + esc(r.block) + '"><td>' + esc(r.block) + ' <span class="chev">›</span></td><td>' + esc(r.planted || '–') + '</td><td>' + f2(r.ha) + '</td><td>' + n0(r.palms) + '</td><td>' + sph(r.palms, r.ha) + '</td><td>' + r.lots + '</td></tr>'; }).join('') +
+      '<tr class="tot"><td>' + EA.t('Jumlah', 'Total') + '</td><td></td><td>' + f2(s.ha) + '</td><td>' + n0(s.palms) + '</td><td>' + sph(s.palms, s.ha) + '</td><td>' + s.lots + '</td></tr></tbody></table>' +
+      '<p class="hint">' + EA.t('Peta A3 untuk dicetak ada di pejabat. Warna ikut kerja: Rekod › Program.', 'The A3 maps to print are at the office. Colours by work: Records › Plan.') + '</p>',
+      function (sh) {
+        if (fromAll) $('land-up').onclick = function () { landAll(); };
+        sh.querySelectorAll('[data-landblk]').forEach(function (tr) { tr.onclick = function () { landBlock(estate, tr.dataset.landblk, piece, fromAll); }; });
+      });
+  }
+  function landBlock(estate, block, piece, fromAll) {
+    var L = EA.lists, ls = L.lotsFor(estate, block) || [], b = (L.blocksFor(estate) || []).filter(function (x) { return x.block === block; })[0] || { ha: 0 };
+    var r = landRows(estate, null).filter(function (x) { return x.block === block; })[0], st = {};
+    ls.forEach(function (l) { st[l.lot] = { k: '' }; });
+    var m = EA.fh && EA.fh.program && EA.fh.program.lotMap ? EA.fh.program.lotMap(estate, block, st, 'land') : '';
+    openSheet('<button type="button" class="back-btn land-up" id="land-up">‹ ' + esc(piece && piece !== estate ? (piece === '43AC' ? '43 Acres' : piece) : estName(estate)) + '</button>' +
+      '<h2 id="sheet-title">' + esc(estName(estate)) + ' · Blok ' + esc(block) + '</h2>' +
+      '<p class="hint">' + (r.planted ? EA.t('Tanam ', 'Planted ') + esc(r.planted) + ' · ' : '') + f2(b.ha) + ' Ha · ' + ls.length + EA.t(' petak · ', ' lots · ') + n0(r.palms) + EA.t(' pokok', ' palms') + '</p>' +
+      '<div class="ref-blk land-map">' + (m || '<p class="hint">' + EA.t('Belum ada peta untuk blok ini.', 'No map for this block yet.') + '</p>') + '</div>' +
+      '<p class="land-pick" id="land-pick" hidden></p>' +
+      '<table class="land-tab" id="land-lots"><thead><tr><th>' + EA.t('Petak', 'Lot') + '</th><th>Ha</th><th>' + EA.t('Pokok', 'Palms') + '</th><th>' + EA.t('Pokok/Ha', 'Palms/Ha') + '</th></tr></thead><tbody>' +
+      ls.map(function (l) { return '<tr class="tap" data-landlot="' + esc(l.lot) + '"><td>' + esc(l.lot) + '</td><td>' + f2(l.ha) + '</td><td>' + n0(l.palms) + '</td><td>' + sph(l.palms, l.ha) + '</td></tr>'; }).join('') +
+      '<tr class="tot"><td>' + EA.t('Jumlah', 'Total') + '</td><td>' + f2(ls.reduce(function (a, l) { return a + (Number(l.ha) || 0); }, 0)) + '</td><td>' + n0(r.palms) + '</td><td>' + sph(r.palms, ls.reduce(function (a, l) { return a + (Number(l.ha) || 0); }, 0)) + '</td></tr></tbody></table>' +
+      (m ? '<p class="hint">' + EA.t('Tekan petak di peta atau di senarai — kedua-duanya menyala.', 'Tap a lot on the map or in the list — it lights up in both.') + '</p>' : ''),
+      function (sh) {
+        $('land-up').onclick = function () { landEstate(estate, piece, fromAll); };
+        function pick(lot, scroll) {
+          var l = ls.filter(function (x) { return x.lot === lot; })[0]; if (!l) return;
+          sh.querySelectorAll('.land-map path.sel, #land-lots tr.sel').forEach(function (el) { el.classList.remove('sel'); });
+          sh.querySelectorAll('.land-map path[data-pglot]').forEach(function (el) { if (el.dataset.pglot === 'land|' + lot) { el.classList.add('sel'); el.parentNode.appendChild(el); } });
+          // the lot numbers are drawn after the outlines; put them back on top of the lot just raised
+          sh.querySelectorAll('.land-map svg text, .land-map svg g').forEach(function (el) { el.parentNode.appendChild(el); });
+          var tr = sh.querySelector('#land-lots tr[data-landlot="' + lot + '"]'); if (tr) { tr.classList.add('sel'); if (scroll && tr.scrollIntoView) tr.scrollIntoView({ block: 'center' }); }
+          var pk = $('land-pick'); pk.hidden = false; pk.textContent = EA.t('Petak ', 'Lot ') + l.lot + ' · ' + f2(l.ha) + ' Ha · ' + n0(l.palms) + EA.t(' pokok', ' palms');
+        }
+        sh.querySelectorAll('.land-map path[data-pglot]').forEach(function (el) { el.onclick = function () { pick(el.dataset.pglot.split('|')[1], true); }; });
+        sh.querySelectorAll('[data-landlot]').forEach(function (tr) { tr.onclick = function () { pick(tr.dataset.landlot, false); var mp = sh.querySelector('.land-map'); if (mp && mp.scrollIntoView) mp.scrollIntoView({ block: 'start' }); }; });
+      });
+  }
   function renderRef(u, estate) {
     var L = EA.lists, box = $('tiles-ref');
     var blocks = (L.blocksFor ? L.blocksFor(estate) : []).filter(function (b) { return !(L.isDurian && L.isDurian(estate, b.block)); });
@@ -249,7 +329,9 @@
     var jobs = (L.mainJobs && L.mainJobs[estate]) || [];
     var hol = (L.holidays || []).filter(function (d) { return d.slice(0, 4) === EA.today().slice(0, 4); });
     var h = '';
-    if (lots.length) h += refTile('data-ref="map"', 'PP', 'Peta petak', 'Lot map', lots.length + ' petak · ' + blocks.length + ' blok', lots.length + ' lots · ' + blocks.length + ' blocks');
+    // 1.84 (Yu Chen, 21 Nov 2026, "ok" to the joined sample): one tile for the land. The block table is the way in;
+    // a block opens its own map with its lots under it. It takes the place of the Peta petak tile.
+    if (lots.length) h += refTile('data-ref="map"', 'TP', 'Tanah & peta', 'Land & map', blocks.length + ' blok · ' + lots.length + ' petak · ' + f2(blocks.reduce(function (a, b) { return a + (Number(b.ha) || 0); }, 0)) + ' Ha', blocks.length + ' blocks · ' + lots.length + ' lots · ' + f2(blocks.reduce(function (a, b) { return a + (Number(b.ha) || 0); }, 0)) + ' Ha');
     if (people.length && !seesWorkersRoom) h += refTile('data-ref="people"', 'PK', 'Pekerja', 'Workers', people.length + ' orang · lihat sahaja', people.length + ' people · view only');
     if (jobs.length) h += refTile('data-ref="jobs"', 'KK', 'Kod kerja', 'Job codes', jobs.length + ' kerja utama', jobs.length + ' main jobs');
     if (lots.length || isHQ(u)) h += refTile('data-ref="rates"', 'KD', 'Kadar', 'Piece rates', isHQ(u) ? 'Senarai kadar ladang' : 'Dari pejabat', isHQ(u) ? 'The estate\'s rate list' : 'From the office');
@@ -257,16 +339,8 @@
     if (lots.length || (L.calendarFor && L.calendarFor(estate))) h += refTile('data-ref="hol"', 'CU', 'Cuti umum', 'Public holidays', hol.length ? hol.length + ' cuti umum ' + EA.today().slice(0, 4) : 'Belum dimuat naik', hol.length ? hol.length + ' holidays ' + EA.today().slice(0, 4) : 'Not loaded yet');
     box.innerHTML = h; box.hidden = !h;
     var name = estName(estate);
-    var show = { map: function () {
-        var st = {}; lots.forEach(function (l) { st[l.lot] = { k: '' }; });
-        openSheet('<h2 id="sheet-title">' + EA.t('Peta petak · ', 'Lot map · ') + esc(name) + '</h2>' +
-          '<p class="hint">' + lots.length + EA.t(' petak dalam ', ' lots in ') + blocks.length + EA.t(' blok · ', ' blocks · ') + f2(lots.reduce(function (a, l) { return a + (Number(l.ha) || 0); }, 0)) + ' Ha</p>' +
-          blocks.map(function (b) { var bl = lots.filter(function (l) { return l.block === b.block; });
-            var m = EA.fh && EA.fh.program && EA.fh.program.lotMap ? EA.fh.program.lotMap(estate, b.block, st) : '';
-            return '<div class="ref-blk"><h3>Blk ' + esc(b.block) + ' <small>' + bl.length + EA.t(' petak · ', ' lots · ') + f2(b.ha) + ' Ha</small></h3>' +
-              (m || '<p class="hint">' + EA.t('Belum ada peta untuk blok ini.', 'No map for this block yet.') + '</p>') + '</div>'; }).join('') +
-          '<p class="hint">' + EA.t('Peta A3 untuk dicetak ada di pejabat. Warna ikut kerja: Rekod › Program.', 'The A3 maps to print are at the office. Colours by work: Records › Plan.') + '</p>');
-      }, people: function () {
+    var show = { map: function () { if (isHQ(u)) landAll(estate); else landEstate(estate, null); }
+      , people: function () {
         var by = {}; people.forEach(function (w) { (by[w.gang || '-'] = by[w.gang || '-'] || []).push(w); });
         openSheet('<h2 id="sheet-title">' + EA.t('Pekerja · ', 'Workers · ') + esc(name) + '</h2><p class="hint">' + people.length + EA.t(' orang · lihat sahaja. Pekerja baru atau berhenti: beritahu kerani.', ' people · view only. A new or leaving worker: tell the clerk.') + '</p>' +
           Object.keys(by).sort().map(function (g) { return '<h3 class="ref-h">' + esc(g) + ' <small>' + by[g].length + '</small></h3><ul class="ref-list">' + by[g].map(function (w) { return '<li>' + esc(w.name) + '</li>'; }).join('') + '</ul>'; }).join(''));

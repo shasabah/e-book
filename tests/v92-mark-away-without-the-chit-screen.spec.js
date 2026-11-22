@@ -98,5 +98,5 @@ const root = path.resolve(__dirname, '..');
   const wk = fs.readFileSync(path.join(root, 'rooms', 'field', 'work.js'), 'utf8');
   check('Kerja passes its own estate in', /EA\.fh\.markAway\(chit\.chit, marks, ctx\.estate\)/.test(wk), 'work.js');
   const v = fs.readFileSync(path.join(root, 'core', 'version.js'), 'utf8');
-  check('version 1.82 (130)', /EA\.RELEASE = '1\.82'/.test(v) && /EA\.VERSION = 130/.test(v), 'version');
+  check('version 1.86 (134) or later', Number((v.match(/EA\.VERSION = (\d+)/) || [])[1]) >= 134 && /EA\.RELEASE = '1\.\d+'/.test(v), 'version');
 })();

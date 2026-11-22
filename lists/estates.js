@@ -11,7 +11,7 @@ EA.lists = EA.lists || {};
 // old records that carry it (Rule 4 — nothing is deleted).
 EA.lists.estates = [
   { code: 'SDK',  company: 'SPLT', bm: 'Ibu Pejabat Sandakan', en: 'Sandakan HQ' },
-  { code: 'MELU', company: 'SPLT', bm: 'Meliau', en: 'Meliau' },
+  { code: 'MELU', company: 'SPLT', bm: 'Meliau', en: 'Meliau', ha: 280.66 },   // 18 Nov 2026: Meliau land (Brief_Data_Induk 4)
   { code: 'SSGT', company: 'SPLT', bm: 'Sugut', en: 'Sugut', ha: 130.65 },
   { code: 'PTAN', company: 'SPLT', bm: 'Paitan', en: 'Paitan', ha: 236.53 },   // the group: Paitan 184.14 + TKRS 34.85 + 43 Acres 17.54
   // v1.68 (Yu Chen, 16 Nov 2026): Tekara is a piece of the Paitan group, not an estate of its own
@@ -39,6 +39,14 @@ EA.lists.blocks = [
   { estate: 'PTAN', block: '03', name: 'Paitan Blk 3', ha: 47.71 },
   { estate: 'PTAN', block: '04', name: 'Paitan Blk 4', ha: 56.64 },
   { estate: 'PTAN', block: '9A', name: 'Paitan 9Ac', ha: 3.64 },
+  // Meliau (MELU), one piece, from HQ's MELU SUMMARY BUDGET 2026 (Maintenance Work 23/12/2025; Abandoned Palm
+  // Planning 11/02/2026, palms as at 02.01.2026): 6 blocks, 280.66 Ha, 34,906 palms. Brief_Data_Induk 4.
+  { estate: 'MELU', block: '01', name: 'Meliau Blk 1', ha: 53.00 },
+  { estate: 'MELU', block: '02', name: 'Meliau Blk 2', ha: 43.97 },
+  { estate: 'MELU', block: '03', name: 'Meliau Blk 3', ha: 41.95 },
+  { estate: 'MELU', block: '04', name: 'Meliau Blk 4', ha: 39.74 },
+  { estate: 'MELU', block: '05', name: 'Meliau Blk 5', ha: 41.28 },
+  { estate: 'MELU', block: '06', name: 'Meliau Blk 6', ha: 60.72 },
   // v1.60 (14 Nov 2026): the Paitan group's other two pieces. One worker team covers all three places, so they
   // share Paitan's worker list, morning chit and day close, and the land hangs under estate PTAN
   // (Brief_Data_Induk 2.2–2.4, signed 13 Nov). The piece says which company owns the land, never the worker:

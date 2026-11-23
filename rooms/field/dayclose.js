@@ -138,6 +138,8 @@
   }
   function workOf(chit) { return chit ? (EA.local.get('fh.work', []).find(function (s) { return s.chit === chit.chit; }) || null) : null; }
   function collectsOf(estate, date) { return EA.local.get('fh.collect', []).filter(function (s) { return s.estate === estate && s.date === date; }); }
+  // The collections of this day and every later day (v1.87, check 2).
+  function collectsFrom(estate, date) { return EA.local.get('fh.collect', []).filter(function (s) { return s.estate === estate && s.date >= date; }); }
 
   // Days this phone can close: the chits of the last 7 days from the start date, not closed yet (or reopened by the office).
   function openDays(estate) {
@@ -238,9 +240,19 @@
     else if (pl.badDay.length) out.push(toWork({ n: 1, ok: false, bm: pl.badDay.length + ' orang kerja harian tanpa 1 / ½ hari', en: pl.badDay.length + ' day workers without 1 / ½ day', sub: names(pl.badDay) + EA.t(' · ladang durian dibayar ikut hari', ' · the durian farm is paid by the day') }));
     else out.push({ n: 1, ok: true, bm: pl.people.length + ' orang · semua ada kerja hari ini', en: pl.people.length + ' people · every one has work done today', sub: payCountText(pl), pay: pl });
     // 2 · harvest lots collected to the ramp, or explained
-    var cut = 0, col = 0;
-    lines.forEach(function (l) { if (l.task_code === EA.lists.HARVEST) cut += num(l.bunches); });
-    collectsOf(estate, c.date).forEach(function (s) { (s.lines || []).forEach(function (l) { col += num(l.bunches); }); });
+    // v1.87 (Yu Chen, 23 Nov 2026: "after this version hardly see ferzelly can close the day"). Fruit was counted as
+    // at the ramp only when it was collected ON THE DAY it was cut. Sugut cuts in the afternoon and collects the
+    // next morning, so for 15, 16, 19 and 20 Nov this line could never turn green: in the records every one of
+    // those bunches WAS collected, lot by lot, a day later. Now a lot cut this day counts as at the ramp when it
+    // was collected on this day or any day after (up to its cut), or marked habis. Nothing else about the check
+    // changes: fruit still lying in the field still stops the close, and still asks for a reason.
+    var cut = 0, col = 0, cutLot = {};
+    lines.forEach(function (l) { if (l.task_code === EA.lists.HARVEST) { cut += num(l.bunches); cutLot[l.lot] = (cutLot[l.lot] || 0) + num(l.bunches); } });
+    var gotLot = {}, habisLot = {};
+    collectsFrom(estate, c.date).forEach(function (s) { (s.lines || []).forEach(function (l) {
+      if (!(l.lot in cutLot)) return;
+      gotLot[l.lot] = (gotLot[l.lot] || 0) + num(l.bunches); if (l.cleared === 'Y') habisLot[l.lot] = true; }); });
+    Object.keys(cutLot).forEach(function (lot) { col += habisLot[lot] ? cutLot[lot] : Math.min(cutLot[lot], gotLot[lot] || 0); });
     var fieldLeft = Math.max(0, cut - col), bl = EA.fh.getBacklog ? EA.fh.getBacklog(estate) : null;
     var fieldOld = bl && Array.isArray(bl.field) ? bl.field.filter(function (x) { return x.since && x.since <= c.date; }).reduce(function (a, x) { return a + (Number(x.bunches) || 0); }, 0) : 0;
     var left = Math.max(fieldLeft, fieldOld);

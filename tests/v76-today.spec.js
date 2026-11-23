@@ -25,7 +25,7 @@ const { chromium } = require('playwright');
   check('staff: Hari ini shows on the home page', await p.locator('#today:not([hidden]) .today-card').count() === 1);
   check('six steps in order: rain, chit, work, ramp, close, plan', (await steps()) === 'rain· chit· work· ramp· close· plan·', await steps());
   const btn = await p.innerText('#today-go');
-  check('the big button is the first step: HUJAN MALAM TADI (or RAIN LAST NIGHT)', /HUJAN MALAM TADI|RAIN LAST NIGHT/.test(btn), btn);
+  check('the big button is the first step: HUJAN SEMALAM (or RAIN YESTERDAY) — 1.88, one reading for the day that ended', /HUJAN SEMALAM|RAIN YESTERDAY/.test(btn), btn);
   check('the milestone card is gone', await p.locator('#plan:not([hidden])').count() === 0);
   // last night's rain answered on the draft → the chit is next
   await p.evaluate(() => { const t = EA.today(); localStorage.setItem('fh.draft2', JSON.stringify({ SSGT: { date: t, estate: 'SSGT', jobs: [], marks: {}, rain_mm: '0', rain_time: '' } })); });

@@ -1566,7 +1566,7 @@
     }
     var last = lastRainDay(ctx.estate, draft.date || EA.today()), gap = last && last < addDays(day, -1);
     return '<section class="card rain-q' + (ok ? ' done' : '') + '" id="fh-rainq" aria-labelledby="fh-s0">' + head +
-      '<p class="hint">' + EA.t('Hujan sepanjang hari ' + dayBm + ', 12 malam hingga 12 malam. Baca tolok, kemudian kosongkan.', 'The rain of the whole of ' + dayEn + ', midnight to midnight. Read the gauge, then empty it.') + '</p>' +
+      '<p class="hint">' + EA.t('Hujan sepanjang hari ' + dayBm + ', 12 malam hingga 12 malam. Baca tolok, kemudian kosongkan.', 'The rain of the whole of ' + dayEn + ', 12am to 12am. Read the gauge, then empty it.') + '</p>' +
       (gap ? '<p class="hint warn-t">' + EA.t('Tolok kali terakhir dibaca untuk ' + niceDate(last) + '. Jika tidak dikosongkan sejak itu, bacaan ini termasuk hujan hari-hari itu juga.', 'The gauge was last read for ' + niceDate(last) + '. If it was not emptied since, this reading holds the rain of those days too.') + '</p>' : '') +
       '<div class="rain-row"><button type="button" class="btn' + (dry ? ' btn-ok' : ' btn-ghost') + '" id="fh-rain-no" aria-pressed="' + dry + '">NO RAIN<small>TIADA HUJAN</small></button>' +
       '<button type="button" class="btn' + (wet ? ' btn-wait' : ' btn-ghost') + '" id="fh-rain-yes" aria-pressed="' + wet + '">IT RAINED<small>ADA HUJAN</small></button></div>' +
@@ -1580,7 +1580,7 @@
             '<label>' + EA.t('Mula', 'Start') + ' <input type="time" class="text-input" data-rs="' + k + '" value="' + esc(t[0] || '') + '"></label>' +
             '<label>' + EA.t('Henti', 'Stop') + ' <input type="time" class="text-input" data-re="' + k + '" value="' + esc(t[1] || '') + '"></label></div>';
         }).join('') +
-        '<p class="hint">' + EA.t('Hujan petang atau malam semalam → semalam. Hujan lepas 12 malam → hari ini.', 'Rain yesterday afternoon or evening → yesterday. Rain after midnight → today.') + '</p>' : '') +
+        '<p class="hint">' + EA.t('Hujan petang atau malam semalam → semalam. Hujan lepas 12 malam → hari ini.', 'Rain yesterday afternoon or evening → yesterday. Rain after 12am → today.') + '</p>' : '') +
       // Drawn whenever it can be needed and switched on as the answer becomes whole: redrawing the card from the
       // mm box would swallow the tap on a period that took the focus away from it.
       (ok || wet ? '<div class="actions"><button type="button" class="btn btn-ok" id="fh-rain-save"' + (ok ? '' : ' disabled') + '>SAVE READING<small>SIMPAN BACAAN · dihantar bersama chit</small></button></div>' : '') +

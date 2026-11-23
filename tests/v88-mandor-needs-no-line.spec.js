@@ -77,7 +77,7 @@ const root = path.resolve(__dirname, '..');
 
   const r = await p.evaluate(() => {
     const txt = document.querySelector('#room').innerText.replace(/\s+/g, ' ');
-    const one = [...document.querySelectorAll('.dc-it')][0];
+    document.querySelectorAll('#room details').forEach(d => { d.open = true; }); const one = [...document.querySelectorAll('.dc-it')].find(e => / orang /.test(e.innerText.replace(/\s+/g, ' ')));   // 1.88: missing lines come first, so check 1 is found by its words
     return { first: one ? one.innerText.replace(/\s+/g, ' ').trim() : '', bad: one ? one.className.indexOf('dc-bad') >= 0 : true, txt: txt.slice(0, 420) };
   });
   check('check 1 passes: nobody is "hadir tiada baris kerja"', !r.bad, r.first);
@@ -94,7 +94,7 @@ const root = path.resolve(__dirname, '..');
   await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(200);
   await p.evaluate(() => { location.hash = 'field-harvest/close'; }); await p.waitForTimeout(1000);
   const r2 = await p.evaluate(() => {
-    const one = [...document.querySelectorAll('.dc-it')][0];
+    document.querySelectorAll('#room details').forEach(d => { d.open = true; }); const one = [...document.querySelectorAll('.dc-it')].find(e => / orang /.test(e.innerText.replace(/\s+/g, ' ')));   // 1.88: missing lines come first, so check 1 is found by its words
     return { first: one ? one.innerText.replace(/\s+/g, ' ').trim() : '', bad: one ? one.className.indexOf('dc-bad') >= 0 : false };
   });
   check('a HARVESTER with no work line still stops the close', r2.bad, r2.first);

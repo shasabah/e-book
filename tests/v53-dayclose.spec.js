@@ -41,10 +41,11 @@ const { chromium } = require('playwright');
              { id: 'm3', worker_id: 'S1', muster: 'H', task_code: 'CPS', block: '02', lots: '2-1 2-2' }, { id: 'm4', worker_id: 'D1', muster: 'H', task_code: 'DF', block: 'DR', lots: 'DR-A' }] }]));
   }, yd);
   await p.reload(); await p.fill('#key', '123456'); await p.waitForSelector('#home:not([hidden])');
-  await p.evaluate(() => { location.hash = 'field-harvest/close'; }); await p.waitForSelector('#dc-close'); if (await p.$('#dc-rain-no') && await p.getAttribute('#dc-rain-no', 'aria-pressed') !== 'true') { await p.click('#dc-rain-no'); await p.waitForTimeout(150); }
-  let txt = await p.innerText('#room');
+  await p.evaluate(() => { location.hash = 'field-harvest/close'; }); await p.waitForSelector('#dc-close'); await p.evaluate(() => document.querySelectorAll('#room details').forEach(d => { d.open = true; })); if (await p.$('#dc-rain-no') && await p.getAttribute('#dc-rain-no', 'aria-pressed') !== 'true') { await p.click('#dc-rain-no'); await p.waitForTimeout(150); }
+  let txt = await (await p.evaluate(() => { document.querySelectorAll('#room details').forEach(d => { d.open = true; }); }), p.innerText('#room'));
   check('no work keyed: TUTUP HARI is off; checks 1 and 4 are red', await p.$eval('#dc-close', b => b.disabled) && /Kerja harian belum dikunci/.test(txt) && /belum dijawab/.test(txt), txt.slice(0, 200));
-  check('a red line opens the Kerja screen', await p.$eval('.dc-bad .dc-go', b => b.dataset.go) === '#field-harvest/work');
+  // v1.88: a missing line carries its own fix button; ISI KERJA opens the Kerja screen on that day's chit.
+  check('a red line carries ISI KERJA, which opens the Kerja screen', /ISI KERJA/.test(await p.innerText('.dc-bad .dc-fix')) && await p.evaluate(() => { document.querySelector('.dc-bad [data-fix]').click(); return location.hash; }) === '#field-harvest/work');
   // key the work: harvesters 120 + 110 bunches, CPS not done (rain), durian worker 1 day (v1.51: every durian job is by the day)
   await p.evaluate((yd) => {
     localStorage.setItem('fh.work', JSON.stringify([{ chit: 'CH-SSGT-P13-1', date: yd, estate: 'SSGT', rev: 1, chitRev: 1, lines: {}, status: {}, rec: { chit: 'CH-SSGT-P13-1', date: yd, estate: 'SSGT', at: '17:00',
@@ -56,26 +57,29 @@ const { chromium } = require('playwright');
     // the tractor took the fruit to the ramp; one lorry with a DN
     localStorage.setItem('fh.collect', JSON.stringify([{ date: yd, estate: 'SSGT', at: '15:00', lines: [{ block: '01', lot: '1-13', bunches: 120, cleared: 'Y' }, { block: '01', lot: '1-14', bunches: 110, cleared: 'Y' }], dispatch: { trip: 'LR-1', dn: '8524', lorry: 'SA1', mill: 'BOU', bunches: 230 }, ids: [] }]));
   }, yd);
-  await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(100); await p.evaluate(() => { location.hash = 'field-harvest/close'; }); await p.waitForSelector('#dc-close'); if (await p.$('#dc-rain-no') && await p.getAttribute('#dc-rain-no', 'aria-pressed') !== 'true') { await p.click('#dc-rain-no'); await p.waitForTimeout(150); } await p.waitForTimeout(200);
-  txt = await p.innerText('#room');
+  await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(100); await p.evaluate(() => { location.hash = 'field-harvest/close'; }); await p.waitForSelector('#dc-close'); await p.evaluate(() => document.querySelectorAll('#room details').forEach(d => { d.open = true; })); if (await p.$('#dc-rain-no') && await p.getAttribute('#dc-rain-no', 'aria-pressed') !== 'true') { await p.click('#dc-rain-no'); await p.waitForTimeout(150); } await p.waitForTimeout(200);
+  txt = await (await p.evaluate(() => { document.querySelectorAll('#room details').forEach(d => { d.open = true; }); }), p.innerText('#room'));
   check('work keyed: 4 pay lines (v1.51: the durian worker is 1 day), 230 bunches at the ramp, 1 lorry with DN, 1/2 jobs done · button on', !(await p.$eval('#dc-close', b => b.disabled)) && /4 orang · semua ada kerja hari ini/.test(txt) && /230 tandan dituai · semua ke ramp/.test(txt) && /1 lori keluar, semua ada DN/.test(txt) && /1\/2 kerja siap/.test(txt), txt.slice(0, 400));
   check('rain read from the lot in Kerja: kerja berhenti · ½ hari · CPS (1 lot); no rain questions on the screen', /kerja berhenti · ½ hari · Circle Spraying \(1 petak\)/.test(txt) && !(await p.$('[data-when]')), txt.slice(0, 500));
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v53-dayclose.png' });
   await p.click('#dc-close'); await p.waitForTimeout(400);
   const dc = posted.filter(x => x.tab === 'FH_DAYCLOSE');
   check('TUTUP HARI: one FH_DAYCLOSE row, kind close, rain kept (from the lot), 4 present', dc.length === 1 && dc[0].row.kind === 'close' && dc[0].row.rain_reason === 'HENTI' && dc[0].row.rain_when === 'work' && dc[0].row.rain_lost === '0.5' && dc[0].row.rain_jobs === 'CPS' && dc[0].row.present === '4' && dc[0].row.bunches === '230' && dc[0].row.jobs_done === '1', JSON.stringify(dc[0] && dc[0].row).slice(0, 300));
-  const sheet = await p.innerText('#sheet-back').catch(() => '');
-  check('day summary for WhatsApp shows bunches, jobs, rain and catch-up', /TUTUP HARI SPLT SSGT/.test(sheet) && /230 tandan/.test(sheet) && /Kerja: 1\/2 siap/.test(sheet) && /Hujan siang: tiada/.test(sheet) && /Kerja terjejas hujan: Hujan — kerja berhenti/.test(sheet) && /baki kerja/.test(sheet), sheet.slice(0, 300));
-  await p.click('#ds-back'); await p.waitForTimeout(200);
-  txt = await p.innerText('#room');
+  // v1.88: after the press, "<day> ditutup" with the figures; the WhatsApp summary is one tap away (its link
+  // carries the text). The gauge is no longer part of the close, so the summary has no "Hujan siang" line.
+  const sheet = decodeURIComponent(((await p.getAttribute('#ds-wa', 'href').catch(() => '')) || '').replace(/^.*?text=/, ''));
+  check('day summary for WhatsApp shows bunches, jobs, rain lost and catch-up, and no gauge line', /TUTUP HARI SPLT SSGT/.test(sheet) && /230 tandan/.test(sheet) && /Kerja: 1\/2 siap/.test(sheet) && !/Hujan siang/.test(sheet) && /Kerja terjejas hujan: Hujan — kerja berhenti/.test(sheet) && /baki kerja/.test(sheet), sheet.slice(0, 300));
+  check('after the press: "ditutup", the three figures, SELESAI', /ditutup/.test(await p.innerText('#sheet-back')) && /230\s*tandan/.test(await p.innerText('#sheet-back')) && !!(await p.$('#ds-done')));
+  await p.click('#ds-done'); await p.waitForTimeout(200);
+  txt = await (await p.evaluate(() => { document.querySelectorAll('#room details').forEach(d => { d.open = true; }); }), p.innerText('#room'));
   check('after the close the day leaves the open list', /Semua hari sudah ditutup/.test(txt) && /Hari ditutup/.test(txt), txt.slice(0, 200));
   // No lot stopped by rain: the close row carries no rain
   await p.evaluate((yd) => {
     localStorage.setItem('fh.dayclose', '[]'); localStorage.removeItem('fh.daydraft');
     const w = JSON.parse(localStorage.getItem('fh.work')); w[0].rec.jobs[1].status = 'done'; w[0].rec.jobs[1].reason = ''; w[0].prog = { j2: { '2-1': '100', '2-2': '100' } }; w[0].lotwhy = {}; localStorage.setItem('fh.work', JSON.stringify(w));
   }, yd);
-  await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(100); await p.evaluate(() => { location.hash = 'field-harvest/close'; }); await p.waitForSelector('#dc-close'); if (await p.$('#dc-rain-no') && await p.getAttribute('#dc-rain-no', 'aria-pressed') !== 'true') { await p.click('#dc-rain-no'); await p.waitForTimeout(150); } await p.waitForTimeout(200);
-  txt = await p.innerText('#room');
+  await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(100); await p.evaluate(() => { location.hash = 'field-harvest/close'; }); await p.waitForSelector('#dc-close'); await p.evaluate(() => document.querySelectorAll('#room details').forEach(d => { d.open = true; })); if (await p.$('#dc-rain-no') && await p.getAttribute('#dc-rain-no', 'aria-pressed') !== 'true') { await p.click('#dc-rain-no'); await p.waitForTimeout(150); } await p.waitForTimeout(200);
+  txt = await (await p.evaluate(() => { document.querySelectorAll('#room details').forEach(d => { d.open = true; }); }), p.innerText('#room'));
   check('no lot stopped by rain: "Tiada petak terhenti kerana hujan", close allowed', /Tiada petak terhenti kerana hujan/.test(txt) && !(await p.$eval('#dc-close', b => b.disabled)), txt.slice(0, 300));
   await p.click('#dc-close'); await p.waitForTimeout(400);
   const q2 = posted.filter(x => x.tab === 'FH_DAYCLOSE');

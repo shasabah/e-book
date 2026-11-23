@@ -62,20 +62,23 @@ const OFF = new Date().getDay() === 1 ? 86400000 : 0;
     localStorage.setItem('fh.chits2', JSON.stringify([chit])); localStorage.setItem('fh.work', JSON.stringify([work])); localStorage.setItem('fh.collect', JSON.stringify(collect));
   }, { people, chit, work, collect });
   await p.reload(); await p.fill('#key', '123456'); await p.waitForSelector('#home:not([hidden])');
-  const go = async () => { await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(100); await p.evaluate(() => { location.hash = 'field-harvest/close'; }); await p.waitForSelector('#dc-close'); if (await p.$('#dc-rain-no') && await p.getAttribute('#dc-rain-no', 'aria-pressed') !== 'true') { await p.click('#dc-rain-no'); await p.waitForTimeout(150); } await p.waitForTimeout(200); };
+  const go = async () => { await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(100); await p.evaluate(() => { location.hash = 'field-harvest/close'; }); await p.waitForSelector('#dc-close'); await p.evaluate(() => document.querySelectorAll('#room details').forEach(d => { d.open = true; })); if (await p.$('#dc-rain-no') && await p.getAttribute('#dc-rain-no', 'aria-pressed') !== 'true') { await p.click('#dc-rain-no'); await p.waitForTimeout(150); } await p.waitForTimeout(200); };
   await go();
-  let txt = await p.innerText('#room');
+  let txt = await (await p.evaluate(() => { document.querySelectorAll('#room details').forEach(d => { d.open = true; }); }), p.innerText('#room'));
   check('a worker on the list but on no chit stops the close', await p.$eval('#dc-close', x => x.disabled) && /1 orang dalam senarai tiada dalam chit/.test(txt) && /Eko Rahim/.test(txt), txt.slice(0, 300));
-  check('that red line opens the chit screen', await p.$eval('.dc-bad .dc-go', x => x.dataset.go) === '#field-harvest');
+  // v1.88: that line offers TIDAK HADIR… (marked here, on the close) and BETULKAN CHIT (the chit screen).
+  const fx = await p.innerText('.dc-bad .dc-fix').catch(() => '');
+  check('that red line offers TIDAK HADIR… and BETULKAN CHIT; BETULKAN CHIT opens the chit screen', /TIDAK HADIR/.test(fx) && /BETULKAN CHIT/.test(fx) &&
+    await p.evaluate(() => { const b = [...document.querySelectorAll('.dc-bad [data-fix]')].find(x => /BETULKAN CHIT/.test(x.innerText)); b.click(); return location.hash; }) === '#field-harvest', fx);
   // Eko is marked absent (T) on the chit; the durian worker still has 0 Ha of pruning
   await p.evaluate(() => { const c = JSON.parse(localStorage.getItem('fh.chits2')); c[0].rows.push({ id: 'm5', worker_id: 'W-SSGT-005', muster: 'T', task_code: '', block: '', lots: '' }); localStorage.setItem('fh.chits2', JSON.stringify(c)); });
-  await go(); txt = await p.innerText('#room');
+  await go(); txt = await (await p.evaluate(() => { document.querySelectorAll('#room details').forEach(d => { d.open = true; }); }), p.innerText('#room'));
   check('durian worker saved as 0 Ha of pruning stops the close: the durian farm is by the day', await p.$eval('#dc-close', x => x.disabled) && /1 orang kerja harian tanpa 1 \/ ½ hari/.test(txt) && /Dani Musa/.test(txt), txt.slice(0, 300));
   // ½ day for him
   await p.evaluate(() => { const w = JSON.parse(localStorage.getItem('fh.work')); w[0].rec.lines[3].qty = '0.5'; w[0].rec.lines[3].unit = 'day'; localStorage.setItem('fh.work', JSON.stringify(w)); });
-  await go(); txt = await p.innerText('#room');
+  await go(); txt = await (await p.evaluate(() => { document.querySelectorAll('#room details').forEach(d => { d.open = true; }); }), p.innerText('#room'));
   check('all pay lines: 5 people, letters P 3 · ½ 1 · X 1, close allowed', !(await p.$eval('#dc-close', x => x.disabled)) && /5 orang · semua ada kerja hari ini/.test(txt) && /P 3 · ½ 1 · X 1/.test(txt), txt.slice(0, 400));
-  const card = await p.innerText('.dc-pay').catch(() => '');
+  const card = await (await p.evaluate(() => { document.querySelectorAll('#room details').forEach(d => { d.open = true; }); }), p.innerText('.dc-pay')).catch(() => '');
   check('pay card: harvest 230 tandan (MT from the ticket), spray 1.44 Ha, durian 0.5 hari, Eko tidak hadir', /230 tandan/.test(card) && /MT ikut tiket/.test(card) && /1\.44 Ha/.test(card) && /0\.5 hari/.test(card) && /Eko Rahim · tidak hadir/.test(card), card.slice(0, 400));
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v61-pay-lines.png', fullPage: true });
   // v1.51.1: the saved day's card on Kerja carries TUTUP HARI (not only the sheet after SAVE)
@@ -90,13 +93,13 @@ const OFF = new Date().getDay() === 1 ? 86400000 : 0;
     /^TUTUP HARI$/i.test(btn.trim()), btn);
   check('Kerja: the saved day still says all complete, on the line above the button',
     /(Semua lengkap|All complete)/i.test(savedCard), savedCard.slice(0, 200));
-  await p.click('#wk-close'); await p.waitForSelector('#dc-close'); if (await p.$('#dc-rain-no') && await p.getAttribute('#dc-rain-no', 'aria-pressed') !== 'true') { await p.click('#dc-rain-no'); await p.waitForTimeout(150); } await p.waitForTimeout(200);
+  await p.click('#wk-close'); await p.waitForSelector('#dc-close'); await p.evaluate(() => document.querySelectorAll('#room details').forEach(d => { d.open = true; })); if (await p.$('#dc-rain-no') && await p.getAttribute('#dc-rain-no', 'aria-pressed') !== 'true') { await p.click('#dc-rain-no'); await p.waitForTimeout(150); } await p.waitForTimeout(200);
   check('TUTUP HARI on the card opens the close screen for that day', /field-harvest\/close$/.test(await p.evaluate(() => location.hash)));
   await p.click('#dc-close'); await p.waitForTimeout(400);
-  const sheet = await p.innerText('#sheet-back').catch(() => '');
+  const sheet = decodeURIComponent(((await p.getAttribute('#ds-wa', 'href').catch(() => '')) || '').replace(/^.*?text=/, ''));
   check('WhatsApp summary carries the pay letters', /Pekerja: 4\/5 hadir · P 3 · ½ 1 · X 1/.test(sheet) && /Tidak hadir: Eko Rahim \(T\)/.test(sheet), sheet.slice(0, 300));
   check('one FH_DAYCLOSE row saved', posted.filter(x => x.tab === 'FH_DAYCLOSE').length === 1);
-  await p.evaluate(() => { const bk = document.querySelector('#ds-back'); if (bk) bk.click(); location.hash = ''; }); await p.waitForTimeout(150);
+  await p.evaluate(() => { const bk = document.querySelector('#ds-done'); if (bk) bk.click(); location.hash = ''; }); await p.waitForTimeout(150);
   await p.evaluate(() => { location.hash = 'field-harvest/work'; }); await p.waitForSelector('#wk-saved');
   const closedTxt = await p.innerText('#wk-saved');
   check('after the close the card says the day is closed, no button', /(Hari ditutup|Day closed)/.test(closedTxt) && !(await p.$('#wk-close')), closedTxt.slice(0, 200));

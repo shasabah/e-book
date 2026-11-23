@@ -3,6 +3,10 @@
 // the morning chit keys the night (18-24, 00-06), Tutup hari keys the day (06-12, 12-18). No rain is one tap; rain is
 // one mm figure as the gauge shows it and a tick for the period — never split by guess. Today's chit cannot be saved
 // until the night is answered; the close cannot lock until the day is answered (the morning self-close skips it).
+// 1.88 (Brief_Hujan 0.2 sections 2–5; Brief_Tutup_Hari_Baru section 3, signed 23 Nov 2026): ONE reading a day, at the
+// morning chit, for the whole of yesterday, named by its day; four periods in the paper form's order, each with an
+// optional start and stop; rain_time begins "hari=<the day the rain fell>". The close no longer asks the rain.
+// Readings keyed before 1.88 (night on the chit, day on the close) still read back exactly as before.
 const check = (name, ok, detail) => { console.log((ok ? 'PASS ' : 'FAIL ') + name + (detail ? ' — ' + detail : '')); if (!ok) process.exitCode = 1; };
 const fs = require('fs'), path = require('path');
 const root = path.resolve(__dirname, '..');
@@ -11,7 +15,7 @@ const dc = fs.readFileSync(path.join(root, 'rooms', 'field', 'dayclose.js'), 'ut
 check('office: the day close keeps the day reading (rain_mm, rain_time)', /FH_DAYCLOSE:[\s\S]{0,400}'rain_mm', 'rain_time'\]/.test(gs));
 check('office: the chit already keeps the night reading (rain_mm, rain_time)', /FH_CHIT:\s+\['chit', 'rain_mm', 'rain_time'/.test(gs));
 check('office: the DMS is read for no estate', /var RAIN_ESTATES = \{\};/.test(gs));
-check('phone: the close saves the reading, blank on the morning self-close', /rain_mm: dayRainOk\(d\) \?/.test(dc) && /if \(opts\.auto\) d = Object\.assign\(\{\}, d, \{ autoClose: true \}\)/.test(dc));
+check('phone (1.88): the close sends no gauge reading — rain_mm and rain_time go empty', /rain_mm: '', rain_time: ''/.test(dc) && !/rainDayCard\(/.test(dc));
 
 const { chromium } = require('playwright');
 (async () => {
@@ -41,24 +45,40 @@ const { chromium } = require('playwright');
   check('chit: no DMS line any more, even when the office sends one', await p.locator('#fh-rain').count() === 0);
   await p.click('#fh-check'); await p.waitForTimeout(250);
   const msg = await p.innerText('#sheet').catch(() => '');
-  check('chit: cannot save before the rain is answered', /Jawab hujan malam tadi|Answer last night/.test(msg), msg.replace(/\n/g, ' | ').slice(0, 200));
+  const Y = await p.evaluate(() => { const d = new Date(EA.today() + 'T00:00:00'); d.setDate(d.getDate() - 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); });
+  check('chit: the card asks "Hujan semalam" and names the day', /Hujan semalam · \S+ \d+ \S+/.test(await p.innerText('#fh-rainq')), (await p.innerText('#fh-rainq')).slice(0, 80));
+  check('chit: cannot save before the rain is answered, and the message names yesterday', /Jawab hujan semalam \(\S+ \d+ \S+\)|Answer yesterday/.test(msg), msg.replace(/\n/g, ' | ').slice(0, 200));
   await p.evaluate(() => { const b = document.querySelector('#pb-ok'); if (b) b.click(); });
   await p.click('#fh-rain-yes'); await p.waitForTimeout(150);
-  check('chit: IT RAINED asks the mm and the two night periods', await p.locator('#fh-rain-mm').count() === 1 && await p.locator('[data-rp]').count() === 2);
+  check('chit: IT RAINED asks the mm and the four periods of the paper form', await p.locator('#fh-rain-mm').count() === 1 && await p.locator('[data-rp]').count() === 4 &&
+    (await p.$$eval('[data-rp]', bs => bs.map(b => b.dataset.rp).join(' '))) === '00-06 06-12 12-18 18-24');
   await p.fill('#fh-rain-mm', '8,5'); await p.click('[data-rp="18-24"]'); await p.waitForTimeout(150);
   let dr = await p.evaluate(() => JSON.parse(localStorage.getItem('fh.draft2')).SSGT);
-  check('chit: 8,5 is kept as 8.5 mm, period 18-24', dr.rain_mm === '8.5' && dr.rain_time === '18-24', dr.rain_mm + ' / ' + dr.rain_time);
+  check('chit: 8,5 is kept as 8.5 mm, period 18-24, the day the rain fell written first', dr.rain_mm === '8.5' && dr.rain_time === 'hari=' + Y + ' 18-24', dr.rain_mm + ' / ' + dr.rain_time);
   await p.click('[data-rp="00-06"]'); await p.waitForTimeout(120);
   dr = await p.evaluate(() => JSON.parse(localStorage.getItem('fh.draft2')).SSGT);
-  check('chit: both periods ticked, kept in order', dr.rain_time === '18-24 00-06', dr.rain_time);
+  check('chit: both periods ticked, kept in the paper form\'s order', dr.rain_time === 'hari=' + Y + ' 00-06 18-24', dr.rain_time);
+  await p.fill('[data-rs="18-24"]', '19:00'); await p.dispatchEvent('[data-rs="18-24"]', 'change');
+  await p.fill('[data-re="18-24"]', '20:30'); await p.dispatchEvent('[data-re="18-24"]', 'change'); await p.waitForTimeout(100);
+  dr = await p.evaluate(() => JSON.parse(localStorage.getItem('fh.draft2')).SSGT);
+  check('chit: start and stop for a period, optional, kept with it', dr.rain_time === 'hari=' + Y + ' 00-06 18-24@19:00-20:30', dr.rain_time);
+  check('chit: the mm is asked once, never per period', await p.locator('#fh-rain-mm').count() === 1);
+  await p.click('#fh-rain-save'); await p.waitForTimeout(120);
+  check('chit: SIMPAN BACAAN folds the card to one line with UBAH', /8\.5 mm · awal pagi · malam 19:00–20:30/.test(await p.innerText('#fh-rainq')) && await p.locator('#fh-rain-edit').count() === 1, await p.innerText('#fh-rainq'));
+  await p.click('#fh-rain-edit'); await p.waitForTimeout(120);
   await p.click('#fh-rain-no'); await p.waitForTimeout(150);
   dr = await p.evaluate(() => JSON.parse(localStorage.getItem('fh.draft2')).SSGT);
-  check('chit: NO RAIN is one tap — 0 mm, no period, card done', dr.rain_mm === '0' && dr.rain_time === '' && await p.locator('#fh-rainq.done').count() === 1 && await p.locator('#fh-rain-mm').count() === 0);
+  check('chit: NO RAIN is one tap — 0 mm, no period, the day kept, card done', dr.rain_mm === '0' && dr.rain_time === 'hari=' + Y && await p.locator('#fh-rainq.done').count() === 1 && await p.locator('#fh-rain-mm').count() === 0, dr.rain_time);
   await p.screenshot({ path: (process.argv[2] || '/tmp') + '/v75-rain.png' });
 
   // the WhatsApp chit
   const T = (o) => p.evaluate((o) => EA.roomViews['field-harvest'].chitText(Object.assign({ estate: 'SSGT', rows: [], jobs: [], alerts: [], backlog: { field: [], fieldTotal: 0, ramp: { bunches: 0 } } }, o)), o);
-  let t = await T({ date: '2026-11-16', rain_mm: '8', rain_time: '18-24' });
+  let t = await T({ date: '2026-11-16', rain_mm: '8', rain_time: 'hari=2026-11-15 12-18@14:30-15:10 18-24' });
+  check('WhatsApp (1.88): "Hujan semalam (Ahad 15/11): 8 mm · petang 14:30–15:10 · malam"', /Hujan semalam \(Ahad 15\/11\): 8 mm · petang 14:30–15:10 · malam/.test(t), t.split('\n').filter(l => /Hujan/.test(l)).join(' | '));
+  t = await T({ date: '2026-11-16', rain_mm: '0', rain_time: 'hari=2026-11-15' });
+  check('WhatsApp (1.88): no rain — "Hujan semalam (Ahad 15/11): tiada", one line only', /Hujan semalam \(Ahad 15\/11\): tiada/.test(t) && t.split('\n').filter(l => /Hujan/.test(l)).length === 1);
+  // Readings keyed before 1.88 read back as they always did:
+  t = await T({ date: '2026-11-16', rain_mm: '8', rain_time: '18-24' });
   check('WhatsApp: "Hujan malam tadi: 8 mm (6 ptg–12 mlm)"', /Hujan malam tadi: 8 mm \(6 ptg–12 mlm\)/.test(t), t.split('\n').filter(l => /Hujan/.test(l)).join(' | '));
   t = await T({ date: '2026-11-16', rain_mm: '0', rain_time: '' });
   check('WhatsApp: no rain says "tiada"', /Hujan malam tadi: tiada/.test(t));
@@ -75,31 +95,23 @@ const { chromium } = require('playwright');
   t = await T({ date: '2026-11-16', estate: 'PTAN', rain_mm: '8', rain_time: '18-24' });
   check('WhatsApp: another estate never borrows Sugut\'s day reading', /Hujan malam tadi: 8 mm/.test(t) && !/siang/.test(t));
 
-  // the day reading at Tutup hari
+  // 1.88: Tutup hari no longer asks the gauge (check 8 is gone, whatever the draft holds)
   const ck = await p.evaluate(() => {
     const c = { chit: 'C9', date: EA.today(), estate: 'SSGT', rows: [] };
     const f = d => (EA.fh.dayclose.checks('SSGT', c, d).find(x => x.n === 8) || null);
-    return { none: f({}), dry: f({ rainMm: '0' }), wet: f({ rainMm: '12', rainTime: '06-12' }), wetNoTime: f({ rainMm: '12', rainTime: '' }), auto: f({ autoClose: true }) };
+    return { none: f({}), dry: f({ rainMm: '0' }), wet: f({ rainMm: '12', rainTime: '06-12' }), auto: f({ autoClose: true }) };
   });
-  // v1.72: the line used to carry the close screen's own address, so pressing it set the hash to the hash it
-  // already had and nothing happened. It now points at the rain card on this same screen (Yu Chen, 18 Nov:
-  // "the red line cannot press to the direct issue").
-  check('close: day rain not answered is a red check that points at the rain card',
-    ck.none && ck.none.ok === false && ck.none.scrollTo === '#dc-rainq' && !ck.none.go, JSON.stringify(ck.none));
-  // v1.71: the check names the day being closed, not "siang ini" (Ferezelly, 18 Nov: he closed 17 Nov on the
-  // morning of 18 Nov and keyed the day before's reading, because the screen said "today").
-  check('close: NO RAIN passes, and the check names the day', ck.dry && ck.dry.ok
-    && /^Hujan \S+ \d+ \S+: tiada$/.test(ck.dry.bm), JSON.stringify(ck.dry));
-  check('close: 12 mm with its period passes, "12 mm (6 pg–12 tgh)"', ck.wet && ck.wet.ok && /12 mm \(6 pg–12 tgh\)/.test(ck.wet.bm), JSON.stringify(ck.wet));
-  check('close: mm without a period is not enough', ck.wetNoTime && ck.wetNoTime.ok === false);
-  check('close: the morning self-close does not ask (no reading is "tiada bacaan")', ck.auto === null);
+  check('close (1.88): no rain check at all — not with a blank, a dry or a wet draft, nor on the self-close', !ck.none && !ck.dry && !ck.wet && !ck.auto, JSON.stringify(ck));
   const sum = await p.evaluate(() => {
     const base = { estate: 'SSGT', date: '2026-11-16', chit: 'C1', present: 23, total: 25, bunches: 612, lorries: 1, jobsDone: 7, jobs: 8, at: '17:30', byName: 'Staf Contoh' };
     return [EA.fh.dayclose.summaryText(Object.assign({}, base, { rainMm: '12', rainTime: '06-12', rain: 'Hujan — kerja berhenti · ½ hari', rainJobs: ['MAN'] })),
             EA.fh.dayclose.summaryText(Object.assign({}, base, { rainMm: '0', rainTime: '' })),
             EA.fh.dayclose.summaryText(Object.assign({}, base, { rainMm: '' })),
-            EA.fh.dayclose.summaryText(Object.assign({}, base))];
+            EA.fh.dayclose.summaryText(Object.assign({}, base)),
+            EA.fh.dayclose.summaryText(Object.assign({}, base, { noGauge: true, rain: 'Hujan — kerja berhenti · ½ hari', rainJobs: ['MAN'] })),
+            EA.fh.dayclose.summaryText(Object.assign({}, base, { noGauge: true }))];
   });
+  check('TUTUP HARI WhatsApp (1.88): a new close carries no gauge line, only the work rain stopped', !/Hujan siang|Hujan: tiada/.test(sum[4]) && /Kerja terjejas hujan: Hujan — kerja berhenti/.test(sum[4]) && !/ujan/.test(sum[5]), sum[4].split('\n').filter(l => /ujan/.test(l)).join(' | '));
   check('TUTUP HARI WhatsApp: the reading, then the work rain stopped', /Hujan siang: 12 mm \(6 pg–12 tgh\)\nKerja terjejas hujan: /.test(sum[0]), sum[0].split('\n').filter(l => /ujan/.test(l)).join(' | '));
   check('TUTUP HARI WhatsApp: "Hujan siang: tiada" / "tiada bacaan"', /Hujan siang: tiada\n/.test(sum[1]) && /Hujan siang: tiada bacaan/.test(sum[2]));
   check('TUTUP HARI WhatsApp: an old close (before 1.61) reads as before', /Hujan: tiada/.test(sum[3]) && !/Hujan siang/.test(sum[3]));

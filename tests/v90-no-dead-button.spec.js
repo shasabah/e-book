@@ -47,13 +47,15 @@ function seedTwoDays(p) {
       newKeyable: EA.fh.workChitOpen({ date: newDay, estate: est }) };
   });
 }
+// 1.88: a red line is text with its own fix buttons under it. "button" = any fix that keys the day or leaves the
+// screen (ISI KERJA, BETULKAN CHIT, ISI DN, TIDAK HADIR…, SEMUA KE RAMP); TINGGAL DI LADANG… only writes a reason
+// on the close itself, so it works at any age and is reported apart as "leave".
 function redLines(p) {
-  return p.evaluate(() => [...document.querySelectorAll('.dc-it.dc-bad')].map(li => ({
-    text: li.innerText.replace(/\s+/g, ' ').trim(),
-    button: !!li.querySelector('button'),
-    go: li.querySelector('button') ? (li.querySelector('button').dataset.go || '') : '',
-    scroll: li.querySelector('button') ? (li.querySelector('button').dataset.scroll || '') : ''
-  })));
+  return p.evaluate(() => [...document.querySelectorAll('.dc-it.dc-bad')].map(li => {
+    const fx = [...li.querySelectorAll('[data-fix]')].map(b => b.innerText.replace(/\s+/g, ' ').trim());
+    const go = fx.filter(x => !/TINGGAL DI LADANG|LEFT IN THE FIELD/.test(x));
+    return { text: (li.querySelector('span') || li).innerText.replace(/\s+/g, ' ').trim(), button: go.length > 0, go: go.join(','), leave: fx.length > go.length };
+  }));
 }
 
 (async () => {
@@ -91,9 +93,8 @@ function redLines(p) {
   const ramp = old.find(l => /ke ramp/.test(l.text));
   check('the ramp line is no longer a button either', ramp && !ramp.button, ramp ? ramp.text.slice(0, 50) : '(missing)');
   check('and it says the same thing', ramp && new RegExp(TOO_OLD).test(ramp.text), ramp ? ramp.text.slice(-70) : '');
-  const rain = old.find(l => /Hujan/.test(l.text));
-  check('the rain line KEEPS its button — it scrolls on this same screen, so it works at any age',
-    rain && rain.button && rain.scroll && !rain.go, rain ? (rain.scroll || 'no scroll') : '(missing)');
+  check('1.88: the ramp line keeps only TINGGAL DI LADANG… — a reason, written on the close, works at any age', ramp && ramp.leave, ramp ? ramp.text.slice(0, 50) : '(missing)');
+  check('1.88: there is no rain line any more (the gauge is read at the morning chit)', !old.some(l => /Hujan/.test(l.text)), old.map(l => l.text.slice(0, 30)).join(' | '));
 
   // 2 · the guard must not be over-applied: a day inside the window keeps its buttons
   await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(200);
@@ -137,10 +138,10 @@ function redLines(p) {
   const dc = fs.readFileSync(path.join(root, 'rooms', 'field', 'dayclose.js'), 'utf8');
   const body = dc.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
   check('no check carries a hard-coded jump any more', !/go: '#field-harvest/.test(body), 'every jump goes through the guard');
-  check('one guard, three doors', /var only = function \(o, hash\)/.test(body)
-    && /var toWork = function \(o\) \{ return only\(o, '#field-harvest\/work'\); \}/.test(body)
-    && /var toChit = function \(o\) \{ return only\(o, '#field-harvest'\); \}/.test(body)
-    && /var toRamp = function \(o\) \{ return only\(o, '#field-harvest\/collect'\); \}/.test(body), 'only()');
+  check('one guard, three doors', /var only = function \(o, hash, fix\)/.test(body)
+    && /var toWork = function \(o, fix\) \{ return only\(o, '#field-harvest\/work', fix \|\| \[\{ k: 'work' \}\]\); \}/.test(body)
+    && /var toChit = function \(o, fix\) \{ return only\(o, '#field-harvest', fix \|\| \[\{ k: 'chit' \}\]\); \}/.test(body)
+    && /var toRamp = function \(o, fix\) \{ return only\(o, '#field-harvest\/collect', fix \|\| \[\{ k: 'dn' \}\]\); \}/.test(body), 'only()');
   const ms = fs.readFileSync(path.join(root, 'rooms', 'field', 'muster.js'), 'utf8');
   check('the band asks the very same rule, it does not keep its own copy',
     /EA\.fh\.workChitOpen \? EA\.fh\.workChitOpen\(\{ date: m\.date, estate: ctx\.estate \}\)/.test(ms), 'muster.js');

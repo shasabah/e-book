@@ -66,14 +66,11 @@ check('today is still first in the list', /return a\.date < b\.date \? 1 : -1;/.
 // (Ferezelly, 18 Nov 2026: he closed 17 Nov on the morning of 18 Nov, read "Hujan siang ini" as the day
 // before, and keyed 16 Nov's 13 mm where 17 Nov's 35 mm belonged.)
 check('the rain card no longer says "ini" (today)', !/'Hujan siang ini'/.test(dc), 'Hujan siang ini is gone');
-check('the rain card names the day being closed',
-  /function rainDayCard\(d, fromWork, date\)/.test(dc) && /var day = date \? niceDate\(date\) : '';/.test(dc)
-  && /'Hujan hari ' \+ day/.test(dc), 'rainDayCard takes the date');
-check('the screen passes the day being closed to the card',
-  /rainDayCard\(d, wr\.lots > 0 && d\.rainTime === '06-12', day\.date\)/.test(dc), 'caller');
-check('the hint says the rain is that day\'s, not today\'s',
-  /Hujan pada hari yang ditutup, bukan hari ini/.test(dc), 'hint');
-check('check 8 names the day too', /'Hujan ' \+ rday \+ ' belum dijawab'/.test(dc), 'check 8');
+// 1.88 (Brief_Tutup_Hari_Baru, signed 23 Nov 2026): the same lesson taken to its end — the gauge is read ONCE, at
+// the morning chit, for the day that ended, and that card names the day. The close asks no rain at all.
+check('1.88: the close has no rain card and no rain check', !/rainDayCard\(/.test(dc) && !/'Hujan ' \+ rday \+ ' belum dijawab'/.test(dc), 'rain gone from the close');
+check('1.88: the chit\'s card names the day the rain fell, never "hari ini"',
+  /Hujan semalam · ' \+ esc\(dayBm\)/.test(ms) && /function rainDay\(d\) \{ return addDays\(\(d && d\.date\) \|\| EA\.today\(\), -1\); \}/.test(ms), 'Hujan semalam · <day>');
 check('the office can put 17 Nov right', /function fixSugutRain17Nov\(\)/.test(gs) && /row\.rain_mm = 35;/.test(gs), 'one-off');
 check('the office does not key 16 Nov for the staff',
   !/'2026-11-16'[\s\S]{0,400}rain_mm/.test(gs.slice(gs.indexOf('function fixSugutRain17Nov'))), '16 Nov left to Ferezelly');
@@ -82,7 +79,7 @@ check('the 17 Nov fix replaces, never deletes (Rule 4)',
 
 // 7 · the rain periods show the clock on both sides (Yu Chen, 18 Nov 2026: "the selection 6am to noon?
 // noon mean? shall we specific 6am - 12pm, 12pm - 6pm"). Bahasa was already exact and is unchanged.
-check('close: the day periods read 6am–12pm and 12pm–6pm',
+check('close: the day periods read 6am–12pm and 12pm–6pm (still used to read back closes keyed before 1.88)',
   /\['06-12', '6 pg–12 tgh', '6am–12pm'\]/.test(dc) && /\['12-18', '12 tgh–6 ptg', '12pm–6pm'\]/.test(dc), 'DAYP');
 // The word may still appear in a comment quoting the request; what matters is the text on the screen.
 const dcCode = dc.split('\n').filter(l => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
@@ -120,16 +117,15 @@ check('the close asks before it offers a jump to Kerja',
 // that toWork never covered and sent the staff round a ring (see v90-no-dead-button). What this check
 // holds is unchanged: too old to key means no button, and the line says to ask the office.
 check('too old to key: no button, and the line says to ask the office',
-  /if \(canKey\) \{ o\.go = hash; return o; \}/.test(dc)
+  /if \(canKey\) \{ o\.go = hash; o\.fix = fix \|\| \[\]; return o; \}/.test(dc)
   && /terlalu lama untuk dikunci di telefon — minta pejabat/.test(dc), 'the guard');
 check('and the work door still goes through that one guard',
-  /var toWork = function \(o\) \{ return only\(o, '#field-harvest\/work'\); \}/.test(dc), 'toWork');
-check('the rain line points at its own card, not at the screen it is already on',
-  /scrollTo: '#dc-rainq'/.test(dc) && !/go: '#field-harvest\/close' \}\);/.test(dc), 'scrollTo');
-check('a line with nowhere to go is not drawn as a button',
-  /var btn = x\.ok \? '' : x\.go \? /.test(dc) && /\(btn \|\| '<span>'\)/.test(dc) && /\(btn \? '<\/button>' : '<\/span>'\)/.test(dc), 'btn');
-check('pressing a card line scrolls to the card and marks it',
-  /if \(b\.dataset\.scroll\)/.test(dc) && /scrollIntoView/.test(dc) && /look-here/.test(dc), 'handler');
+  /var toWork = function \(o, fix\) \{ return only\(o, '#field-harvest\/work', fix \|\| \[\{ k: 'work' \}\]\); \}/.test(dc), 'toWork');
+// 1.88: the line itself is never a button now; only its fix buttons are, and too old to key leaves only
+// TINGGAL DI LADANG… (a reason, kept on the close itself, works at any age).
+check('1.88: a line is text; its fix buttons are drawn from its own fix list',
+  /function fixBtns\(x\)/.test(dc) && /data-fix="' \+ x\.n \+ '\|'/.test(dc) && /'<li class="dc-it ' \+ cls \+ '"><span>/.test(dc), 'fixBtns');
+check('1.88: too old to key keeps only the reason button', /o\.fix = \(fix \|\| \[\]\)\.filter\(function \(f\) \{ return f\.k === 'leave'; \}\);/.test(dc), 'leave only');
 const css = fs.readFileSync(path.join(root, 'core', 'look.css'), 'utf8');
 check('the mark has a style', /\.look-here \{/.test(css) && /@keyframes look-here/.test(css), 'css');
 // v1.75: the 24 Oct rule now covers CLOSED days only, and there it is untouched — a closed day still reopens

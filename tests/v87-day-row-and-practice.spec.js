@@ -64,10 +64,10 @@ const root = path.resolve(__dirname, '..');
   let r = await p.evaluate(() => {
     const row = [...document.querySelectorAll('.dc-day')];
     const card = document.querySelector('.dc-days');
-    const checks = [...document.querySelectorAll('#room .card h2')].find(h => /Semakan|Checks/.test(h.textContent));
+    const checks = [...document.querySelectorAll('#room .card h2')].find(h => /Semakan|Checks|Belum lengkap|Not complete|Semua lengkap|All complete/.test(h.textContent));
     return { days: row.map(e => e.innerText.replace(/\s+/g, ' ').trim()),
       on: (document.querySelector('.dc-day.on') || {}).innerText || '',
-      hint: (document.querySelector('.dc-days .hint') || {}).textContent || '',
+      hint: ((document.querySelector('.dc-days h2') || {}).textContent || '') + ' · ' + ((document.querySelector('.dc-days .hint') || {}).textContent || ''),
       cardTop: card ? Math.round(card.getBoundingClientRect().top) : -1,
       checksTop: checks ? Math.round(checks.getBoundingClientRect().top) : -1,
       widest: Math.max(...row.map(e => Math.round(e.getBoundingClientRect().right))),
@@ -88,20 +88,20 @@ const root = path.resolve(__dirname, '..');
   await p.waitForTimeout(700);
   const moved = await p.evaluate(() => ({
     on: (document.querySelector('.dc-day.on') || {}).innerText.replace(/\s+/g, ' ').trim(),
-    heading: ([...document.querySelectorAll('#room .card h2')].find(h => /Semakan|Checks/.test(h.textContent)) || {}).textContent || '' }));
+    heading: ([...document.querySelectorAll('#room .card h2')].find(h => /Semakan|Checks|Belum lengkap|Not complete|Semua lengkap|All complete/.test(h.textContent)) || {}).textContent || '' }));
   check('pressing a day switches the checks to that day',
     moved.heading.indexOf(moved.on.split(' ')[0].split('/')[0]) >= 0, moved.on + ' vs ' + moved.heading);
   check('no page errors', errs.length === 0, errs.join(' | '));
   await p.close();
 
-  // ---- one day open: the control must still be there ----
+  // ---- one day open ----
+  // 1.88 (Brief_Tutup_Hari_Baru, signed 23 Nov 2026): the day is now named on the close button itself
+  // (TUTUP HARI JUMAAT 20 NOV), so one open day needs no row; the row comes back as soon as two days are open.
   ({ p, errs } = await screen(1));
   r = await p.evaluate(() => ({
     days: [...document.querySelectorAll('.dc-day')].length,
-    hint: (document.querySelector('.dc-days .hint') || {}).textContent || '' }));
-  check('with one day open the chooser is STILL drawn, so it is learnt on a quiet day',
-    r.days === 1, r.days + ' buttons');
-  check('and it says so plainly', /1 hari belum ditutup/.test(r.hint), r.hint);
+    btn: (document.querySelector('#dc-close') || {}).textContent || '' }));
+  check('with one day open there is no row: the day is named on the close button', r.days === 0 && /^TUTUP HARI \S+ \d+ \S+$/.test(r.btn.trim()), r.days + ' buttons · ' + r.btn);
   check('no page errors', errs.length === 0, errs.join(' | '));
   await p.close();
   await b.close();

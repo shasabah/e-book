@@ -52,7 +52,7 @@ const { chromium } = require('playwright');
       jobs: [{ id: 'j1', key: 'j1', task_code: 'HA', block: '01', lots: '1-13 1-14', workers: 2, bunches: '230', status: 'done', reason: '' },
              { id: 'j2', key: 'j2', task_code: 'CPS', block: '02', lots: '2-1 2-2', workers: 1, qty: '1.5', unit: 'Ha', status: 'done', reason: '' }] }, prog: {}, lotwhy: {} }]));
   };
-  const open = async () => { await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(100); await p.evaluate(() => { location.hash = 'field-harvest/close'; }); await p.waitForSelector('#dc-close'); await p.waitForTimeout(150); return p.innerText('#room'); };
+  const open = async () => { await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(100); await p.evaluate(() => { location.hash = 'field-harvest/close'; }); await p.waitForSelector('#dc-close'); await p.evaluate(() => document.querySelectorAll('#room details').forEach(d => { d.open = true; })); await p.waitForTimeout(150); return (await p.evaluate(() => { document.querySelectorAll('#room details').forEach(d => { d.open = true; }); }), p.innerText('#room')); };
   const td = D(0);
   // 1 · all of yesterday's fruit collected this morning (a later day), lot by lot
   await p.evaluate(([yd, td, w]) => { eval(w)(yd);

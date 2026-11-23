@@ -22,7 +22,7 @@ window.EA = window.EA || {};
     var chit = (fh.allChits ? fh.allChits() : []).filter(function (c) { return c.estate === estate && c.date === t; })
       .sort(function (a, b) { return String(a.confirmedAt || '') < String(b.confirmedAt || '') ? 1 : -1; })[0] || null;
     var dr = (EA.local.get('fh.draft2', {}) || {})[estate] || null;
-    var draftRain = dr && dr.date === t && !dr.mode && (String(dr.rain_mm) === '0' || (Number(dr.rain_mm) > 0 && String(dr.rain_time || '').trim()));
+    var draftRain = dr && dr.date === t && !dr.mode && (String(dr.rain_mm) === '0' || (Number(dr.rain_mm) > 0 && (function () { var r = fh.rainPeriods && fh.rainPeriods.parse ? fh.rainPeriods.parse(dr.rain_time) : null; return r && r.day ? r.per.length > 0 : !!String(dr.rain_time || '').trim(); })()));
     var chitRain = chit && chit.rain_mm !== '' && chit.rain_mm != null;
     var work = chit ? (EA.local.get('fh.work', []) || []).find(function (s) { return s.chit === chit.chit; }) : null;
     var jobs = (work && work.rec && work.rec.jobs) || [];
@@ -34,7 +34,8 @@ window.EA = window.EA || {};
     var present = chit ? (chit.rows || []).filter(function (r) { return r.status !== 'removed' && r.muster === 'H'; }).length : 0;
     var total = chit ? (chit.rows || []).filter(function (r) { return r.status !== 'removed'; }).length : 0;
     return [
-      { k: 'rain', done: !!(chitRain || draftRain), bm: 'Hujan malam tadi', en: 'Rain last night', go: '#field-harvest',
+      // v1.88: one reading, for the whole of yesterday (Brief_Hujan 0.2, Brief_Tutup_Hari_Baru section 3).
+      { k: 'rain', done: !!(chitRain || draftRain), bm: 'Hujan semalam', en: 'Rain yesterday', go: '#field-harvest',
         sub: chitRain ? mmText(chit.rain_mm) : draftRain ? mmText(dr.rain_mm) : EA.t('langkah pertama · baca tolok', 'first step · read the gauge') },
       { k: 'chit', done: !!chit, bm: 'Chit pagi', en: 'Morning chit', go: '#field-harvest',
         sub: chit ? (chit.jobs || []).length + EA.t(' kerja · ', ' jobs · ') + present + '/' + total + EA.t(' hadir', ' present') : EA.t('kerja, orang, siapa tidak hadir', 'jobs, people, who is absent') },
@@ -43,7 +44,7 @@ window.EA = window.EA || {};
       { k: 'ramp', done: !!chit && (!harvest || lorries.length > 0 || close.state === 'closed'), bm: 'Ramp & lori', en: 'Ramp & lorry', go: '#field-harvest/collect',
         sub: !chit ? EA.t('buah ke ramp, lori keluar', 'fruit to the ramp, lorry out') : !harvest ? EA.t('tiada tuaian hari ini', 'no harvest today') : lorries.length ? lorries.length + EA.t(' lori keluar', ' lorry out') : EA.t('buah ke ramp, lori keluar', 'fruit to the ramp, lorry out') },
       { k: 'close', done: close.state === 'closed', bm: 'Tutup hari', en: 'Close the day', go: '#field-harvest/close',
-        sub: close.state === 'closed' ? EA.t('dikunci', 'locked') + (close.at ? ' ' + close.at : '') : close.state === 'missing' ? close.bad + EA.t(' perkara belum lengkap', ' things not complete') : EA.t('hujan siang · kunci hari', 'day rain · lock the day') },
+        sub: close.state === 'closed' ? EA.t('dikunci', 'locked') + (close.at ? ' ' + close.at : '') : close.state === 'missing' ? close.bad + EA.t(' perkara belum lengkap', ' things not complete') : EA.t('semak dan kunci hari', 'check and lock the day') },
       { k: 'plan', done: !!plan, bm: 'Rancang ' + dayName(tomorrow) + ' ' + dm(tomorrow), en: 'Plan ' + dayName(tomorrow) + ' ' + dm(tomorrow), plan: tomorrow,
         sub: plan ? EA.t('dirancang', 'planned') : rest(addDays(t, 1)) ? EA.t('hari esok hari rehat · rancang hari kerja seterusnya', 'tomorrow is a rest day · plan the next working day') : EA.t('isi dari hari ini, ubah yang berbeza', 'filled from today, change what differs') }
     ];

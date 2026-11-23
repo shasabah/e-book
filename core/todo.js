@@ -41,7 +41,7 @@ window.EA = window.EA || {};
         EA.fh.openDays(est).filter(function (o) { return o.date < EA.today(); }).forEach(function (o) {
           var d = new Date(o.date + 'T00:00:00'), lbl = EA.ui.dayBm[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1);
           out.push({ id: 'TH:' + o.date, p: 1, ic: 'TH', bm: (o.reopened ? 'Hari ' + lbl + ' dibuka semula · tutup semula' : 'Hari ' + lbl + ' belum ditutup') + ' · TUTUP HARI', en: o.reopened ? 'Day ' + lbl + ' reopened · close it again' : 'Day ' + lbl + ' not closed',
-            sub: EA.t('Semak kerja, ramp, lori, hujan, lalu tekan TUTUP HARI', 'Check work, ramp, lorry, rain, then press TUTUP HARI'), go: '#field-harvest/close' });
+            sub: EA.t('Tunjuk apa yang belum lengkap, betulkan di situ, lalu TUTUP HARI', 'Shows what is missing, fix it there, then CLOSE THE DAY'), go: '#field-harvest/close' });
         });
       } catch (e) {}
     }

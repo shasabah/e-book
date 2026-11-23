@@ -1482,53 +1482,152 @@
 
 
   // ---------- v1.61 rain, keyed by every estate from its own gauge (Yu Chen, 15 Nov 2026) ----------
-  // Two readings a day in four periods: the morning chit keys the night (6 pm–12 am, 12 am–6 am), Tutup hari keys the
-  // day (6 am–12 pm, 12 pm–6 pm). No rain is one tap; rain is one mm figure as the gauge shows it, and a tick for the
-  // period or periods it fell in — the mm is never split by guess. Stored on the chit as rain_mm and rain_time.
-  // v1.72 (Yu Chen, 18 Nov 2026): the clock on both sides here too, so the night periods read the same way
-  // as the day ones on the close. Bahasa unchanged; the stored codes 18-24 and 00-06 unchanged.
+  // Until 1.88 there were two readings a day: the morning chit keyed the night (6 pm–12 am, 12 am–6 am) and
+  // Tutup hari keyed the day (6 am–12 pm, 12 pm–6 pm). Those night readings are still read back the old way
+  // (NIGHT, rainLinesOld) — nothing already keyed is changed.
+  // v1.72 (Yu Chen, 18 Nov 2026): the clock on both sides, the stored codes 18-24 and 00-06 unchanged.
   var NIGHT = [['18-24', '6 ptg–12 mlm', '6pm–12am'], ['00-06', '12 mlm–6 pg', '12am–6am']];
-  function rainOk(d) { d = d || draft; var mm = String(d.rain_mm == null ? '' : d.rain_mm).trim(); return mm === '0' || (Number(mm.replace(',', '.')) > 0 && !!String(d.rain_time || '').trim()); }
   function periodText(codes, list, en) {
     var c = String(codes || '').split(/[ ,]+/).filter(Boolean);
     var known = c.map(function (x) { var p = list.find(function (q) { return q[0] === x; }); return p ? p[en ? 2 : 1] : null; });
     return known.every(Boolean) ? known.join(' · ') : String(codes || '');
   }
+
+  // ---------- v1.88 one reading a day, at the morning chit, for the day that ended ----------
+  // (Yu Chen, 23 Nov 2026: "the rain also make confuse. why no we do it the same time ?"; Brief_Hujan 0.2
+  // sections 2–5, agreed 19 Nov; Brief_Tutup_Hari_Baru section 3, signed 23 Nov.)
+  // The gauge is read once, at the muster call, for the day that just ended, and the card says which day by name
+  // ("Hujan semalam · Ahad 22 Nov") — never "hari ini", which is how 13 mm was keyed where 35 belonged on 17 Nov.
+  // TIADA HUJAN is one tap. Otherwise one mm figure (a gauge holds one total, so mm is never asked per period),
+  // the periods it fell in, in the order of the company's paper form, and for each period a start and stop if he
+  // knows them. Rain is no longer asked at the close.
+  //
+  // Where it is kept: on the chit, as before (FH_CHIT rain_mm, rain_time), so the office needs no change. rain_time
+  // now begins with the day the rain fell — "hari=2026-11-22 12-18@14:30-15:10 18-24" — so the record carries
+  // its own date (Brief_Hujan section 10) and a reading of 1.88 can never be mistaken for an old night reading.
+  var DAY4 = [['00-06', 'Awal pagi', 'Early morning', '12 mlm–6 pg', '12am–6am'], ['06-12', 'Pagi', 'Morning', '6 pg–12 tgh', '6am–12pm'],
+              ['12-18', 'Petang', 'Afternoon', '12 tgh–6 ptg', '12pm–6pm'], ['18-24', 'Malam', 'Night', '6 ptg–12 mlm', '6pm–12am']];
+  function parseRain(time) {
+    var s = String(time || ''), m = /hari=(\d{4}-\d\d-\d\d)/.exec(s), out = { day: m ? m[1] : '', per: [], at: {} };
+    if (!m) return out;
+    s.replace(/hari=\S+/, '').split(/\s+/).filter(Boolean).forEach(function (x) {
+      var p = /^(\d\d-\d\d)(?:@(\S*))?$/.exec(x); if (!p || out.per.indexOf(p[1]) >= 0) return;
+      out.per.push(p[1]); if (p[2]) out.at[p[1]] = p[2];
+    });
+    return out;
+  }
+  function buildRain(day, per, at) {
+    return ['hari=' + day].concat(DAY4.map(function (p) { return p[0]; }).filter(function (k) { return per.indexOf(k) >= 0; })
+      .map(function (k) { var t = String((at || {})[k] || '').trim(); return k + (t && t !== '-' ? '@' + t : ''); })).join(' ');
+  }
+  function rainDay(d) { return addDays((d && d.date) || EA.today(), -1); }
+  function rainOk(d) {
+    d = d || draft;
+    var mm = String(d.rain_mm == null ? '' : d.rain_mm).trim();
+    if (mm === '0') return true;
+    if (!(Number(mm.replace(',', '.')) > 0)) return false;
+    var r = parseRain(d.rain_time);
+    return r.day ? r.per.length > 0 : !!String(d.rain_time || '').trim();
+  }
+  // The periods, as the WhatsApp text and the card's summary write them: "petang 14:30–15:10 · malam".
+  function perText(r, en) {
+    return r.per.map(function (k) {
+      var p = DAY4.find(function (q) { return q[0] === k; }), t = String(r.at[k] || '').split('-');
+      var clock = t[0] && t[1] ? ' ' + t[0] + '–' + t[1] : t[0] ? ' ' + EA.t('dari ', 'from ') + t[0] : t[1] ? ' ' + EA.t('hingga ', 'until ') + t[1] : '';
+      return (p ? (en ? p[2] : p[1]).toLowerCase() : k) + clock;
+    }).join(' · ');
+  }
+  // The last day this phone has a gauge reading for, before the chit's day (the gap line on the card).
+  function lastRainDay(estate, before) {
+    var best = '';
+    chits().forEach(function (c) {
+      if (c.estate !== estate || c.date >= before || String(c.rain_mm == null ? '' : c.rain_mm).trim() === '') return;
+      var r = parseRain(c.rain_time), d = r.day || addDays(c.date, -1);
+      if (d > best) best = d;
+    });
+    return best;
+  }
   function rainCard() {
     var mm = String(draft.rain_mm == null ? '' : draft.rain_mm), dry = mm === '0', wet = !dry && (draft.rainWet || Number(mm) > 0);
-    var picked = String(draft.rain_time || '').split(/[ ,]+/).filter(Boolean);
-    return '<section class="card rain-q' + (rainOk() ? ' done' : '') + '" id="fh-rainq" aria-labelledby="fh-s0"><h2 id="fh-s0"><span class="step">0</span><span class="inline"><span class="bm">Hujan malam tadi</span> · <span class="en">Rain last night</span></span></h2>' +
-      '<p class="hint">' + EA.t('6 petang semalam hingga 6 pagi ini. Baca tolok, kemudian kosongkan.', '6 pm yesterday to 6 am today. Read the gauge, then empty it.') + '</p>' +
+    var day = rainDay(draft), r = parseRain(draft.rain_time);
+    // A draft begun before 1.88 holds an old night reading, and one kept from another morning names another day:
+    // neither is this morning's answer, so the question is asked afresh rather than guessed.
+    if (r.day && r.day !== day) { draft.rain_mm = ''; draft.rain_time = ''; draft.rainWet = false; draft.rainShut = false; mm = ''; dry = false; wet = false; keepDraft(); r = parseRain(''); }
+    else if (!r.day && mm !== '') { draft.rain_time = buildRain(day, [], {}); keepDraft(); r = parseRain(draft.rain_time); }
+    var ok = rainOk();
+    var dayBm = niceDate(day), dayEn = (function () { var x = new Date(day + 'T00:00:00'); return ui().dayEn[x.getDay()] + ' ' + x.getDate() + ' ' + ui().monEn[x.getMonth()]; })();
+    var head = '<h2 id="fh-s0"><span class="step">0</span><span class="inline"><span class="bm">Hujan semalam · ' + esc(dayBm) + '</span><span class="en">Rain yesterday · ' + esc(dayEn) + '</span></span></h2>';
+    // Answered and put away: one line, and UBAH to open it again. It goes to the office with the chit.
+    if (ok && draft.rainShut) {
+      return '<section class="card rain-q done" id="fh-rainq" aria-labelledby="fh-s0">' + head +
+        '<p class="rain-sum"><b>✓ ' + (dry ? EA.t('Tiada hujan', 'No rain') : esc(fmtMm(mm)) + ' mm · ' + esc(perText(r, EA.lang && EA.lang() === 'en'))) + '</b>' +
+        ' <button type="button" class="link-btn" id="fh-rain-edit">' + EA.t('UBAH', 'CHANGE') + '</button></p>' +
+        '<p class="hint">' + EA.t('Dihantar bersama chit.', 'Sent with the chit.') + '</p></section>';
+    }
+    var last = lastRainDay(ctx.estate, draft.date || EA.today()), gap = last && last < addDays(day, -1);
+    return '<section class="card rain-q' + (ok ? ' done' : '') + '" id="fh-rainq" aria-labelledby="fh-s0">' + head +
+      '<p class="hint">' + EA.t('Hujan sepanjang hari ' + dayBm + ', 12 malam hingga 12 malam. Baca tolok, kemudian kosongkan.', 'The rain of the whole of ' + dayEn + ', midnight to midnight. Read the gauge, then empty it.') + '</p>' +
+      (gap ? '<p class="hint warn-t">' + EA.t('Tolok kali terakhir dibaca untuk ' + niceDate(last) + '. Jika tidak dikosongkan sejak itu, bacaan ini termasuk hujan hari-hari itu juga.', 'The gauge was last read for ' + niceDate(last) + '. If it was not emptied since, this reading holds the rain of those days too.') + '</p>' : '') +
       '<div class="rain-row"><button type="button" class="btn' + (dry ? ' btn-ok' : ' btn-ghost') + '" id="fh-rain-no" aria-pressed="' + dry + '">NO RAIN<small>TIADA HUJAN</small></button>' +
       '<button type="button" class="btn' + (wet ? ' btn-wait' : ' btn-ghost') + '" id="fh-rain-yes" aria-pressed="' + wet + '">IT RAINED<small>ADA HUJAN</small></button></div>' +
       (wet ? '<div class="field"><label><span class="bm">Bacaan tolok (mm)</span><span class="en">Gauge reading (mm)</span></label>' +
         '<input class="text-input qty" id="fh-rain-mm" inputmode="decimal" value="' + esc(Number(mm) > 0 ? mm : '') + '" placeholder="mm"></div>' +
-        '<p class="hint">' + EA.t('Bila hujan turun? Tanda satu atau dua.', 'When did it rain? Tick one or both.') + '</p><div class="rain-row">' +
-        NIGHT.map(function (p) { var on = picked.indexOf(p[0]) >= 0; return '<button type="button" class="btn' + (on ? ' btn-wait' : ' btn-ghost') + '" data-rp="' + p[0] + '" aria-pressed="' + on + '">' + p[2] + '<small>' + p[1] + '</small></button>'; }).join('') + '</div>' : '') +
+        '<p class="hint">' + EA.t('Bila hujan turun? Tanda satu atau lebih.', 'When did it rain? Tick one or more.') + '</p><div class="rain-row rain-4">' +
+        DAY4.map(function (p) { var on = r.per.indexOf(p[0]) >= 0; return '<button type="button" class="btn' + (on ? ' btn-wait' : ' btn-ghost') + '" data-rp="' + p[0] + '" aria-pressed="' + on + '">' + esc(EA.t(p[1], p[2])) + '<span class="rp-clock">' + esc(EA.t(p[3], p[4])) + '</span></button>'; }).join('') + '</div>' +
+        r.per.map(function (k) {
+          var p = DAY4.find(function (q) { return q[0] === k; }), t = String(r.at[k] || '').split('-');
+          return '<div class="rain-at"><b>' + EA.t(p[1], p[2]) + ' <span class="hint">· ' + EA.t('mula dan henti, jika tahu', 'start and stop, if known') + '</span></b>' +
+            '<label>' + EA.t('Mula', 'Start') + ' <input type="time" class="text-input" data-rs="' + k + '" value="' + esc(t[0] || '') + '"></label>' +
+            '<label>' + EA.t('Henti', 'Stop') + ' <input type="time" class="text-input" data-re="' + k + '" value="' + esc(t[1] || '') + '"></label></div>';
+        }).join('') +
+        '<p class="hint">' + EA.t('Hujan petang atau malam semalam → semalam. Hujan lepas 12 malam → hari ini.', 'Rain yesterday afternoon or evening → yesterday. Rain after midnight → today.') + '</p>' : '') +
+      // Drawn whenever it can be needed and switched on as the answer becomes whole: redrawing the card from the
+      // mm box would swallow the tap on a period that took the focus away from it.
+      (ok || wet ? '<div class="actions"><button type="button" class="btn btn-ok" id="fh-rain-save"' + (ok ? '' : ' disabled') + '>SAVE READING<small>SIMPAN BACAAN · dihantar bersama chit</small></button></div>' : '') +
       '</section>';
   }
   function wireRain() {
-    var no = $('#fh-rain-no'), yes = $('#fh-rain-yes'), mm = $('#fh-rain-mm');
+    var no = $('#fh-rain-no'), yes = $('#fh-rain-yes'), mm = $('#fh-rain-mm'), ed = $('#fh-rain-edit'), sv = $('#fh-rain-save');
+    if (ed) ed.onclick = function () { draft.rainShut = false; keepDraft(); render(el, ctx); };
+    if (sv) sv.onclick = function () { if (!rainOk()) return; draft.rainShut = true; keepDraft(); render(el, ctx); };
     if (!no) return;
-    no.onclick = function () { draft.rain_mm = '0'; draft.rain_time = ''; draft.rainWet = false; keepDraft(); render(el, ctx); };
-    yes.onclick = function () { draft.rainWet = true; if (String(draft.rain_mm) === '0') draft.rain_mm = ''; keepDraft(); render(el, ctx); var m = $('#fh-rain-mm'); if (m) m.focus(); };
-    if (mm) mm.oninput = function () { draft.rain_mm = mm.value.replace(',', '.').replace(/[^\d.]/g, ''); keepDraft(); var c = $('#fh-rainq'); if (c) c.classList.toggle('done', rainOk()); };
+    var day = rainDay(draft);
+    no.onclick = function () { draft.rain_mm = '0'; draft.rain_time = buildRain(day, [], {}); draft.rainWet = false; draft.rainShut = true; keepDraft(); render(el, ctx); };
+    yes.onclick = function () { draft.rainWet = true; draft.rainShut = false; if (String(draft.rain_mm) === '0') draft.rain_mm = ''; var r = parseRain(draft.rain_time); draft.rain_time = buildRain(day, r.per, r.at); keepDraft(); render(el, ctx); var m = $('#fh-rain-mm'); if (m) m.focus(); };
+    if (mm) {
+      mm.oninput = function () { draft.rain_mm = mm.value.replace(',', '.').replace(/[^\d.]/g, ''); keepDraft(); var c = $('#fh-rainq'); if (c) c.classList.toggle('done', rainOk()); if (sv) sv.disabled = !rainOk(); };
+    }
     el.querySelectorAll('[data-rp]').forEach(function (b) {
       b.onclick = function () {
-        var cur = String(draft.rain_time || '').split(/[ ,]+/).filter(Boolean), k = b.dataset.rp, i = cur.indexOf(k);
-        if (i >= 0) cur.splice(i, 1); else cur.push(k);
-        draft.rain_time = NIGHT.map(function (p) { return p[0]; }).filter(function (x) { return cur.indexOf(x) >= 0; }).join(' ');
+        var r = parseRain(draft.rain_time), k = b.dataset.rp, i = r.per.indexOf(k);
+        if (i >= 0) { r.per.splice(i, 1); delete r.at[k]; } else r.per.push(k);
+        draft.rain_time = buildRain(day, r.per, r.at);
         keepDraft(); render(el, ctx);
       };
     });
+    el.querySelectorAll('[data-rs],[data-re]').forEach(function (inp) {
+      inp.onchange = function () {
+        var r = parseRain(draft.rain_time), k = inp.dataset.rs || inp.dataset.re, t = String(r.at[k] || '').split('-');
+        if (inp.dataset.rs) t[0] = inp.value; else t[1] = inp.value;
+        r.at[k] = (t[0] || '') + '-' + (t[1] || '');
+        draft.rain_time = buildRain(day, r.per, r.at); keepDraft();
+      };
+    });
   }
-  // The rain lines for the WhatsApp chit: last night's reading, and yesterday's whole day when its close holds the day reading.
+  // The rain line for the WhatsApp chit. A 1.88 reading names its own day; an older chit keeps its old lines.
   function rainLines(c) {
     var mm = String(c.rain_mm == null ? '' : c.rain_mm).trim();
     if (mm === '') return [];
+    var r = parseRain(c.rain_time);
+    if (!r.day) return rainLinesOld(c, mm);
+    var n = Number(mm) || 0;
+    return ['Hujan semalam (' + dayDmBm(r.day) + '): ' + (n > 0 ? fmtMm(n) + ' mm' + (r.per.length ? ' · ' + perText(r, false) : '') : 'tiada')];
+  }
+  function dayDmBm(date) { var d = new Date(date + 'T00:00:00'); return ui().dayBm[d.getDay()] + ' ' + dm(date); }
+  function rainLinesOld(c, mm) {
     var n = Number(mm) || 0, L = [];
     var prev = EA.fh.dayRainBefore ? EA.fh.dayRainBefore(c.estate, c.date) : null;
-    var yday = (function () { var d = new Date(c.date + 'T00:00:00'); d.setDate(d.getDate() - 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })();
+    var yday = addDays(c.date, -1);
     var since = prev && prev.date < yday ? ' sejak ' + dayDm(prev.date) + ' 6 ptg' : '';
     L.push('Hujan ' + (since ? since.trim() : 'malam tadi') + ': ' + (n > 0 ? fmtMm(n) + ' mm (' + periodText(c.rain_time, NIGHT) + ')' : 'tiada'));
     if (prev && prev.date === yday && prev.mm !== '') {
@@ -1553,7 +1652,8 @@
     var noNote = isPast() ? [] : chitAlerts().filter(function (a) { return !a.note; });
     if (noNote.length) p.push(['Tulis apa berlaku untuk setiap amaran (' + noNote.length + ' belum).', 'Say what happened for each alert (' + noNote.length + ' not done).']);
     // v1.61: today's chit (not a plan, not a day gone by) answers last night's rain first.
-    if (!isPast() && draft.mode !== 'plan' && !rainOk()) p.push(['Jawab hujan malam tadi: TIADA HUJAN, atau mm dan bila.', 'Answer last night\'s rain: no rain, or the mm and when.']);
+    // v1.88: the question is now the whole of yesterday, named by its day.
+    if (!isPast() && draft.mode !== 'plan' && !rainOk()) p.push(['Jawab hujan semalam (' + niceDate(rainDay(draft)) + '): TIADA HUJAN, atau mm dan bila.', 'Answer yesterday\'s rain (' + niceDate(rainDay(draft)) + '): no rain, or the mm and when.']);
     return p;
   }
   function emptyJobs() {
@@ -2240,8 +2340,13 @@
       if (!ctx.user) return false;
       var d = fixDraft(c, null);
       var did = 0;
+      // v1.88: TUTUP HARI's TIDAK HADIR… may also name a man on the estate list who is on no chit that day (the
+      // close's "on the list but not on the chit"). He is added with his letter; anyone else still is not.
+      var listedHere = {};
+      (EA.lists.mandorsFor ? EA.lists.mandorsFor(c.estate) : []).concat(EA.lists.workersFor ? EA.lists.workersFor(c.estate) : []).forEach(function (w) { listedHere[w.id] = true; });
       marks.forEach(function (m) {
-        if (d.marks[m.worker] === undefined || d.marks[m.worker] === m.mark) return;
+        if (d.marks[m.worker] === m.mark) return;
+        if (d.marks[m.worker] === undefined && !listedHere[m.worker]) return;
         d.marks[m.worker] = m.mark; delete d.jobOf[m.worker]; did++;
       });
       if (!did) { draft = keepDraft; return false; }
@@ -2264,7 +2369,7 @@
   // still open to a correction?" calls this, instead of writing EA.dayAgo(3) of its own. Four places were
   // doing that and all four were missed when the window went 3 -> 5 on 19 Nov (Rule 5).
   EA.fh.fixFrom = function () { return EA.dayAgo(FIX_DAYS - 1); };
-  EA.fh.rainPeriods = { night: NIGHT, text: periodText };   // v1.61
+  EA.fh.rainPeriods = { night: NIGHT, day4: DAY4, text: periodText, parse: parseRain, perText: perText };   // v1.61, v1.88
   EA.fh.rainLines = rainLines;
   EA.fh.roundRepeats = roundRepeats;
   EA.fh.summary = summary;

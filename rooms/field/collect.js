@@ -357,5 +357,25 @@
     if (card) { card.outerHTML = todayCard(); wireToday(); }
   });
 
+  // v1.88 (Brief_Tutup_Hari_Baru, signed 23 Nov 2026): TUTUP HARI's SEMUA KE RAMP puts a day's lots to the ramp
+  // without leaving the close. It is written here, beside the Ramp's own save, so the record is the same one the
+  // Ramp writes (Rule 5): one FH_COLLECT row per lot, collected and cleared ("habis"), dated the day it is keyed.
+  // lots: [{ lot, block, bunches }]. Returns the bunches put to the ramp; throws if the save fails.
+  EA.fh.toRamp = function (estate, lots, note) {
+    lots = (lots || []).filter(function (l) { return l && l.lot && num(l.bunches) > 0; });
+    if (!lots.length) return 0;
+    var now = new Date(), rec = { date: EA.today(), estate: estate, at: EA.ui.hhmm(now), tractor: '', loader: '', lines: [], dispatch: null, ids: [], disIds: {}, lotIds: {}, fromClose: true };
+    try {
+      EA.batchStart();
+      lots.forEach(function (l) {
+        var line = { lot: String(l.lot), block: String(l.block || ''), bunches: String(num(l.bunches)), cleared: 'Y' };
+        line.id = EA.save(TAB, ROOM, estate, { block: line.block, lot: line.lot, bunches: line.bunches, cleared: 'Y', tractor: '', loader: '', note: note || '' }).id;
+        rec.lines.push(line); rec.ids.push(line.id);
+      });
+      EA.batchEnd();
+    } catch (e) { EA.batchCancel(); throw e; }
+    var all = EA.local.get(K.saved, []); all.push(rec); EA.local.set(K.saved, all);
+    return rec.lines.reduce(function (a, l) { return a + num(l.bunches); }, 0);
+  };
   EA.fh.collect = { render: render };
 })();

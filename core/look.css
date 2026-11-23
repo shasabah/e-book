@@ -1049,3 +1049,32 @@ body:has(#home-bar.botbar) .sheet-back:not([hidden]) ~ .toast { bottom: auto; to
 
 /* v1.70: the rate list (Owner and HQ) — the words on the left, the rate on the right, nothing wider than the phone */
 .rate-list li { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; } .rate-l { min-width: 0; overflow-wrap: anywhere; } .rate-l small, .rate-r small { display: block; color: var(--muted); font-size: .78rem; } .rate-r { flex: none; text-align: right; white-space: nowrap; }
+
+/* v1.88 the new TUTUP HARI (Brief_Tutup_Hari_Baru): only what is missing, each with its own fix buttons */
+.dc-miss { box-shadow: inset 4px 0 0 var(--bad); }
+.dc-done { box-shadow: inset 4px 0 0 var(--ok); }
+.dc-done h2 { color: var(--ok); }
+.dc-miss .dc-list, .dc-done .dc-list, .dc-passed .dc-list, #sheet .dc-list { list-style: none; padding: 0; margin: 8px 0; }
+.dc-fix { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+.dc-fix .btn { flex: 1 1 auto; min-width: 0; min-height: 44px; padding: 8px 12px; font-size: .9rem; }
+.dc-figs { display: flex; gap: 8px; margin: 10px 0; }
+.dc-figs span { flex: 1; text-align: center; background: var(--ok-soft); border-radius: var(--r); padding: 8px 4px; font-size: .8rem; color: var(--muted); }
+.dc-figs b { display: block; font-size: 1.4rem; color: var(--ink); line-height: 1.2; }
+#dc-close { width: 100%; }
+.dc-passed, .dc-closed { padding-top: 4px; padding-bottom: 4px; }
+.dc-passed summary, .dc-closed summary { cursor: pointer; font-weight: 600; color: var(--muted); min-height: 44px; display: flex; align-items: center; justify-content: space-between; list-style: none; }
+.dc-passed summary::-webkit-details-marker, .dc-closed summary::-webkit-details-marker { display: none; }
+.dc-passed summary::after, .dc-closed summary::after { content: '›'; font-size: 1.4rem; transition: transform .15s; }
+.dc-passed[open] summary::after, .dc-closed[open] summary::after { transform: rotate(90deg); }
+.dc-passed .dc-pay { margin-top: 10px; }
+.dc-passed .dc-pay h3 { font-size: 1rem; margin: 0 0 2px; }
+/* v1.88 rain at the morning chit: four periods, an optional start and stop for each */
+.rain-row.rain-4 { display: grid; grid-template-columns: 1fr 1fr; }
+.rain-4 .btn { text-transform: uppercase; }
+.rain-4 .rp-clock { display: block; font-size: .72rem; font-weight: 500; text-transform: none; opacity: .85; margin-top: 2px; }
+.rain-at { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; margin: 8px 0; }
+.rain-at > b { grid-column: 1 / -1; }
+.rain-at > b .hint { font-weight: 400; }
+.rain-at label { display: grid; gap: 2px; font-size: .82rem; color: var(--muted); }
+.rain-at input { width: 100%; min-width: 0; }
+.rain-sum { margin: 4px 0; }

@@ -35,7 +35,7 @@ async function run(b, code, keyPrefix) {
 (async () => {
   const b = await chromium.launch();
   const pr = await run(b, 'L-STF-SSGT-01', 'L:');
-  check('practice login: yesterday is a day to close before the start date', /Semakan sebelum tutup/.test(pr.txt) && !/Semua hari sudah ditutup/.test(pr.txt), pr.txt.slice(0, 200));
+  check('practice login: yesterday is a day to close before the start date', /Belum lengkap · |Semua lengkap untuk /.test(pr.txt) && !/Semua hari sudah ditutup/.test(pr.txt), pr.txt.slice(0, 200));
   const re = await run(b, 'STF-SSGT-01', '');
   check('real login: nothing to close before the start date', /Semua hari sudah ditutup/.test(re.txt), re.txt.slice(0, 200));
   check('no page errors', pr.errs.length + re.errs.length === 0, pr.errs.concat(re.errs).join(' | '));

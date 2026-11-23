@@ -160,8 +160,13 @@ const { chromium } = require('playwright');
   await p.click('#pd-work'); await p.waitForTimeout(600);
   check('Kerja opens on the Sunday chit with the planned-day band', /KERJA SEBENAR · Ahad 1 Nov/i.test((await p.textContent('#wk-planband').catch(() => '')) || ''), await p.textContent('#wk-planband').catch(() => 'none'));
   // key Sunday's actual work as on any evening: bunches for the harvesters, both jobs done
-  const lotSel = await p.$$('select[data-f="lot"]');
-  for (let i = 0; i < lotSel.length; i++) await lotSel[i].selectOption(i % 2 ? '2-2' : '2-1');
+  // 1.88: the lot is a chip now, not a dropdown (v93). Each man still gets one lot, alternating as before.
+  // Every tap redraws the screen, so the rows are counted once and each chip is found fresh.
+  const lotRows = await p.evaluate(() => [...new Set([...document.querySelectorAll('[data-pick-lot]')].map(b => b.dataset.w))]);
+  for (let i = 0; i < lotRows.length; i++) {
+    await p.evaluate(([w, lot]) => { const b = [...document.querySelectorAll('[data-pick-lot]')].find(x => x.dataset.w === w && x.dataset.pickLot === lot); if (b) b.click(); }, [lotRows[i], i % 2 ? '2-2' : '2-1']);
+    await p.waitForTimeout(120);
+  }
   for (const inp of await p.$$('input[data-f="bunches"]')) await inp.fill('120');
   for (const k of ['j1', 'j2']) { const bt = p.locator('[data-st="' + k + '"][data-v="Y"]'); if (await bt.count()) await bt.click(); }
   await p.click('#wk-check'); await p.waitForTimeout(400);

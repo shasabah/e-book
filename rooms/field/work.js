@@ -486,8 +486,8 @@
               j.lots.map(function (n) { return '<button type="button" class="pick" data-w="' + w + '" data-i="' + i + '" data-onelot="' + esc(n) + '" aria-pressed="' + (on.indexOf(n) >= 0) + '"><b>' + esc(n) + '</b></button>'; }).join('') + '</div>';
             return '<div class="wline">' + chips + '</div><div class="wline"><div class="seg"><button type="button" data-w="' + w + '" data-i="' + i + '" data-day="1" aria-pressed="' + (l.qty === '1') + '">1</button><button type="button" data-w="' + w + '" data-i="' + i + '" data-day="0.5" aria-pressed="' + (l.qty === '0.5') + '">½</button></div> hari</div>';
           }
-          // SAMPLE (branch petak-cepat, 23 Nov 2026) - not published. Yu Chen: "Lot that already choose for
-          // the task still able to see. If we have big group it take time to see all the task number."
+          // v1.88 (Yu Chen, 23 Nov 2026: "Lot that already choose for
+          // the task still able to see. If we have big group it take time to see all the task number.").
           // Measured on a 16-man gang over 5 lots: 16 dropdowns, 3,768px of screen, and nothing anywhere
           // showing which lots are already covered. A dropdown hides its options until it is opened, so the
           // staff cannot see what is left without opening all sixteen of them one at a time.
@@ -594,7 +594,8 @@
         keepDraft(); refresh(jobs);
       };
     });
-    // SAMPLE: the chips write exactly what the dropdown wrote, through the same draft and the same refresh.
+    // v1.88: the chips write exactly what the dropdown wrote, into the same draft. Tapping a man's own lot
+    // again clears it, which the dropdown did through its blank first line.
     el.querySelectorAll('[data-pick-lot]').forEach(function (b) {
       b.onclick = function () {
         var l = draft.lines[b.dataset.w][Number(b.dataset.i)];

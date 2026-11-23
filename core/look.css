@@ -1049,3 +1049,10 @@ body:has(#home-bar.botbar) .sheet-back:not([hidden]) ~ .toast { bottom: auto; to
 
 /* v1.70: the rate list (Owner and HQ) — the words on the left, the rate on the right, nothing wider than the phone */
 .rate-list li { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; } .rate-l { min-width: 0; overflow-wrap: anywhere; } .rate-l small, .rate-r small { display: block; color: var(--muted); font-size: .78rem; } .rate-r { flex: none; text-align: right; white-space: nowrap; }
+
+/* SAMPLE (branch petak-cepat) the per-worker lot chips. A lot nobody is on yet is outlined, so what is
+   left to cover is readable without opening anything. */
+.wk-lotpick { gap: 5px; margin: 2px 0 4px; }
+.wk-lotpick .lotp { min-width: 56px; padding: 5px 7px; line-height: 1.15; }
+.wk-lotpick .lotp small { display: block; font-size: .72rem; opacity: .75; }
+.wk-lotpick .lotp-free { border-style: dashed; }

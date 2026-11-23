@@ -281,6 +281,16 @@
     var last = EA.lists.lotRound[code] ? lotLast(code) : {}, ready = [];
     var crop = COLLECT_JOBS.indexOf(code) >= 0 ? collectLots(block) : null;
     var done = ROUND_JOBS[code] ? roundDone(ctx.estate, code, block, draft.date) : {}, nDone = 0;
+    // v1.88 (Yu Chen, 23 Nov 2026: "Lot that already choose for the task still able to see"). A lot already
+    // given to ANOTHER job of the same task on today's chit looked exactly like a free one, so with two
+    // gangs in one block the staff had to remember which lots the first gang took. It is marked now, not
+    // hidden: two gangs can share a lot, and a lot that cannot be picked is how staff end up keying a
+    // wrong one. The job being edited does not count against itself.
+    var taken = {};
+    (draft.jobs || []).forEach(function (j) {
+      if (j.key === lotPicks.editKey || j.task !== code || j.block !== block) return;
+      (j.lots || []).forEach(function (x) { taken[x] = 1; });
+    });
     var html = EA.lists.lotsFor(ctx.estate, block).map(function (l) {
       if (done[l.lot]) {
         nDone++;
@@ -291,8 +301,8 @@
       if (crop && crop[l.lot]) return '<button type="button" class="pick lot-due" data-lot="' + l.lot + '" aria-pressed="' + (chosen.indexOf(l.lot) >= 0) + '"><b>' + esc(l.label || l.lot) + '</b><small>' + esc(crop[l.lot]) + '</small></button>';
       var st = lotState(code, l.lot, last);
       if (st && st.cls !== 'lot-done') ready.push(l.lot);
-      return '<button type="button" class="pick' + (st ? ' ' + st.cls : '') + '" data-lot="' + l.lot + '" aria-pressed="' + (chosen.indexOf(l.lot) >= 0) + '"><b>' + esc(l.label || l.lot) + '</b><small>' +
-        (st ? st.n + EA.t(' hari', st.n === 1 ? ' day' : ' days') : l.durian ? EA.t('durian', 'durian') : l.ha.toFixed(2) + ' Ha') + '</small></button>';
+      return '<button type="button" class="pick' + (st ? ' ' + st.cls : '') + (taken[l.lot] ? ' lot-taken' : '') + '" data-lot="' + l.lot + '" aria-pressed="' + (chosen.indexOf(l.lot) >= 0) + '"><b>' + esc(l.label || l.lot) + '</b><small>' +
+        (taken[l.lot] ? EA.t('kerja lain', 'other job') : st ? st.n + EA.t(' hari', st.n === 1 ? ' day' : ' days') : l.durian ? EA.t('durian', 'durian') : l.ha.toFixed(2) + ' Ha') + '</small></button>';
     }).join('');
     var top = '';
     if (crop) top = Object.keys(crop).length ? '<p class="hint">' + EA.t('Ditanda sendiri: petak tuai hari ini dan petak belum dikutip. Buang tanda jika traktor tidak pergi.', 'Ticked for you: today\'s harvest lots and lots not yet collected. Untick a lot the tractor will not go to.') + '</p>'
@@ -1327,9 +1337,9 @@
           if (ROUND_JOBS[pick.task] && !EA.local.get('fh.prog.' + ctx.estate + '.' + EA.today().slice(0, 7), null) && !fill.asked && EA.fh.program && EA.fh.program.refresh) {
             fill.asked = true; EA.fh.program.refresh(ctx.estate, EA.today().slice(0, 7), function () { if (document.body.contains(s)) fill(); });
           }
-          lotPicks.repeat = pick.repeat; lotPicks.ask = pick.askLot || '';
+          lotPicks.repeat = pick.repeat; lotPicks.ask = pick.askLot || ''; lotPicks.editKey = key || '';
           s.querySelector('#jb-lots').innerHTML = lotPicks(pick.block, pick.lots, pick.task);
-          lotPicks.repeat = null; lotPicks.ask = '';
+          lotPicks.repeat = null; lotPicks.ask = ''; lotPicks.editKey = '';
           var sg = s.querySelector('#jb-suggest');
           if (sg) sg.onclick = function () { sg.dataset.lots.split(' ').forEach(function (l) { if (pick.lots.indexOf(l) < 0) pick.lots.push(l); }); fill(); };
           s.querySelectorAll('#jb-lots .picks:not(#jb-repeat .picks) .pick[data-lot]').forEach(function (b) {

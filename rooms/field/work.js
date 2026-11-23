@@ -486,8 +486,25 @@
               j.lots.map(function (n) { return '<button type="button" class="pick" data-w="' + w + '" data-i="' + i + '" data-onelot="' + esc(n) + '" aria-pressed="' + (on.indexOf(n) >= 0) + '"><b>' + esc(n) + '</b></button>'; }).join('') + '</div>';
             return '<div class="wline">' + chips + '</div><div class="wline"><div class="seg"><button type="button" data-w="' + w + '" data-i="' + i + '" data-day="1" aria-pressed="' + (l.qty === '1') + '">1</button><button type="button" data-w="' + w + '" data-i="' + i + '" data-day="0.5" aria-pressed="' + (l.qty === '0.5') + '">½</button></div> hari</div>';
           }
-          var lotSel = EA.lists.MACHINE_JOBS.indexOf(j.task) >= 0 ? '' : j.lots.length > 1 ? '<select class="text-input" data-w="' + w + '" data-i="' + i + '" data-f="lot"><option value="">' + EA.t('Petak?', 'Lot?') + '</option>' +
-            j.lots.map(function (n) { return '<option' + (n === l.lot ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select>' : (j.lots[0] ? '<span class="mono">' + esc(j.lots[0]) + '</span>' : '');
+          // v1.88 (Yu Chen, 23 Nov 2026: "Lot that already choose for
+          // the task still able to see. If we have big group it take time to see all the task number.").
+          // Measured on a 16-man gang over 5 lots: 16 dropdowns, 3,768px of screen, and nothing anywhere
+          // showing which lots are already covered. A dropdown hides its options until it is opened, so the
+          // staff cannot see what is left without opening all sixteen of them one at a time.
+          // Chips instead, one tap, with the number of men already on each lot written under it. A lot
+          // nobody is on yet is marked kosong, so what is left can be read at a glance.
+          var lotSel = EA.lists.MACHINE_JOBS.indexOf(j.task) >= 0 ? '' : j.lots.length > 1 ? (function () {
+            var count = {};
+            j.lots.forEach(function (n) { count[n] = 0; });
+            j.people.forEach(function (ww) {
+              (draft.lines[ww] || []).forEach(function (ll) { if (ll.lot && count[ll.lot] !== undefined) count[ll.lot]++; });
+            });
+            return '<div class="picks wk-lotpick">' + j.lots.map(function (n) {
+              var c = count[n], mine = n === l.lot;
+              return '<button type="button" class="pick lotp' + (c ? '' : ' lotp-free') + '" data-w="' + w + '" data-i="' + i + '" data-pick-lot="' + esc(n) + '" aria-pressed="' + mine + '"><b>' + esc(n) + '</b><small>' +
+                (c ? c + EA.t(' org', ' on it') : EA.t('kosong', 'nobody')) + '</small></button>';
+            }).join('') + '</div>';
+          })() : (j.lots[0] ? '<span class="mono">' + esc(j.lots[0]) + '</span>' : '');
           var input = k === 'day'
             ? '<div class="seg"><button type="button" data-w="' + w + '" data-i="' + i + '" data-day="1" aria-pressed="' + (l.qty === '1') + '">1</button><button type="button" data-w="' + w + '" data-i="' + i + '" data-day="0.5" aria-pressed="' + (l.qty === '0.5') + '">½</button></div> hari'
             // v1.75: an empty box used to show a grey 0, which reads as a keyed zero (Yu Chen, 19 Nov: the
@@ -575,6 +592,15 @@
         var l = draft.lines[inp.dataset.w][Number(inp.dataset.i)];
         l[inp.dataset.f] = inp.dataset.f === 'lot' ? inp.value : inp.value.replace(/[^\d.,]/g, '');
         keepDraft(); refresh(jobs);
+      };
+    });
+    // v1.88: the chips write exactly what the dropdown wrote, into the same draft. Tapping a man's own lot
+    // again clears it, which the dropdown did through its blank first line.
+    el.querySelectorAll('[data-pick-lot]').forEach(function (b) {
+      b.onclick = function () {
+        var l = draft.lines[b.dataset.w][Number(b.dataset.i)];
+        l.lot = l.lot === b.dataset.pickLot ? '' : b.dataset.pickLot;
+        keepDraft(); render(el, ctx);
       };
     });
     el.querySelectorAll('[data-day]').forEach(function (b) {

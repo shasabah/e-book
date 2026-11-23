@@ -1078,3 +1078,12 @@ body:has(#home-bar.botbar) .sheet-back:not([hidden]) ~ .toast { bottom: auto; to
 .rain-at label { display: grid; gap: 2px; font-size: .82rem; color: var(--muted); }
 .rain-at input { width: 100%; min-width: 0; }
 .rain-sum { margin: 4px 0; }
+/* v1.88 the per-worker lot chips. A lot nobody is on yet is outlined, so what is
+   left to cover is readable without opening anything. */
+.wk-lotpick { gap: 5px; margin: 2px 0 4px; }
+.wk-lotpick .lotp { min-width: 56px; padding: 5px 7px; line-height: 1.15; }
+.wk-lotpick .lotp small { display: block; font-size: .72rem; opacity: .75; }
+.wk-lotpick .lotp-free { border-style: dashed; }
+/* v1.88 the chit's lot picker: a lot another job of the same task already holds today. Marked, never hidden. */
+.pick.lot-taken { opacity: .55; border-style: dashed; }
+.pick.lot-taken[aria-pressed="true"] { opacity: 1; }

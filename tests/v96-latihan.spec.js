@@ -2,7 +2,7 @@
 // "cause my current need new id for latihan. can you help fix it", "urgent for new user like paitan and meliau").
 // Brief_Latihan_Satu_Login. Below:
 // - MASUK LATIHAN in the name menu of a real login; orange stripes, the band and KELUAR LATIHAN on the screen;
-// - in Latihan: made-up workers (also at Meliau), no Pengguna / Pentadbir tiles, no TUKAR PIN, every office call carries practice:1;
+// - in Latihan: made-up workers (also at Meliau), no Pengguna / Pentadbir tiles, no TUKAR PIN, every office call carries latihan:1;
 // - a record keyed in Latihan is sent only in Latihan (practice:1), a real record only outside it (no practice flag);
 // - KELUAR LATIHAN with practice records waiting asks first; the real worker list comes back after;
 // - Latihan is kept only for this opening of the app (sessionStorage): a new opening starts real.
@@ -18,7 +18,7 @@ const { chromium } = require('playwright');
     let o = { ok: true, sw };
     if (!online) o = { ok: false, error: 'busy' };
     else if (bd.action === 'login') o = { ok: true, user: { code: 'OWN-ALL-01', name: 'Pemilik', role: 'Owner', estates: ['SSGT', 'MELU', 'PTAN'] }, sw };
-    else if (bd.action === 'people') o = bd.practice ? { ok: true, people: [], practice: true } : { ok: true, people: [{ id: 'H1', name: 'Ahmad Bin Contoh', estate: 'SSGT', gang: 'Tuai · Harvest', sex: 'M' }] };
+    else if (bd.action === 'people') o = bd.latihan ? { ok: true, people: [], practice: true } : { ok: true, people: [{ id: 'H1', name: 'Ahmad Bin Contoh', estate: 'SSGT', gang: 'Tuai · Harvest', sex: 'M' }] };
     else if (bd.action === 'saveBatch') o = { ok: true, results: bd.items.map(it => ({ id: it.row.id, ok: true })), sw };
     else o = { ok: false, error: 'busy' };
     rt.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
@@ -49,13 +49,13 @@ const { chromium } = require('playwright');
   await p.click('#who-name');
   check('in Latihan the name menu has KELUAR LATIHAN and no TUKAR PIN', /KELUAR LATIHAN/.test(await p.innerText('#nm-lat')) && await p.locator('#nm-pin').count() === 0);
   await p.evaluate(() => EA.ui.closeSheet());
-  // records: one practice, sent in Latihan with practice:1
+  // records: one practice, sent in Latihan with latihan:1
   online = true; calls.length = 0;
   await p.evaluate(() => { EA.save('FH_MUSTER', 'FH', 'MELU', { worker_id: 'W-MELU-001', muster: 'H' }); });
   await p.evaluate(() => EA.send()); await p.waitForTimeout(800);
   let sb = calls.filter(c => c.action === 'saveBatch');
-  check('a practice record is sent with practice:1', sb.length >= 1 && sb.every(c => c.practice === 1) && sb[0].items[0].row.estate === 'MELU', JSON.stringify(sb.map(c => c.practice)));
-  check('every office call in Latihan carries practice:1', calls.length > 0 && calls.every(c => c.practice === 1), JSON.stringify(calls.map(c => c.action + ':' + c.practice)));
+  check('a practice record is sent with latihan:1', sb.length >= 1 && sb.every(c => c.latihan === 1) && sb[0].items[0].row.estate === 'MELU', JSON.stringify(sb.map(c => c.latihan)));
+  check('every office call in Latihan carries latihan:1', calls.length > 0 && calls.every(c => c.latihan === 1), JSON.stringify(calls.map(c => c.action + ':' + c.latihan)));
   check('the row itself carries no practice column (the office sheet is unchanged)', sb.length && !('practice' in sb[0].items[0].row) && !('pr' in sb[0].items[0].row));
   // a practice record left waiting, then KELUAR LATIHAN asks first
   online = false;
@@ -71,13 +71,13 @@ const { chromium } = require('playwright');
   await p.evaluate(() => { EA.save('FH_MUSTER', 'FH', 'SSGT', { worker_id: 'H1', muster: 'H' }); });
   await p.evaluate(() => EA.send()); await p.waitForTimeout(800);
   sb = calls.filter(c => c.action === 'saveBatch');
-  check('a real record is sent with no practice flag, and only the real one', sb.length >= 1 && sb.every(c => !c.practice) && sb.every(c => c.items.every(it => it.row.estate === 'SSGT')), JSON.stringify(sb.map(c => [c.practice, c.items.length])));
+  check('a real record is sent with no practice flag, and only the real one', sb.length >= 1 && sb.every(c => !c.latihan) && sb.every(c => c.items.every(it => it.row.estate === 'SSGT')), JSON.stringify(sb.map(c => [c.practice, c.items.length])));
   check('the practice record is still waiting for Latihan', await p.evaluate(() => EA.waitingOtherMode() === 1));
-  // Latihan again: the waiting practice record goes, with practice:1
+  // Latihan again: the waiting practice record goes, with latihan:1
   await p.evaluate(() => { EA.setPractice(true); location.reload(); }); await p.waitForSelector('#home:not([hidden])'); calls.length = 0;
   await p.evaluate(() => EA.send()); await p.waitForTimeout(800);
   sb = calls.filter(c => c.action === 'saveBatch');
-  check('back in Latihan the waiting practice record is sent, with practice:1', sb.length >= 1 && sb.every(c => c.practice === 1) && sb[0].items[0].row.worker_id === 'W-MELU-002' && await p.evaluate(() => EA.waitingOtherMode() === 0), JSON.stringify(sb.map(c => c.practice)));
+  check('back in Latihan the waiting practice record is sent, with latihan:1', sb.length >= 1 && sb.every(c => c.latihan === 1) && sb[0].items[0].row.worker_id === 'W-MELU-002' && await p.evaluate(() => EA.waitingOtherMode() === 0), JSON.stringify(sb.map(c => c.latihan)));
   // a new opening of the app (a new tab = new sessionStorage) starts real
   const p2 = await ctx.newPage(); await p2.goto('http://localhost:8765/index.html'); await p2.waitForSelector('#home:not([hidden])');
   check('closing and opening the app again starts real (Latihan is for one opening only)', await p2.evaluate(() => !EA.practice() && document.getElementById('practice-band').hidden));

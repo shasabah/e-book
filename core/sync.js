@@ -203,7 +203,7 @@ window.EA = window.EA || {};
     var sent = 0, err = null, refusedAll = 0;
     function post(body) {
       return EA.fetchWait(link, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(Object.assign({ key: user.key, version: EA.VERSION, phone: EA.phone(), waiting: get(K.queue, []).length }, practiceNow() ? { practice: 1 } : {}, body)) }).then(function (r) { return r.json(); });
+        body: JSON.stringify(Object.assign({ key: user.key, version: EA.VERSION, phone: EA.phone(), waiting: get(K.queue, []).length }, practiceNow() && !/^L-/.test(String(user.code)) ? { latihan: 1 } : {}, body)) }).then(function (r) { return r.json(); });
     }
     try {
       // Everything waiting goes in one trip (up to 50 at a time).
@@ -283,7 +283,7 @@ window.EA = window.EA || {};
     try {
       // v1.19: asking for something back waits at most 30 s (sending still waits 60 s).
       var res = await EA.fetchWait(link, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(Object.assign({ action: action, key: user.key, version: EA.VERSION, phone: EA.phone(), waiting: get(K.queue, []).length }, practiceNow() ? { practice: 1 } : {}, extra || {})) }, 30000);
+        body: JSON.stringify(Object.assign({ action: action, key: user.key, version: EA.VERSION, phone: EA.phone(), waiting: get(K.queue, []).length }, practiceNow() && !/^L-/.test(String(user.code)) ? { latihan: 1 } : {}, extra || {})) }, 30000);
       var j = null;
       try { j = await res.json(); } catch (e2) { j = null; }
       if (j && j.sw) EA.setSwitches(j.sw);

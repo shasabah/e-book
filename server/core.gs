@@ -32,7 +32,7 @@ function liveSheetId_() { try { return PropertiesService.getScriptProperties().g
 var PRACTICE_ = false, UBOOK_ = null;
 function isPracticeCode_(code) { return /^L-/.test(String(code)); }
 // v1.90 Latihan satu login (Yu Chen, 24 Nov 2026): a real person may practise with his own login. The phone then
-// sends practice:1 with every request, and that request reads and writes only the practice book, like an L- login.
+// sends latihan:1 with every request (not "practice": userAdd already uses that word for making an L- login), and that request reads and writes only the practice book, like an L- login.
 function isPractice_(user) { return PRACTICE_ || isPracticeCode_(user && user.user_code); }
 function book_() { return BOOK_ || (BOOK_ = SpreadsheetApp.openById(PRACTICE_ ? SHEET_ID : liveSheetId_())); }
 function usersBook_() { if (!PRACTICE_) return book_(); return UBOOK_ || (UBOOK_ = SpreadsheetApp.openById(liveSheetId_())); }
@@ -237,7 +237,7 @@ function doPost_(e) {
   if (bad >= 20 || badAll >= 300) return reply({ ok: false, error: 'locked' });
   if (PRACTICE_) { PRACTICE_ = false; BOOK_ = null; }
   var user = findUser(req.key);
-  if (user && (isPracticeCode_(user.user_code) || (Number(req.practice) === 1 && req.action !== 'login'))) { PRACTICE_ = true; BOOK_ = null; }
+  if (user && (isPracticeCode_(user.user_code) || (Number(req.latihan) === 1 && req.action !== 'login'))) { PRACTICE_ = true; BOOK_ = null; }
   if (!user) { cache.put(pk, String(bad + 1), 900); cache.put('badkeys', String(badAll + 1), 900); return reply({ ok: false, error: 'wrong_key' }); }
 
   if (req.action === 'login') {

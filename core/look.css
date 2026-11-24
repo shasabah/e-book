@@ -602,6 +602,19 @@ body.rb-room header.top { display: none; }
 .rb-drv { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .rb-lots.rb-wrapl { flex-wrap: wrap; }
 .rb-lots.rb-wrapl button { flex: 1 0 64px; }
+/* v1.96 Jubin: the lot questions as tiles, one SEMUA HABIS button, the answer on the shared sheet */
+.rb-all { width: 100%; min-height: 52px; border: 0; border-radius: 14px; background: var(--ok); color: #fff; font: inherit; font-weight: 800; font-size: 1rem; margin: 6px 0 0; }
+.rb-all.ghost { background: var(--surface); color: var(--ok); border: 2px solid var(--ok); }
+.rb-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 4px; }
+.rb-tile { text-align: left; border: 2px dashed #cfd8d1; background: var(--surface); border-radius: 12px; padding: 8px 10px; min-height: 64px; font: inherit; color: var(--ink); }
+.rb-tile b { font-size: 1.05rem; } .rb-tile .rb-s { display: block; font-size: .78rem; color: var(--muted); }
+.rb-tile i { display: block; font-style: normal; font-weight: 800; font-size: .78rem; margin-top: 2px; color: var(--muted); }
+.rb-tile.y, .rb-tile.n { color: #17301f; } .rb-tile.y .rb-s, .rb-tile.n .rb-s { color: #4d5a52; }
+.rb-tile.y { border: 2px solid var(--ok); background: #e3f3e8; } .rb-tile.y i { color: #17683a; }
+.rb-tile.n { border: 2px solid var(--wait); background: #fdeccb; } .rb-tile.n i { color: #7a4a00; }
+.rb-sopts { display: flex; gap: 6px; margin: 10px 0; }
+.rb-sopts button { flex: 1; min-height: 50px; border-radius: 10px; border: 2px solid var(--ok); background: var(--surface); color: var(--ok); font: inherit; font-weight: 800; font-size: .85rem; }
+.rb-sopts button[aria-pressed="true"] { background: var(--ok); color: #fff; }
 .rb-why button { border: 2px solid var(--wait); background: var(--surface); color: #7a4a00; border-radius: 99px; font: inherit; font-weight: 700; font-size: .82rem; min-height: 44px; padding: 0 12px; }
 .rb-why button[aria-pressed="true"] { background: var(--wait); color: #fff; }
 .rb-jnext { width: 100%; margin-top: 12px; }

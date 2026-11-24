@@ -795,11 +795,17 @@
         s.querySelector('#lr-ok').onclick = async function () {
           var b = s.querySelector('#lr-ok'), m = s.querySelector('#lr-err');
           if (b.disabled) return; b.disabled = true;
+          // v1.98 (Yu Chen, 24 Nov 22:17: "start again button have issue"): the first reset of a long-used practice login
+          // took the office 40 s, longer than the 30 s the phone waits, so the phone gave up and said "no signal" while
+          // the office finished. It now waits up to 2 minutes, says it is working, and a slow answer says to press again
+          // (a second press is safe: the office has nothing more to remove, and the phone is then cleared).
+          m.hidden = false; m.textContent = EA.t('Sedang mengosongkan… boleh ambil masa hingga 1 minit. Jangan tutup.', 'Clearing… this can take up to a minute. Do not close.');
           if (EA.sendLink()) {
-            var j = await EA.askFull('latihanReset', {});
+            var j = await EA.askFull('latihanReset', {}, 120000);
             if (!j || !j.ok) {
               b.disabled = false; m.hidden = false;
-              m.textContent = j && (j.error === 'offline' || j.error === 'slow') ? EA.t('Perlu isyarat untuk mula semula. Cuba lagi bila ada talian.', 'This needs a signal. Try again when you are online.')
+              m.textContent = j && j.error === 'slow' ? EA.t('Pejabat masih bekerja. Tunggu 1 minit, kemudian tekan MULA SEMULA sekali lagi.', 'The office is still working. Wait a minute, then press START AGAIN once more.')
+                : j && j.error === 'offline' ? EA.t('Perlu isyarat untuk mula semula. Cuba lagi bila ada talian.', 'This needs a signal. Try again when you are online.')
                 : j && j.error === 'busy' ? EA.t('Pejabat sibuk. Cuba lagi sebentar.', 'The office is busy. Try again in a moment.')
                 : EA.t('Tidak dapat mula semula. Tekan MUAT dan cuba lagi.', 'Could not start again. Press LOAD and try again.');
               return;

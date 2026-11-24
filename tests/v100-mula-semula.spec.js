@@ -38,6 +38,7 @@ const { chromium } = require('playwright');
   online = false;
   await p.click('#lr-ok'); await p.waitForTimeout(600);
   check('the office not reached: nothing is cleared, and it says so', await p.evaluate(() => !!localStorage.getItem('L:fh.chits2')) && await p.isVisible('#lr-err'), await p.innerText('#lr-err'));
+  check('while it works it says so, and the phone waits up to 2 minutes for this one (a first reset took the office 40 s)', /latihanReset', \{\}, 120000\)/.test(await (await p.request.get('http://localhost:8765/core/home.js')).text()) && /Sedang mengosongkan/.test(await (await p.request.get('http://localhost:8765/core/home.js')).text()));
   online = true; calls.length = 0;
   await p.click('#lr-ok'); await p.waitForTimeout(800);
   const c = calls.find(x => x.action === 'latihanReset');

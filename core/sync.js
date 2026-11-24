@@ -296,14 +296,14 @@ window.EA = window.EA || {};
   window.addEventListener('unhandledrejection', function (e) { EA.reportError('promise', e.reason); });
 
   // EA.askFull: the office's whole answer, or { ok:false, error:'nolink'|'offline'|'busy' } (v1.9).
-  EA.askFull = async function (action, extra) {
+  EA.askFull = async function (action, extra, waitMs) {
     var link = EA.sendLink(), user = EA.currentUser();
     if (!link || !user) return { ok: false, error: 'nolink' };
     if (!navigator.onLine) return { ok: false, error: 'offline' };
     try {
       // v1.19: asking for something back waits at most 30 s (sending still waits 60 s).
       var res = await EA.fetchWait(link, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(Object.assign({ action: action, key: user.key, version: EA.VERSION, phone: EA.phone(), waiting: get(K.queue, []).length }, latBody(user), extra || {})) }, 30000);
+        body: JSON.stringify(Object.assign({ action: action, key: user.key, version: EA.VERSION, phone: EA.phone(), waiting: get(K.queue, []).length }, latBody(user), extra || {})) }, waitMs || 30000);
       var j = null;
       try { j = await res.json(); } catch (e2) { j = null; }
       if (j && j.sw) EA.setSwitches(j.sw);

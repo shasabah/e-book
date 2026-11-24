@@ -554,12 +554,52 @@ body:has(#room:not([hidden]) .botbar) .sheet-back:not([hidden]) ~ .toast,
 .rupa-tick i { width: 30px; height: 30px; border-radius: 8px; border: 2px solid #cfd8d1; display: flex; align-items: center; justify-content: center; color: #fff; font-style: normal; font-weight: 800; flex: none; }
 .rupa-tick[aria-pressed="true"] i { background: #6a4fb3; border-color: #6a4fb3; }
 .rupa-tick[disabled] i { background: #b9acdc; border-color: #b9acdc; }
-.rupa-job-nav { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
-.rupa-job-nav button { min-height: 44px; }
-.rupa-jobs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
-.rupa-jobs button { flex: none; min-height: 44px; border: 2px solid #cfd8d1; background: #fff; border-radius: 10px; padding: 4px 10px; font: inherit; font-weight: 700; }
-.rupa-jobs button[aria-current="true"] { border-color: #6a4fb3; background: #f1ecfb; color: #4b3590; }
-.rupa-jobs button.done::after { content: " ✓"; color: #1f7a45; }
+/* v1.92 Rupa Baru Kerja — the screen agreed in the sample (CADANGAN) */
+body.rb-room header.top { display: none; }
+.rb-thin { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--slate); color: var(--slate-ink); border-radius: var(--r); padding: 4px 12px; margin: 0 0 10px; min-height: 48px; }
+.rb-thin button { background: transparent; border: 0; color: inherit; font: inherit; font-weight: 800; font-size: 1rem; min-height: 44px; padding: 0; text-align: left; }
+.rb-thin small { font-size: .8rem; opacity: .9; }
+.rb-lead { margin: 0 0 8px; }
+#rb-list { display: flex; flex-direction: column; gap: 10px; }
+.rb-job { padding: 0; overflow: hidden; }
+.rb-jh { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent; border: 0; padding: 12px 14px; min-height: 56px; font: inherit; color: inherit; }
+.rb-jh .t { flex: 1; min-width: 0; } .rb-jh b { display: block; font-size: 1.02rem; } .rb-jh .rb-s { color: var(--muted); font-size: .8rem; }
+.rb-job.on .rb-jh { border-bottom: 1px solid var(--line); }
+.rb-jb { padding: 8px 14px 14px; }
+.rb-jb > .card { box-shadow: none; padding: 0; margin: 0; }
+.rb-jb > .card > h2 { display: none; }
+.rb-chip { flex: none; font-size: .75rem; font-weight: 800; padding: 5px 10px; border-radius: 99px; background: var(--ok-soft); color: var(--ok); white-space: nowrap; }
+.rb-chip.w { background: #eceee9; color: #4d564f; }
+.rb-prog { margin: 2px 0 6px; color: var(--muted); font-size: .85rem; }
+.rb-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; text-align: left; background: transparent; border: 0; border-top: 1px solid var(--line); padding: 8px 0; min-height: 48px; font: inherit; color: inherit; }
+.rb-row b { font-weight: 600; } .rb-row span b { font-weight: 800; }
+.rb-row.rb-wrap { flex-wrap: wrap; }
+.rb-ok { color: var(--ok); font-style: normal; font-weight: 800; }
+.rb-open { background: #f2f8f3; margin: 0 -14px; padding: 10px 14px; border-top: 2px solid var(--ok); border-bottom: 2px solid var(--ok); }
+.rb-name { display: block; font-size: 1.02rem; }
+.rb-second { margin: 8px 0 0; }
+.rb-lots { display: flex; gap: 6px; margin: 8px 0; overflow-x: auto; }
+.rb-lots button { flex: 1 0 58px; min-width: 58px; text-align: center; border: 2px dashed #cfd8d1; background: var(--surface); border-radius: 10px; padding: 6px 2px; font: inherit; font-weight: 800; font-size: .9rem; min-height: 46px; color: var(--ink); }
+.rb-lots button .rb-s { display: block; font-weight: 500; font-size: .66rem; color: var(--muted); }
+.rb-lots button[data-taken] { border-style: solid; border-color: var(--ok); background: var(--ok-soft); }
+.rb-lots button[aria-pressed="true"] { background: var(--ok); border-color: var(--ok); color: #fff; }
+.rb-lots button[aria-pressed="true"] .rb-s { color: #d9efe0; }
+.rb-box { display: flex; gap: 8px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
+.rb-box input, .rb-inl input { border: 2px solid var(--ok); border-radius: 10px; width: 110px; height: 46px; padding: 0 12px; font: inherit; font-size: 1.25rem; font-weight: 700; background: var(--surface); color: var(--ink); }
+.rb-inl { display: flex; align-items: center; gap: 6px; white-space: nowrap; } .rb-inl input { width: 84px; height: 44px; font-size: 1.1rem; }
+.rb-inl input::placeholder { font-size: .75rem; font-weight: 500; }
+.rb-next { margin-left: auto; background: var(--ok); color: #fff; border: 0; border-radius: 10px; font: inherit; font-weight: 800; min-height: 46px; padding: 0 14px; }
+.rb-b2 { display: flex; gap: 8px; margin-top: 8px; }
+.rb-b2 button { flex: 1; min-width: 0; border: 2px solid var(--ok); color: var(--ok); background: var(--surface); border-radius: 12px; padding: 8px 6px; font: inherit; font-weight: 800; font-size: .75rem; min-height: 46px; }
+.rb-lst { border-top: 1px solid var(--line); padding: 10px 0; }
+.rb-lst .rb-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.rb-lst .rb-top small { display: block; color: var(--muted); font-size: .8rem; }
+.rb-lst .seg button { min-width: 64px; }
+.rb-why { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.rb-why button { border: 2px solid var(--wait); background: var(--surface); color: #7a4a00; border-radius: 99px; font: inherit; font-weight: 700; font-size: .82rem; min-height: 44px; padding: 0 12px; }
+.rb-why button[aria-pressed="true"] { background: var(--wait); color: #fff; }
+.rb-jnext { width: 100%; margin-top: 12px; }
+.rb-report summary { font-weight: 700; min-height: 44px; display: flex; align-items: center; }
 .practice-as { display: block; font-size: .85rem; font-weight: 700; margin-top: 2px; }
 .practice-out { flex: none; min-height: 44px; padding: 6px 12px; font-size: .85rem; }
 .tag-practice { display: inline-block; background: var(--wait-soft); color: var(--wait); border-radius: 999px; padding: 1px 9px; font-size: .75rem; font-weight: 700; }

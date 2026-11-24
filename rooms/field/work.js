@@ -353,47 +353,160 @@
 
   // ---------- the screen ----------
   // ---------- v1.92 Rupa Baru (Brief_Rupa_Baru, signed by Yu Chen 24 Nov 2026) ----------
-  // The same Kerja: the same draft, the same checks, the same SIMPAN and the same records. Only the screen changes:
-  // one job at a time with KERJA SETERUSNYA; on harvesting, Enter goes to the next man and his lot starts as the lot of
-  // the man above (one tap to change); "Petak habis dituai?" is asked once per lot, after the last man, and the
-  // answers become the job's own SIAP / BELUM SIAP and reason, exactly as the old screen writes them.
+  // The screen agreed in the sample (CADANGAN, 23–24 Nov): the jobs as one list, one job open at a time, each marked
+  // LENGKAP ✓ when done; on a per-man job one man open at a time — the men already keyed fold to one line
+  // ("1-13 · 101 tandan ✓"), the rest read BELUM DIISI ›; SETERUSNYA › (or Enter) goes to the next man, who starts on
+  // the lot of the man before him; "Petak habis dituai?" once per lot, its answers filling the job's SIAP / BELUM SIAP.
+  // Only the screen is new. Every button writes the same draft through the same handlers (wireJobs), and SIMPAN,
+  // the checks and the records are the ones the old screen uses. Jobs the sample did not redraw (CPS by lot, a day
+  // job over several lots) open with the old card inside, so nothing is lost.
   function rbOn() { return !!(EA.rupaBaru && EA.rupaBaru()); }
+  // The big estate heading is folded away on the new Kerja (the thin green line says where you are), as in the sample;
+  // the sending line with HANTAR stays. Back on any other screen the heading returns.
+  function rbRoom(on) { try { document.body.classList.toggle('rb-room', !!on); } catch (e) {} }
+  window.addEventListener('hashchange', function () { if (location.hash.indexOf('field-harvest/work') < 0) rbRoom(false); });
+  var rbMan = {}, rbFocus = '';
   function rbKey() { return 'fh.rbJob.' + (chit ? chit.chit : ''); }
-  function rbIdx(jobs) { var i = Number(EA.local.get(rbKey(), 0)) || 0; return Math.max(0, Math.min(jobs.length - 1, i)); }
+  function rbType(j) {
+    var k = kind(j.task, j.block);
+    if (k === 'ticket') return 'ticket';
+    if (isHa(j)) return 'old';
+    if (isOp(j)) return 'op';
+    if (k === 'day') return j.lots.length > 1 && EA.lists.MACHINE_JOBS.indexOf(j.task) < 0 ? 'old' : 'day';
+    if (k === 'bunches') return 'harv';
+    return j.lots.length > 1 ? 'harv' : 'num';     // a qty job over several lots goes man by man, like harvesting
+  }
   function rbHarvest(j) { return rbOn() && kind(j.task, j.block) === 'bunches'; }
   function rbDefaults(jobs) {
     var ch = false;
     jobs.forEach(function (j) {
-      if (kind(j.task, j.block) !== 'day') return;
+      if (rbType(j) !== 'day') return;
       j.people.forEach(function (w) { (draft.lines[w] || []).forEach(function (l) { if (String(l.qty == null ? '' : l.qty) === '' && !zeroWhy(w)) { l.qty = '1'; ch = true; } }); });
     });
     if (ch) keepDraft();
   }
+  function rbManDone(j, w) {
+    var k = kind(j.task, j.block), ls = draft.lines[w] || [];
+    if (isOp(j)) return ls.length > 0 && ls.every(function (l) { return hoursOf(l) > 0; });
+    if (k === 'day') return ls.length > 0 && ls.every(function (l) { return !!l.qty; });
+    return answered(w, k) && (j.lots.length < 2 || ls.every(function (l) { return !!l.lot || !(num(k === 'bunches' ? l.bunches : l.qty) > 0); }));
+  }
   function rbFilled(j) {
-    var k = kind(j.task, j.block);
-    return problems([j]).length === 0 && (k === 'ticket' || auto(j) || j.people.every(function (w) { return answered(w, k); }));
+    if (problems([j]).length) return false;
+    var t = rbType(j);
+    return t === 'ticket' || auto(j) || j.people.every(function (w) { return rbManDone(j, w); });
   }
-  function rbNav(jobs) {
-    var cur = rbIdx(jobs);
-    return '<div class="rupa-jobs" id="rb-jobs">' + jobs.map(function (j, i) {
-      return '<button type="button" data-rbj="' + i + '" aria-current="' + (i === cur) + '" class="' + (rbFilled(j) ? 'done' : '') + '">' + (i + 1) + '. ' + esc(jobName(j.task)) + (j.block ? ' · ' + esc(j.block) : '') + '</button>';
-    }).join('') + '</div><p class="hint" id="rb-count"></p>';
+  function rbOpenJob(jobs) {
+    var k = EA.local.get(rbKey(), null);
+    if (k === '' ) return '';
+    if (k && jobs.some(function (j) { return j.key === k; })) return k;
+    var f = jobs.find(function (j) { return !rbFilled(j); });
+    return (f || jobs[0] || {}).key || '';
   }
-  function rbShow(jobs) {
-    var cur = rbIdx(jobs), last = cur === jobs.length - 1;
-    jobs.forEach(function (j, i) { var c = el.querySelector('[data-job="' + j.key + '"]'); if (c) c.hidden = i !== cur; });
-    el.querySelectorAll('[data-rbj]').forEach(function (b) { var i = Number(b.dataset.rbj); b.setAttribute('aria-current', String(i === cur)); b.classList.toggle('done', rbFilled(jobs[i])); });
-    var cnt = el.querySelector('#rb-count'); if (cnt) cnt.textContent = EA.t('Kerja ' + (cur + 1) + ' daripada ' + jobs.length, 'Job ' + (cur + 1) + ' of ' + jobs.length);
-    var rep = el.querySelector('#rb-report'); if (rep) rep.hidden = !last;
-    var st = el.querySelector('#rb-steps');
-    if (st) {
-      st.innerHTML = (cur > 0 ? '<button type="button" class="btn btn-ghost" id="rb-prev">‹ PREVIOUS<small>‹ SEBELUM</small></button>' : '') +
-        (!last ? '<button type="button" class="btn btn-rupa" id="rb-next">NEXT JOB ›<small>KERJA SETERUSNYA ›</small></button>' : '');
-      var pv = st.querySelector('#rb-prev'); if (pv) pv.onclick = function () { rbGo(jobs, cur - 1); };
-      var nx = st.querySelector('#rb-next'); if (nx) nx.onclick = function () { rbGo(jobs, cur + 1); };
-    }
+  function rbUnit(j) { return kind(j.task, j.block) === 'bunches' ? EA.t('tandan', 'bunches') : unitLabel(j.task, j.block); }
+  function rbVal(j, l) { return kind(j.task, j.block) === 'bunches' ? l.bunches : l.qty; }
+  function rbSumLine(j, w) {
+    var ls = (draft.lines[w] || []).filter(function (l) { return String(rbVal(j, l) || '') !== ''; });
+    if (!ls.length && zeroWhy(w)) return '0 · ' + esc(zeroWhy(w));
+    return ls.map(function (l) { return (l.lot ? esc(l.lot) + ' · ' : '') + '<b>' + esc(rbVal(j, l)) + '</b>'; }).join(' + ') + ' ' + esc(rbUnit(j));
   }
-  function rbGo(jobs, i) { EA.local.set(rbKey(), Math.max(0, Math.min(jobs.length - 1, i))); rbShow(jobs); window.scrollTo(0, 0); }
+  function rbLotBtns(j, w, i) {
+    if (j.lots.length < 2) return '';
+    var count = {}; j.lots.forEach(function (n) { count[n] = 0; });
+    j.people.forEach(function (ww) { (draft.lines[ww] || []).forEach(function (ll) { if (ll.lot && count[ll.lot] !== undefined) count[ll.lot]++; }); });
+    var l = (draft.lines[w] || [])[i] || {};
+    return '<div class="rb-lots">' + j.lots.map(function (n) {
+      var lo = EA.lists.lot(ctx.estate, n), c = count[n];
+      return '<button type="button" data-w="' + esc(w) + '" data-i="' + i + '" data-pick-lot="' + esc(n) + '"' + (c ? ' data-taken' : '') + ' aria-pressed="' + (l.lot === n) + '">' + esc(n) +
+        (lo && lo.palms ? '<span class="rb-s">' + lo.palms + ' pk</span>' : '') + '<span class="rb-s">' + (c ? '<b>' + c + ' org</b>' : EA.t('kosong', 'nobody')) + '</span></button>';
+    }).join('') + '</div>';
+  }
+  function rbManList(j) {
+    var k = kind(j.task, j.block), unit = rbUnit(j), f = k === 'bunches' ? 'bunches' : 'qty';
+    var done = j.people.filter(function (w) { return rbManDone(j, w); }).length;
+    var tot = j.people.reduce(function (a, w) { return a + (draft.lines[w] || []).reduce(function (b, l) { return b + num(rbVal(j, l)); }, 0); }, 0);
+    var open = rbMan[j.key];
+    if (open === undefined || j.people.indexOf(open) < 0) open = rbMan[j.key] = j.people.find(function (w) { return !rbManDone(j, w); }) || '';
+    var h = '<p class="rb-prog"><b>' + done + EA.t(' daripada ', ' of ') + j.people.length + EA.t(' orang diisi · ', ' people keyed · ') + (Math.round(tot * 100) / 100) + ' ' + esc(unit) + '</b></p>';
+    h += j.people.map(function (w) {
+      if (w !== open) {
+        var ok = rbManDone(j, w);
+        return '<button type="button" class="rb-row" data-rbman="' + esc(j.key) + '|' + esc(w) + '"><b>' + esc(person(w)) + '</b>' +
+          (ok ? '<span>' + rbSumLine(j, w) + ' <i class="rb-ok">✓</i></span>' : '<span class="rb-chip w">' + EA.t('BELUM DIISI ›', 'NOT KEYED ›') + '</span>') + '</button>';
+      }
+      var ls = draft.lines[w] || [];
+      return '<div class="rb-open" data-rbopen="' + esc(j.key) + '"><b class="rb-name">' + esc(person(w)) + '</b>' +
+        ls.map(function (l, i) {
+          return (i > 0 ? '<p class="hint rb-second">' + EA.t('Petak lain', 'Another lot') + ' · <button type="button" class="link-btn" data-w="' + esc(w) + '" data-del="' + i + '">' + EA.t('buang', 'remove') + '</button></p>' : '') +
+            rbLotBtns(j, w, i) +
+            '<div class="rb-box"><input inputmode="numeric" data-f="' + f + '" data-w="' + esc(w) + '" data-i="' + i + '" data-rbin="' + esc(j.key) + '" value="' + esc(rbVal(j, l) || '') + '" aria-label="' + esc(unit + ' ' + person(w)) + '"> ' + esc(unit) +
+            (i === ls.length - 1 ? '<button type="button" class="rb-next" data-rbnext="' + esc(j.key) + '|' + esc(w) + '">' + EA.t('SETERUSNYA ›', 'NEXT ›') + '</button>' : '') + '</div>';
+        }).join('') + bagBox(j, w) +
+        '<div class="rb-b2">' + (j.lots.length > 1 ? '<button type="button" data-w="' + esc(w) + '" data-add="1">' + EA.t('+ PETAK LAIN', '+ ANOTHER LOT') + '</button>' : '') +
+        (askable(j) ? '<button type="button" data-awayw="' + esc(w) + '" data-awayj="' + esc(j.key) + '">' + EA.t('TIDAK HADIR / TIADA KERJA', 'ABSENT / NO WORK') + '</button>' : '') + '</div></div>';
+    }).join('');
+    return h;
+  }
+  function rbStatus(j) {
+    var st = draft.status[j.key] || { done: '', reason: '' };
+    return '<div class="rb-lst"><div class="rb-top"><b>' + EA.t('Kerja ini', 'This job') + '</b><span class="seg">' +
+      '<button type="button" data-st="' + j.key + '" data-v="Y" aria-pressed="' + (st.done === 'Y') + '">' + EA.t('SIAP', 'DONE') + '</button>' +
+      '<button type="button" data-st="' + j.key + '" data-v="N" aria-pressed="' + (st.done === 'N') + '">' + EA.t('BELUM', 'NOT YET') + '</button></span></div>' +
+      '<div class="field" data-reasonbox="' + j.key + '"' + (st.done === 'N' ? '' : ' hidden') + '><textarea class="text-input" rows="2" data-reason="' + j.key + '" placeholder="' + EA.t('sebab dan tindakan', 'why, and what will be done') + '">' + esc(st.reason || '') + '</textarea></div></div>';
+  }
+  function rbBody(j) {
+    var t = rbType(j), mand = j.mandors && j.mandors.length ? '<p class="hint">' + EA.t('Mandor ', 'Mandor ') + j.mandors.map(person).map(esc).join(', ') + EA.t(' · ikut kumpulan, tiada angka', ' · goes by the gang, no number') + '</p>' : '';
+    if (t === 'old') return jobCard(j);
+    var dose = j.task === 'MAN' ? '<div class="wline"><label class="inline-label">' + EA.t('Dos baja (kg sepokok) ', 'Dose (kg per palm) ') + '<input class="qty" inputmode="decimal" data-dose="' + j.key + '" value="' + esc((draft.dose || {})[j.key] || '') + '"></label></div>' : '';
+    if (t === 'harv') return mand + dose + rbManList(j) + (kind(j.task, j.block) === 'bunches' ? rbLotsHtml(j) : rbStatus(j));
+    if (t === 'ticket') return '<p class="hint"><b>' + EA.t('Tiada apa untuk diisi.', 'Nothing to key.') + '</b> ' + EA.t('Dibayar ikut tan pada tiket kilang.', 'Paid by the tonnes on the mill ticket.') + '</p>' +
+      j.people.map(function (w) { return '<div class="rb-row"><b>' + esc(person(w)) + '</b><span class="rb-chip">' + EA.t('IKUT TIKET', 'BY TICKET') + '</span></div>'; }).join('');
+    if (t === 'op') return '<p class="hint">' + EA.t('Isi jam meter mula dan tamat.', 'Key the hour meter at start and end.') + '</p>' + j.people.map(function (w) {
+      return (draft.lines[w] || []).map(function (l, i) {
+        return '<div class="rb-row rb-wrap"><b>' + esc(person(w)) + '</b><span class="rb-inl"><input inputmode="decimal" data-w="' + esc(w) + '" data-i="' + i + '" data-f="ms" value="' + esc(l.ms || '') + '" placeholder="' + EA.t('mula', 'start') + '"> ' +
+          '<input inputmode="decimal" data-w="' + esc(w) + '" data-i="' + i + '" data-f="me" value="' + esc(l.me || '') + '" placeholder="' + EA.t('tamat', 'end') + '"> <b data-hrs="' + esc(w) + '|' + i + '"></b></span></div>';
+      }).join('');
+    }).join('') + rbStatus(j);
+    if (t === 'day') return '<p class="hint"><b>' + EA.t('1 hari.', '1 day.') + '</b> ' + EA.t('Tekan ½ untuk separuh hari sahaja.', 'Tap ½ for half a day only.') + '</p>' + j.people.map(function (w) {
+      return (draft.lines[w] || []).map(function (l, i) {
+        return '<div class="rb-row"><b>' + esc(person(w)) + '</b><span class="seg"><button type="button" data-w="' + esc(w) + '" data-i="' + i + '" data-day="1" aria-pressed="' + (l.qty === '1') + '">1</button>' +
+          '<button type="button" data-w="' + esc(w) + '" data-i="' + i + '" data-day="0.5" aria-pressed="' + (l.qty === '0.5') + '">½</button></span></div>';
+      }).join('');
+    }).join('') + rbStatus(j);
+    // one lot, one number a man (loose fruit, manuring…)
+    var sum = j.people.reduce(function (a, w) { return a + (draft.lines[w] || []).reduce(function (b, l) { return b + num(l.qty); }, 0); }, 0);
+    return mand + dose + '<p class="rb-prog"><b>' + EA.t('Jumlah: ', 'Total: ') + (Math.round(sum * 100) / 100) + ' ' + esc(rbUnit(j)) + '</b> · ' + EA.t('seorang satu angka', 'one number a man') + '</p>' +
+      j.people.map(function (w) {
+        return (draft.lines[w] || []).map(function (l, i) {
+          return '<div class="rb-row rb-wrap"><b>' + esc(person(w)) + '</b><span class="rb-inl"><input inputmode="decimal" data-f="qty" data-w="' + esc(w) + '" data-i="' + i + '" data-rbin="' + esc(j.key) + '" value="' + esc(l.qty || '') + '"> ' + esc(rbUnit(j)) + '</span>' +
+            (askable(j) ? '<button type="button" class="link-btn" data-awayw="' + esc(w) + '" data-awayj="' + esc(j.key) + '">' + EA.t('tidak hadir', 'absent') + '</button>' : '') + bagBox(j, w) + '</div>';
+        }).join('');
+      }).join('') + rbStatus(j);
+  }
+  function rbLeft(j) {
+    var t = rbType(j);
+    if (t === 'op') return EA.t('meter belum diisi', 'meter not keyed');
+    var left = j.people.filter(function (w) { return !rbManDone(j, w); }).length;
+    if ((t === 'harv' || t === 'num') && left) return (j.people.length - left) + '/' + j.people.length + EA.t(' diisi', ' keyed');
+    var st = draft.status[j.key] || {};
+    if (!left && !st.done) return EA.t(kind(j.task, j.block) === 'bunches' ? 'petak habis?' : 'SIAP / BELUM?', kind(j.task, j.block) === 'bunches' ? 'lots done?' : 'DONE / NOT YET?');
+    return EA.t('belum lengkap', 'not complete');
+  }
+  function rbJobs(jobs) {
+    var openK = rbOpenJob(jobs), nd = jobs.filter(rbFilled).length;
+    if (EA.local.get(rbKey(), null) === null && openK) EA.local.set(rbKey(), openK);   // the open job stays open while it is worked on
+    return '<p class="hint rb-lead"><b>' + nd + EA.t(' daripada ', ' of ') + jobs.length + EA.t(' kerja lengkap.', ' jobs complete.') + '</b> ' + EA.t('Buka satu kerja, isi, kemudian yang seterusnya.', 'Open one job, key it, then the next.') + '</p>' +
+      jobs.map(function (j, n) {
+        var d = rbFilled(j), open = j.key === openK, sec = EA.lists.sectionOf(j.task);
+        var sub = j.people.length + EA.t(' orang', ' people') + (j.lots.length ? ' · ' + EA.t('Petak ', 'Lots ') + (j.lots.length > 3 ? j.lots[0] + EA.t(' hingga ', ' to ') + j.lots[j.lots.length - 1] : j.lots.join(', ')) : '');
+        return '<div class="card rb-job' + (open ? ' on' : '') + '" data-rbjob="' + esc(j.key) + '"><button type="button" class="rb-jh" data-rbj="' + esc(j.key) + '" aria-expanded="' + open + '">' +
+          '<span class="t"><b>' + (n + 1) + '. ' + esc(jobName(j.task)) + (j.block ? ' · Blok ' + esc(j.block) : '') + '</b><span class="rb-s">' + esc(sub) + (j.ask ? ' · ' + EA.t('minta lulus', 'needs approval') : '') + '</span></span>' +
+          '<span class="rb-chip' + (d ? '' : ' w') + '">' + (d ? EA.t('LENGKAP ✓', 'COMPLETE ✓') : esc(rbLeft(j))) + '</span></button>' +
+          (open ? '<div class="rb-jb">' + rbBody(j) + (d && n < jobs.length - 1 ? '<button type="button" class="btn btn-main rb-jnext" data-rbjnext="' + esc(j.key) + '">' + EA.t('KERJA SETERUSNYA ›', 'NEXT JOB ›') + '</button>' : '') + '</div>' : '') + '</div>';
+      }).join('');
+  }
+  function rbHl(j) { draft.hlot = draft.hlot || {}; return (draft.hlot[j.key] = draft.hlot[j.key] || {}); }
+  var RB_WHY = [['besar', 'Petak besar', 'Big lot'], ['hujan', 'Hujan', 'Rain'], ['orang', 'Kurang orang', 'Short of men'], ['lain', 'Lain-lain', 'Other']];
   function rbLotsOf(j) {
     var used = [];
     j.people.forEach(function (w) { (draft.lines[w] || []).forEach(function (l) {
@@ -402,15 +515,13 @@
     }); });
     return j.lots.filter(function (x) { return used.indexOf(x) >= 0; });
   }
-  function rbHl(j) { draft.hlot = draft.hlot || {}; return (draft.hlot[j.key] = draft.hlot[j.key] || {}); }
-  var RB_WHY = [['besar', 'Petak besar', 'Big lot'], ['hujan', 'Hujan', 'Rain'], ['lain', 'Lain', 'Other']];
   // The answers per lot become the job's SIAP / BELUM SIAP and its reason (the same fields the old screen fills).
   function rbSync(j) {
     if (!rbHarvest(j)) return;
     var lots = rbLotsOf(j), hl = rbHl(j);
     if (!Object.keys(hl).length) return;          // nothing answered here yet: an answer from the old screen stays as it is
     var st = draft.status[j.key] = draft.status[j.key] || { done: '', reason: '' };
-    if (!lots.length || lots.some(function (l) { return !hl[l] || !hl[l].v; })) { st.done = ''; st.reason = ''; return; }
+    if (!lots.length || lots.some(function (l) { return !hl[l] || !hl[l].v || (hl[l].v === 'N' && !hl[l].why); })) { st.done = ''; st.reason = ''; return; }
     var not = lots.filter(function (l) { return hl[l].v === 'N'; });
     if (!not.length) { st.done = 'Y'; st.reason = ''; return; }
     st.done = 'N';
@@ -422,85 +533,103 @@
   function rbLotsHtml(j) {
     rbSync(j);
     var lots = rbLotsOf(j), hl = rbHl(j);
-    if (!lots.length) return '<div class="field" data-rblots="' + j.key + '" data-rbl=""><p class="hint">' + EA.t('Isi tandan setiap orang dahulu. Selepas orang terakhir, app tanya: petak habis dituai?', 'Key each man\'s bunches first. After the last man the app asks: is the lot finished?') + '</p></div>';
-    return '<div class="field" data-rblots="' + j.key + '" data-rbl="' + esc(lots.join(' ')) + '"><span class="inline"><span class="bm">Petak habis dituai?</span> · <span class="en">Is the lot harvested out?</span></span>' +
+    if (!lots.length) return '<div class="rb-lots-q" data-rblots="' + j.key + '" data-rbl=""></div>';
+    return '<div class="rb-lots-q" data-rblots="' + j.key + '" data-rbl="' + esc(lots.join(' ')) + '"><p class="hint rb-lead"><b>' + EA.t('Petak habis dituai?', 'Is the lot harvested out?') + '</b> ' +
+      EA.t('Belum habis: pilih sebab. Petak itu masuk chit esok.', 'Not finished: pick why. The lot goes on tomorrow\'s chit.') + '</p>' +
       lots.map(function (l) {
-        var w = hl[l] || {};
-        return '<div class="wline"><b class="mono">' + esc(l) + '</b><div class="seg">' +
-          '<button type="button" data-hl="' + j.key + '|' + esc(l) + '|Y" aria-pressed="' + (w.v === 'Y') + '" style="min-width:90px">' + EA.t('HABIS', 'DONE') + '</button>' +
-          '<button type="button" data-hl="' + j.key + '|' + esc(l) + '|N" aria-pressed="' + (w.v === 'N') + '" style="min-width:90px">' + EA.t('BELUM', 'NOT YET') + '</button></div></div>' +
-          (w.v === 'N' ? '<div class="wline lot-why"><div class="seg">' + RB_WHY.map(function (x) {
+        var w = hl[l] || {}, lo = EA.lists.lot(ctx.estate, l);
+        var men = j.people.filter(function (p) { return (draft.lines[p] || []).some(function (x) { return (x.lot || (j.lots.length === 1 ? j.lots[0] : '')) === l && num(x.bunches) > 0; }); }).length;
+        var bun = j.people.reduce(function (a, p) { return a + (draft.lines[p] || []).reduce(function (b, x) { return b + ((x.lot || (j.lots.length === 1 ? j.lots[0] : '')) === l ? num(x.bunches) : 0); }, 0); }, 0);
+        return '<div class="rb-lst"><div class="rb-top"><span><b>' + esc(l) + '</b>' + (lo && lo.palms ? ' · ' + lo.palms + EA.t(' pokok', ' palms') : '') + '<small>' + men + ' org · ' + bun + EA.t(' tandan', ' bunches') + '</small></span><span class="seg">' +
+          '<button type="button" data-hl="' + j.key + '|' + esc(l) + '|Y" aria-pressed="' + (w.v === 'Y') + '">' + EA.t('HABIS', 'DONE') + '</button>' +
+          '<button type="button" data-hl="' + j.key + '|' + esc(l) + '|N" aria-pressed="' + (w.v === 'N') + '">' + EA.t('BELUM', 'NOT YET') + '</button></span></div>' +
+          (w.v === 'N' ? '<div class="rb-why">' + RB_WHY.map(function (x) {
             return '<button type="button" data-hlwhy="' + j.key + '|' + esc(l) + '|' + x[0] + '" aria-pressed="' + (w.why === x[0]) + '">' + esc(EA.t(x[1], x[2])) + '</button>'; }).join('') + '</div>' +
-            '<input class="text-input" data-hlnote="' + j.key + '|' + esc(l) + '" value="' + esc(w.note || '') + '" placeholder="' + EA.t('catatan (pilihan)', 'note (optional)') + '">' +
-            '<p class="hint">' + EA.t('Petak ini ditanda "sambung" esok.', 'This lot shows as "continue" tomorrow.') + '</p></div>' : '');
+            (w.why === 'lain' ? '<input class="text-input" data-hlnote="' + j.key + '|' + esc(l) + '" value="' + esc(w.note || '') + '" placeholder="' + EA.t('tulis sebab', 'write why') + '">' : '') : '') + '</div>';
       }).join('') + '</div>';
   }
-  function rbRedraw(jobs, j) {
-    var c = el.querySelector('[data-job="' + j.key + '"]'); if (!c) return;
-    var wrap = document.createElement('div'); wrap.innerHTML = jobCard(j);
-    c.parentNode.replaceChild(wrap.firstChild, c);
-    wireJobs(jobs); refresh(jobs); rbShow(jobs);
+  // The next man of the job who is not keyed yet; he starts on the lot of the man just keyed (one tap to change).
+  function rbNextMan(j, w) {
+    var i = j.people.indexOf(w), nxt = '';
+    for (var n = 1; n <= j.people.length; n++) { var c = j.people[(i + n) % j.people.length]; if (c !== w && !rbManDone(j, c)) { nxt = c; break; } }
+    var mine = (draft.lines[w] || []).filter(function (l) { return l.lot; }), last = mine.length ? mine[mine.length - 1].lot : '';
+    if (nxt && last && j.lots.length > 1) { var l0 = (draft.lines[nxt] || [])[0]; if (l0 && !l0.lot) { l0.lot = last; keepDraft(); } }
+    rbMan[j.key] = nxt; rbFocus = nxt ? j.key + '|' + nxt : '';
   }
+  function rbRedraw() { render(el, ctx); }
   function rbWire(jobs) {
-    el.querySelectorAll('[data-rbj]').forEach(function (b) { b.onclick = function () { rbGo(jobs, Number(b.dataset.rbj)); }; });
     var byKey = {}; jobs.forEach(function (j) { byKey[j.key] = j; });
+    el.querySelectorAll('[data-rbj]').forEach(function (b) {
+      b.onclick = function () { var k = b.dataset.rbj; EA.local.set(rbKey(), rbOpenJob(jobs) === k ? '' : k); rbRedraw(); };
+    });
+    el.querySelectorAll('[data-rbjnext]').forEach(function (b) {
+      b.onclick = function () {
+        var i = jobs.findIndex(function (j) { return j.key === b.dataset.rbjnext; });
+        var nx = jobs.slice(i + 1).find(function (j) { return !rbFilled(j); }) || jobs[i + 1];
+        EA.local.set(rbKey(), nx ? nx.key : ''); render(el, ctx);
+        var c = el.querySelector('[data-rbjob="' + (nx ? nx.key : '') + '"]'); if (c) c.scrollIntoView({ block: 'start' });
+      };
+    });
+    el.querySelectorAll('[data-rbman]').forEach(function (b) {
+      b.onclick = function () { var x = b.dataset.rbman.split('|'); rbMan[x[0]] = x[1]; rbFocus = x[0] + '|' + x[1]; rbRedraw(); };
+    });
+    el.querySelectorAll('[data-rbnext]').forEach(function (b) {
+      b.onclick = function () { var x = b.dataset.rbnext.split('|'); rbNextMan(byKey[x[0]], x[1]); rbRedraw(); };
+    });
+    el.querySelectorAll('input[data-rbin]').forEach(function (inp) {
+      inp.setAttribute('enterkeyhint', 'next');
+      inp.onkeydown = function (e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        var j = byKey[inp.dataset.rbin];
+        if (rbType(j) === 'harv') { rbNextMan(j, inp.dataset.w); rbRedraw(); return; }
+        var all = [].slice.call(el.querySelectorAll('input[data-rbin="' + j.key + '"]')), n = all.indexOf(inp);
+        if (all[n + 1]) all[n + 1].focus(); else inp.blur();
+      };
+    });
     el.querySelectorAll('[data-hl]').forEach(function (b) {
       b.onclick = function () {
         var x = b.dataset.hl.split('|'), j = byKey[x[0]], hl = rbHl(j);
         hl[x[1]] = Object.assign(hl[x[1]] || {}, { v: x[2] });
         if (x[2] === 'Y') { delete hl[x[1]].why; delete hl[x[1]].note; }
-        rbSync(j); keepDraft(); rbRedraw(jobs, j);
+        rbSync(j); keepDraft(); rbRedraw();
       };
     });
     el.querySelectorAll('[data-hlwhy]').forEach(function (b) {
-      b.onclick = function () { var x = b.dataset.hlwhy.split('|'), j = byKey[x[0]]; rbHl(j)[x[1]].why = x[2]; rbSync(j); keepDraft(); rbRedraw(jobs, j); };
+      b.onclick = function () { var x = b.dataset.hlwhy.split('|'), j = byKey[x[0]]; rbHl(j)[x[1]].why = x[2]; rbSync(j); keepDraft(); rbRedraw(); };
     });
     el.querySelectorAll('[data-hlnote]').forEach(function (inp) {
       inp.oninput = function () { var x = inp.dataset.hlnote.split('|'), j = byKey[x[0]]; rbHl(j)[x[1]].note = inp.value; rbSync(j); keepDraft(); refresh(jobs); };
     });
-    // Harvesting: Enter goes to the next man's box, and a man with no lot yet starts on the lot of the man above.
-    jobs.filter(rbHarvest).forEach(function (j) {
-      var boxes = [].slice.call(el.querySelectorAll('[data-job="' + j.key + '"] input[data-f="bunches"]'));
-      boxes.forEach(function (inp, n) {
-        inp.setAttribute('enterkeyhint', n < boxes.length - 1 ? 'next' : 'done');
-        inp.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); if (boxes[n + 1]) boxes[n + 1].focus(); else inp.blur(); } };
-        inp.onfocus = function () {
-          if (j.lots.length < 2) return;
-          var l = (draft.lines[inp.dataset.w] || [])[Number(inp.dataset.i)];
-          if (!l || l.lot) return;
-          var prev = '';
-          for (var m = n - 1; m >= 0 && !prev; m--) { var pl = (draft.lines[boxes[m].dataset.w] || [])[Number(boxes[m].dataset.i)]; if (pl && pl.lot) prev = pl.lot; }
-          if (!prev) return;
-          l.lot = prev; keepDraft(); rbChips(j);
-        };
-      });
-    });
+    // a lot picked: the man's box takes the focus, so the number goes straight in
+    el.querySelectorAll('[data-pick-lot]').forEach(function (b) { b.addEventListener('click', function () { rbFocus = (b.closest('[data-rbopen]') || {}).dataset ? b.closest('[data-rbopen]').dataset.rbopen + '|' + b.dataset.w : ''; }); });
+    if (rbFocus) {
+      var fx = rbFocus.split('|'); rbFocus = '';
+      var fi = el.querySelector('input[data-rbin="' + fx[0] + '"][data-w="' + fx[1] + '"]');
+      if (fi) { fi.focus(); fi.scrollIntoView({ block: 'center' }); }
+    }
   }
-  // As the bunches are keyed, the lot question follows the lots that have men on them (drawn before the staff reaches it,
-  // so a tap on HABIS is never lost to a redraw).
-  function rbLotsRefresh(jobs) {
-    var again = false;
-    jobs.filter(rbHarvest).forEach(function (j) {
-      var c = el.querySelector('[data-rblots="' + j.key + '"]'); if (!c) return;
-      if (c.dataset.rbl === rbLotsOf(j).join(' ')) return;
-      var t = document.createElement('div'); t.innerHTML = rbLotsHtml(j); c.parentNode.replaceChild(t.firstChild, c); again = true;
+  // While keying, the counts and ticks follow without drawing the screen again (so the box keeps its focus).
+  function rbRefresh(jobs) {
+    jobs.forEach(function (j) {
+      var c = el.querySelector('[data-rbjob="' + j.key + '"]'); if (!c) return;
+      var chip = c.querySelector('.rb-jh .rb-chip'), d = rbFilled(j);
+      if (chip) { chip.className = 'rb-chip' + (d ? '' : ' w'); chip.textContent = d ? EA.t('LENGKAP ✓', 'COMPLETE ✓') : rbLeft(j); }
+      var pg = c.querySelector('.rb-prog b');
+      if (pg && (rbType(j) === 'harv')) {
+        var tot = j.people.reduce(function (a, w) { return a + (draft.lines[w] || []).reduce(function (b, l) { return b + num(rbVal(j, l)); }, 0); }, 0);
+        pg.textContent = j.people.filter(function (w) { return rbManDone(j, w); }).length + EA.t(' daripada ', ' of ') + j.people.length + EA.t(' orang diisi · ', ' people keyed · ') + (Math.round(tot * 100) / 100) + ' ' + rbUnit(j);
+      }
+      var q = c.querySelector('[data-rblots]');
+      if (q && rbHarvest(j) && q.dataset.rbl !== rbLotsOf(j).join(' ')) { var t = document.createElement('div'); t.innerHTML = rbLotsHtml(j); q.parentNode.replaceChild(t.firstChild, q); rbWire(jobs); }
     });
-    if (again) { rbWire(jobs); rbShow(jobs); }
-  }
-  // The lot chips of one harvesting job, brought up to date without drawing the card again (so the box keeps focus).
-  function rbChips(j) {
-    var count = {}; j.lots.forEach(function (n) { count[n] = 0; });
-    j.people.forEach(function (ww) { (draft.lines[ww] || []).forEach(function (ll) { if (ll.lot && count[ll.lot] !== undefined) count[ll.lot]++; }); });
-    el.querySelectorAll('[data-job="' + j.key + '"] [data-pick-lot]').forEach(function (b) {
-      var l = (draft.lines[b.dataset.w] || [])[Number(b.dataset.i)], n = b.dataset.pickLot, c = count[n];
-      b.setAttribute('aria-pressed', String(!!l && l.lot === n));
-      b.classList.toggle('lotp-free', !c);
-      var sm = b.querySelector('small'); if (sm) sm.textContent = c ? c + EA.t(' org', ' on it') : EA.t('kosong', 'nobody');
-    });
+    var lead = el.querySelector('.rb-lead b');
+    if (lead && lead.parentNode.parentNode === el.querySelector('#rb-list')) lead.textContent = jobs.filter(rbFilled).length + EA.t(' daripada ', ' of ') + jobs.length + EA.t(' kerja lengkap.', ' jobs complete.');
   }
 
   function render(container, c) {
     el = container; ctx = c;
+    rbRoom(rbOn());
     var testing = !EA.roomLive(ctx.room, ctx.estate);
     var head = '<div class="room-top">' +
       '<button type="button" class="back-btn" id="wk-back">‹ BACK<small>‹ BALIK</small></button>' +
@@ -542,22 +671,36 @@
 
     var jobs = jobsOf(chit);
     var rb = rbOn();
-    if (rb) rbDefaults(jobs);
+    if (rb) {
+      rbDefaults(jobs);
+      // v1.92 Rupa Baru: a thin heading, the jobs as one list, the same bands, the same SIMPAN.
+      var y0 = window.scrollY;
+      rbRoom(true);
+      el.innerHTML = '<div class="rb-thin"><button type="button" id="wk-back">‹ ' + EA.t('Kerja', 'Work') + ' · ' + esc(niceDate(chit.date)) + '</button><small>' + esc(ctx.estate) + (testing ? ' · ' + EA.t('UJIAN', 'TEST') : '') + '</small></div>' + chooser +
+        fixBand() + (EA.fh.dayCloseBand ? EA.fh.dayCloseBand(ctx.estate, ctx.user) : '') +
+        (draft.replacing ? '<p class="warn"><span class="bm">Membetulkan kerja harian. Rekod lama kekal; yang baru menggantikannya.</span><span class="en">Correcting the day\'s work. The old record stays; this one replaces it.</span></p>' : '') +
+        '<div id="rb-list">' + rbJobs(jobs) + '</div>' +
+        '<details class="card rb-report"><summary>' + EA.t('Laporan petang', 'Evening report') + '</summary><pre class="chit" id="wk-preview"></pre></details>' +
+        '<div class="bottom-bar"><button type="button" class="btn btn-main" id="wk-check">SAVE<small>Simpan kerja harian</small></button></div>';
+      window.scrollTo(0, y0);
+      wireTop();
+      wireJobs(jobs);
+      $('#wk-check').onclick = function () { check(jobs); };
+      refresh(jobs);
+      return;
+    }
     el.innerHTML = head + chooser +
       '<p class="hint">' + EA.t('Dari chit pagi ', 'From the morning chit of ') + esc(niceDate(chit.date)) + ' · ' + jobs.reduce(function (a, j) { return a + j.people.length; }, 0) + EA.t(' orang bekerja, ', ' people working, ') + jobs.length + EA.t(' kerja.', ' jobs.') + '</p>' +
       fixBand() +
       (EA.fh.dayCloseBand ? EA.fh.dayCloseBand(ctx.estate, ctx.user) : '') +   // v1.43 TUTUP HARI
       (draft.replacing ? '<p class="warn"><span class="bm">Membetulkan kerja harian. Rekod lama kekal; yang baru menggantikannya.</span><span class="en">Correcting the day\'s work. The old record stays; this one replaces it.</span></p>' : '') +
-      (rb ? rbNav(jobs) : '') +
       jobs.map(jobCard).join('') +
-      (rb ? '<div class="rupa-job-nav" id="rb-steps"></div>' : '') +
-      '<section class="card"' + (rb ? ' id="rb-report"' : '') + '><h2><span class="inline"><span class="bm">Laporan petang</span> · <span class="en">Evening report</span></span></h2><pre class="chit" id="wk-preview"></pre></section>' +
+      '<section class="card"><h2><span class="inline"><span class="bm">Laporan petang</span> · <span class="en">Evening report</span></span></h2><pre class="chit" id="wk-preview"></pre></section>' +
       '<div class="bottom-bar"><button type="button" class="btn btn-main" id="wk-check">SAVE<small>Simpan kerja harian</small></button></div>';
     wireTop();
     wireJobs(jobs);
     $('#wk-check').onclick = function () { check(jobs); };
     refresh(jobs);
-    if (rb) rbShow(jobs);
     if (EA.fh.refreshDayClose && navigator.onLine) EA.fh.refreshDayClose(ctx.estate).then(function (j) { if (j && el && location.hash.indexOf('/work') > 0) { var b = el.querySelector('#wk-dayclose'); var nb = EA.fh.dayCloseBand(ctx.estate, ctx.user); if (b && !nb) b.remove(); } });
   }
 
@@ -707,7 +850,7 @@
       '<p class="wk-total" data-tot="' + j.key + '"></p>' +
       '<div class="rows">' + lines + '</div>' +
       '<div data-flags="' + j.key + '"></div>' +
-      (isHa(j) ? '<p class="hint" data-hastat="' + j.key + '"></p>' : rbHarvest(j) ? rbLotsHtml(j) : '<div class="field"><span class="inline"><span class="bm">Kerja ini</span> · <span class="en">This job</span></span>' +
+      (isHa(j) ? '<p class="hint" data-hastat="' + j.key + '"></p>' : '<div class="field"><span class="inline"><span class="bm">Kerja ini</span> · <span class="en">This job</span></span>' +
         '<div class="seg"><button type="button" data-st="' + j.key + '" data-v="Y" aria-pressed="' + (st.done === 'Y') + '" style="min-width:110px">' + EA.t('SIAP', 'DONE') + '</button>' +
         '<button type="button" data-st="' + j.key + '" data-v="N" aria-pressed="' + (st.done === 'N') + '" style="min-width:140px">' + EA.t('BELUM SIAP', 'NOT DONE') + '</button></div></div>' +
       '<div class="field" data-reasonbox="' + j.key + '"' + (st.done === 'N' ? '' : ' hidden') + '><label><span class="bm">Sebab & tindakan</span><span class="en">Why, and what will be done (counter-measure)</span></label>' +
@@ -886,7 +1029,7 @@
       if (fl) fl.innerHTML = t.flags.map(function (f) { return '<p class="flag' + (f.bad ? ' bad' : '') + '">' + esc(f.text) + '</p>'; }).join('');
     });
     el.querySelectorAll('[data-hrs]').forEach(function (sp) { var x = sp.dataset.hrs.split('|'), l = (draft.lines[x[0]] || [])[Number(x[1])]; if (l) sp.textContent = '= ' + hoursOf(l) + EA.t(' jam', ' hours'); });
-    if (rbOn()) { rbLotsRefresh(jobs); el.querySelectorAll('[data-rbj]').forEach(function (b) { b.classList.toggle('done', rbFilled(jobs[Number(b.dataset.rbj)])); }); }
+    if (rbOn()) rbRefresh(jobs);
     var pv = $('#wk-preview'); if (pv) pv.textContent = reportText(buildRecord(EA.t('(belum disimpan)', '(not saved yet)'), EA.ui.hhmm(new Date()), draft.checker));
   }
 

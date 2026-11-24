@@ -40,54 +40,59 @@ const { chromium } = require('playwright');
     return { hv: hv.map(x => x.id), sp: sp.map(x => x.id) };
   });
   await p.evaluate(() => { location.hash = 'field-harvest/work'; }); await p.waitForTimeout(1500);
-  const vis = () => p.evaluate(() => [...document.querySelectorAll('[data-job]')].filter(c => !c.hidden).map(c => c.dataset.job));
-  check('one job at a time: only the first job shows', JSON.stringify(await vis()) === '["j1"]', JSON.stringify(await vis()));
-  check('the jobs are chips on top, with "Kerja 1 daripada 2"', await p.locator('[data-rbj]').count() === 2 && /Kerja 1 daripada 2/.test(await p.innerText('#rb-count')));
-  check('KERJA SETERUSNYA at the bottom', await p.isVisible('#rb-next'));
-  check('the evening report waits for the last job', await p.evaluate(() => document.getElementById('rb-report').hidden));
-
-  // harvesting: lot of the man above, Enter to the next man
-  await p.evaluate(w => { const b = [...document.querySelectorAll('[data-pick-lot]')].find(x => x.dataset.w === w && x.dataset.pickLot === '2-1'); b.click(); }, s.hv[0]);
-  await p.waitForTimeout(400);
-  const box = w => `[data-job="j1"] input[data-f="bunches"][data-w="${w}"]`;
-  await p.fill(box(s.hv[0]), '120'); await p.press(box(s.hv[0]), 'Enter');
-  check('Enter goes to the next man\'s box', await p.evaluate(w => document.activeElement && document.activeElement.dataset.w === w, s.hv[1]));
-  const lotOf = w => p.evaluate(w => { const d = Object.values(JSON.parse(localStorage.getItem('fh.workdraft') || '{}'))[0]; return d && d.lines[w] && d.lines[w][0].lot; }, w);
-  const pressed = w => p.evaluate(w => ([...document.querySelectorAll('[data-pick-lot]')].find(x => x.dataset.w === w && x.getAttribute('aria-pressed') === 'true') || {}).dataset?.pickLot || '', w);
-  check('the next man starts on the lot of the man above (2-1), shown on his chips', await pressed(s.hv[1]) === '2-1', await pressed(s.hv[1]));
-  await p.fill(box(s.hv[1]), '100'); await p.press(box(s.hv[1]), 'Enter');
-  // the third man changes his lot with one tap
-  await p.evaluate(w => { const b = [...document.querySelectorAll('[data-pick-lot]')].find(x => x.dataset.w === w && x.dataset.pickLot === '2-2'); b.click(); }, s.hv[2]);
-  await p.waitForTimeout(400);
-  check('one tap changes a man to another lot', await pressed(s.hv[2]) === '2-2');
-  await p.fill(box(s.hv[2]), '90'); await p.waitForTimeout(300);
-
+  const openJobs = () => p.evaluate(() => [...document.querySelectorAll('[data-rbjob].on')].map(c => c.dataset.rbjob));
+  check('the jobs are one list, one job open at a time (the first not complete)', JSON.stringify(await openJobs()) === '["j1"]' && await p.locator('[data-rbjob]').count() === 2, JSON.stringify(await openJobs()));
+  check('a thin heading: ‹ Kerja · the day', /Kerja ·/.test(await p.innerText('.rb-thin')));
+  check('"0 daripada 2 kerja lengkap"', /0 daripada 2 kerja lengkap/.test(await p.innerText('#rb-list')));
+  check('each job says what is left (0/3 diisi)', /0\/3 diisi/.test(await p.innerText('[data-rbjob="j1"] .rb-jh')));
+  const openMen = () => p.evaluate(() => [...document.querySelectorAll('[data-rbopen] input[data-rbin]')].map(i => i.dataset.w).filter((x, i, a) => a.indexOf(x) === i));
+  check('one man open at a time: the first', JSON.stringify(await openMen()) === JSON.stringify([s.hv[0]]), JSON.stringify(await openMen()));
+  check('the others read BELUM DIISI ›', await p.locator('[data-rbman] .rb-chip.w').count() === 2);
+  check('no mandor box, no total box and no warnings between the men', await p.locator('[data-rbjob="j1"] .wk-total, [data-rbjob="j1"] [data-flags]').count() === 0);
+  // lot buttons with palms and men, then the number, then SETERUSNYA
+  const lotTxt = await p.innerText('[data-rbopen] .rb-lots');
+  check('the lot buttons show palms and men ("pk", "kosong")', /pk/.test(lotTxt) && /kosong/.test(lotTxt), lotTxt.replace(/\s+/g, ' ') + ' || ' + (await p.innerHTML('[data-rbopen] .rb-lots')).slice(0, 400));
+  await p.click(`[data-rbopen] [data-pick-lot="2-1"]`); await p.waitForTimeout(400);
+  check('after a lot is picked the box has the focus', await p.evaluate(w => document.activeElement && document.activeElement.dataset.w === w, s.hv[0]));
+  await p.keyboard.type('120'); await p.click('[data-rbnext]'); await p.waitForTimeout(400);
+  check('SETERUSNYA folds the man to one line "2-1 · 120 tandan ✓"', /2-1 · 120 tandan ✓/.test(await p.innerText(`[data-rbman="j1|${s.hv[0]}"]`)), await p.innerText(`[data-rbman="j1|${s.hv[0]}"]`));
+  check('and opens the next man, his lot already 2-1, his box in focus', JSON.stringify(await openMen()) === JSON.stringify([s.hv[1]]) &&
+    await p.evaluate(() => (document.querySelector('[data-rbopen] [data-pick-lot][aria-pressed="true"]') || {}).dataset?.pickLot) === '2-1' &&
+    await p.evaluate(w => document.activeElement && document.activeElement.dataset.w === w, s.hv[1]));
+  check('progress "1 daripada 3 orang diisi · 120 tandan"', /1 daripada 3 orang diisi · 120 tandan/.test(await p.innerText('[data-rbjob="j1"] .rb-prog')));
+  await p.keyboard.type('100'); await p.keyboard.press('Enter'); await p.waitForTimeout(400);
+  check('Enter does the same as SETERUSNYA', JSON.stringify(await openMen()) === JSON.stringify([s.hv[2]]));
+  await p.click(`[data-rbopen] [data-pick-lot="2-2"]`); await p.waitForTimeout(400);
+  check('one tap changes the lot', await p.evaluate(() => (document.querySelector('[data-rbopen] [data-pick-lot][aria-pressed="true"]') || {}).dataset?.pickLot) === '2-2');
+  await p.keyboard.type('90'); await p.keyboard.press('Enter'); await p.waitForTimeout(400);
+  check('after the last man, all three fold, none open', (await openMen()).length === 0 && await p.locator('[data-rbjob="j1"] .rb-ok').count() === 3);
   // Petak habis dituai?
   const lotQ = () => p.evaluate(() => [...document.querySelectorAll('[data-hl]')].map(b => b.dataset.hl.split('|')[1]).filter((x, i, a) => a.indexOf(x) === i).join(','));
-  check('"Petak habis dituai?" is asked for each lot that has men on it', await lotQ() === '2-1,2-2', await lotQ());
+  check('"Petak habis dituai?" for each lot with men, with palms, men and bunches', await lotQ() === '2-1,2-2' && /2 org · 220 tandan/.test(await p.innerText('[data-rblots="j1"]')), (await lotQ()) + ' ' + (await p.innerText('[data-rblots="j1"]')).replace(/\s+/g, ' ').slice(0, 160));
   const st = () => p.evaluate(() => { const d = Object.values(JSON.parse(localStorage.getItem('fh.workdraft') || '{}'))[0] || {}; return d.status && d.status.j1; });
   await p.click('[data-hl="j1|2-1|Y"]'); await p.waitForTimeout(300);
   check('one lot answered: the job is not decided yet', !((await st()) || {}).done, JSON.stringify(await st()));
   await p.click('[data-hl="j1|2-2|N"]'); await p.waitForTimeout(300);
+  check('BELUM asks why: Petak besar, Hujan, Kurang orang, Lain-lain', (await p.innerText('.rb-why')).replace(/\s+/g, ' ').trim() === 'Petak besar Hujan Kurang orang Lain-lain', await p.innerText('.rb-why'));
   await p.click('[data-hlwhy="j1|2-2|hujan"]'); await p.waitForTimeout(300);
   let j1 = await st();
-  check('a lot BELUM with its reason makes the job BELUM SIAP, with the reason written for it', j1 && j1.done === 'N' && /Petak 2-2 belum habis: hujan, sambung esok/.test(j1.reason), JSON.stringify(j1));
+  check('the answers make the job BELUM SIAP with its reason written', j1 && j1.done === 'N' && /Petak 2-2 belum habis: hujan, sambung esok/.test(j1.reason), JSON.stringify(j1));
   await p.click('[data-hl="j1|2-2|Y"]'); await p.waitForTimeout(300);
   j1 = await st();
   check('every lot HABIS makes the job SIAP', j1 && j1.done === 'Y' && j1.reason === '', JSON.stringify(j1));
-  check('the job chip is ticked once it is complete', await p.evaluate(() => document.querySelector('[data-rbj="0"]').classList.contains('done')));
-
-  // next job: a day job starts at 1 day
-  await p.click('#rb-next'); await p.waitForTimeout(300);
-  check('KERJA SETERUSNYA shows the next job only', JSON.stringify(await vis()) === '["j2"]');
-  check('a day job starts at 1 day for everyone', await p.evaluate(ws => ws.every(w => (document.querySelector('[data-w="' + w + '"][data-day="1"]') || {}).getAttribute('aria-pressed') === 'true'), s.sp));
-  check('on the last job the evening report shows, and no SETERUSNYA', await p.evaluate(() => !document.getElementById('rb-report').hidden && !document.getElementById('rb-next')));
+  check('the job reads LENGKAP ✓ and offers KERJA SETERUSNYA ›', /LENGKAP ✓/.test(await p.innerText('[data-rbjob="j1"] .rb-jh')) && await p.isVisible('[data-rbjnext="j1"]'));
+  await p.click('[data-rbjnext="j1"]'); await p.waitForTimeout(400);
+  check('KERJA SETERUSNYA opens the next job', JSON.stringify(await openJobs()) === '["j2"]');
+  check('a day job: 1 day already set for everyone, ½ one tap away', await p.evaluate(ws => ws.every(w => (document.querySelector('[data-w="' + w + '"][data-day="1"]') || {}).getAttribute('aria-pressed') === 'true'), s.sp));
+  await p.click('[data-rbjob="j2"] [data-st="j2"][data-v="Y"]'); await p.waitForTimeout(300);
+  check('"2 daripada 2 kerja lengkap"', /2 daripada 2 kerja lengkap/.test(await p.innerText('#rb-list')) || /LENGKAP ✓/.test(await p.innerText('[data-rbjob="j2"] .rb-jh')), await p.innerText('[data-rbjob="j2"] .rb-jh'));
   check('the same SIMPAN as always', await p.isVisible('#wk-check'));
 
   // back to the old look: everything shows, nothing lost
   await p.evaluate(() => { EA.setRupaBaru(false); location.hash = ''; }); await p.waitForTimeout(200);
   await p.evaluate(() => { location.hash = 'field-harvest/work'; }); await p.waitForTimeout(1200);
-  check('back in the old look every job shows again, with the same keyed numbers', JSON.stringify(await vis()) === '["j1","j2"]' && await p.inputValue(box(s.hv[0])) === '120', JSON.stringify(await vis()));
+  const vis = () => p.evaluate(() => [...document.querySelectorAll('section[data-job]')].filter(c => !c.hidden).map(c => c.dataset.job));
+  check('back in the old look every job shows again, with the same keyed numbers', JSON.stringify(await vis()) === '["j1","j2"]' && await p.inputValue(`[data-job="j1"] input[data-f="bunches"][data-w="${s.hv[0]}"]`) === '120', JSON.stringify(await vis()));
 
   // the Owner's tick list (Pengguna & PIN → RUPA BARU · SIAPA BOLEH CUBA)
   const p2 = await b.newPage({ viewport: { width: 390, height: 1000 } });

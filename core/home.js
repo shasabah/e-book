@@ -178,7 +178,7 @@
     $('top').className = 'top' + (pr ? ' practice' : isHQ(u) ? ' hq' : '');
     $('practice-band').hidden = !pr;
     $('practice-out').hidden = !(EA.practiceOwn && EA.practiceOwn());
-    var lr = EA.latihanRole && EA.latihanRole(), lrn = lr ? (EA.roleNames[lr] || { bm: lr, en: lr }) : null;
+    var lr = EA.latihanRole && EA.latihanRole(), lrn = lr ? ({ Staff: { bm: 'Staf bertugas', en: 'Staff in charge' }, Clerk: { bm: 'Kerani', en: 'Clerk' }, Manager: { bm: 'Pengurus', en: 'Manager' } })[lr] : null;
     $('practice-as').hidden = !lr;
     $('practice-as').textContent = lr ? EA.t('Latih sebagai: ' + lrn.bm, 'Practising as: ' + lrn.en) : '';
     $('who-name').textContent = u.name;

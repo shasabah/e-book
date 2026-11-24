@@ -14,7 +14,7 @@ EA.lists = EA.lists || {};
   EA.lists.realPeople = function (estate) { return !!real(estate); };
   // The made-up workers are only for the made-up test people (codes T-…). A real person with no
   // list yet gets none, and the muster asks for signal once (v1.9), so no made-up worker is ever sent.
-  function testOk() { var u = EA.currentUser && EA.currentUser(); return !u || /^[TL]-/.test(String(u.code)); }
+  function testOk() { var u = EA.currentUser && EA.currentUser(); return !u || /^[TL]-/.test(String(u.code)) || prac(); }
   // v1.24: the made-up workers serve every estate in Mod Latihan (W-PTAN-001 is Pekerja Contoh 1 at Paitan).
   function made(estate) {
     return EA.lists.testWorkers.filter(function (w) { return w.estate === 'SSGT'; }).map(function (w) {

@@ -63,7 +63,7 @@ window.EA = window.EA || {};
     return { ok: false, why: 'nolink' };
   };
 
-  EA.logout = function () { EA.local.del(USER); };
+  EA.logout = function () { if (EA.setPractice) EA.setPractice(false); EA.local.del(USER); };
 
   // The Owner made a new PIN for himself (v1.9): this phone keeps working with the new one.
   EA.setMyPin = function (pin) {

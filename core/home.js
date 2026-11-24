@@ -177,6 +177,7 @@
     var pr = EA.practice && EA.practice();
     $('top').className = 'top' + (pr ? ' practice' : isHQ(u) ? ' hq' : '');
     $('practice-band').hidden = !pr;
+    $('practice-out').hidden = !(EA.practiceOwn && EA.practiceOwn());
     $('who-name').textContent = u.name;
     var r = EA.roleNames[u.role] || { bm: u.role, en: u.role };
     $('who-role').textContent = EA.t(r.bm, r.en);
@@ -220,6 +221,8 @@
     var all = EA.roomsFor(u, estate).filter(function (r) { return EA.roomLive(r, estate) || enterable(r, estate); });
     // v1.63: Field & Harvest is opened by its screens on Hari ini (Chit pagi, Kerja, Ramp, Tiket), not by a second tile
     var work = all.filter(function (r) { return LIST_ROOMS.indexOf(r.id) < 0 && r.id !== 'durian' && r.id !== 'field-harvest'; }), lists = all.filter(function (r) { return LIST_ROOMS.indexOf(r.id) >= 0; });
+    // v1.89: in Latihan, Pengguna and Pentadbir are not shown (people, PINs, phones and switches are real, never practice)
+    if (EA.practice && EA.practice()) lists = lists.filter(function (r) { return r.id !== 'users' && r.id !== 'admin'; });
     $('rooms-h').hidden = !work.length;
     $('tiles').innerHTML = tilesHtml(work, u, estate);
     // v1.65 (Brief_Susun_Atur 4): the Admin page is spread into Senarai — Telefon, Masalah and Suis are their own
@@ -710,13 +713,48 @@
     var r = EA.roleNames[u.role] || { bm: u.role, en: u.role };
     openSheet('<h2 id="sheet-title">' + esc(u.name) + '</h2><p class="hint">' + esc(EA.t(r.bm, r.en)) + '</p>' +
       '<div class="name-menu">' +
-      (testUser() ? '' : '<button class="btn btn-ghost" type="button" id="nm-pin">CHANGE MY PIN<small>TUKAR PIN SAYA</small></button>') +
+      (latOk(u) ? (EA.practiceOwn() ? '<button class="btn btn-wait" type="button" id="nm-lat">LEAVE PRACTICE<small>KELUAR LATIHAN</small></button>'
+        : '<button class="btn btn-ghost" type="button" id="nm-lat">PRACTICE<small>MASUK LATIHAN</small></button>') : '') +
+      (testUser() || (EA.practice && EA.practice()) ? '' : '<button class="btn btn-ghost" type="button" id="nm-pin">CHANGE MY PIN<small>TUKAR PIN SAYA</small></button>') +
       '<button class="btn btn-ghost" type="button" id="logout">LOG OUT<small>KELUAR</small></button></div>',
       function (s) {
+        var lat = s.querySelector('#nm-lat'); if (lat) lat.onclick = function () { closeSheet(); if (EA.practiceOwn()) latLeave(); else latEnterAsk(); };
         var pin = s.querySelector('#nm-pin'); if (pin) pin.onclick = function () { closeSheet(); myPinSheet(); };
         s.querySelector('#logout').onclick = function () { closeSheet(); logoutAsk(); };
       });
   }
+  // v1.89 Latihan satu login (Yu Chen, 24 Nov 2026): every real person practises with his own login, from his
+  // name menu. No practice ID. Latihan shows the same app with made-up workers, and its records go only to the
+  // practice book. It ends with KELUAR LATIHAN or when the app is closed.
+  function latOk(u) { return !!u && !/^[TL]-/.test(String(u.code)) && !!EA.practiceOwn; }
+  function latSwitch(on) { EA.setPractice(on); location.hash = ''; location.reload(); }
+  function latEnterAsk() {
+    openSheet('<h2 id="sheet-title"><span class="bm">Masuk Latihan?</span><span class="en">Enter practice?</span></h2>' +
+      '<p class="hint"><span class="bm">Skrin sama seperti biasa. Pekerja rekaan. Apa yang anda isi pergi ke buku latihan sahaja, bukan buku sebenar. ' +
+      'Tekan KELUAR LATIHAN bila siap. Tutup app juga tamatkan Latihan.</span>' +
+      '<span class="en">The same screens as usual. Made-up workers. What you key goes only to the practice book, not the real book. ' +
+      'Press LEAVE PRACTICE when done. Closing the app also ends practice.</span></p>' +
+      '<div class="actions"><button class="btn btn-wait" type="button" id="lat-in">ENTER PRACTICE<small>MASUK LATIHAN</small></button>' +
+      '<button class="btn btn-ghost" type="button" id="lat-no">CANCEL<small>BATAL</small></button></div>',
+      function (s) {
+        s.querySelector('#lat-in').onclick = function () { closeSheet(); latSwitch(true); };
+        s.querySelector('#lat-no').onclick = closeSheet;
+      });
+  }
+  function latLeave() {
+    var n = EA.waitingMine();
+    if (!n) { latSwitch(false); return; }
+    openSheet('<h2 id="sheet-title"><span class="bm">' + n + ' rekod latihan belum dihantar</span><span class="en">' + n + ' practice entries not sent yet</span></h2>' +
+      '<p><span class="bm" style="font-weight:400">Ia kekal di telefon ini dan dihantar ke buku latihan bila anda masuk Latihan semula.</span>' +
+      '<span class="en">They stay on this phone and go to the practice book when you enter practice again.</span></p>' +
+      '<div class="actions"><button class="btn btn-ok" type="button" id="ll-send">SEND<small>Hantar dulu</small></button>' +
+      '<button class="btn btn-wait" type="button" id="ll-out">LEAVE PRACTICE<small>Keluar Latihan juga</small></button></div>',
+      function (s) {
+        s.querySelector('#ll-send').onclick = function () { closeSheet(); $('send-btn').click(); };
+        s.querySelector('#ll-out').onclick = function () { closeSheet(); latSwitch(false); };
+      });
+  }
+  $('practice-out').onclick = latLeave;
   $('who-name').onclick = nameMenu;
   $('who-name').setAttribute('role', 'button'); $('who-name').setAttribute('tabindex', '0');
   $('who-name').title = 'Tukar PIN, keluar · Change PIN, log out';

@@ -34,6 +34,7 @@ EA.roomViews = EA.roomViews || {};
     offline: ['Tiada isyarat. Cuba lagi bila ada isyarat.', 'No signal. Try again when there is signal.'],
     busy: ['Pejabat sibuk. Cuba lagi sebentar.', 'The office is busy. Try again in a moment.'],
     not_allowed: ['Hanya Pemilik boleh buka skrin ini.', 'Only the Owner can open this screen.'],
+    not_in_practice: ['Tidak boleh dalam Latihan. Tekan KELUAR LATIHAN dahulu.', 'Not in practice. Press LEAVE PRACTICE first.'],
     wrong_pin: ['PIN anda salah. Cuba lagi.', 'Your PIN is wrong. Try again.'],
     test_user: ['PIN ujian tidak boleh urus pengguna lagi. Masuk dengan PIN anda sendiri.', 'A test PIN cannot manage users any more. Log in with your own PIN.'],
     first_owner_only: ['Buat PIN Pemilik anda sendiri dahulu.', 'Make your own Owner PIN first.'],
@@ -198,7 +199,7 @@ EA.roomViews = EA.roomViews || {};
       return '<button type="button" data-est="' + e + '" aria-pressed="' + (f.estates.indexOf(e) >= 0) + '" title="' + esc(estNm(e)) + '">' + e + '</button>';
     }).join('') + '<button type="button" data-est="*" class="us-all">' + EA.t('Semua', 'All') + '</button></div></div>';
     if (!editing && !f.firstOwner) h += '<button type="button" class="us-practice" id="us-prac" aria-pressed="' + !!f.practice + '"><i>' + (f.practice ? '✓' : '') + '</i><span><b>' +
-      EA.t('Pengguna latihan', 'Practice user') + '</b><span class="s">' + EA.t('Rekod pergi ke buku LATIHAN, bukan buku sebenar.', 'Records go to the PRACTICE book, not the real book.') + '</span></span></button>';
+      EA.t('Pengguna latihan', 'Practice user') + '</b><span class="s">' + EA.t('Rekod pergi ke buku LATIHAN, bukan buku sebenar. Biasanya tidak perlu: setiap pengguna boleh MASUK LATIHAN dari menu nama sendiri.', 'Records go to the PRACTICE book, not the real book. Usually not needed: every user can enter PRACTICE from their own name menu.') + '</span></span></button>';
     if (!editing) h += '<p class="note-sun">' + EA.t('Pejabat akan buat PIN 6 digit secara rawak. PIN ditunjuk sekali sahaja.', 'The office makes a random 6-digit PIN. It is shown once only.') + '</p>';
     h += '<p class="msg" id="us-err" hidden></p>';
     h += '<div class="actions"><button class="btn btn-ghost" type="button" id="us-cancel">CANCEL<small>Batal</small></button>' +

@@ -18,6 +18,7 @@ EA.roomViews = EA.roomViews || {};
     nolink: ['Skrin ini perlu pautan hantar dan isyarat.', 'This screen needs the sending link and signal.'],
     busy: ['Pejabat sibuk. Cuba lagi sebentar.', 'The office is busy. Try again in a moment.'],
     not_allowed: ['Hanya Pemilik boleh buka bahagian ini.', 'Only the Owner can open this part.'],
+    not_in_practice: ['Tidak boleh dalam Latihan. Tekan KELUAR LATIHAN dahulu.', 'Not in practice. Press LEAVE PRACTICE first.'],
     test_user: ['PIN ujian tidak boleh buka Pentadbir. Masuk dengan PIN anda sendiri.', 'A test PIN cannot open Admin. Log in with your own PIN.'],
     not_ready: ['Belum boleh: semua orang sebenar mesti masuk sekali dahulu.', 'Not yet: every real person must log in once first.'],
     order: ['Ikut turutan: 1 → 2 → 3.', 'Follow the order: 1 → 2 → 3.'],
@@ -128,6 +129,15 @@ EA.roomViews = EA.roomViews || {};
         '<i class="adm-st ' + cls + '">' + esc(txt) + '</i></button>';
     });
     if (!(d.phones || []).length) h += '<p class="hint">' + t('Belum ada peranti.', 'No devices yet.') + '</p>';
+    // v1.89 Latihan satu login: how much of today's office work is practice, and who practised today.
+    var pu = d.practiceUse;
+    if (pu) {
+      var pct = pu.all ? Math.round(100 * pu.req / pu.all) : 0;
+      h += '</div><div class="card"><h2>' + t('Latihan hari ini', 'Practice today') + '<small>' + (pu.who || []).length + ' ' + t('orang', 'people') + '</small></h2>' +
+        '<p class="adm-lat">' + t(pu.req + ' panggilan ke pejabat daripada kira-kira ' + pu.all + ' hari ini (' + pct + '%) · ' + pu.rec + ' rekod latihan',
+          pu.req + ' office calls out of about ' + pu.all + ' today (' + pct + '%) · ' + pu.rec + ' practice records') + '</p>';
+      (pu.who || []).forEach(function (x) { h += '<div class="adm-dv"><div><b>' + esc(x.name) + '</b><span>' + esc(x.code) + '</span></div><i class="tag-practice">' + esc(x.at) + '</i></div>'; });
+    }
     // v1.24 Mod Latihan: practice users apart; their logins never change the device lines above.
     if ((d.practice || []).length) {
       h += '</div><div class="card"><h2>' + t('Latihan', 'Practice') + '<small>' + d.practice.length + '</small></h2>';

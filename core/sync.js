@@ -11,11 +11,21 @@ window.EA = window.EA || {};
   // v1.24 Mod Latihan: a practice login (code L-) keeps its own field records, drafts, office answers and
   // worker list apart (keys start with "L:"), so practice never mixes with a real person's on a shared phone.
   // The queue, the login, the phone code and the sending link stay shared.
-  var PRACT = null;
+  // v1.89 Latihan satu login (Yu Chen, 24 Nov 2026): a real person enters Latihan from his name menu, with his own
+  // login. It is kept only for this opening of the app (sessionStorage), so closing the app ends Latihan.
+  var PRACT = null, LAT = 'ea.latihan';
+  function latOwn() { try { return sessionStorage.getItem(LAT) || ''; } catch (e) { return ''; } }
   function practiceNow() {
-    if (PRACT === null) { try { var u = JSON.parse(localStorage.getItem('ea.user') || 'null'); PRACT = !!(u && /^L-/.test(String(u.code))); } catch (e) { PRACT = false; } }
+    if (PRACT === null) { try { var u = JSON.parse(localStorage.getItem('ea.user') || 'null'); PRACT = !!(u && (/^L-/.test(String(u.code)) || latOwn() === String(u.code))); } catch (e) { PRACT = false; } }
     return PRACT;
   }
+  // Latihan entered from the name menu (not a practice login L-).
+  EA.practiceOwn = function () { var u = null; try { u = JSON.parse(localStorage.getItem('ea.user') || 'null'); } catch (e) {} return !!(u && !/^L-/.test(String(u.code)) && latOwn() === String(u.code)); };
+  EA.setPractice = function (on) {
+    var u = null; try { u = JSON.parse(localStorage.getItem('ea.user') || 'null'); } catch (e) {}
+    try { if (on && u) sessionStorage.setItem(LAT, String(u.code)); else sessionStorage.removeItem(LAT); } catch (e) {}
+    PRACT = null;
+  };
   function nk(k) { return practiceNow() && /^(fh\.|ea\.people|ea\.refused|ea\.errSeen|ea\.admin)/.test(k) ? 'L:' + k : k; }
   function get(k, d) { try { var v = localStorage.getItem(nk(k)); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }
   function set(k, v) { try { localStorage.setItem(nk(k), JSON.stringify(v)); if (k === 'ea.user') PRACT = null; return true; } catch (e) { return false; } }
@@ -125,6 +135,7 @@ window.EA = window.EA || {};
     };
     Object.keys(fields || {}).forEach(function (k) { if (!(k in row)) row[k] = fields[k]; });
     var item = { tab: tab, row: row, savedAt: Date.now() };
+    if (practiceNow()) item.pr = 1;     // v1.89: a practice record is sent only in Latihan, to the practice book
     if (batchQ) { batchQ.push(item); return row; }
     var q = get(K.queue, []);
     q.push(item);
@@ -158,11 +169,14 @@ window.EA = window.EA || {};
   var sending = false;
   // Each person's entries are sent with that person's own key, so "who keyed it" stays
   // right on a shared phone. Someone else's entries wait until they log in again.
-  function mine(user) { return function (it) { return !it.row.keyed_by || it.row.keyed_by === user.code; }; }
+  // v1.89: and only in the same mode it was keyed in: practice records in Latihan, real records outside it.
+  function sameMode(user, it) { return /^L-/.test(String(user.code)) || !!it.pr === practiceNow(); }
+  function mine(user) { return function (it) { return (!it.row.keyed_by || it.row.keyed_by === user.code) && sameMode(user, it); }; }
+  EA.waitingOtherMode = function () { var u = EA.currentUser(); return u ? get(K.queue, []).filter(function (it) { return (!it.row.keyed_by || it.row.keyed_by === u.code) && !sameMode(u, it); }).length : 0; };
   EA.waitingOthers = function () {
     var u = EA.currentUser(); if (!u) return [];
     var by = {};
-    get(K.queue, []).forEach(function (it) { if (!mine(u)(it)) by[it.row.keyed_by] = (by[it.row.keyed_by] || 0) + 1; });
+    get(K.queue, []).forEach(function (it) { if (!mine(u)(it) && it.row.keyed_by !== u.code) by[it.row.keyed_by] = (by[it.row.keyed_by] || 0) + 1; });
     return Object.keys(by).map(function (k) { return { code: k, n: by[k] }; });
   };
   async function sendNow() {
@@ -189,7 +203,7 @@ window.EA = window.EA || {};
     var sent = 0, err = null, refusedAll = 0;
     function post(body) {
       return EA.fetchWait(link, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(Object.assign({ key: user.key, version: EA.VERSION, phone: EA.phone(), waiting: get(K.queue, []).length }, body)) }).then(function (r) { return r.json(); });
+        body: JSON.stringify(Object.assign({ key: user.key, version: EA.VERSION, phone: EA.phone(), waiting: get(K.queue, []).length }, practiceNow() ? { practice: 1 } : {}, body)) }).then(function (r) { return r.json(); });
     }
     try {
       // Everything waiting goes in one trip (up to 50 at a time).
@@ -269,7 +283,7 @@ window.EA = window.EA || {};
     try {
       // v1.19: asking for something back waits at most 30 s (sending still waits 60 s).
       var res = await EA.fetchWait(link, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(Object.assign({ action: action, key: user.key, version: EA.VERSION, phone: EA.phone(), waiting: get(K.queue, []).length }, extra || {})) }, 30000);
+        body: JSON.stringify(Object.assign({ action: action, key: user.key, version: EA.VERSION, phone: EA.phone(), waiting: get(K.queue, []).length }, practiceNow() ? { practice: 1 } : {}, extra || {})) }, 30000);
       var j = null;
       try { j = await res.json(); } catch (e2) { j = null; }
       if (j && j.sw) EA.setSwitches(j.sw);

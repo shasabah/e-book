@@ -31,6 +31,9 @@ function liveSheetId_() { try { return PropertiesService.getScriptProperties().g
 // The people list (USERS, USERS_LOG) always stays in the real book.
 var PRACTICE_ = false, UBOOK_ = null;
 function isPracticeCode_(code) { return /^L-/.test(String(code)); }
+// v1.89 Latihan satu login (Yu Chen, 24 Nov 2026): a real person may practise with his own login. The phone then
+// sends practice:1 with every request, and that request reads and writes only the practice book, like an L- login.
+function isPractice_(user) { return PRACTICE_ || isPracticeCode_(user && user.user_code); }
 function book_() { return BOOK_ || (BOOK_ = SpreadsheetApp.openById(PRACTICE_ ? SHEET_ID : liveSheetId_())); }
 function usersBook_() { if (!PRACTICE_) return book_(); return UBOOK_ || (UBOOK_ = SpreadsheetApp.openById(liveSheetId_())); }
 // Records dated before the trial began are practice from the phones: they are answered "done" so the
@@ -38,7 +41,7 @@ function usersBook_() { if (!PRACTICE_) return book_(); return UBOOK_ || (UBOOK_
 function liveFrom_() { try { return PropertiesService.getScriptProperties().getProperty('LIVE_FROM') || ''; } catch (e) { return ''; } }
 function beforeLive_(user, row, tab) {
   var lf = liveFrom_();
-  if (!(lf && row && String(row.date) < lf && !isTestCode_(user.user_code) && !isPracticeCode_(user.user_code))) return false;
+  if (!(lf && row && String(row.date) < lf && !isTestCode_(user.user_code) && !isPractice_(user))) return false;
   // v1.27.1: mill tickets and grading of the trial's own month are real (the clerk keys a ticket of a lorry
   // that went before the trial day, e.g. 20 Oct). Only older practice records are skipped.
   if (TICKET_TABS.indexOf(String(tab)) >= 0 && String(row.date) >= lf.slice(0, 7) + '-01') return false;
@@ -234,7 +237,7 @@ function doPost_(e) {
   if (bad >= 20 || badAll >= 300) return reply({ ok: false, error: 'locked' });
   if (PRACTICE_) { PRACTICE_ = false; BOOK_ = null; }
   var user = findUser(req.key);
-  if (user && isPracticeCode_(user.user_code)) { PRACTICE_ = true; BOOK_ = null; }
+  if (user && (isPracticeCode_(user.user_code) || (Number(req.practice) === 1 && req.action !== 'login'))) { PRACTICE_ = true; BOOK_ = null; }
   if (!user) { cache.put(pk, String(bad + 1), 900); cache.put('badkeys', String(badAll + 1), 900); return reply({ ok: false, error: 'wrong_key' }); }
 
   if (req.action === 'login') {
@@ -245,6 +248,7 @@ function doPost_(e) {
     return reply({ ok: true, user: { code: user.user_code, name: user.name, role: user.role, estates: user.estates, practice: PRACTICE_ }, sw: switches_() });
   }
   noteSeen_(user, req);
+  countUse_(user, req);
   if (req.action === 'switches') return reply({ ok: true, sw: switches_() });
   if (READS_[req.action]) return readCached_(user, req);
   var out = doWrite_(user, req);
@@ -311,7 +315,7 @@ function doRead_(user, req) {
 // The answer is kept per person (see readCached_), never under a key another login could read.
 function rates_(user, estate) {
   if (user.role !== 'Owner' && user.role !== 'HQ') return { ok: false, error: 'not_allowed' };
-  if (isTestCode_(user.user_code) || isPracticeCode_(user.user_code)) return { ok: false, error: 'not_allowed' };
+  if (isTestCode_(user.user_code) || isPractice_(user)) return { ok: false, error: 'not_allowed' };
   var rows = standingRows_('LIST_RATES', estate).map(function (r) {
     return { id: r.id, task_code: r.task_code, pay_unit: r.pay_unit, band: r.band, rate_rm: r.rate_rm, target_day: r.target_day,
       from_date: r.from_date, note: r.note, approved_by: r.approved_by };
@@ -330,6 +334,9 @@ function doWrite_(user, req) {
     rb.sw = switches_();
     return reply(rb);
   }
+  // v1.89: in Latihan only records and answers go to the practice book. Nothing that changes people, PINs,
+  // phones or switches (those live in the real book and the script) is done from Latihan.
+  if (PRACTICE_ && (/^(admin|user)/.test(String(req.action)) || req.action === 'myPin' || req.action === 'testOff')) return reply({ ok: false, error: 'not_in_practice' });
   // Pentadbir (v1.16): the Owner's admin page; its reading parts are answered above.
   if (/^admin/.test(String(req.action))) return reply(adminAction_(user, req));
   // Users and PIN screen (v1.9): the Owner only.
@@ -800,7 +807,7 @@ function dmsRain_(estate, now) {
 // The people list for the user's estates (active only), for the phones' muster and day's work.
 function people_(user) {
   var out = [];
-  if (isPracticeCode_(user.user_code)) return { ok: true, people: [], practice: true };   // made-up workers on the phone
+  if (isPractice_(user)) return { ok: true, people: [], practice: true };   // made-up workers on the phone
   var today = todayKL_();
   user.estates.forEach(function (est) {
     var st = workerStates_(est);
@@ -1488,7 +1495,7 @@ function noteSeen_(user, req) {
   var p = String(req.phone || '').toUpperCase();
   if (!/^P\d{2,3}$/.test(p)) return;
   var v = String(req.version || ''), w = req.waiting === undefined ? '' : String(Number(req.waiting) || 0);
-  if (isPracticeCode_(user.user_code)) {   // practice logins never change the real phone lines
+  if (isPractice_(user)) {   // practice logins (and Latihan, v1.89) never change the real phone lines
     var ck = 'seenLq:' + user.user_code, mk = p + '|' + v, c0 = CacheService.getScriptCache();
     if (c0.get(ck) === mk) return;
     try { PropertiesService.getScriptProperties().setProperty('seenL:' + user.user_code, JSON.stringify({ phone: p, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), v: v })); c0.put(ck, mk, 300); } catch (e) {}
@@ -1500,6 +1507,31 @@ function noteSeen_(user, req) {
     PropertiesService.getScriptProperties().setProperty('seen:' + p, JSON.stringify({ u: String(user.user_code), at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), v: v, w: w }));
     c.put(k, mark, 300);
   } catch (e) {}
+}
+
+// v1.89: how much Latihan uses the office. Every request today is counted (an estimate, kept in the script cache),
+// and practice requests, records and people are counted in one script setting (written only on practice requests).
+function countUse_(user, req) {
+  try {
+    var day = todayKL_(), c = CacheService.getScriptCache(), k = 'reqN:' + day;
+    c.put(k, String((Number(c.get(k)) || 0) + 1), 21600);
+    if (!PRACTICE_) return;
+    var P = PropertiesService.getScriptProperties(), u = {};
+    try { u = JSON.parse(P.getProperty('PRAC_USE') || '{}') || {}; } catch (e) { u = {}; }
+    if (u.day !== day) u = { day: day, req: 0, rec: 0, who: {} };
+    u.req++;
+    if (req.action === 'saveBatch') u.rec += (req.items || []).length; else if (req.action === 'save') u.rec++;
+    u.who[String(user.user_code)] = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'HH:mm');
+    P.setProperty('PRAC_USE', JSON.stringify(u));
+  } catch (e) {}
+}
+function practiceUse_(list) {
+  var day = todayKL_(), u = {}, all = 0;
+  try { u = JSON.parse(PropertiesService.getScriptProperties().getProperty('PRAC_USE') || '{}') || {}; } catch (e) { u = {}; }
+  try { all = Number(CacheService.getScriptCache().get('reqN:' + day)) || 0; } catch (e) {}
+  if (u.day !== day) u = { day: day, req: 0, rec: 0, who: {} };
+  var names = {}; (list || []).forEach(function (x) { names[x.user_code] = String(x.name).replace(/^'/, ''); });
+  return { day: day, req: u.req, rec: u.rec, all: all, who: Object.keys(u.who || {}).map(function (k) { return { code: k, name: names[k] || k, at: u.who[k] }; }) };
 }
 
 // A refused save or login is kept for the Owner (tab APP_REFUSED), once per phone, record and error in 6 hours.
@@ -1595,7 +1627,7 @@ function adminPhones_() {
                  seen: seen && seen.u === u.user_code ? seen : (seen ? { at: seen.at, v: seen.v, w: seen.w, other: seen.u } : null) });
     });
   });
-  return { ok: true, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), phones: out, practice: practice, appVersion: MIN_APP_VERSION };
+  return { ok: true, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), phones: out, practice: practice, practiceUse: practiceUse_(list), appVersion: MIN_APP_VERSION };
 }
 function adminPhoneName_(user, req) {
   // The device to name is req.device; req.phone is always the phone that is asking.

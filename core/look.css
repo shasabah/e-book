@@ -602,6 +602,19 @@ body.rb-room header.top { display: none; }
 .rb-drv { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .rb-lots.rb-wrapl { flex-wrap: wrap; }
 .rb-lots.rb-wrapl button { flex: 1 0 64px; }
+/* v1.99 Satu kerja satu skrin: the job list, the finished jobs on top of a job, SIAP · KERJA SETERUSNYA */
+.rb-bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; margin: 4px 0 10px; } .rb-bar i { display: block; height: 100%; background: var(--ok); }
+.rb-steps { padding: 2px 14px; }
+.rb-step { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent; border: 0; border-top: 1px solid var(--line); padding: 12px 0; min-height: 62px; font: inherit; color: var(--ink); }
+.rb-step:first-child { border-top: 0; }
+.rb-step .rb-dot { width: 30px; height: 30px; border-radius: 50%; background: var(--line); color: var(--muted); flex: none; display: flex; align-items: center; justify-content: center; font-weight: 800; }
+.rb-step.done .rb-dot { background: var(--ok); color: #fff; } .rb-step.next .rb-dot { background: var(--wait); color: #fff; }
+.rb-step .t { flex: 1; min-width: 0; } .rb-step .t b { display: block; } .rb-step .rb-s { display: block; color: var(--muted); font-size: .82rem; }
+.rb-step[disabled] { opacity: .5; }
+.rb-step.sm { min-height: 48px; padding: 8px 0; } .rb-step.sm .rb-dot { width: 24px; height: 24px; font-size: .8rem; } .rb-step.sm .t b { font-size: .9rem; }
+.rb-job > .rb-jh { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.rb-bb .hint { text-align: center; margin: 0 0 6px; }
+#rb-done[disabled], .rb-bb #wk-check[disabled] { opacity: .45; }
 /* v1.96 Jubin: the lot questions as tiles, one SEMUA HABIS button, the answer on the shared sheet */
 .rb-all { width: 100%; min-height: 52px; border: 0; border-radius: 14px; background: var(--ok); color: #fff; font: inherit; font-weight: 800; font-size: 1rem; margin: 6px 0 0; }
 .rb-all.ghost { background: var(--surface); color: var(--ok); border: 2px solid var(--ok); }

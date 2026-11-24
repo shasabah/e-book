@@ -41,9 +41,15 @@ const { chromium } = require('playwright');
   });
   await p.evaluate(() => { location.hash = 'field-harvest/work'; }); await p.waitForTimeout(1500);
   const openJobs = () => p.evaluate(() => [...document.querySelectorAll('[data-rbjob].on')].map(c => c.dataset.rbjob));
-  check('the jobs are one list, one job open at a time (the first not complete)', JSON.stringify(await openJobs()) === '["j1"]' && await p.locator('[data-rbjob]').count() === 2, JSON.stringify(await openJobs()));
+  // v1.99 Satu kerja satu skrin: Kerja opens on the list of jobs; a job opens alone when tapped
+  check('Kerja opens on the list: 2 jobs, none open, the first marked as next', (await openJobs()).length === 0 && await p.locator('.rb-steps [data-rbj]').count() === 2 && await p.evaluate(() => document.querySelector('.rb-step.next').dataset.rbj) === 'j1');
+  check('"0 daripada 2 kerja siap", and each line says what is left (0/3 diisi)', /0 daripada 2 kerja siap/.test(await p.innerText('#rb-list')) && /0\/3 diisi/.test(await p.innerText('[data-rbj="j1"]')));
+  check('SIMPAN is shut until every job is ticked', await p.isDisabled('#wk-check'));
   check('a thin heading: ‹ Kerja · the day', /Kerja ·/.test(await p.innerText('.rb-thin')));
-  check('"0 daripada 2 kerja lengkap"', /0 daripada 2 kerja lengkap/.test(await p.innerText('#rb-list')));
+  await p.click('[data-rbj="j1"]'); await p.waitForTimeout(400);
+  check('a job tapped fills the screen alone; the heading goes back to the list', JSON.stringify(await openJobs()) === '["j1"]' && await p.locator('[data-rbjob]').count() === 1 && /Senarai kerja/.test(await p.innerText('.rb-thin')) && await p.locator('#wk-check').count() === 0);
+  check('SIAP · KERJA SETERUSNYA is shut until the job is complete', await p.isDisabled('#rb-done') && /SIAP · KERJA SETERUSNYA/.test(await p.innerText('#rb-done')));
+
   check('each job says what is left (0/3 diisi)', /0\/3 diisi/.test(await p.innerText('[data-rbjob="j1"] .rb-jh')));
   const openMen = () => p.evaluate(() => [...document.querySelectorAll('[data-rbopen] input[data-rbin]')].map(i => i.dataset.w).filter((x, i, a) => a.indexOf(x) === i));
   check('one man open at a time: the first', JSON.stringify(await openMen()) === JSON.stringify([s.hv[0]]), JSON.stringify(await openMen()));
@@ -80,13 +86,21 @@ const { chromium } = require('playwright');
   await p.click('[data-rbtile=\"h|j1|2-2\"]'); await p.waitForTimeout(150); await p.click('#sheet [data-sv=\"Y\"]'); await p.waitForTimeout(300);
   j1 = await st();
   check('every lot HABIS makes the job SIAP', j1 && j1.done === 'Y' && j1.reason === '', JSON.stringify(j1));
-  check('the job reads LENGKAP ✓ and offers KERJA SETERUSNYA ›', /LENGKAP ✓/.test(await p.innerText('[data-rbjob="j1"] .rb-jh')) && await p.isVisible('[data-rbjnext="j1"]'));
-  await p.click('[data-rbjnext="j1"]'); await p.waitForTimeout(400);
+  check('the job reads LENGKAP ✓ and offers KERJA SETERUSNYA ›', /LENGKAP ✓/.test(await p.innerText('[data-rbjob="j1"] .rb-jh')) && await p.isEnabled('#rb-done'));
+  await p.click('#rb-done'); await p.waitForTimeout(400);
+  check('the finished job stays on top as a ticked line with its result', /1\. .*SIAP ✓/s.test(await p.innerText('.rb-donetop')) && /310 tandan · semua petak habis/.test(await p.innerText('.rb-donetop')), await p.innerText('.rb-donetop'));
   check('KERJA SETERUSNYA opens the next job', JSON.stringify(await openJobs()) === '["j2"]');
   check('a day job: 1 day already set for everyone, ½ one tap away', await p.evaluate(ws => ws.every(w => (document.querySelector('[data-w="' + w + '"][data-day="1"]') || {}).getAttribute('aria-pressed') === 'true'), s.sp));
   await p.click('[data-rbjob="j2"] [data-st="j2"][data-v="Y"]'); await p.waitForTimeout(300);
   check('"2 daripada 2 kerja lengkap"', /2 daripada 2 kerja lengkap/.test(await p.innerText('#rb-list')) || /LENGKAP ✓/.test(await p.innerText('[data-rbjob="j2"] .rb-jh')), await p.innerText('[data-rbjob="j2"] .rb-jh'));
-  check('the same SIMPAN as always', await p.isVisible('#wk-check'));
+  check('the last job says SIAP · KE SENARAI', /SIAP · KE SENARAI/.test(await p.innerText('#rb-done')));
+  await p.click('#rb-done'); await p.waitForTimeout(400);
+  check('back on the list: "2 daripada 2 kerja siap", both ticked, and the same SIMPAN opens', /2 daripada 2 kerja siap/.test(await p.innerText('#rb-list')) && await p.locator('.rb-step.done').count() === 2 && await p.isEnabled('#wk-check'));
+  await p.click('[data-rbj="j1"]'); await p.waitForTimeout(300); await p.click('[data-rbtile="h|j1|2-2"]'); await p.waitForTimeout(150); await p.click('#sheet [data-sv="N"]'); await p.waitForTimeout(150); await p.click('#sheet-x'); await p.waitForTimeout(150);
+  await p.click('#wk-back'); await p.waitForTimeout(300);
+  check('a ticked job changed so it is no longer complete loses its tick, and SIMPAN shuts again', await p.locator('.rb-step.done').count() === 1 && await p.isDisabled('#wk-check'));
+  await p.click('[data-rbj="j1"]'); await p.waitForTimeout(300); await p.click('[data-rbtile="h|j1|2-2"]'); await p.waitForTimeout(150); await p.click('#sheet [data-sv="Y"]'); await p.waitForTimeout(200); await p.click('#rb-done'); await p.waitForTimeout(300);
+  check('the same SIMPAN as always', await p.isEnabled('#wk-check'));
 
   // back to the old look: everything shows, nothing lost
   await p.evaluate(() => { EA.setRupaBaru(false); location.hash = ''; }); await p.waitForTimeout(200);

@@ -402,12 +402,10 @@
     if (t === 'col') return rbAllKeyed(j) && rbColAnswered(j);
     return t === 'ticket' || auto(j) || j.people.every(function (w) { return rbManDone(j, w); });
   }
+  // v1.99 Satu kerja satu skrin: the list shows when no job is open; a job opens only when it is tapped (or follows SIAP).
   function rbOpenJob(jobs) {
     var k = EA.local.get(rbKey(), null);
-    if (k === '' ) return '';
-    if (k && jobs.some(function (j) { return j.key === k; })) return k;
-    var f = jobs.find(function (j) { return !rbFilled(j); });
-    return (f || jobs[0] || {}).key || '';
+    return k && jobs.some(function (j) { return j.key === k; }) ? k : '';
   }
   function rbUnit(j) { return kind(j.task, j.block) === 'bunches' ? EA.t('tandan', 'bunches') : unitLabel(j.task, j.block); }
   function rbVal(j, l) { return kind(j.task, j.block) === 'bunches' ? l.bunches : l.qty; }
@@ -502,20 +500,49 @@
     if (!left && !st.done) return EA.t(kind(j.task, j.block) === 'bunches' ? 'petak habis?' : 'SIAP / BELUM?', kind(j.task, j.block) === 'bunches' ? 'lots done?' : 'DONE / NOT YET?');
     return EA.t('belum lengkap', 'not complete');
   }
+  // ---------- v1.99 Satu kerja satu skrin (Brief_Rupa_Baru 1.1 §3a; Yu Chen, 24 Nov 2026: "any where to completed one
+  // task by task ? or better option that is no confuse?"; sample "E-Book Kerja Satu Demi Satu" v2, "ok") ----------
+  // Kerja opens on the list of the day's jobs. A job tapped fills the screen alone, the finished jobs as ticked lines on
+  // top ("i need those completed task show at top like the practice"). SIAP · KERJA SETERUSNYA ticks it and opens the
+  // next; a tick holds only while the job is still complete. The tractor and loader wait for the harvest. SIMPAN opens
+  // on the list when every job is ticked. The day is still saved once, as one record; nothing in the record changes.
+  function rbVis(all) { return all.filter(function (j) { return rbType(j) !== 'colx'; }); }   // the loader is inside the tractor's card
+  function rbTicked(j) { return !!(draft.rbTick && draft.rbTick[j.key]) && rbFilled(j); }
+  function rbLocked(j) { return rbType(j) === 'col' && jobsOf(chit).some(function (x) { return kind(x.task, x.block) === 'bunches' && !rbFilled(x); }); }
+  function rbJobName(j) { return (rbType(j) === 'col' ? EA.t('Traktor & pemuat', 'Tractor & loader') : jobName(j.task)) + (j.block ? ' · Blok ' + j.block : ''); }
+  function rbJobSub(j) {
+    if (rbType(j) === 'col') return EA.t('Angkut BTS (ITF) + Muat BTS (LFF) · ditutup bersama', 'Tractor (ITF) + loader (LFF) · closed together') + (j.lots.length ? ' · ' + j.lots.length + EA.t(' petak', ' lots') : '');
+    return j.people.length + EA.t(' orang', ' people') + (j.lots.length ? ' · ' + EA.t('Petak ', 'Lots ') + (j.lots.length > 3 ? j.lots[0] + EA.t(' hingga ', ' to ') + j.lots[j.lots.length - 1] : j.lots.join(', ')) : '') + (j.ask ? ' · ' + EA.t('minta lulus', 'needs approval') : '');
+  }
+  // One line of what a finished job came to.
+  function rbSum(j) {
+    var t = rbType(j), st = draft.status[j.key] || {}, end = st.done === 'Y' ? EA.t('siap', 'done') : EA.t('belum siap', 'not done');
+    if (t === 'col') { var ok = j.lots.filter(function (l) { return rbColState(j, l) === 'Y'; }), no = j.lots.filter(function (l) { return ok.indexOf(l) < 0; });
+      return ok.length + '/' + j.lots.length + EA.t(' petak ke ramp', ' lots to the ramp') + (no.length ? ' · ' + no.join(', ') + EA.t(' belum', ' not yet') : ''); }
+    if (kind(j.task, j.block) === 'bunches') { var hl = rbHl(j), nb = rbLotsOf(j).filter(function (l) { return (hl[l] || {}).v !== 'Y'; });
+      return jobTotals(j).bunches + EA.t(' tandan · ', ' bunches · ') + (nb.length ? nb.join(', ') + EA.t(' belum habis', ' not finished') : EA.t('semua petak habis', 'every lot done')); }
+    if (t === 'ticket') return j.people.length + EA.t(' orang · ikut tiket kilang', ' people · by the mill ticket');
+    return j.people.length + EA.t(' orang · ', ' people · ') + end;
+  }
+  function rbStepRow(j, n, cls, small) {
+    var tk = rbTicked(j), lk = !tk && rbLocked(j), full = rbFilled(j);
+    return '<button type="button" class="rb-step' + (tk ? ' done' : '') + (cls ? ' ' + cls : '') + (small ? ' sm' : '') + '" data-rbj="' + esc(j.key) + '"' + (lk ? ' disabled' : '') + '><span class="rb-dot">' + (tk ? '✓' : n + 1) + '</span>' +
+      '<span class="t"><b>' + (small ? (n + 1) + '. ' : '') + esc(rbJobName(j)) + '</b><span class="rb-s">' + esc(tk ? rbSum(j) : rbJobSub(j)) + '</span></span>' +
+      '<span class="rb-chip' + (tk ? '' : ' w') + '">' + (tk ? EA.t('SIAP ✓', 'DONE ✓') : lk ? '🔒 ' + EA.t('selepas Menuai', 'after harvesting') : full ? EA.t('semak & SIAP', 'check & DONE') : esc(rbLeft(j))) + '</span></button>';
+  }
   function rbJobs(all) {
-    var jobs = all.filter(function (j) { return rbType(j) !== 'colx'; });   // v1.95: the loader is inside the tractor's card
-    var openK = rbOpenJob(jobs), nd = jobs.filter(rbFilled).length;
-    if (EA.local.get(rbKey(), null) === null && openK) EA.local.set(rbKey(), openK);   // the open job stays open while it is worked on
-    return '<p class="hint rb-lead"><b>' + nd + EA.t(' daripada ', ' of ') + jobs.length + EA.t(' kerja lengkap.', ' jobs complete.') + '</b> ' + EA.t('Buka satu kerja, isi, kemudian yang seterusnya.', 'Open one job, key it, then the next.') + '</p>' +
-      jobs.map(function (j, n) {
-        var d = rbFilled(j), open = j.key === openK, sec = EA.lists.sectionOf(j.task);
-        var sub = j.people.length + EA.t(' orang', ' people') + (j.lots.length ? ' · ' + EA.t('Petak ', 'Lots ') + (j.lots.length > 3 ? j.lots[0] + EA.t(' hingga ', ' to ') + j.lots[j.lots.length - 1] : j.lots.join(', ')) : '');
-        if (rbType(j) === 'col') sub = EA.t('Angkut BTS (ITF) + Muat BTS (LFF) · ditutup bersama', 'Tractor (ITF) + loader (LFF) · closed together') + (j.lots.length ? ' · ' + j.lots.length + EA.t(' petak', ' lots') : '');
-        return '<div class="card rb-job' + (open ? ' on' : '') + '" data-rbjob="' + esc(j.key) + '"><button type="button" class="rb-jh" data-rbj="' + esc(j.key) + '" aria-expanded="' + open + '">' +
-          '<span class="t"><b>' + (n + 1) + '. ' + esc(rbType(j) === 'col' ? EA.t('Traktor & pemuat', 'Tractor & loader') : jobName(j.task)) + (j.block ? ' · Blok ' + esc(j.block) : '') + '</b><span class="rb-s">' + esc(sub) + (j.ask ? ' · ' + EA.t('minta lulus', 'needs approval') : '') + '</span></span>' +
-          '<span class="rb-chip' + (d ? '' : ' w') + '">' + (d ? EA.t('LENGKAP ✓', 'COMPLETE ✓') : esc(rbLeft(j))) + '</span></button>' +
-          (open ? '<div class="rb-jb">' + rbBody(j) + (d && n < jobs.length - 1 ? '<button type="button" class="btn btn-main rb-jnext" data-rbjnext="' + esc(j.key) + '">' + EA.t('KERJA SETERUSNYA ›', 'NEXT JOB ›') + '</button>' : '') + '</div>' : '') + '</div>';
-      }).join('');
+    var jobs = rbVis(all), openK = rbOpenJob(jobs), nd = jobs.filter(rbTicked).length;
+    if (!openK) {
+      var nx = jobs.find(function (j) { return !rbTicked(j) && !rbLocked(j); });
+      return '<p class="hint rb-lead"><b>' + nd + EA.t(' daripada ', ' of ') + jobs.length + EA.t(' kerja siap.', ' jobs done.') + '</b> ' + EA.t('Tekan kerja pertama yang belum bertanda.', 'Tap the first job not ticked.') + '</p>' +
+        '<div class="rb-bar"><i style="width:' + (jobs.length ? Math.round(nd / jobs.length * 100) : 0) + '%"></i></div>' +
+        '<div class="card rb-steps">' + jobs.map(function (j, n) { return rbStepRow(j, n, nx && nx.key === j.key ? 'next' : ''); }).join('') + '</div>';
+    }
+    var n = jobs.findIndex(function (j) { return j.key === openK; }), j = jobs[n], d = rbFilled(j);
+    var top = jobs.map(function (x, i) { return x.key !== openK && rbTicked(x) ? rbStepRow(x, i, '', true) : ''; }).join('');
+    return (top ? '<div class="card rb-steps rb-donetop">' + top + '</div>' : '') +
+      '<div class="card rb-job on" data-rbjob="' + esc(j.key) + '"><div class="rb-jh"><span class="t"><b>' + (n + 1) + '. ' + esc(rbJobName(j)) + '</b><span class="rb-s">' + esc(rbJobSub(j)) + ' · ' + EA.t('kerja ', 'job ') + (n + 1) + '/' + jobs.length + '</span></span>' +
+      '<span class="rb-chip' + (d ? '' : ' w') + '">' + (d ? EA.t('LENGKAP ✓', 'COMPLETE ✓') : esc(rbLeft(j))) + '</span></div><div class="rb-jb">' + rbBody(j) + '</div></div>';
   }
   // ---------- v1.94 Membaja in the new look (Brief_Membaja_Rupa_Baru, signed by Yu Chen 24 Nov 2026) ----------
   // ① each lot HABIS / BELUM with the bags used (HABIS fills what the lot needed; more than 10% off asks why);
@@ -879,16 +906,17 @@
     var byKey = {}; jobs.forEach(function (j) { byKey[j.key] = j; });
     rbTileWire(byKey);
     el.querySelectorAll('[data-rbj]').forEach(function (b) {
-      b.onclick = function () { var k = b.dataset.rbj; EA.local.set(rbKey(), rbOpenJob(jobs) === k ? '' : k); rbRedraw(); };
+      b.onclick = function () { EA.local.set(rbKey(), b.dataset.rbj); render(el, ctx); window.scrollTo(0, 0); };
     });
-    el.querySelectorAll('[data-rbjnext]').forEach(function (b) {
-      b.onclick = function () {
-        var vis = jobs.filter(function (j) { return rbType(j) !== 'colx'; }), i = vis.findIndex(function (j) { return j.key === b.dataset.rbjnext; });
-        var nx = vis.slice(i + 1).find(function (j) { return !rbFilled(j); }) || vis[i + 1];
-        EA.local.set(rbKey(), nx ? nx.key : ''); render(el, ctx);
-        var c = el.querySelector('[data-rbjob="' + (nx ? nx.key : '') + '"]'); if (c) c.scrollIntoView({ block: 'start' });
-      };
-    });
+    var rbd = el.querySelector('#rb-done');
+    if (rbd) rbd.onclick = function () {
+      var vis = rbVis(jobs), j = vis.find(function (x) { return x.key === rbd.dataset.k; });
+      if (!j || !rbFilled(j)) return;
+      draft.rbTick = draft.rbTick || {}; draft.rbTick[j.key] = 1; keepDraft();
+      var i = vis.indexOf(j), open = function (x) { return !rbTicked(x) && !rbLocked(x); };
+      var nx = vis.slice(i + 1).find(open) || vis.find(open);
+      EA.local.set(rbKey(), nx ? nx.key : ''); render(el, ctx); window.scrollTo(0, 0);
+    };
     el.querySelectorAll('[data-rbman]').forEach(function (b) {
       b.onclick = function () { var x = b.dataset.rbman.split('|'); rbMan[x[0]] = x[1]; rbFocus = x[0] + '|' + x[1]; rbRedraw(); };
     });
@@ -930,8 +958,11 @@
       if (q && rbHarvest(j) && q.dataset.rbl !== rbLotsKey(j)) { var t = document.createElement('div'); t.innerHTML = rbLotsHtml(j); q.parentNode.replaceChild(t.firstChild, q); rbWire(jobs); }
     });
     var lead = el.querySelector('.rb-lead b');
-    var vis = jobs.filter(function (j) { return rbType(j) !== 'colx'; });   // v1.95: the loader is counted inside the tractor's card
-    if (lead && lead.parentNode.parentNode === el.querySelector('#rb-list')) lead.textContent = vis.filter(rbFilled).length + EA.t(' daripada ', ' of ') + vis.length + EA.t(' kerja lengkap.', ' jobs complete.');
+    var vis = rbVis(jobs);
+    if (lead && lead.parentNode.parentNode === el.querySelector('#rb-list')) lead.textContent = vis.filter(rbTicked).length + EA.t(' daripada ', ' of ') + vis.length + EA.t(' kerja siap.', ' jobs done.');
+    var rbd = el.querySelector('#rb-done');
+    if (rbd) { var oj = vis.find(function (x) { return x.key === rbd.dataset.k; }), okj = !!oj && rbFilled(oj); rbd.disabled = !okj;
+      var dh = el.querySelector('#rb-done-hint'); if (dh) { dh.hidden = okj; dh.textContent = okj || !oj ? '' : EA.t('Belum lengkap: ', 'Not complete: ') + rbLeft(oj); } }
   }
 
   function render(container, c) {
@@ -983,16 +1014,20 @@
       // v1.92 Rupa Baru: a thin heading, the jobs as one list, the same bands, the same SIMPAN.
       var y0 = window.scrollY;
       rbRoom(true);
-      el.innerHTML = '<div class="rb-thin"><button type="button" id="wk-back">‹ ' + EA.t('Kerja', 'Work') + ' · ' + esc(niceDate(chit.date)) + '</button><small>' + esc(ctx.estate) + (testing ? ' · ' + EA.t('UJIAN', 'TEST') : '') + '</small></div>' + chooser +
+      var rbV = rbVis(jobs), rbK = rbOpenJob(rbV), rbAll = rbV.length > 0 && rbV.every(rbTicked), rbLast = !!rbK && rbV.every(function (x) { return x.key === rbK || rbTicked(x); });
+      el.innerHTML = '<div class="rb-thin"><button type="button" id="wk-back">‹ ' + (rbK ? EA.t('Senarai kerja', 'Job list') : EA.t('Kerja', 'Work') + ' · ' + esc(niceDate(chit.date))) + '</button><small>' + esc(ctx.estate) + (testing ? ' · ' + EA.t('UJIAN', 'TEST') : '') + '</small></div>' + chooser +
         fixBand() + (EA.fh.dayCloseBand ? EA.fh.dayCloseBand(ctx.estate, ctx.user) : '') +
         (draft.replacing ? '<p class="warn"><span class="bm">Membetulkan kerja harian. Rekod lama kekal; yang baru menggantikannya.</span><span class="en">Correcting the day\'s work. The old record stays; this one replaces it.</span></p>' : '') +
         '<div id="rb-list">' + rbJobs(jobs) + '</div>' +
-        '<details class="card rb-report"><summary>' + EA.t('Laporan petang', 'Evening report') + '</summary><pre class="chit" id="wk-preview"></pre></details>' +
-        '<div class="bottom-bar"><button type="button" class="btn btn-main" id="wk-check">SAVE<small>Simpan kerja harian</small></button></div>';
+        (rbK ? '<div class="bottom-bar rb-bb"><p class="hint" id="rb-done-hint" hidden></p><button type="button" class="btn btn-main" id="rb-done" data-k="' + esc(rbK) + '">' + (rbLast ? 'DONE · TO THE LIST ›<small>SIAP · KE SENARAI ›</small>' : 'DONE · NEXT JOB ›<small>SIAP · KERJA SETERUSNYA ›</small>') + '</button></div>'
+          : '<details class="card rb-report"><summary>' + EA.t('Laporan petang', 'Evening report') + '</summary><pre class="chit" id="wk-preview"></pre></details>' +
+            '<div class="bottom-bar rb-bb">' + (rbAll ? '' : '<p class="hint">' + EA.t('Dibuka bila semua kerja bertanda SIAP. Apa yang diisi sudah disimpan di telefon.', 'Opens when every job is ticked DONE. What you keyed is already kept on this phone.') + '</p>') +
+            '<button type="button" class="btn btn-main" id="wk-check"' + (rbAll ? '' : ' disabled') + '>SAVE<small>Simpan kerja harian</small></button></div>');
       window.scrollTo(0, y0);
       wireTop();
+      if (rbK) $('#wk-back').onclick = function () { EA.local.set(rbKey(), ''); render(el, ctx); window.scrollTo(0, 0); };
       wireJobs(jobs);
-      $('#wk-check').onclick = function () { check(jobs); };
+      if ($('#wk-check')) $('#wk-check').onclick = function () { check(jobs); };
       refresh(jobs);
       return;
     }
@@ -1177,7 +1212,7 @@
       draft = { chit: chit.chit, lines: JSON.parse(JSON.stringify(s.lines)), status: JSON.parse(JSON.stringify(s.status)), checker: s.checker, replacing: s.chit,
                 prog: JSON.parse(JSON.stringify(s.prog || {})), manual: JSON.parse(JSON.stringify(s.manual || {})), bags: JSON.parse(JSON.stringify(s.bags || {})), chitRev: s.chitRev || 1,
                 who: s.who ? JSON.parse(JSON.stringify(s.who)) : null, pbags: JSON.parse(JSON.stringify(s.pbags || {})), dose: JSON.parse(JSON.stringify(s.dose || {})), lotwhy: JSON.parse(JSON.stringify(s.lotwhy || {})),
-                hlot: JSON.parse(JSON.stringify(s.hlot || {})), clot: JSON.parse(JSON.stringify(s.clot || {})) };
+                hlot: JSON.parse(JSON.stringify(s.hlot || {})), clot: JSON.parse(JSON.stringify(s.clot || {})), rbTick: JSON.parse(JSON.stringify(s.rbTick || {})) };
       normProg(draft);
       if (!draft.who) { draft.who = {}; jobsOf(chit).forEach(function (j) { if (isHa(j)) draft.who[j.key] = allWho(j, draft); }); }
       keepDraft(); render(el, ctx);
@@ -1737,7 +1772,7 @@
     settled.forEach(function (x) {   // v1.42: the earlier day now carries its share (kept on this phone too)
       var l = x.s.rec.lines[x.i]; l.hist = (l.hist || []).concat([[l.id, l.qty]]); l.id = x.id; l.qty = x.qty; l.settledBy = rec.chit; keepSaved(x.s);
     });
-    keepSaved({ chit: rec.chit, date: rec.date, estate: rec.estate, rec: rec, lines: draft.lines, status: draft.status, prog: draft.prog, manual: draft.manual, bags: draft.bags || {}, who: draft.who || {}, pbags: draft.pbags || {}, dose: draft.dose || {}, lotwhy: draft.lotwhy || {}, checker: draft.checker, rev: old ? (old.rev || 1) + 1 : 1, chitRev: chit.rev || 1, mids: mids || {}, mlot: draft.mlot || {}, mpul: draft.mpul || {}, hlot: draft.hlot || {}, clot: draft.clot || {} });
+    keepSaved({ chit: rec.chit, date: rec.date, estate: rec.estate, rec: rec, lines: draft.lines, status: draft.status, prog: draft.prog, manual: draft.manual, bags: draft.bags || {}, who: draft.who || {}, pbags: draft.pbags || {}, dose: draft.dose || {}, lotwhy: draft.lotwhy || {}, checker: draft.checker, rev: old ? (old.rev || 1) + 1 : 1, chitRev: chit.rev || 1, mids: mids || {}, mlot: draft.mlot || {}, mpul: draft.mpul || {}, hlot: draft.hlot || {}, clot: draft.clot || {}, rbTick: draft.rbTick || {} });
     dropDraft();
     var moved = autoCollect(rec, at, !!(chit && chit.fromPlan && !old));   // v1.40: only the first save of a planned day
     ui().toast(EA.t('Kerja harian disimpan', 'Day\'s work saved') + (moved ? ' · ' + moved + EA.t(' tandan ke ramp', ' bunches to the ramp') : ''));

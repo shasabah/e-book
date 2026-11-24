@@ -53,6 +53,7 @@ const { chromium } = require('playwright');
   // ---------- Kerja ----------
   await p.evaluate(() => { EA.ui.closeSheet(); location.hash = ''; }); await p.waitForTimeout(200);
   await p.evaluate(() => { location.hash = 'field-harvest/work'; }); await p.waitForTimeout(1200);
+  await p.click('[data-rbj="j1"]'); await p.waitForTimeout(300);   // v1.99: Kerja opens on the list
   const body = () => p.innerText('[data-rbjob].on .rb-jb');
   t = await body();
   check('Kerja: 🔒 fertiliser and dose, bawa 35 beg', /🔒 Baja Contoh · 2.5 kg sepokok · bawa 35 beg/.test(t), t.slice(0, 160));
@@ -79,6 +80,7 @@ const { chromium } = require('playwright');
   check('the old screen\'s fields are filled: job BELUM SIAP, 1-17 not done with its reason, the dose from the programme', st.st.done === 'N' && st.prog['1-17'] === '0' && st.prog['1-13'] === '100' && /hujan · baki 4 beg/.test(st.why['1-17'].note) && st.dose === '2.5', JSON.stringify(st).slice(0, 300));
   // SIMPAN
   await p.evaluate(() => { localStorage.setItem('ea.queue', '[]'); });
+  await p.click('#rb-done'); await p.waitForTimeout(400);
   await p.click('#wk-check'); await p.waitForTimeout(500);
   const sheet1 = await p.evaluate(() => document.getElementById('sheet').innerText.replace(/\s+/g, ' ').slice(0, 300));
   for (let i = 0; i < 3; i++) { const go = await p.$('#wc-ok, #wp-ok, #ck-go'); if (go) { await go.click(); await p.waitForTimeout(400); } }

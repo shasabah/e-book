@@ -28,9 +28,11 @@ const { chromium } = require('playwright');
     return { hv: hv.map(x => x.id), drv: drv.id, ld: ld.id };
   });
   await p.evaluate(() => { location.hash = 'field-harvest/work'; }); await p.waitForTimeout(1500);
-  const cards = await p.evaluate(() => [...document.querySelectorAll('[data-rbjob]')].map(c => c.dataset.rbjob).join(','));
+  const cards = await p.evaluate(() => [...document.querySelectorAll('.rb-steps [data-rbj]')].map(c => c.dataset.rbj).join(','));
   check('two cards: Menuai, and Traktor & pemuat (the loader is inside the tractor\'s card)', cards === 'j1,j2', cards);
-  check('the second card is named "Traktor & pemuat · Blok 02", closed together', /Traktor & pemuat · Blok 02/.test(await p.innerText('[data-rbjob="j2"] .rb-jh')) && /ditutup bersama/.test(await p.innerText('[data-rbjob="j2"] .rb-jh')), await p.innerText('[data-rbjob="j2"] .rb-jh'));
+  check('the second card is named "Traktor & pemuat · Blok 02", closed together', /Traktor & pemuat · Blok 02/.test(await p.innerText('[data-rbj="j2"]')) && /ditutup bersama/.test(await p.innerText('[data-rbj="j2"]')), await p.innerText('[data-rbj="j2"]'));
+  check('the tractor and loader are locked until the harvest is keyed ("selepas Menuai")', await p.isDisabled('[data-rbj="j2"]') && /selepas Menuai/.test(await p.innerText('[data-rbj="j2"]')));
+  await p.click('[data-rbj="j1"]'); await p.waitForTimeout(300);
   // Menuai: the lot question waits for the last harvester
   await p.click('[data-rbopen] [data-pick-lot="2-1"]'); await p.waitForTimeout(300); await p.keyboard.type('120'); await p.keyboard.press('Enter'); await p.waitForTimeout(300);
   await p.keyboard.type('100'); await p.keyboard.press('Enter'); await p.waitForTimeout(300);
@@ -41,7 +43,8 @@ const { chromium } = require('playwright');
   await p.click('[data-rbtile=\"h|j1|2-2\"]'); await p.waitForTimeout(150); await p.click('#sheet [data-sv=\"N\"]'); await p.waitForTimeout(200); await p.click('#sheet [data-sw=\"hujan\"]'); await p.waitForTimeout(300);
   check('Menuai reads LENGKAP ✓', /LENGKAP ✓/.test(await p.innerText('[data-rbjob="j1"] .rb-jh')));
   // Traktor & pemuat
-  await p.click('[data-rbjnext="j1"]'); await p.waitForTimeout(400);
+  await p.click('#rb-done'); await p.waitForTimeout(400);
+  check('SIAP · KERJA SETERUSNYA opens the tractor and loader, now unlocked', await p.evaluate(() => (document.querySelector('[data-rbjob].on') || {}).dataset.rbjob) === 'j2');
   const j2 = await p.innerText('[data-rbjob="j2"]');
   check('the driver: 1 day set; no separate lot picker (the tiles answer it)', await p.getAttribute(`[data-w="${s.drv}"][data-day="1"]`, 'aria-pressed') === 'true' && await p.locator('[data-alllots],[data-onelot]').count() === 0);
   check('one SEMUA HABIS button and a tile for every lot of the job, none answered', /SEMUA HABIS · 3 petak/.test(j2) && await p.locator('[data-rbtile^="c|j2|"]').count() === 3 && (j2.match(/belum dijawab/g) || []).length === 3, j2.replace(/\s+/g, ' ').slice(0, 400));
@@ -68,7 +71,8 @@ const { chromium } = require('playwright');
   const st = await p.evaluate(() => { const d = Object.values(JSON.parse(localStorage.getItem('fh.workdraft')))[0]; return { j2: d.status.j2, j3: d.status.j3 }; });
   check('one answer closes both: tractor and loader BELUM SIAP with the same reason, lot by lot',
     st.j2.done === 'N' && st.j3.done === 'N' && st.j2.reason === st.j3.reason && /Petak 2-2 belum ke ramp: traktor rosak/.test(st.j2.reason) && /Petak 2-3 tidak dipergi: tak sempat/.test(st.j2.reason), JSON.stringify(st));
-  check('"2 daripada 2 kerja lengkap"', /2 daripada 2 kerja lengkap/.test(await p.innerText('#rb-list')), await p.innerText('.rb-lead'));
+  await p.click('#rb-done'); await p.waitForTimeout(400);
+  check('"2 daripada 2 kerja siap", and the tractor line says "1/3 petak ke ramp · 2-2, 2-3 belum"', /2 daripada 2 kerja siap/.test(await p.innerText('#rb-list')) && /1\/3 petak ke ramp · 2-2, 2-3 belum/.test(await p.innerText('[data-rbj="j2"]')), await p.innerText('#rb-list'));
   // SIMPAN
   await p.evaluate(() => { localStorage.setItem('ea.queue', '[]'); });
   await p.click('#wk-check'); await p.waitForTimeout(500);

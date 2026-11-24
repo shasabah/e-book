@@ -263,9 +263,18 @@
       var have = fl && fl[lot] > 0 ? fl[lot] : (cutLot[lot] || 0) - (gotLot[lot] || 0);
       return { lot: lot, block: blockOf[lot] || ((EA.lists.lot && EA.lists.lot(estate, lot)) || {}).block || '', bunches: Math.max(0, have) };
     }).filter(function (x) { return x.bunches > 0; });
+    // v2.00 (Yu Chen, 25 Nov 2026: "Fix"; Brief_Tuai_Kutip_Rupa_Baru 1.2 §5a). In the new look the tractor's job
+    // already says, lot by lot, why fruit stayed in the block ("2-2 belum (traktor rosak)"). When every lot still in
+    // the block has such an answer, this line takes it and turns green; the close keeps it as the field reason. A lot
+    // with fruit left and no answer from Kerja still asks TINGGAL DI LADANG…, as before.
+    var cw = colReasons(w), openL = rampLots.map(function (x) { return x.lot; });
+    var fromKerja = left > 0 && openL.length > 0 && openL.every(function (l) { return cw[l]; }) ? openL.map(function (l) { return l + ' ' + cw[l]; }).join(', ') : '';
+    var noWhyL = openL.filter(function (l) { return !cw[l]; });
     if (!cut) out.push({ n: 2, ok: true, bm: 'Tiada tuaian hari ini', en: 'No harvest today', sub: '' });
+    else if (left > 0 && !String(d.fieldNote || '').trim() && fromKerja) out.push({ n: 2, ok: true, bm: cut + ' tandan dituai · ' + left + ' belum ke ramp (sebab dari Kerja)', en: cut + ' bunches cut · ' + left + ' not at the ramp (reason from Work)',
+      sub: fromKerja, autoField: fromKerja });
     else if (left > 0 && !String(d.fieldNote || '').trim()) out.push(toRamp({ n: 2, ok: false, bm: left + ' tandan dituai belum ke ramp', en: left + ' bunches cut, not yet at the ramp',
-      sub: EA.t('Sudah dibawa ke ramp: SEMUA KE RAMP · masih di ladang: TINGGAL DI LADANG…', 'Taken to the ramp: ALL TO THE RAMP · still in the field: LEFT IN THE FIELD…'), note: 'field', left: left },
+      sub: (Object.keys(cw).length && noWhyL.length ? EA.t('Tiada jawapan dari Kerja: petak ', 'No answer from Work: lot ') + noWhyL.join(', ') + ' · ' : '') + EA.t('Sudah dibawa ke ramp: SEMUA KE RAMP · masih di ladang: TINGGAL DI LADANG…', 'Taken to the ramp: ALL TO THE RAMP · still in the field: LEFT IN THE FIELD…'), note: 'field', left: left },
       (rampLots.length ? [{ k: 'ramp', lots: rampLots }] : []).concat([{ k: 'leave' }])));
     else out.push({ n: 2, ok: true, bm: cut + ' tandan dituai' + (left > 0 ? ' · ' + left + ' belum ke ramp (sebab ditulis)' : ' · semua ke ramp'), en: cut + ' bunches cut' + (left > 0 ? ' · ' + left + ' not at the ramp (reason given)' : ' · all at the ramp'), sub: '' });
     // 3 · every lorry has its delivery note
@@ -293,6 +302,15 @@
     if (rep.length) out.push({ n: 7, ok: true, warn: true, soft: true, bm: rep.length + ' petak sudah siap pusingan ini dikunci lagi', en: rep.length + ' lots already done this round keyed again',
       sub: rep.map(function (x) { return x.task + ' ' + x.lot + ' (' + EA.t('siap ', 'done ') + x.on.slice(8, 10) + '/' + x.on.slice(5, 7) + (x.why ? ' · ' + x.why : EA.t(' · tiada sebab', ' · no reason')) + ')'; }).join(' · ') });
     return out;
+  }
+  // v2.00: the tractor's lot-by-lot answers from Kerja (new look, 1.95): lot → why its fruit is not at the ramp.
+  function colReasons(w) {
+    var m = {};
+    ((w && w.rec && w.rec.jobs) || []).forEach(function (j) {
+      if (j.task_code !== 'ITF' || !j.progress) return;
+      String(j.progress).split(', ').forEach(function (x) { var r = /^([\w\-\/]+) (belum|tidak pergi) \((.*)\)$/.exec(x); if (r) m[r[1]] = (r[2] === 'tidak pergi' ? 'tidak dipergi, ' : '') + r[3]; });
+    });
+    return m;
   }
   // Which jobs fell short today (BELUM SIAP, or a flag such as under target).
   function shortJobs(jobs) { return jobs.filter(function (j) { return j.status === 'not_done' || /sasaran|target|kurang|under/i.test(String(j.flags || '')); }); }
@@ -583,7 +601,9 @@
     var at = EA.today() + ' ' + EA.ui.hhmm(new Date());
     var old = closes().find(function (s) { return s.estate === estate && s.date === c.date; });
     var checksTxt = ck.map(function (x) { return x.n + (x.ok ? '✓' : '!') + ' ' + x.bm; }).join(' | ').slice(0, 400);
-    var note = [String(d.fieldNote || '').trim(), String(d.note || '').trim(), opts.auto ? 'Ditutup oleh app (lengkap) semasa chit pagi' : ''].filter(Boolean).join(' · ').slice(0, 200);
+    var af = (ck.find(function (x) { return x.n === 2 && x.autoField; }) || {}).autoField || '';   // v2.00: the reason from Kerja
+    var fnote = String(d.fieldNote || '').trim() || (af ? 'Buah belum ke ramp (Kerja): ' + af : '');
+    var note = [fnote, String(d.note || '').trim(), opts.auto ? 'Ditutup oleh app (lengkap) semasa chit pagi' : ''].filter(Boolean).join(' · ').slice(0, 200);
     var rec;
     try {
       rec = EA.save(TAB, ROOM, estate, { date: c.date, chit: c.chit, kind: 'close', closed_by: user.code, closed_at: at, checks: checksTxt,
@@ -598,7 +618,7 @@
       // v1.50.1 (Yu Chen, 5 Nov): who was away, by name and mark, for the day summary.
       pay: (function () { var c1 = ck.find(function (x) { return x.n === 1 && x.pay; }); return c1 ? payCountText(c1.pay) : ''; })(),
       away: (c.rows || []).filter(function (r) { return r.status !== 'removed' && r.muster !== 'H'; }).map(function (r) { return person(r.worker_id) + ' (' + r.muster + ')'; }),
-      notDone: jobs.filter(function (j) { return j.status === 'not_done'; }).map(function (j) { return { job: shortName(j.task_code) + (j.block ? ' Blk ' + j.block : ''), why: j.reason || '' }; }), note: d.note || '', fieldNote: d.fieldNote || '' };
+      notDone: jobs.filter(function (j) { return j.status === 'not_done'; }).map(function (j) { return { job: shortName(j.task_code) + (j.block ? ' Blk ' + j.block : ''), why: j.reason || '' }; }), note: d.note || '', fieldNote: d.fieldNote || af };
     var list = closes().filter(function (x) { return !(x.estate === s.estate && x.date === s.date); }); list.push(s); EA.local.set(K.saved, list);
     var o = EA.local.get(K.office + estate, null); if (o && o.days) { o.days.forEach(function (x) { if (x.date === c.date) x.state = 'closed'; }); EA.local.set(K.office + estate, o); }
     var all = EA.local.get(K.draft, {}); delete all[estate + '|' + c.date]; EA.local.set(K.draft, all);

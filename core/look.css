@@ -542,6 +542,24 @@ body:has(#room:not([hidden]) .botbar) .sheet-back:not([hidden]) ~ .toast,
 .practice-band b { display: block; font-weight: 800; }
 .practice-in { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
 .practice-in > div { min-width: 0; }
+/* v1.92 Rupa Baru: purple, so it is never mixed up with Latihan's orange */
+.rupa-card { display: flex; align-items: center; gap: 12px; justify-content: space-between; border: 2px solid #6a4fb3; background: #f1ecfb; color: #2e2156; }
+.rupa-card > div { min-width: 0; } .rupa-card b { display: block; color: #4b3590; font-weight: 800; } .rupa-card span { font-size: .9rem; }
+.rupa-card .btn { flex: none; }
+.btn-rupa { background: #6a4fb3; color: #fff; }
+.tag-rupa { font-size: .7rem; font-weight: 800; background: #f1ecfb; color: #4b3590; border-radius: 6px; padding: 2px 6px; margin-left: 6px; vertical-align: middle; }
+.us-rupa { border: 2px dashed #6a4fb3; color: #4b3590; background: transparent; }
+.rupa-tick { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--line, #edf0ec); background: none; padding: 10px 0; min-height: 52px; font: inherit; color: inherit; }
+.rupa-tick > span { flex: 1; min-width: 0; } .rupa-tick small { display: block; color: var(--muted, #5d6a61); }
+.rupa-tick i { width: 30px; height: 30px; border-radius: 8px; border: 2px solid #cfd8d1; display: flex; align-items: center; justify-content: center; color: #fff; font-style: normal; font-weight: 800; flex: none; }
+.rupa-tick[aria-pressed="true"] i { background: #6a4fb3; border-color: #6a4fb3; }
+.rupa-tick[disabled] i { background: #b9acdc; border-color: #b9acdc; }
+.rupa-job-nav { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.rupa-job-nav button { min-height: 44px; }
+.rupa-jobs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+.rupa-jobs button { flex: none; min-height: 44px; border: 2px solid #cfd8d1; background: #fff; border-radius: 10px; padding: 4px 10px; font: inherit; font-weight: 700; }
+.rupa-jobs button[aria-current="true"] { border-color: #6a4fb3; background: #f1ecfb; color: #4b3590; }
+.rupa-jobs button.done::after { content: " ✓"; color: #1f7a45; }
 .practice-as { display: block; font-size: .85rem; font-weight: 700; margin-top: 2px; }
 .practice-out { flex: none; min-height: 44px; padding: 6px 12px; font-size: .85rem; }
 .tag-practice { display: inline-block; background: var(--wait-soft); color: var(--wait); border-radius: 999px; padding: 1px 9px; font-size: .75rem; font-weight: 700; }

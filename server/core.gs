@@ -1493,7 +1493,8 @@ function setJson_(k, v) { PropertiesService.getScriptProperties().setProperty(k,
 function phoneNames_(u) { try { var o = JSON.parse(String(u.phone_names || '{}').replace(/^'/, '')); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } }
 
 // The trial switches, sent to every phone with the login and each send.
-function switches_() { var w = getJson_('SWITCHES', {}); return { testModeOff: !!w.testModeOff, live: w.live || {}, cleanFrom: liveFrom_() }; }
+// v1.92 Rupa Baru (Brief_Rupa_Baru, signed 24 Nov 2026): the people the Owner ticked may try the new look.
+function switches_() { var w = getJson_('SWITCHES', {}); return { testModeOff: !!w.testModeOff, live: w.live || {}, cleanFrom: liveFrom_(), rupaBaru: w.rupaBaru || [] }; }
 
 // When each phone last reached the office, with its app version and how many records were waiting.
 // Written at most every 5 minutes per phone (or when the version or waiting count changes).
@@ -1682,7 +1683,7 @@ function adminSwitches_() {
   if (lg && lg.getLastRow() > 1) lg.getRange(2, 1, lg.getLastRow() - 1, USERS_LOG_COLS.length).getValues().forEach(function (r) {
     if (String(r[3]) === 'switch' || String(r[3]) === 'test_off') log.push({ at: r[0] instanceof Date ? Utilities.formatDate(r[0], 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm') : String(r[0]).replace(/^'/, ''), by: String(r[2]), detail: String(r[6]) });
   });
-  return { ok: true, testPinsOn: testOn, testModeOff: sw.testModeOff, live: sw.live, people: people, log: log.reverse().slice(0, 10) };
+  return { ok: true, testPinsOn: testOn, testModeOff: sw.testModeOff, live: sw.live, rupaBaru: sw.rupaBaru, people: people, log: log.reverse().slice(0, 10) };
 }
 function adminSwitch_(user, req) {
   var lock = LockService.getScriptLock();
@@ -1711,6 +1712,11 @@ function adminSwitch_(user, req) {
       var l = (w.live[room] || []).filter(function (x) { return x !== est; });
       if (on) l.push(est);
       w.live[room] = l; detail = (on ? 'Dibuka: ' : 'Ditutup: ') + room + ' ' + est;
+    } else if (which === 'rupaBaru') {
+      // v1.92: the whole tick list at once; only real, active logins (never test or practice codes).
+      var act = {}; readUsers_().list.forEach(function (u) { if (u.status === 'active' && !isTestCode_(u.user_code) && !isPracticeCode_(u.user_code)) act[String(u.user_code)] = 1; });
+      w.rupaBaru = (req.codes || []).map(String).filter(function (c, i, a) { return act[c] && a.indexOf(c) === i; }).slice(0, 60);
+      detail = 'Rupa Baru: ' + (w.rupaBaru.join(', ') || 'tiada');
     } else return { ok: false, error: 'unknown_switch' };
     setJson_('SWITCHES', w);
     logUser_(user, 'switch', { user_code: '-', name: '-' }, detail);

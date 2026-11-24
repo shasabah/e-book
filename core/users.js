@@ -91,6 +91,7 @@ EA.roomViews = EA.roomViews || {};
     if (!el) return;
     if (shown) return drawPin();
     if (form && form.mode === 'move') return drawMove();
+    if (form && form.mode === 'rupa') return drawRupa();
     if (form) return drawForm();
     var h = top(EA.t('Pengguna & PIN', 'Users & PIN'), '<span class="inline"><span class="bm">Bilik</span><span class="en">Rooms</span></span>');
     if (loading && !data) h += '<div class="card"><p class="hint">' + EA.t('Memuat dari pejabat…', 'Loading from the office…') + '</p></div>';
@@ -120,6 +121,7 @@ EA.roomViews = EA.roomViews || {};
     } else {
       h += '<button class="btn us-add" type="button" id="us-add">+ ADD USER<small>+ Tambah pengguna</small></button>';
       h += '<button class="btn btn-ghost us-pins" type="button" id="us-pins">SHOW PINS<small>Lihat PIN</small></button>';
+      h += '<button class="btn us-rupa" type="button" id="us-rupa">NEW LOOK · WHO MAY TRY ›<small>RUPA BARU · SIAPA BOLEH CUBA ›</small></button>';
     }
     // Active real users, grouped: all estates first, then by first estate; then the switched-off ones.
     var groups = {}, order = [];
@@ -155,6 +157,7 @@ EA.roomViews = EA.roomViews || {};
       '<span class="s">' + esc(u.position ? posShort(u.position) : roleName(u.role)) + ' · ' + esc(allEst(u.estates) ? EA.t('semua ladang', 'all estates') : u.estates.join(', ')) +
       (u.move ? ' · ' + EA.t('pindah ke ', 'moving to ') + esc(u.move.estates.join(', ')) + ' ' + esc(shortDate(u.move.date)) : '') +
       (u.added ? ' · ' + EA.t('sejak ', 'since ') + esc(shortDate(u.added)) : '') + '</span>' + phonesHtml(u) + '</div>' +
+      (rupaOn(u) && on ? '<span class="tag-rupa">' + EA.t('RUPA BARU', 'NEW LOOK') + '</span>' : '') +
       (u.practice && on ? '<span class="tag-practice">' + EA.t('LATIHAN', 'PRACTICE') + '</span>' :
       '<span class="us-tag ' + (on ? 'on' : 'off') + '">' + (on ? EA.t('AKTIF', 'ACTIVE') : EA.t('DITUTUP', 'OFF')) + '</span>') + '</button>';
   }
@@ -176,6 +179,7 @@ EA.roomViews = EA.roomViews || {};
     var f = el.querySelector('#us-first'); if (f) f.onclick = function () { form = { mode: 'add', name: ctx.user.name && !/ujian|test/i.test(ctx.user.name) ? ctx.user.name : '', role: 'Owner', estates: ALLest(), firstOwner: true }; draw(); };
     var t = el.querySelector('#us-testoff'); if (t) t.onclick = testOffSheet;
     var pn = el.querySelector('#us-pins'); if (pn) pn.onclick = pinsAsk;
+    var rb = el.querySelector('#us-rupa'); if (rb) rb.onclick = function () { form = { mode: 'rupa', codes: ((EA.switches().rupaBaru) || []).slice(), err: '' }; draw(); window.scrollTo(0, 0); };
     el.querySelectorAll('[data-user]').forEach(function (x) { x.onclick = function () { personSheet(x.dataset.user); }; });
   }
 
@@ -351,6 +355,40 @@ EA.roomViews = EA.roomViews || {};
       var a = ACT[l.action] ? EA.t(ACT[l.action][0], ACT[l.action][1]) : l.action;
       return '<div class="us-logline"><b>' + esc(l.at) + ' · ' + esc(l.by) + '</b><br>' + esc(a) + (l.detail ? ': ' + esc(l.detail) : '') + '</div>';
     }).join('') : '<div class="hint">' + EA.t('Belum ada.', 'Nothing yet.') + '</div>');
+  }
+  // v1.92 Rupa Baru (Brief_Rupa_Baru, signed 24 Nov 2026): one tick list, grouped by place. The Owner is always ticked.
+  function rupaOn(u) { return !u.test && !u.practice && (u.role === 'Owner' || ((EA.switches().rupaBaru) || []).indexOf(u.code) >= 0); }
+  function drawRupa() {
+    var f = form, users = (data && data.users || []).filter(function (u) { return !u.test && !u.practice && u.status === 'active'; });
+    var groups = {}, order = [];
+    users.forEach(function (u) { var g = u.role === 'Owner' ? 'OWN' : allEst(u.estates) ? 'ALL' : firstEst(u.estates); (groups[g] = groups[g] || []).push(u); });
+    ['OWN', 'ALL'].concat(ALLest()).forEach(function (g) { if (groups[g]) order.push(g); });
+    var n = users.filter(function (u) { return u.role === 'Owner' || f.codes.indexOf(u.code) >= 0; }).length;
+    var h = top(EA.t('Rupa Baru · siapa boleh cuba', 'New look · who may try'), '');
+    h += '<div class="card rupa-card"><div><b>' + EA.t('Rupa Baru · siapa boleh cuba', 'New look · who may try') + '</b><span>' +
+      EA.t('Ditanda: nampak butang CUBA RUPA BARU. Tidak ditanda: tiada apa berubah. ', 'Ticked: sees the TRY THE NEW LOOK button. Not ticked: nothing changes. ') + '<b style="display:inline">' + n + EA.t(' orang ditanda.', ' ticked.') + '</b></span></div></div>';
+    order.forEach(function (g) {
+      h += '<div class="card"><h2>' + (g === 'OWN' ? EA.t('Pemilik', 'Owner') : g === 'ALL' ? EA.t('Semua ladang', 'All estates') : esc(estNm(g)) + ' (' + g + ')') + '</h2>' +
+        groups[g].map(function (u) {
+          var own = u.role === 'Owner', on = own || f.codes.indexOf(u.code) >= 0;
+          return '<button type="button" class="rupa-tick" data-rupa="' + esc(u.code) + '" aria-pressed="' + on + '"' + (own ? ' disabled' : '') + '><span><b>' + esc(u.name) + '</b><small>' +
+            esc(u.position ? posShort(u.position) : roleName(u.role)) + (own ? ' · ' + EA.t('sentiasa boleh', 'always') : '') + '</small></span><i>' + (on ? '✓' : '') + '</i></button>';
+        }).join('') + '</div>';
+    });
+    if (f.err) h += '<p class="msg">' + esc(errText(f.err)) + '</p>';
+    h += '<div class="bottom-bar"><button type="button" class="btn btn-rupa" id="rb-save">SAVE<small>Simpan</small></button></div>';
+    el.innerHTML = '<div class="us">' + h + '</div>';
+    el.querySelector('#us-back').onclick = function () { form = null; draw(); };
+    el.querySelectorAll('[data-rupa]').forEach(function (b) {
+      b.onclick = function () { var c = b.dataset.rupa, i = f.codes.indexOf(c); if (i >= 0) f.codes.splice(i, 1); else f.codes.push(c); draw(); };
+    });
+    el.querySelector('#rb-save').onclick = async function () {
+      this.disabled = true;
+      var j = await EA.askFull('adminSwitch', { which: 'rupaBaru', codes: f.codes });
+      if (!j || !j.ok) { f.err = (j && j.error) || 'busy'; draw(); return; }
+      var sw = EA.switches(); EA.setSwitches({ testModeOff: sw.testModeOff, live: sw.live, rupaBaru: j.rupaBaru || [] });
+      form = null; ui().toast(EA.t('Disimpan', 'Saved')); draw();
+    };
   }
   function drawMove() {
     var f = form;

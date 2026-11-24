@@ -576,6 +576,20 @@
   }
 
   var switchAsk = false;
+  // v1.92 Rupa Baru (Brief_Rupa_Baru, signed 24 Nov 2026): a purple card on Hari ini, only for people the Owner ticked.
+  // CUBA RUPA BARU turns the new look on for this phone; KEMBALI KE RUPA LAMA turns it off. Only the screens change.
+  function renderRupa() {
+    var box = $('rupa-card'); if (!box) return;
+    var ok = EA.rupaBaruAllowed && EA.rupaBaruAllowed() && pane() === 'today';
+    box.hidden = !ok;
+    if (!ok) { box.innerHTML = ''; return; }
+    var on = EA.rupaBaru();
+    box.innerHTML = '<div class="card rupa-card' + (on ? ' on' : '') + '"><div><b>' + (on ? EA.t('RUPA BARU · sedang dicuba', 'NEW LOOK · on') : EA.t('RUPA BARU', 'NEW LOOK')) + '</b>' +
+      '<span>' + (on ? EA.t('Kerja dalam rupa baru. Rekod sama, cara isi lebih mudah.', 'Kerja in the new look. Same records, easier keying.')
+        : EA.t('Cuba Kerja dalam rupa baru. Rekod sama; boleh kembali bila-bila.', 'Try Kerja in the new look. Same records; go back any time.')) + '</span></div>' +
+      '<button type="button" class="btn ' + (on ? 'btn-ghost' : 'btn-rupa') + '" id="rupa-go">' + (on ? 'BACK TO OLD LOOK<small>KEMBALI KE RUPA LAMA</small>' : 'TRY THE NEW LOOK<small>CUBA RUPA BARU</small>') + '</button></div>';
+    $('rupa-go').onclick = function () { EA.setRupaBaru(!on); toast(on ? EA.t('Kembali ke rupa lama', 'Back to the old look') : EA.t('Rupa baru dibuka', 'New look on')); render(); };
+  }
   function render() {
     var u = EA.currentUser();
     $('login').hidden = !!u;
@@ -593,6 +607,7 @@
     if (EA.renderLate) { EA.renderLate($('late'), u); EA.latePeek(u); }                   // v1.56: Susulan harian (HQ and the Owner)
     if (EA.renderToday) EA.renderToday($('today'), u, estate);                            // v1.61: Hari ini, the day's steps (staff in charge)
     renderPanes(u, estate);                                                                // v1.61: the four tabs
+    renderRupa();                                                                          // v1.92: Rupa Baru door
     // v1.16: fetch the trial switches from the office now and then (a phone may stay logged in for weeks).
     var sw = EA.switches();
     if (EA.sendLink() && navigator.onLine && !switchAsk && (!sw.at || Date.now() - sw.at > 30 * 60000)) {

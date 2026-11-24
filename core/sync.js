@@ -64,7 +64,7 @@ window.EA = window.EA || {};
   EA.switches = function () { return get('ea.switches', { testModeOff: false, live: {} }) || { testModeOff: false, live: {} }; };
   EA.setSwitches = function (sw) {
     if (!sw || typeof sw !== 'object') return;
-    set('ea.switches', { testModeOff: !!sw.testModeOff, live: sw.live || {}, at: Date.now() });
+    set('ea.switches', { testModeOff: !!sw.testModeOff, live: sw.live || {}, rupaBaru: Array.isArray(sw.rupaBaru) ? sw.rupaBaru : [], at: Date.now() });
     if (sw.cleanFrom && !practiceNow() && get('ea.cleanDone', '') !== sw.cleanFrom) EA.cleanBefore(sw.cleanFrom);
   };
 
@@ -95,6 +95,15 @@ window.EA = window.EA || {};
       if (typeof changed === 'function') changed();
     } catch (e) {}
   };
+  // v1.92 Rupa Baru (Brief_Rupa_Baru, signed 24 Nov 2026): the new look for Kerja, behind its own door. Who may try it is
+  // the Owner's tick list (office switch rupaBaru); the Owner always may. Each phone remembers whether it is on.
+  EA.rupaBaruAllowed = function () {
+    var raw = null; try { raw = JSON.parse(localStorage.getItem('ea.user') || 'null'); } catch (e) {}
+    if (!raw || /^L-/.test(String(raw.code))) return false;
+    return raw.role === 'Owner' || (EA.switches().rupaBaru || []).indexOf(String(raw.code)) >= 0;
+  };
+  EA.rupaBaru = function () { try { return EA.rupaBaruAllowed() && localStorage.getItem('ea.rupaBaru') === '1'; } catch (e) { return false; } };
+  EA.setRupaBaru = function (on) { try { if (on) localStorage.setItem('ea.rupaBaru', '1'); else localStorage.removeItem('ea.rupaBaru'); } catch (e) {} };
   EA.testMode = function () { return !!EA.config.TEST_MODE && !EA.switches().testModeOff; };
   EA.roomLive = function (r, estate) { if (!r) return false; if (r.state === 'live') return true; var l = (EA.switches().live || {})[r.id] || []; return l.indexOf(estate) >= 0; };
 

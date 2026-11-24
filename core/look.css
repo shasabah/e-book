@@ -596,6 +596,12 @@ body.rb-room header.top { display: none; }
 .rb-lst .rb-top small { display: block; color: var(--muted); font-size: .8rem; }
 .rb-lst .seg button { min-width: 64px; }
 .rb-why { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+/* v1.95 Tuai & kutip: the lot question waits for the last man; the tractor's driver row and its lots */
+.rb-wait { background: var(--line); color: var(--muted); border-radius: 12px; padding: 10px 12px; font-size: .85rem; margin: 10px 0 0; }
+.rb-wait b { color: var(--ink, inherit); }
+.rb-drv { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.rb-lots.rb-wrapl { flex-wrap: wrap; }
+.rb-lots.rb-wrapl button { flex: 1 0 64px; }
 .rb-why button { border: 2px solid var(--wait); background: var(--surface); color: #7a4a00; border-radius: 99px; font: inherit; font-weight: 700; font-size: .82rem; min-height: 44px; padding: 0 12px; }
 .rb-why button[aria-pressed="true"] { background: var(--wait); color: #fff; }
 .rb-jnext { width: 100%; margin-top: 12px; }

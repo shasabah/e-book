@@ -2209,6 +2209,64 @@ function manTodo_(alerts, est, r, un, add, today) {
       sub: (un[o.who] || '') + ' · ' + o.at + (o.pulang == null ? ' · pulang: selepas kerja petang' : ' · pulang ' + o.pulang + ' beg' + (o.why ? ' (' + o.why + ')' : '')), go: '' });
   });
 }
+// v1.95 Tuai & kutip (Brief_Tuai_Kutip_Rupa_Baru, signed by Yu Chen 24 Nov 2026: "Havest bunches and evacuate ffb to
+// ramp is separate matter"; "each day need to knw which lot been delivery to ramp which lot no yet"). Read from the job
+// lines' lot-by-lot progress keyed in the new look: the harvest (HA) says whether each lot is harvested out, the tractor
+// (ITF) whether its fruit reached the ramp ("2-1 siap, 2-2 belum (traktor rosak), 2-3 tidak pergi (tak sempat)").
+// Hari ini gets the last work day's lots, at the ramp or still in the block, for every position. A lot not harvested out
+// is a line for the staff and the Pengurus (HQ and the Owner see it), red from the second day. Fruit still in the block
+// keeps the 11 Nov rule (lines FC, FO, FM, FW), which now names each lot and its reason. Old-look days carry no lots.
+function lotProg_(p) {
+  var out = {};
+  String(p || '').split(', ').forEach(function (x) { var m = /^([\w\-\/]+) (siap|belum|tidak pergi)(?: \((.*)\))?$/.exec(x); if (m) out[m[1]] = { s: m[2], why: m[3] || '' }; });
+  return out;
+}
+function tuaiState_(est) {
+  var from = daysAgo_(14), days = {}, open = { HA: {}, COL: {} };
+  standingRows_('FH_JOBDAY', est).forEach(function (r) {
+    var d = String(r.date).slice(0, 10);
+    if (d < from || (r.task_code !== HARVEST_CODE && r.task_code !== 'ITF') || !r.progress) return;
+    var lp = lotProg_(r.progress), k = r.task_code === HARVEST_CODE ? 'HA' : 'COL';
+    if (!Object.keys(lp).length) return;
+    var dd = days[d] = days[d] || { HA: {}, COL: {} };
+    Object.keys(lp).forEach(function (l) { dd[k][l] = { s: lp[l].s, why: lp[l].why, block: String(r.block || '') }; });
+  });
+  var dates = Object.keys(days).sort();
+  ['HA', 'COL'].forEach(function (k) {
+    dates.forEach(function (d) {
+      Object.keys(days[d][k]).forEach(function (l) {
+        var x = days[d][k][l], o = open[k][l];
+        if (x.s === 'siap') delete open[k][l];
+        else open[k][l] = { since: o ? o.since : d, why: x.why, block: x.block };
+      });
+    });
+  });
+  return { days: days, last: dates[dates.length - 1] || '', open: open };
+}
+function tuaiTodo_(est, r, add, today) {
+  var t = tuaiState_(est);
+  if (!t.last) return;
+  var bl = null;
+  try { bl = backlog(est); } catch (e) { bl = { field: [], ramp: {}, fieldTotal: 0 }; }
+  var fl = {};
+  (bl.field || []).forEach(function (x) { fl[String(x.lot)] = (fl[String(x.lot)] || 0) + Number(x.bunches || 0); });
+  var d = t.days[t.last], lots = {};
+  Object.keys(d.COL).concat(Object.keys(d.HA)).forEach(function (l) { lots[l] = (d.COL[l] || d.HA[l]).block; });
+  var parts = Object.keys(lots).sort().map(function (l) {
+    var c = d.COL[l], n = fl[l] || 0;
+    return 'Blk ' + lots[l] + ' ' + l + (n > 0 ? ': DI BLOK ' + n + ' tandan' + (c && c.s !== 'siap' ? ' (' + c.why + ')' : '') : ': sampai ramp ✓');
+  });
+  if (parts.length) add({ id: 'TL:' + t.last, p: 4, ic: 'TU', bm: 'Petak ' + shortD_(t.last) + ' · buah di mana', en: 'Lots of ' + shortD_(t.last) + ' · where the fruit is',
+    sub: parts.join(' · ') + ' · jumlah: ' + Number((bl.ramp || {}).bunches || 0) + ' tandan di ramp menunggu lori, ' + Number(bl.fieldTotal || 0) + ' di blok', go: '' });
+  Object.keys(t.open.HA).sort().forEach(function (l) {
+    var x = t.open.HA[l], days = dayDiff_(x.since, today), late = days >= 2;
+    var line = { id: 'TH:' + l + ':' + x.since, ic: 'TU', bm: 'Blk ' + x.block + ' petak ' + l + ' belum habis dituai' + (x.why ? ' · ' + x.why : ''), en: 'Block ' + x.block + ' lot ' + l + ' not harvested out',
+      sub: 'sejak ' + shortD_(x.since) + (late ? ' · ' + days + ' hari' : '') + ' · masuk chit Menuai sehingga HABIS', go: '' };
+    if (r === 'Staff') add(Object.assign({ p: late ? 1 : 2 }, line));
+    if (r === 'Manager') add(Object.assign({ p: late ? 1 : 3 }, line, late ? { sub: line.sub + ' · beri arahan kepada Staf' } : {}));
+    if (r === 'HQ' || r === 'Owner') add(Object.assign({ p: late ? 2 : 4 }, line));
+  });
+}
 function todo_(user, req) {
   CLOSED_MEMO_ = null;   // v1.43: the day locks are read fresh in every call
   var est = String(req.estate || ''), r = user.role;
@@ -2284,8 +2342,12 @@ function todo_(user, req) {
     if (fld.length) {
       var fsum = function (xs) { return xs.reduce(function (a, x) { return a + Number(x.bunches || 0); }, 0); };
       var ftan = function (n) { var m = abw ? Math.round(n * abw / 100) / 10 : 0; return m ? ' ≈ ' + m.toFixed(1) + ' tan' : ''; };
-      var fblk = function (xs) { var o = {}; xs.forEach(function (x) { var k = x.block || ('0' + String(x.lot).split('-')[0]).slice(-2); o[k] = (o[k] || 0) + Number(x.bunches || 0); });
-        return Object.keys(o).sort().map(function (k) { return 'Blk ' + k + ' ' + o[k]; }).join(', '); };
+      // v1.95: a lot the tractor's job left open in the new look is named, with its reason (Brief_Tuai_Kutip_Rupa_Baru)
+      var colWhy = {};
+      try { var tsn = tuaiState_(est); Object.keys(tsn.open.COL).forEach(function (l) { colWhy[l] = tsn.open.COL[l].why; }); } catch (e) {}
+      var fblk = function (xs) { var o = {}, w = {}; xs.forEach(function (x) { var k = x.block || ('0' + String(x.lot).split('-')[0]).slice(-2); o[k] = (o[k] || 0) + Number(x.bunches || 0);
+          if (colWhy[String(x.lot)] != null) (w[k] = w[k] || []).push(x.lot + (colWhy[String(x.lot)] ? ' ' + colWhy[String(x.lot)] : '')); });
+        return Object.keys(o).sort().map(function (k) { return 'Blk ' + k + ' ' + o[k] + (w[k] ? ' (' + w[k].join(', ') + ')' : ''); }).join(', '); };
       var fdue = fld.filter(function (x) { return x.since === yday; }), flate = fld.filter(function (x) { return x.since < yday; });
       var f1 = flate.map(function (x) { return x.since; }).sort()[0], fdays = f1 ? dayDiff_(f1, today) : 0;
       if (r === 'Staff' && flate.length) add({ id: 'FO:' + f1, p: 1, ls: dayAdd_(f1, 2), ic: '!', bm: 'LEBIH TEMPOH: ' + fsum(flate) + ' tandan' + ftan(fsum(flate)) + ' masih di ladang', en: 'OVERDUE: ' + fsum(flate) + ' bunches' + ftan(fsum(flate)) + ' still in the field',
@@ -2302,6 +2364,7 @@ function todo_(user, req) {
   var un = {};
   try { readUsers_().list.forEach(function (x) { un[x.user_code] = String(x.name).replace(/^'/, ''); }); } catch (e) {}
   manTodo_(alerts, est, r, un, add, today);
+  try { tuaiTodo_(est, r, add, today); } catch (e) {}   // v1.95 Tuai & kutip
   var fixes = chitFixes_(est);
   if (r === 'Staff') {
     fixes.forEach(function (x) {

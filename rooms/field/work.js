@@ -369,6 +369,8 @@
   function rbKey() { return 'fh.rbJob.' + (chit ? chit.chit : ''); }
   function rbType(j) {
     var k = kind(j.task, j.block);
+    if (j.task === 'ITF') return 'col';                  // v1.95 Traktor & pemuat (Brief_Tuai_Kutip_Rupa_Baru)
+    if (j.task === 'LFF' && rbColOf(j)) return 'colx';   // the loader closes with the tractor, inside its card
     if (k === 'ticket') return 'ticket';
     if (j.task === 'MAN' && rbMan0(j)) return 'man';     // v1.94 Membaja (Brief_Membaja_Rupa_Baru)
     if (isHa(j)) return 'old';
@@ -390,12 +392,15 @@
     if (rbType(j) === 'man') return num(pbags(j)[w]) > 0;
     var k = kind(j.task, j.block), ls = draft.lines[w] || [];
     if (isOp(j)) return ls.length > 0 && ls.every(function (l) { return hoursOf(l) > 0; });
+    if (j.task === 'ITF') return ls.length > 0 && ls.every(function (l) { return !!l.qty && !!String(l.lot || '').trim(); });   // v1.95: lots gone to, and the day
     if (k === 'day') return ls.length > 0 && ls.every(function (l) { return !!l.qty; });
     return answered(w, k) && (j.lots.length < 2 || ls.every(function (l) { return !!l.lot || !(num(k === 'bunches' ? l.bunches : l.qty) > 0); }));
   }
   function rbFilled(j) {
-    if (problems([j]).length) return false;
     var t = rbType(j);
+    if (t === 'colx') { var cj = rbColOf(j); return cj ? rbFilled(cj) : true; }
+    if (problems(t === 'col' ? [j].concat(rbColPartners(j)) : [j]).length) return false;
+    if (t === 'col') return rbAllKeyed(j) && rbColAnswered(j);
     return t === 'ticket' || auto(j) || j.people.every(function (w) { return rbManDone(j, w); });
   }
   function rbOpenJob(jobs) {
@@ -461,6 +466,7 @@
     var t = rbType(j), mand = j.mandors && j.mandors.length ? '<p class="hint">' + EA.t('Mandor ', 'Mandor ') + j.mandors.map(person).map(esc).join(', ') + EA.t(' · ikut kumpulan, tiada angka', ' · goes by the gang, no number') + '</p>' : '';
     if (t === 'old') return jobCard(j);
     var dose = j.task === 'MAN' ? '<div class="wline"><label class="inline-label">' + EA.t('Dos baja (kg sepokok) ', 'Dose (kg per palm) ') + '<input class="qty" inputmode="decimal" data-dose="' + j.key + '" value="' + esc((draft.dose || {})[j.key] || '') + '"></label></div>' : '';
+    if (t === 'col') return rbColBody(j);
     if (t === 'harv') return mand + dose + rbManList(j) + (kind(j.task, j.block) === 'bunches' ? rbLotsHtml(j) : rbStatus(j));
     if (t === 'ticket') return '<p class="hint"><b>' + EA.t('Tiada apa untuk diisi.', 'Nothing to key.') + '</b> ' + EA.t('Dibayar ikut tan pada tiket kilang.', 'Paid by the tonnes on the mill ticket.') + '</p>' +
       j.people.map(function (w) { return '<div class="rb-row"><b>' + esc(person(w)) + '</b><span class="rb-chip">' + EA.t('IKUT TIKET', 'BY TICKET') + '</span></div>'; }).join('');
@@ -489,6 +495,7 @@
   function rbLeft(j) {
     var t = rbType(j);
     if (t === 'op') return EA.t('meter belum diisi', 'meter not keyed');
+    if (t === 'col') return !rbAllKeyed(j) ? EA.t('pemandu belum diisi', 'driver not keyed') : !rbColReady(j) ? EA.t('tunggu penuai', 'waiting for the harvesters') : EA.t('petak habis dikutip?', 'lots collected?');
     var left = j.people.filter(function (w) { return !rbManDone(j, w); }).length;
     if (t === 'man') { var ml = progLots(j).filter(function (l) { return !(rbMl(j)[l] || {}).v; }).length; if (ml) return ml + EA.t(' petak belum dijawab', ' lots to answer'); if (left) return (j.people.length - left) + '/' + j.people.length + EA.t(' diisi', ' keyed'); }
     if ((t === 'harv' || t === 'num') && left) return (j.people.length - left) + '/' + j.people.length + EA.t(' diisi', ' keyed');
@@ -496,15 +503,17 @@
     if (!left && !st.done) return EA.t(kind(j.task, j.block) === 'bunches' ? 'petak habis?' : 'SIAP / BELUM?', kind(j.task, j.block) === 'bunches' ? 'lots done?' : 'DONE / NOT YET?');
     return EA.t('belum lengkap', 'not complete');
   }
-  function rbJobs(jobs) {
+  function rbJobs(all) {
+    var jobs = all.filter(function (j) { return rbType(j) !== 'colx'; });   // v1.95: the loader is inside the tractor's card
     var openK = rbOpenJob(jobs), nd = jobs.filter(rbFilled).length;
     if (EA.local.get(rbKey(), null) === null && openK) EA.local.set(rbKey(), openK);   // the open job stays open while it is worked on
     return '<p class="hint rb-lead"><b>' + nd + EA.t(' daripada ', ' of ') + jobs.length + EA.t(' kerja lengkap.', ' jobs complete.') + '</b> ' + EA.t('Buka satu kerja, isi, kemudian yang seterusnya.', 'Open one job, key it, then the next.') + '</p>' +
       jobs.map(function (j, n) {
         var d = rbFilled(j), open = j.key === openK, sec = EA.lists.sectionOf(j.task);
         var sub = j.people.length + EA.t(' orang', ' people') + (j.lots.length ? ' · ' + EA.t('Petak ', 'Lots ') + (j.lots.length > 3 ? j.lots[0] + EA.t(' hingga ', ' to ') + j.lots[j.lots.length - 1] : j.lots.join(', ')) : '');
+        if (rbType(j) === 'col') sub = EA.t('Angkut BTS (ITF) + Muat BTS (LFF) · ditutup bersama', 'Tractor (ITF) + loader (LFF) · closed together') + (j.lots.length ? ' · ' + j.lots.length + EA.t(' petak', ' lots') : '');
         return '<div class="card rb-job' + (open ? ' on' : '') + '" data-rbjob="' + esc(j.key) + '"><button type="button" class="rb-jh" data-rbj="' + esc(j.key) + '" aria-expanded="' + open + '">' +
-          '<span class="t"><b>' + (n + 1) + '. ' + esc(jobName(j.task)) + (j.block ? ' · Blok ' + esc(j.block) : '') + '</b><span class="rb-s">' + esc(sub) + (j.ask ? ' · ' + EA.t('minta lulus', 'needs approval') : '') + '</span></span>' +
+          '<span class="t"><b>' + (n + 1) + '. ' + esc(rbType(j) === 'col' ? EA.t('Traktor & pemuat', 'Tractor & loader') : jobName(j.task)) + (j.block ? ' · Blok ' + esc(j.block) : '') + '</b><span class="rb-s">' + esc(sub) + (j.ask ? ' · ' + EA.t('minta lulus', 'needs approval') : '') + '</span></span>' +
           '<span class="rb-chip' + (d ? '' : ' w') + '">' + (d ? EA.t('LENGKAP ✓', 'COMPLETE ✓') : esc(rbLeft(j))) + '</span></button>' +
           (open ? '<div class="rb-jb">' + rbBody(j) + (d && n < jobs.length - 1 ? '<button type="button" class="btn btn-main rb-jnext" data-rbjnext="' + esc(j.key) + '">' + EA.t('KERJA SETERUSNYA ›', 'NEXT JOB ›') + '</button>' : '') + '</div>' : '') + '</div>';
       }).join('');
@@ -681,11 +690,15 @@
       return 'Petak ' + l + ' belum habis' + (why ? ': ' + why.toLowerCase() : '') + (w.note ? ' (' + w.note + ')' : '') + ', sambung esok';
     }).join('; ');
   }
+  // v1.95 (Yu Chen, 24 Nov 2026): asked once, at the end, after every harvester is keyed.
+  function rbLotsKey(j) { return (rbAllKeyed(j) ? '1:' : '0:') + rbLotsOf(j).join(' '); }
   function rbLotsHtml(j) {
     rbSync(j);
-    var lots = rbLotsOf(j), hl = rbHl(j);
-    if (!lots.length) return '<div class="rb-lots-q" data-rblots="' + j.key + '" data-rbl=""></div>';
-    return '<div class="rb-lots-q" data-rblots="' + j.key + '" data-rbl="' + esc(lots.join(' ')) + '"><p class="hint rb-lead"><b>' + EA.t('Petak habis dituai?', 'Is the lot harvested out?') + '</b> ' +
+    var lots = rbLotsOf(j), hl = rbHl(j), key = esc(rbLotsKey(j));
+    if (!rbAllKeyed(j)) return '<div class="rb-lots-q" data-rblots="' + j.key + '" data-rbl="' + key + '"><p class="rb-wait"><b>' + EA.t('Petak habis dituai?', 'Is the lot harvested out?') + '</b> ' +
+      EA.t('keluar di sini selepas semua penuai diisi', 'comes here once every harvester is keyed') + ' (' + j.people.filter(function (w) { return rbManDone(j, w); }).length + '/' + j.people.length + ').</p></div>';
+    if (!lots.length) return '<div class="rb-lots-q" data-rblots="' + j.key + '" data-rbl="' + key + '"></div>';
+    return '<div class="rb-lots-q" data-rblots="' + j.key + '" data-rbl="' + key + '"><p class="hint rb-lead"><b>' + EA.t('Petak habis dituai?', 'Is the lot harvested out?') + '</b> ' +
       EA.t('Belum habis: pilih sebab. Petak itu masuk chit esok.', 'Not finished: pick why. The lot goes on tomorrow\'s chit.') + '</p>' +
       lots.map(function (l) {
         var w = hl[l] || {}, lo = EA.lists.lot(ctx.estate, l);
@@ -707,17 +720,144 @@
     if (nxt && last && j.lots.length > 1) { var l0 = (draft.lines[nxt] || [])[0]; if (l0 && !l0.lot) { l0.lot = last; keepDraft(); } }
     rbMan[j.key] = nxt; rbFocus = nxt ? j.key + '|' + nxt : '';
   }
+  // ---------- v1.95 Tuai & kutip (Brief_Tuai_Kutip_Rupa_Baru, signed by Yu Chen 24 Nov 2026) ----------
+  // "Havest bunches and evacuate ffb to ramp is separate matter"; "each day need to knw which lot been delivery to
+  // ramp which lot no yet". Harvesting is closed by "Petak habis dituai?" (above). The tractor (ITF) and its loader
+  // (LFF) are one card, closed together: the lots the driver went to (SEMUA or one by one) and his day, as before; then,
+  // once every harvester and driver is keyed, "Buah habis dikutip ke ramp?" for each lot of the job. Only the lots
+  // answered HABIS go to the ramp (autoCollect); the others stay in the block and come back on tomorrow's chit. The
+  // answers fill both jobs' SIAP / BELUM SIAP and reason, and a lot-by-lot line in the job's progress (3-1 siap,
+  // 3-2 belum (traktor rosak), 3-5 tidak pergi (tak sempat)) that the chit's copy, Hari ini and the office read.
+  var RB_CWHY = [['rosak', 'Traktor rosak', 'Tractor broke down'], ['hujan', 'Hujan · jalan basah', 'Rain · wet road'], ['sempat', 'Tak sempat', 'No time'], ['lain', 'Lain-lain', 'Other']];
+  function rbAllKeyed(j) { return j.people.every(function (w) { return rbManDone(j, w); }); }
+  function rbColOf(x) {
+    var itf = jobsOf(chit).filter(function (y) { return y.task === 'ITF'; });
+    return itf.find(function (y) { return y.block === x.block; }) || itf[0] || null;
+  }
+  function rbColPartners(j) { return jobsOf(chit).filter(function (x) { return x.task === 'LFF' && (rbColOf(x) || {}).key === j.key; }); }
+  function rbCl(j) { draft.clot = draft.clot || {}; return (draft.clot[j.key] = draft.clot[j.key] || {}); }
+  function rbWent(j) {
+    var on = [];
+    j.people.forEach(function (w) { (draft.lines[w] || []).forEach(function (l) { String(l.lot || '').split(' ').filter(Boolean).forEach(function (n) { if (on.indexOf(n) < 0) on.push(n); }); }); });
+    return j.lots.filter(function (n) { return on.indexOf(n) >= 0; });
+  }
+  function rbColReady(j) {
+    return rbAllKeyed(j) && jobsOf(chit).every(function (x) { return kind(x.task, x.block) !== 'bunches' || rbAllKeyed(x); });
+  }
+  function rbCwhy(c) { var x = RB_CWHY.find(function (y) { return y[0] === c.why; }); return x ? (c.why === 'lain' && c.note ? c.note : x[1]).toLowerCase() : ''; }
+  function rbColLotOk(j, l) {
+    var c = rbCl(j)[l] || {}, why = !!c.why && (c.why !== 'lain' || String(c.note || '').trim().length > 2);
+    if (rbWent(j).indexOf(l) < 0) return why;
+    return c.v === 'Y' || (c.v === 'N' && why);
+  }
+  function rbColAnswered(j) { return j.lots.length > 0 && j.lots.every(function (l) { return rbColLotOk(j, l); }); }
+  function rbColState(j, l) { var c = rbCl(j)[l] || {}; return rbWent(j).indexOf(l) < 0 ? 'x' : c.v === 'Y' ? 'Y' : 'N'; }
+  function rbColSync(j) {
+    if (!rbOn() || !chit) return;
+    if (j.task === 'LFF') { var cj = rbColOf(j); if (cj) rbColSync(cj); return; }
+    if (j.task !== 'ITF') return;
+    var cl = rbCl(j), all = [j].concat(rbColPartners(j)), st = { done: '', reason: '' };
+    if (!Object.keys(cl).length && !(draft.status[j.key] || {}).rbc) return;      // nothing answered here yet
+    if (rbColAnswered(j)) {
+      var not = j.lots.filter(function (l) { return rbColState(j, l) !== 'Y'; });
+      st.done = not.length ? 'N' : 'Y';
+      st.reason = not.map(function (l) { return 'Petak ' + l + (rbColState(j, l) === 'x' ? ' tidak dipergi' : ' belum ke ramp') + ': ' + rbCwhy(cl[l] || {}) + ', kutip esok'; }).join('; ');
+    }
+    st.rbc = 1;
+    all.forEach(function (x) { draft.status[x.key] = { done: st.done, reason: st.reason, rbc: 1 }; });
+  }
+  function rbColProg(j) {
+    if (j.task === 'LFF') { var cj = rbColOf(j); return cj ? rbColProg(cj) : ''; }
+    if (!rbColAnswered(j)) return '';
+    return j.lots.map(function (l) { var s = rbColState(j, l); return l + (s === 'Y' ? ' siap' : (s === 'x' ? ' tidak pergi (' : ' belum (') + rbCwhy(rbCl(j)[l] || {}) + ')'); }).join(', ');
+  }
+  function rbHarvProg(j) {
+    if (!rbHarvest(j)) return '';
+    var lots = rbLotsOf(j), hl = rbHl(j);
+    if (!lots.length || lots.some(function (l) { return !hl[l] || !hl[l].v || (hl[l].v === 'N' && !hl[l].why); })) return '';
+    return lots.map(function (l) {
+      var w = hl[l], why = (RB_WHY.find(function (x) { return x[0] === w.why; }) || ['', ''])[1];
+      return l + (w.v === 'Y' ? ' siap' : ' belum (' + (w.why === 'lain' && w.note ? w.note : why).toLowerCase() + ')');
+    }).join(', ');
+  }
+  // The job line's lot-by-lot progress in the new look (Ha jobs keep their own, progText).
+  function rbProg(j) {
+    if (!rbOn()) return '';
+    if (j.task === 'ITF' || (j.task === 'LFF' && rbColOf(j))) return rbColProg(j);
+    return rbHarvProg(j);
+  }
+  function rbColProblems(j) {
+    if (!rbAllKeyed(j) || rbColAnswered(j)) return [];
+    return [[EA.t('Traktor & pemuat', 'Tractor & loader') + (j.block ? ' Blk ' + j.block : '') + ': jawab "Buah habis dikutip ke ramp?" bagi setiap petak', 'Answer "All fruit to the ramp?" for each lot']];
+  }
+  // Bunches on the lot before the tractor: today's harvest (this draft) and fruit still in the block from before.
+  function rbLotBunches(l) {
+    var n = 0, fl = draft.replacing || !EA.fh.harvest ? {} : EA.fh.harvest.fieldLeft(ctx.estate);
+    jobsOf(chit).forEach(function (x) {
+      if (kind(x.task, x.block) !== 'bunches') return;
+      x.people.forEach(function (w) { (draft.lines[w] || []).forEach(function (y) { if ((y.lot || (x.lots.length === 1 ? x.lots[0] : '')) === l) n += num(y.bunches); }); });
+    });
+    return n + (fl[l] || 0);
+  }
+  function rbTodayLot(l) { return jobsOf(chit).some(function (x) { return kind(x.task, x.block) === 'bunches' && x.lots.indexOf(l) >= 0; }); }
+  function rbColBody(j) {
+    var parts = rbColPartners(j);
+    var h = '<p class="hint">' + EA.t('Petak dari chit: petak tuai hari ini dan petak yang buahnya belum ke ramp.', 'Lots from the chit: today\'s harvest lots and lots whose fruit is not at the ramp yet.') + '</p>';
+    h += j.people.map(function (w) {
+      return (draft.lines[w] || []).map(function (l, i) {
+        var on = String(l.lot || '').split(' ').filter(Boolean);
+        return '<div class="rb-open"><div class="rb-top rb-drv"><b class="rb-name">' + esc(person(w)) + '</b><span class="seg">' +
+          '<button type="button" data-w="' + esc(w) + '" data-i="' + i + '" data-day="1" aria-pressed="' + (l.qty === '1') + '">1</button>' +
+          '<button type="button" data-w="' + esc(w) + '" data-i="' + i + '" data-day="0.5" aria-pressed="' + (l.qty === '0.5') + '">½</button></span></div>' +
+          '<p class="hint rb-lead"><b>' + EA.t('Traktor pergi petak mana?', 'Which lots did the tractor go to?') + '</b></p>' +
+          (j.lots.length > 1 ? '<div class="rb-lots rb-wrapl"><button type="button" data-w="' + esc(w) + '" data-i="' + i + '" data-alllots="1" aria-pressed="' + (on.length === j.lots.length) + '">' + EA.t('SEMUA', 'ALL') + '<span class="rb-s">' + j.lots.length + EA.t(' petak', ' lots') + '</span></button>' +
+            j.lots.map(function (n) { return '<button type="button" data-w="' + esc(w) + '" data-i="' + i + '" data-onelot="' + esc(n) + '" aria-pressed="' + (on.indexOf(n) >= 0) + '">' + esc(n) + '<span class="rb-s">' + (rbTodayLot(n) ? EA.t('hari ini', 'today') : EA.t('buah lama', 'older fruit')) + '</span></button>'; }).join('') + '</div>'
+            : '<p class="hint">' + EA.t('Petak ', 'Lot ') + esc(j.lots.join(', ')) + '</p>') + '</div>';
+      }).join('');
+    }).join('');
+    h += parts.map(function (p) { return p.people.map(function (w) { return '<div class="rb-row"><b>' + esc(person(w)) + '</b><span class="rb-chip">' + EA.t('PEMUAT · IKUT TIKET', 'LOADER · BY TICKET') + '</span></div>'; }).join(''); }).join('');
+    return h + rbColLotsHtml(j);
+  }
+  function rbColLotsHtml(j) {
+    rbColSync(j);
+    if (!rbColReady(j)) return '<div class="rb-lots-q" data-rbcol="' + j.key + '"><p class="rb-wait"><b>' + EA.t('Buah habis dikutip ke ramp?', 'All fruit taken to the ramp?') + '</b> ' +
+      EA.t('keluar di sini selepas semua penuai dan pemandu diisi.', 'comes here once every harvester and driver is keyed.') + '</p></div>';
+    var cl = rbCl(j), went = rbWent(j);
+    return '<div class="rb-lots-q" data-rbcol="' + j.key + '"><p class="hint rb-lead"><b>' + EA.t('Buah habis dikutip ke ramp?', 'All fruit taken to the ramp?') + '</b> ' +
+      EA.t('Belum: pilih sebab. Petak itu masuk chit esok (Traktor & pemuat). Jawapan ini menutup traktor dan pemuat.', 'Not yet: pick why. The lot goes on tomorrow\'s chit. This answer closes the tractor and the loader.') + '</p>' +
+      j.lots.map(function (l) {
+        var c = cl[l] || {}, go = went.indexOf(l) >= 0, n = rbLotBunches(l), k = j.key + '|' + esc(l);
+        var top = '<div class="rb-top"><span><b>' + esc(l) + '</b><small>' + n + EA.t(' tandan di blok sebelum kutip', ' bunches in the block before collection') + (rbTodayLot(l) ? '' : ' · ' + EA.t('buah lama', 'older fruit')) + '</small></span>';
+        var why = '<div class="rb-why">' + RB_CWHY.map(function (x) { return '<button type="button" data-cwhy="' + k + '|' + x[0] + '" aria-pressed="' + (c.why === x[0]) + '">' + esc(EA.t(x[1], x[2])) + '</button>'; }).join('') + '</div>' +
+          (c.why === 'lain' ? '<input class="text-input" data-cnote="' + k + '" value="' + esc(c.note || '') + '" placeholder="' + EA.t('tulis sebab', 'write why') + '">' : '');
+        if (!go) return '<div class="rb-lst">' + top + '<span class="rb-chip w">' + EA.t('TIDAK PERGI', 'NOT GONE TO') + '</span></div>' + why + '</div>';
+        return '<div class="rb-lst">' + top + '<span class="seg"><button type="button" data-cl="' + k + '|Y" aria-pressed="' + (c.v === 'Y') + '">' + EA.t('HABIS', 'DONE') + '</button>' +
+          '<button type="button" data-cl="' + k + '|N" aria-pressed="' + (c.v === 'N') + '">' + EA.t('BELUM', 'NOT YET') + '</button></span></div>' + (c.v === 'N' ? why : '') + '</div>';
+      }).join('') + '</div>';
+  }
+  function rbColWire(byKey) {
+    el.querySelectorAll('[data-cl]').forEach(function (b) {
+      b.onclick = function () { var x = b.dataset.cl.split('|'), j = byKey[x[0]], c = rbCl(j)[x[1]] = rbCl(j)[x[1]] || {}; c.v = x[2]; if (x[2] === 'Y') { delete c.why; delete c.note; } rbColSync(j); keepDraft(); rbRedraw(); };
+    });
+    el.querySelectorAll('[data-cwhy]').forEach(function (b) {
+      b.onclick = function () { var x = b.dataset.cwhy.split('|'), j = byKey[x[0]], c = rbCl(j)[x[1]] = rbCl(j)[x[1]] || {}; c.why = x[2]; rbColSync(j); keepDraft(); rbRedraw(); };
+    });
+    el.querySelectorAll('[data-cnote]').forEach(function (inp) {
+      inp.oninput = function () { var x = inp.dataset.cnote.split('|'), j = byKey[x[0]], c = rbCl(j)[x[1]] = rbCl(j)[x[1]] || {}; c.note = inp.value; rbColSync(j); keepDraft(); refresh(jobsOf(chit)); };
+    });
+  }
   function rbRedraw() { render(el, ctx); }
   function rbWire(jobs) {
     rbManWire(jobs);
     var byKey = {}; jobs.forEach(function (j) { byKey[j.key] = j; });
+    rbColWire(byKey);
     el.querySelectorAll('[data-rbj]').forEach(function (b) {
       b.onclick = function () { var k = b.dataset.rbj; EA.local.set(rbKey(), rbOpenJob(jobs) === k ? '' : k); rbRedraw(); };
     });
     el.querySelectorAll('[data-rbjnext]').forEach(function (b) {
       b.onclick = function () {
-        var i = jobs.findIndex(function (j) { return j.key === b.dataset.rbjnext; });
-        var nx = jobs.slice(i + 1).find(function (j) { return !rbFilled(j); }) || jobs[i + 1];
+        var vis = jobs.filter(function (j) { return rbType(j) !== 'colx'; }), i = vis.findIndex(function (j) { return j.key === b.dataset.rbjnext; });
+        var nx = vis.slice(i + 1).find(function (j) { return !rbFilled(j); }) || vis[i + 1];
         EA.local.set(rbKey(), nx ? nx.key : ''); render(el, ctx);
         var c = el.querySelector('[data-rbjob="' + (nx ? nx.key : '') + '"]'); if (c) c.scrollIntoView({ block: 'start' });
       };
@@ -774,10 +914,11 @@
         pg.textContent = j.people.filter(function (w) { return rbManDone(j, w); }).length + EA.t(' daripada ', ' of ') + j.people.length + EA.t(' orang diisi · ', ' people keyed · ') + (Math.round(tot * 100) / 100) + ' ' + rbUnit(j);
       }
       var q = c.querySelector('[data-rblots]');
-      if (q && rbHarvest(j) && q.dataset.rbl !== rbLotsOf(j).join(' ')) { var t = document.createElement('div'); t.innerHTML = rbLotsHtml(j); q.parentNode.replaceChild(t.firstChild, q); rbWire(jobs); }
+      if (q && rbHarvest(j) && q.dataset.rbl !== rbLotsKey(j)) { var t = document.createElement('div'); t.innerHTML = rbLotsHtml(j); q.parentNode.replaceChild(t.firstChild, q); rbWire(jobs); }
     });
     var lead = el.querySelector('.rb-lead b');
-    if (lead && lead.parentNode.parentNode === el.querySelector('#rb-list')) lead.textContent = jobs.filter(rbFilled).length + EA.t(' daripada ', ' of ') + jobs.length + EA.t(' kerja lengkap.', ' jobs complete.');
+    var vis = jobs.filter(function (j) { return rbType(j) !== 'colx'; });   // v1.95: the loader is counted inside the tractor's card
+    if (lead && lead.parentNode.parentNode === el.querySelector('#rb-list')) lead.textContent = vis.filter(rbFilled).length + EA.t(' daripada ', ' of ') + vis.length + EA.t(' kerja lengkap.', ' jobs complete.');
   }
 
   function render(container, c) {
@@ -1022,7 +1163,8 @@
       var s = savedFor(chit.chit);
       draft = { chit: chit.chit, lines: JSON.parse(JSON.stringify(s.lines)), status: JSON.parse(JSON.stringify(s.status)), checker: s.checker, replacing: s.chit,
                 prog: JSON.parse(JSON.stringify(s.prog || {})), manual: JSON.parse(JSON.stringify(s.manual || {})), bags: JSON.parse(JSON.stringify(s.bags || {})), chitRev: s.chitRev || 1,
-                who: s.who ? JSON.parse(JSON.stringify(s.who)) : null, pbags: JSON.parse(JSON.stringify(s.pbags || {})), dose: JSON.parse(JSON.stringify(s.dose || {})), lotwhy: JSON.parse(JSON.stringify(s.lotwhy || {})) };
+                who: s.who ? JSON.parse(JSON.stringify(s.who)) : null, pbags: JSON.parse(JSON.stringify(s.pbags || {})), dose: JSON.parse(JSON.stringify(s.dose || {})), lotwhy: JSON.parse(JSON.stringify(s.lotwhy || {})),
+                hlot: JSON.parse(JSON.stringify(s.hlot || {})), clot: JSON.parse(JSON.stringify(s.clot || {})) };
       normProg(draft);
       if (!draft.who) { draft.who = {}; jobsOf(chit).forEach(function (j) { if (isHa(j)) draft.who[j.key] = allWho(j, draft); }); }
       keepDraft(); render(el, ctx);
@@ -1190,6 +1332,7 @@
   function problems(jobs) {
     var p = [];
     jobs.forEach(syncHaStatus);
+    if (rbOn()) jobs.forEach(function (j) { if (j.task === 'ITF' || j.task === 'LFF') rbColSync(j); else if (rbHarvest(j)) rbSync(j); });   // v1.95
     jobs.forEach(function (j) {
       var k = kind(j.task, j.block), st = draft.status[j.key] || {};
       if (auto(j)) {
@@ -1234,6 +1377,7 @@
       if (!st.done && !isHa(j)) p.push([shortName(j.task) + (j.block ? ' Blk ' + j.block : '') + ': pilih SIAP atau BELUM SIAP', 'Mark the job done or not done']);
       if (st.done === 'N' && !isHa(j) && String(st.reason || '').trim().length < 5) p.push([shortName(j.task) + ': tulis sebab dan tindakan', 'Write why and what will be done']);
       if (rbOn() && rbType(j) === 'man') rbManProblems(j).forEach(function (x) { p.push(x); });   // v1.94 Membaja
+      if (rbOn() && j.task === 'ITF') rbColProblems(j).forEach(function (x) { p.push(x); });     // v1.95 Traktor & pemuat
 
     });
     return p;
@@ -1496,7 +1640,7 @@
                       qty: k === 'bunches' || k === 'ticket' ? '' : String(t.qty), unit: k === 'bunches' ? 'bunch' : task(j.task).unit,
                       bunches: k === 'bunches' ? String(t.bunches) : '', plan_ha: t.planHa ? String(t.planHa) : '',
                       status: st.done === 'Y' ? 'done' : st.done === 'N' ? 'not_done' : '', reason: st.reason || '',
-                      flags: t.flags.map(function (f) { return f.text; }).join('; '), progress: isHa(j) ? progText(j) : '',
+                      flags: t.flags.map(function (f) { return f.text; }).join('; '), progress: isHa(j) ? progText(j) : rbProg(j),
                       bags: t.bags != null ? String(t.bags) : '', target: t.target ? String(t.target.total) + ' ' + (t.tunit || t.target.unit) : '',
                       dose: j.task === 'MAN' && String((draft.dose || {})[j.key] || '') !== '' ? String(num(draft.dose[j.key])) : '', hours: isOp(j) ? String(t.hours) : '' });
     });
@@ -1557,7 +1701,7 @@
       rec.jobs.forEach(function (j) {
         var jk = j.task_code + '|' + j.block + '|' + j.lots, o = oldJobs[jk];
         delete oldJobs[jk];
-        if (o && o.qty === j.qty && o.bunches === j.bunches && o.status === j.status && o.reason === j.reason && o.workers === j.workers && String(o.bags || '') === String(j.bags || '') && String(o.dose || '') === String(j.dose || '')) { j.id = o.id; return; }
+        if (o && o.qty === j.qty && o.bunches === j.bunches && o.status === j.status && o.reason === j.reason && String(o.progress || '') === String(j.progress || '') && o.workers === j.workers && String(o.bags || '') === String(j.bags || '') && String(o.dose || '') === String(j.dose || '')) { j.id = o.id; return; }
         j.id = EA.save(TAB_JOB, ROOM, ctx.estate, { date: rec.date, chit: rec.chit, task_code: j.task_code, block: j.block, lots: j.lots, workers: j.workers,
           qty: j.qty, unit: j.unit, bunches: j.bunches, plan_ha: j.plan_ha, job_status: j.status, reason: j.reason, flags: j.flags, progress: j.progress,
           bags: j.bags, target: j.target, dose: j.dose, confirmed_by: rec.checker, confirmed_at: stamp }, o ? o.id : '').id;
@@ -1580,7 +1724,7 @@
     settled.forEach(function (x) {   // v1.42: the earlier day now carries its share (kept on this phone too)
       var l = x.s.rec.lines[x.i]; l.hist = (l.hist || []).concat([[l.id, l.qty]]); l.id = x.id; l.qty = x.qty; l.settledBy = rec.chit; keepSaved(x.s);
     });
-    keepSaved({ chit: rec.chit, date: rec.date, estate: rec.estate, rec: rec, lines: draft.lines, status: draft.status, prog: draft.prog, manual: draft.manual, bags: draft.bags || {}, who: draft.who || {}, pbags: draft.pbags || {}, dose: draft.dose || {}, lotwhy: draft.lotwhy || {}, checker: draft.checker, rev: old ? (old.rev || 1) + 1 : 1, chitRev: chit.rev || 1, mids: mids || {}, mlot: draft.mlot || {}, mpul: draft.mpul || {} });
+    keepSaved({ chit: rec.chit, date: rec.date, estate: rec.estate, rec: rec, lines: draft.lines, status: draft.status, prog: draft.prog, manual: draft.manual, bags: draft.bags || {}, who: draft.who || {}, pbags: draft.pbags || {}, dose: draft.dose || {}, lotwhy: draft.lotwhy || {}, checker: draft.checker, rev: old ? (old.rev || 1) + 1 : 1, chitRev: chit.rev || 1, mids: mids || {}, mlot: draft.mlot || {}, mpul: draft.mpul || {}, hlot: draft.hlot || {}, clot: draft.clot || {} });
     dropDraft();
     var moved = autoCollect(rec, at, !!(chit && chit.fromPlan && !old));   // v1.40: only the first save of a planned day
     ui().toast(EA.t('Kerja harian disimpan', 'Day\'s work saved') + (moved ? ' · ' + moved + EA.t(' tandan ke ramp', ' bunches to the ramp') : ''));
@@ -1593,27 +1737,35 @@
   // v1.34.2 (Yu Chen, 23 Oct): the farm tractor's job (ITF) marked SIAP means the crop on its lots went to the
   // ramp, so the staff keys it once: each of its lots with bunches still in the field is collected and cleared
   // ("Habis"), as if SEMUA KE RAMP was pressed. A correction of the same day's work does not collect again.
+  // v1.95 (Brief_Tuai_Kutip_Rupa_Baru): in the new look the tractor's job carries each lot's answer in its progress
+  // ("3-1 siap, 3-2 belum (traktor rosak)"); only the lots marked siap go to the ramp, whatever the job's SIAP says,
+  // and a correction can still send a lot first answered BELUM (never one already sent).
+  function siapLots(p) { var m, out = {}, re = /(?:^|, )([\w\-\/]+) siap(?=,|$)/g; while ((m = re.exec(String(p || '')))) out[m[1]] = true; return out; }
   function autoCollect(rec, at, firstPlanSave) {
-    var done = (rec.jobs || []).some(function (j) { return j.task_code === 'ITF' && j.status === 'done'; });
+    var itfJobs = (rec.jobs || []).filter(function (j) { return j.task_code === 'ITF'; }), perLot = null;
+    if (itfJobs.some(function (j) { return !!j.progress; })) { perLot = {}; itfJobs.forEach(function (j) { Object.assign(perLot, siapLots(j.progress)); }); }
+    var done = perLot ? Object.keys(perLot).length > 0 : itfJobs.some(function (j) { return j.status === 'done'; });
     if (!done || !EA.fh.harvest) return 0;
     // v1.35: a fix of an older day never moves fruit: what is in the field now may be from later days.
     // v1.40: a planned day is keyed before today's chit (oldest first), so the field holds only fruit up to that day.
     if (rec.date < daysAgo(1) && !firstPlanSave) return 0;
-    var all = EA.local.get('fh.collect', []);
-    if (all.some(function (s) { return s.fromWork === rec.chit && s.estate === rec.estate; })) return 0;
+    var all = EA.local.get('fh.collect', []), sent = {};
+    var prev = all.filter(function (s) { return s.fromWork === rec.chit && s.estate === rec.estate; });
+    if (prev.length && !perLot) return 0;
+    prev.forEach(function (s) { (s.lines || []).forEach(function (l) { sent[l.lot] = true; }); });
     var lots = {}, drivers = [], loaders = [];
     rec.lines.forEach(function (l) {
       if (l.task_code === 'ITF') { if (drivers.indexOf(l.worker_id) < 0) drivers.push(l.worker_id); String(l.lot || '').split(' ').filter(Boolean).forEach(function (n) { lots[n] = l.block; }); }
       if (l.task_code === 'LFF' && loaders.indexOf(l.worker_id) < 0) loaders.push(l.worker_id);
     });
     var fl = EA.fh.harvest.fieldLeft(rec.estate), lines = [];
-    Object.keys(lots).forEach(function (n) { if ((fl[n] || 0) > 0) lines.push({ lot: n, block: lots[n] || ((EA.lists.lot(rec.estate, n) || {}).block || ''), bunches: String(fl[n]), cleared: 'Y' }); });
+    Object.keys(lots).forEach(function (n) { if (perLot && (!perLot[n] || sent[n])) return; if ((fl[n] || 0) > 0) lines.push({ lot: n, block: lots[n] || ((EA.lists.lot(rec.estate, n) || {}).block || ''), bunches: String(fl[n]), cleared: 'Y' }); });
     if (!lines.length) return 0;
     var cr = { date: rec.date, estate: rec.estate, at: at, tractor: drivers.join(' '), loader: loaders.join(' '), lines: lines, dispatch: null, ids: [], disIds: {}, lotIds: {}, fromWork: rec.chit };
     try {
       EA.batchStart();
       lines.forEach(function (l) {
-        l.id = EA.save('FH_COLLECT', ROOM, rec.estate, { date: rec.date, block: l.block, lot: l.lot, bunches: l.bunches, cleared: 'Y', tractor: cr.tractor, loader: cr.loader, note: 'Kerja ITF siap' }).id;
+        l.id = EA.save('FH_COLLECT', ROOM, rec.estate, { date: rec.date, block: l.block, lot: l.lot, bunches: l.bunches, cleared: 'Y', tractor: cr.tractor, loader: cr.loader, note: perLot ? 'Kerja ITF: petak habis dikutip' : 'Kerja ITF siap' }).id;
         cr.ids.push(l.id);
       });
       EA.batchEnd();

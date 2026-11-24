@@ -1099,6 +1099,42 @@
     });
     return out;
   }
+  // v1.95 Tuai & kutip (Brief_Tuai_Kutip_Rupa_Baru, signed by Yu Chen 24 Nov 2026): the lots the last day's work left
+  // open in the new look, read from its job lines' lot-by-lot progress — harvest not finished (HA) and fruit not at the
+  // ramp (COL: the tractor and loader). Each comes back on the next chit under its own job only.
+  function carryOpen(estate, before) {
+    var s = (EA.local.get('fh.work', []) || []).filter(function (x) { return x.estate === estate && x.date < before && x.rec; })
+      .sort(function (a, b) { return a.date < b.date ? 1 : -1; })[0], out = { date: '', HA: {}, COL: {} };
+    if (!s) return out;
+    out.date = s.date;
+    (s.rec.jobs || []).forEach(function (j) {
+      var k = j.task_code === EA.lists.HARVEST ? 'HA' : j.task_code === 'ITF' ? 'COL' : '';
+      if (!k || !j.progress) return;
+      String(j.progress).split(', ').forEach(function (x) {
+        var m = /^([\w\-\/]+) (belum|tidak pergi) \((.*)\)$/.exec(x);
+        if (m) out[k][m[1]] = { block: j.block, why: m[3], gone: m[2] === 'belum' };
+      });
+    });
+    return out;
+  }
+  function carryNote(j) {
+    if (!rbOn() || ['ITF', 'LFF', EA.lists.HARVEST].indexOf(j.task) < 0) return '';
+    var co = carryOpen(ctx.estate, draft.date || EA.today()), m = co[j.task === EA.lists.HARVEST ? 'HA' : 'COL'];
+    var ls = j.lots.filter(function (l) { return m[l]; });
+    if (!ls.length) return '';
+    return '<span class="en warn-t"><b>' + (j.task === EA.lists.HARVEST ? EA.t('SAMBUNG', 'CARRY ON') : EA.t('KUTIP', 'COLLECT')) + '</b> · ' + EA.t('dari ', 'from ') + esc(dayDm(co.date)) + ': ' +
+      ls.map(function (l) { return esc(l) + ' (' + esc(m[l].why) + ')'; }).join(', ') + '</span>';
+  }
+  function carryLines(c) {
+    var co = carryOpen(c.estate, c.date), L = [];
+    function line(m, bm) {
+      var by = {};
+      Object.keys(m).forEach(function (l) { var b = m[l].block || ''; (by[b] = by[b] || []).push(l + ' (' + m[l].why + ')'); });
+      Object.keys(by).sort().forEach(function (b) { L.push('• ' + bm + (b ? ' Blk ' + b : '') + ': ' + by[b].join(', ')); });
+    }
+    line(co.HA, 'Tuai belum habis'); line(co.COL, 'Buah belum ke ramp');
+    return L.length ? ['*SAMBUNG ' + dayDm(co.date) + ' · CARRIED OVER*'].concat(L) : [];
+  }
   function copyLast() {
     var c = lastChit(); if (!c) return;
     draft.jobs = []; draft.marks = {}; draft.jobOf = {}; draft.nextJob = 1;
@@ -1109,7 +1145,8 @@
       if (!j) {
         var lots = r.lots ? r.lots.split(' ') : [], done = fin[r.task_code + '|' + (r.block || '')] || [];
         var tk = EA.lists.task && EA.lists.task(r.task_code), unitHa = !!(tk && tk.unit === 'Ha');
-        if (unitHa && done.length) { var left = lots.filter(function (l) { return done.indexOf(l) < 0; }); dropped += lots.length - left.length; lots = left; }
+        // v1.95: in the new look the harvest and the tractor and loader drop their finished lots too (siap in progress)
+        if ((unitHa || [EA.lists.HARVEST, 'ITF', 'LFF'].indexOf(r.task_code) >= 0) && done.length) { var left = lots.filter(function (l) { return done.indexOf(l) < 0; }); dropped += lots.length - left.length; lots = left; }
         // v1.52.3: Membaja / CPS also drop every lot already done this round, not only yesterday's
         if (ROUND_JOBS[r.task_code]) { var rd = roundDone(ctx.estate, r.task_code, r.block || '', draft.date), left2 = lots.filter(function (l) { return !rd[l]; }); dropped += lots.length - left2.length; lots = left2; }
         j = { key: 'j' + (draft.nextJob++), task: r.task_code, block: r.block, lots: lots, mandor: r.mandor, from: r.lots || '' }; draft.jobs.push(j);
@@ -1147,7 +1184,7 @@
         (j.mandor ? ' · Mandor ' + esc(person(j.mandor)) : '') + '</span>' +
         (j.ask ? '<span class="en warn-t"><b>' + EA.t('Kerja lain · menunggu lulus', 'Other work · waiting for approval') + '</b> · ' + esc(j.ask) + '</span>' : '') +
         (tg && !(j.task === 'MAN' && rbOn()) ? '<span class="en' + (tg.short ? ' warn-t' : '') + '">' + tg.text + '</span>' : '') +
-        (j.task === 'MAN' && rbOn() ? manPanel(j, nw) : '') + '</div>' +
+        (j.task === 'MAN' && rbOn() ? manPanel(j, nw) : '') + carryNote(j) + '</div>' +
         '<div class="acts"><span class="pill plain">' + n + ' orang</span>' +
         '<button type="button" class="btn btn-ghost" data-pick="' + j.key + '">PICK<small>Pilih orang</small></button>' +
         '<button type="button" class="btn btn-ghost" data-edit="' + j.key + '">EDIT<small>Ubah</small></button></div></div>';
@@ -2247,6 +2284,7 @@
     rainLines(c).forEach(function (x) { L.push(x); });   // v1.61: the estate's own gauge (Yu Chen, 15 Nov)
     backlogLines(c.backlog).forEach(function (x) { L.push(x); });
     fieldLines(c.estate, c.backlog).forEach(function (x) { L.push(/^⚠/.test(x) ? '*' + x + '*' : x); });   // v1.54: the day-after-harvest rule
+    carryLines(c).forEach(function (x) { L.push(x); });   // v1.95: lots left open by the last day (Brief_Tuai_Kutip_Rupa_Baru)
     machLines(c.backlog).forEach(function (x) { L.push(x); });   // v1.55: the Jentera block, after the fruit
     // v1.51.4 (Yu Chen, 6 Nov): mill grading leaves the WhatsApp chit. The money on that ticket is already gone
     // and nothing done that morning gets it back, so it is not a thing to settle today — it belongs to the
@@ -2521,6 +2559,7 @@
   EA.fh.wireBacklog = wireBacklog;
   EA.fh.shortDate = shortDate;
   EA.fh.chitText = chitText;
+  EA.fh.carryOpen = carryOpen;   // v1.95: Hari ini reads it too
   EA.fh.plans = plans;
   EA.fh.pendingPlans = function (estate) { var keep = ctx; ctx = ctx || {}; ctx = Object.assign({}, ctx, { estate: estate }); try { return pendingPlans(); } finally { ctx = keep; } };
   EA.fh.planAsChit = planAsChit;

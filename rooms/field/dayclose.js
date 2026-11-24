@@ -263,7 +263,7 @@
       var have = fl && fl[lot] > 0 ? fl[lot] : (cutLot[lot] || 0) - (gotLot[lot] || 0);
       return { lot: lot, block: blockOf[lot] || ((EA.lists.lot && EA.lists.lot(estate, lot)) || {}).block || '', bunches: Math.max(0, have) };
     }).filter(function (x) { return x.bunches > 0; });
-    // v2.00 (Yu Chen, 25 Nov 2026: "Fix"; Brief_Tuai_Kutip_Rupa_Baru 1.2 §5a). In the new look the tractor's job
+    // v1.100 (Yu Chen, 25 Nov 2026: "Fix"; Brief_Tuai_Kutip_Rupa_Baru 1.2 §5a). In the new look the tractor's job
     // already says, lot by lot, why fruit stayed in the block ("2-2 belum (traktor rosak)"). When every lot still in
     // the block has such an answer, this line takes it and turns green; the close keeps it as the field reason. A lot
     // with fruit left and no answer from Kerja still asks TINGGAL DI LADANG…, as before.
@@ -303,7 +303,7 @@
       sub: rep.map(function (x) { return x.task + ' ' + x.lot + ' (' + EA.t('siap ', 'done ') + x.on.slice(8, 10) + '/' + x.on.slice(5, 7) + (x.why ? ' · ' + x.why : EA.t(' · tiada sebab', ' · no reason')) + ')'; }).join(' · ') });
     return out;
   }
-  // v2.00: the tractor's lot-by-lot answers from Kerja (new look, 1.95): lot → why its fruit is not at the ramp.
+  // v1.100: the tractor's lot-by-lot answers from Kerja (new look, 1.95): lot → why its fruit is not at the ramp.
   function colReasons(w) {
     var m = {};
     ((w && w.rec && w.rec.jobs) || []).forEach(function (j) {
@@ -601,7 +601,7 @@
     var at = EA.today() + ' ' + EA.ui.hhmm(new Date());
     var old = closes().find(function (s) { return s.estate === estate && s.date === c.date; });
     var checksTxt = ck.map(function (x) { return x.n + (x.ok ? '✓' : '!') + ' ' + x.bm; }).join(' | ').slice(0, 400);
-    var af = (ck.find(function (x) { return x.n === 2 && x.autoField; }) || {}).autoField || '';   // v2.00: the reason from Kerja
+    var af = (ck.find(function (x) { return x.n === 2 && x.autoField; }) || {}).autoField || '';   // v1.100: the reason from Kerja
     var fnote = String(d.fieldNote || '').trim() || (af ? 'Buah belum ke ramp (Kerja): ' + af : '');
     var note = [fnote, String(d.note || '').trim(), opts.auto ? 'Ditutup oleh app (lengkap) semasa chit pagi' : ''].filter(Boolean).join(' · ').slice(0, 200);
     var rec;

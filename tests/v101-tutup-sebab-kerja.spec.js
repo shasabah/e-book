@@ -1,4 +1,4 @@
-// E-Book test (2.00) Tutup Hari takes the tractor's lot reasons from Kerja. Brief_Tuai_Kutip_Rupa_Baru 1.2 §5a, signed by
+// E-Book test (1.100) Tutup Hari takes the tractor's lot reasons from Kerja. Brief_Tuai_Kutip_Rupa_Baru 1.2 §5a, signed by
 // Yu Chen 25 Nov 2026 ("Fix"). In the new look the tractor's tiles already say why a lot's fruit stayed in the block;
 // check 2 of the close took no notice and asked TINGGAL DI LADANG… again. Now, when every lot still in the block has an
 // answer from Kerja, check 2 is green and the close keeps that answer as the field reason. Old-look days are unchanged.

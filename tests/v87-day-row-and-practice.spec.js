@@ -75,7 +75,7 @@ const root = path.resolve(__dirname, '..');
   });
   check('every open day is a button of its own', r.days.length === 5, JSON.stringify(r.days));
   check('each one shows the date and the day name', /^\d+\/\d+ \w+/.test(r.days[0]), r.days[0]);
-  check('the day chosen is marked', /16|17|18|19|20/.test(r.on), r.on.replace(/\s+/g, ' '));
+  check('the day chosen is marked', !!r.on.trim() && r.days.indexOf(r.on.replace(/\s+/g, ' ').trim()) >= 0, r.on.replace(/\s+/g, ' '));   // 25 Nov: was tied to 16–20 Nov
   check('it says how many are waiting, and that order does not matter',
     /5 hari belum ditutup/.test(r.hint) && /tidak perlu ikut turutan/.test(r.hint), r.hint);
   check('the choice comes BEFORE the checks card that names a date',

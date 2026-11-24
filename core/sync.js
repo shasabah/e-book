@@ -310,6 +310,22 @@ window.EA = window.EA || {};
       return j || { ok: false, error: 'slow' };          // Google's own error page: Google is slow
     } catch (e) { return { ok: false, error: e && e.name === 'AbortError' ? 'slow' : 'offline' }; }
   };
+  // v1.97 MULA SEMULA LATIHAN (Brief_Latihan_Satu_Login 1.2 §2b, signed by Yu Chen 24 Nov 2026 "sign reset"): this phone's
+  // practice records (the keys kept apart under "L:") and its practice entries still waiting to be sent are cleared.
+  // Only ever in Latihan, and only keys that start with "L:fh." — a real record has no such key.
+  EA.resetPracticeLocal = function () {
+    if (!practiceNow()) return 0;
+    var n = 0;
+    try {
+      var ks = []; for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && k.indexOf('L:fh.') === 0) ks.push(k); }
+      ks.forEach(function (k) { localStorage.removeItem(k); n++; });
+      var u = EA.currentUser(), lcode = !!u && /^L-/.test(String(u.code));
+      var q = JSON.parse(localStorage.getItem(K.queue) || '[]');
+      var keep = q.filter(function (it) { return !(it.pr || (lcode && it.row && it.row.keyed_by === u.code)); });
+      if (keep.length !== q.length) localStorage.setItem(K.queue, JSON.stringify(keep));
+    } catch (e) {}
+    return n;
+  };
   EA.ask = async function (action, extra) {
     var j = await EA.askFull(action, extra);
     return j && j.ok ? j : null;

@@ -346,6 +346,7 @@ function doWrite_(user, req) {
   }
   // v1.90: in Latihan only records and answers go to the practice book. Nothing that changes people, PINs,
   // phones or switches (those live in the real book and the script) is done from Latihan.
+  if (req.action === 'latihanReset') return reply(latihanReset_(user));   // v1.97: only ever the practice book
   if (PRACTICE_ && (/^(admin|user)/.test(String(req.action)) || req.action === 'myPin' || req.action === 'testOff')) return reply({ ok: false, error: 'not_in_practice' });
   // Pentadbir (v1.16): the Owner's admin page; its reading parts are answered above.
   if (/^admin/.test(String(req.action))) return reply(adminAction_(user, req));
@@ -3104,6 +3105,36 @@ function fixFromStatus29Oct() {
   } finally { PRACTICE_ = was; BOOK_ = null; ROWS_MEMO_ = null; }
   Logger.log('fixFromStatus29Oct: ' + JSON.stringify(out));
   return out;
+}
+// v1.97 MULA SEMULA LATIHAN (Brief_Latihan_Satu_Login 1.2 §2b, signed by Yu Chen 24 Nov 2026: "sign reset"). A clean start
+// in Latihan. Refused outside Latihan, so it can only ever reach the practice book. Every standing Field & Harvest row
+// that THIS person keyed, on his estates, gets a new row marked removed (Rule 4: nothing is erased; other people's
+// practice is not touched). The phone then clears its own practice copies.
+function latihanReset_(user) {
+  if (!PRACTICE_) return { ok: false, error: 'only_in_practice' };
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(25000)) return { ok: false, error: 'busy' };
+  var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), n = 0, me = String(user.user_code);
+  try {
+    ROWS_MEMO_ = null;
+    Object.keys(ROOM_TABS).filter(function (tab) { return /^FH_/.test(tab); }).forEach(function (tab) {
+      var sh = book_().getSheetByName(tab);
+      if (!sh || sh.getLastRow() < 2) return;
+      var mine = readRows_(tab, null).standing.filter(function (r) { return String(r.keyed_by) === me && user.estates.indexOf(r.estate) >= 0; });
+      if (!mine.length) return;
+      var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+      var out = mine.map(function (r) {
+        var row = {}; head.forEach(function (c) { row[c] = r[c] === undefined ? '' : r[c]; });
+        row.id = String(r.id) + '-X'; row.replaces = r.id; row.status = 'removed'; row.keyed_at = now; row.received_at = now; row.phone = 'OFFICE';
+        if (head.indexOf('note') >= 0) row.note = 'Mula semula Latihan';
+        return head.map(function (c) { return plain(row[c]); });
+      });
+      sh.getRange(sh.getLastRow() + 1, 1, out.length, head.length).setValues(out);
+      n += out.length;
+    });
+  } finally { lock.releaseLock(); ROWS_MEMO_ = null; CLOSED_MEMO_ = null; }
+  newGen_();
+  return { ok: true, removed: n };
 }
 function removeLine_(tab, r, why) {
   var now = Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm');

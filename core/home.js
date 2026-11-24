@@ -734,11 +734,13 @@
       (latOk(u) ? (EA.practiceOwn() ? '<button class="btn btn-wait" type="button" id="nm-lat">LEAVE PRACTICE<small>KELUAR LATIHAN</small></button>'
         : '<button class="btn btn-ghost" type="button" id="nm-lat">PRACTICE<small>MASUK LATIHAN</small></button>') : '') +
       (EA.practiceOwn && EA.practiceOwn() && EA.canPickRole() ? '<button class="btn btn-ghost" type="button" id="nm-lrole">PRACTISE AS…<small>LATIH SEBAGAI…</small></button>' : '') +
+      (EA.practice && EA.practice() ? '<button class="btn btn-ghost" type="button" id="nm-lreset">START PRACTICE AGAIN<small>MULA SEMULA LATIHAN</small></button>' : '') +
       (testUser() || (EA.practice && EA.practice()) ? '' : '<button class="btn btn-ghost" type="button" id="nm-pin">CHANGE MY PIN<small>TUKAR PIN SAYA</small></button>') +
       '<button class="btn btn-ghost" type="button" id="logout">LOG OUT<small>KELUAR</small></button></div>',
       function (s) {
         var lat = s.querySelector('#nm-lat'); if (lat) lat.onclick = function () { closeSheet(); if (EA.practiceOwn()) latLeave(); else latEnterAsk(); };
         var lrs = s.querySelector('#nm-lrole'); if (lrs) lrs.onclick = function () { closeSheet(); latRoleSheet(true); };
+        var lrt = s.querySelector('#nm-lreset'); if (lrt) lrt.onclick = function () { closeSheet(); latResetAsk(); };
         var pin = s.querySelector('#nm-pin'); if (pin) pin.onclick = function () { closeSheet(); myPinSheet(); };
         s.querySelector('#logout').onclick = function () { closeSheet(); logoutAsk(); };
       });
@@ -774,6 +776,38 @@
       function (s) {
         s.querySelector('#lat-in').onclick = function () { closeSheet(); if (EA.canPickRole()) latRoleSheet(); else latSwitch(true); };
         s.querySelector('#lat-no').onclick = closeSheet;
+      });
+  }
+  // v1.97 MULA SEMULA LATIHAN (Yu Chen, 24 Nov 2026: "how do i reset the practice mode?", "sign reset"): a clean start
+  // for the next try or the next trainee. Only in Latihan. The office marks this person's own practice records as
+  // removed in the practice book (new rows, nothing erased, other people's practice untouched); the phone clears its
+  // practice copies. With a sending link it needs a signal, so the phone and the practice book never disagree.
+  function latResetAsk() {
+    if (!(EA.practice && EA.practice())) return;
+    openSheet('<h2 id="sheet-title"><span class="bm">Mula semula Latihan?</span><span class="en">Start practice again?</span></h2>' +
+      '<p><span class="bm" style="font-weight:400">Semua rekod LATIHAN anda dikosongkan: chit, kerja, ramp dan tutup hari. Rekod sebenar tidak disentuh. Latihan orang lain tidak disentuh.</span>' +
+      '<span class="en">All YOUR practice records are cleared: chits, work, ramp and day close. Real records are not touched. Other people\'s practice is not touched.</span></p>' +
+      '<p class="msg" id="lr-err" hidden></p>' +
+      '<div class="actions"><button class="btn btn-ghost btn-back" type="button" id="lr-no">‹ BACK<small>‹ BALIK</small></button>' +
+      '<button class="btn btn-wait" type="button" id="lr-ok">START AGAIN<small>MULA SEMULA</small></button></div>',
+      function (s) {
+        s.querySelector('#lr-no').onclick = closeSheet;
+        s.querySelector('#lr-ok').onclick = async function () {
+          var b = s.querySelector('#lr-ok'), m = s.querySelector('#lr-err');
+          if (b.disabled) return; b.disabled = true;
+          if (EA.sendLink()) {
+            var j = await EA.askFull('latihanReset', {});
+            if (!j || !j.ok) {
+              b.disabled = false; m.hidden = false;
+              m.textContent = j && (j.error === 'offline' || j.error === 'slow') ? EA.t('Perlu isyarat untuk mula semula. Cuba lagi bila ada talian.', 'This needs a signal. Try again when you are online.')
+                : j && j.error === 'busy' ? EA.t('Pejabat sibuk. Cuba lagi sebentar.', 'The office is busy. Try again in a moment.')
+                : EA.t('Tidak dapat mula semula. Tekan MUAT dan cuba lagi.', 'Could not start again. Press LOAD and try again.');
+              return;
+            }
+          }
+          EA.resetPracticeLocal();
+          closeSheet(); location.hash = ''; render(); toast(EA.t('Latihan dikosongkan. Mula dari chit pagi.', 'Practice cleared. Start from the morning chit.'));
+        };
       });
   }
   function latLeave() {

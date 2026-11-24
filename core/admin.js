@@ -129,7 +129,7 @@ EA.roomViews = EA.roomViews || {};
         '<i class="adm-st ' + cls + '">' + esc(txt) + '</i></button>';
     });
     if (!(d.phones || []).length) h += '<p class="hint">' + t('Belum ada peranti.', 'No devices yet.') + '</p>';
-    // v1.89 Latihan satu login: how much of today's office work is practice, and who practised today.
+    // v1.90 Latihan satu login: how much of today's office work is practice, and who practised today.
     var pu = d.practiceUse;
     if (pu) {
       var pct = pu.all ? Math.round(100 * pu.req / pu.all) : 0;

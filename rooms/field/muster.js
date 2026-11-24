@@ -50,7 +50,28 @@
   function keepDraft() { var all = EA.local.get(K.draft, {}); all[ctx.estate] = draft; EA.local.set(K.draft, all); }
   function dropDraft() { var all = EA.local.get(K.draft, {}); delete all[ctx.estate]; EA.local.set(K.draft, all); }
 
+  // v1.89 (Ferezelly, 23 Nov 2026, closing 21 Nov: "button tutup hari hijau... tidak keluar boleh submit").
+  // The tail of the wrong-date fault fixed in 1.81. Until then a correction the staff started himself was
+  // filed under the day he made it, and that happened in TWO places: the office row (repaired on 21 Nov by
+  // an office step) and the phone's own copy of the chit, which nothing repaired. So his phone still held
+  // the 17 and 18 Nov chits under 21 Nov, the close for the 21st gathered all three, and men present on
+  // the 17th and 18th were demanded a work line on the 21st. One red line he had no way to clear.
+  //
+  // A chit's code carries its own day (MC-SSGT-P13-20261117-1), so the right day is read from the chit
+  // itself, never guessed. Done once per phone, on the stored copy, and only for a code of that shape.
+  var CHIT_DAY = /^MC-.+-(\d{4})(\d{2})(\d{2})-\d+$/;
+  function chitOwnDay(code) { var m = CHIT_DAY.exec(String(code || '')); return m ? m[1] + '-' + m[2] + '-' + m[3] : ''; }
+  var reDated = false;
+  function reDateChits() {
+    if (reDated) return; reDated = true;
+    try {
+      var all = EA.local.get(K.chits, []), n = 0;
+      all.forEach(function (c) { var d = chitOwnDay(c.chit); if (d && c.date !== d) { c.date = d; n++; } });
+      if (n) EA.local.set(K.chits, all);
+    } catch (e) { /* a phone that cannot repair its copy still works as before */ }
+  }
   function chits() {
+    reDateChits();
     var keepFrom = EA.dayAgo(40);       // kept 40 days for the month's rain to date
     return EA.local.get(K.chits, []).filter(function (c) { return c.date >= keepFrom; });
   }

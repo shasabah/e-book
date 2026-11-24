@@ -221,7 +221,7 @@
     var all = EA.roomsFor(u, estate).filter(function (r) { return EA.roomLive(r, estate) || enterable(r, estate); });
     // v1.63: Field & Harvest is opened by its screens on Hari ini (Chit pagi, Kerja, Ramp, Tiket), not by a second tile
     var work = all.filter(function (r) { return LIST_ROOMS.indexOf(r.id) < 0 && r.id !== 'durian' && r.id !== 'field-harvest'; }), lists = all.filter(function (r) { return LIST_ROOMS.indexOf(r.id) >= 0; });
-    // v1.89: in Latihan, Pengguna and Pentadbir are not shown (people, PINs, phones and switches are real, never practice)
+    // v1.90: in Latihan, Pengguna and Pentadbir are not shown (people, PINs, phones and switches are real, never practice)
     if (EA.practice && EA.practice()) lists = lists.filter(function (r) { return r.id !== 'users' && r.id !== 'admin'; });
     $('rooms-h').hidden = !work.length;
     $('tiles').innerHTML = tilesHtml(work, u, estate);
@@ -723,7 +723,7 @@
         s.querySelector('#logout').onclick = function () { closeSheet(); logoutAsk(); };
       });
   }
-  // v1.89 Latihan satu login (Yu Chen, 24 Nov 2026): every real person practises with his own login, from his
+  // v1.90 Latihan satu login (Yu Chen, 24 Nov 2026): every real person practises with his own login, from his
   // name menu. No practice ID. Latihan shows the same app with made-up workers, and its records go only to the
   // practice book. It ends with KELUAR LATIHAN or when the app is closed.
   function latOk(u) { return !!u && !/^[TL]-/.test(String(u.code)) && !!EA.practiceOwn; }

@@ -11,7 +11,7 @@ window.EA = window.EA || {};
   // v1.24 Mod Latihan: a practice login (code L-) keeps its own field records, drafts, office answers and
   // worker list apart (keys start with "L:"), so practice never mixes with a real person's on a shared phone.
   // The queue, the login, the phone code and the sending link stay shared.
-  // v1.89 Latihan satu login (Yu Chen, 24 Nov 2026): a real person enters Latihan from his name menu, with his own
+  // v1.90 Latihan satu login (Yu Chen, 24 Nov 2026): a real person enters Latihan from his name menu, with his own
   // login. It is kept only for this opening of the app (sessionStorage), so closing the app ends Latihan.
   var PRACT = null, LAT = 'ea.latihan';
   function latOwn() { try { return sessionStorage.getItem(LAT) || ''; } catch (e) { return ''; } }
@@ -135,7 +135,7 @@ window.EA = window.EA || {};
     };
     Object.keys(fields || {}).forEach(function (k) { if (!(k in row)) row[k] = fields[k]; });
     var item = { tab: tab, row: row, savedAt: Date.now() };
-    if (practiceNow()) item.pr = 1;     // v1.89: a practice record is sent only in Latihan, to the practice book
+    if (practiceNow()) item.pr = 1;     // v1.90: a practice record is sent only in Latihan, to the practice book
     if (batchQ) { batchQ.push(item); return row; }
     var q = get(K.queue, []);
     q.push(item);
@@ -169,7 +169,7 @@ window.EA = window.EA || {};
   var sending = false;
   // Each person's entries are sent with that person's own key, so "who keyed it" stays
   // right on a shared phone. Someone else's entries wait until they log in again.
-  // v1.89: and only in the same mode it was keyed in: practice records in Latihan, real records outside it.
+  // v1.90: and only in the same mode it was keyed in: practice records in Latihan, real records outside it.
   function sameMode(user, it) { return /^L-/.test(String(user.code)) || !!it.pr === practiceNow(); }
   function mine(user) { return function (it) { return (!it.row.keyed_by || it.row.keyed_by === user.code) && sameMode(user, it); }; }
   EA.waitingOtherMode = function () { var u = EA.currentUser(); return u ? get(K.queue, []).filter(function (it) { return (!it.row.keyed_by || it.row.keyed_by === u.code) && !sameMode(u, it); }).length : 0; };

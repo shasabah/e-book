@@ -31,7 +31,7 @@ function liveSheetId_() { try { return PropertiesService.getScriptProperties().g
 // The people list (USERS, USERS_LOG) always stays in the real book.
 var PRACTICE_ = false, UBOOK_ = null;
 function isPracticeCode_(code) { return /^L-/.test(String(code)); }
-// v1.89 Latihan satu login (Yu Chen, 24 Nov 2026): a real person may practise with his own login. The phone then
+// v1.90 Latihan satu login (Yu Chen, 24 Nov 2026): a real person may practise with his own login. The phone then
 // sends practice:1 with every request, and that request reads and writes only the practice book, like an L- login.
 function isPractice_(user) { return PRACTICE_ || isPracticeCode_(user && user.user_code); }
 function book_() { return BOOK_ || (BOOK_ = SpreadsheetApp.openById(PRACTICE_ ? SHEET_ID : liveSheetId_())); }
@@ -334,7 +334,7 @@ function doWrite_(user, req) {
     rb.sw = switches_();
     return reply(rb);
   }
-  // v1.89: in Latihan only records and answers go to the practice book. Nothing that changes people, PINs,
+  // v1.90: in Latihan only records and answers go to the practice book. Nothing that changes people, PINs,
   // phones or switches (those live in the real book and the script) is done from Latihan.
   if (PRACTICE_ && (/^(admin|user)/.test(String(req.action)) || req.action === 'myPin' || req.action === 'testOff')) return reply({ ok: false, error: 'not_in_practice' });
   // Pentadbir (v1.16): the Owner's admin page; its reading parts are answered above.
@@ -1509,7 +1509,7 @@ function noteSeen_(user, req) {
   } catch (e) {}
 }
 
-// v1.89: how much Latihan uses the office. Every request today is counted (an estimate, kept in the script cache),
+// v1.90: how much Latihan uses the office. Every request today is counted (an estimate, kept in the script cache),
 // and practice requests, records and people are counted in one script setting (written only on practice requests).
 function countUse_(user, req) {
   try {

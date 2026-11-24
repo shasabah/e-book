@@ -1,4 +1,4 @@
-// E-Book test (1.89) Latihan satu login, office script. A real login that sends practice:1 reads and writes only the
+// E-Book test (1.90) Latihan satu login, office script. A real login that sends practice:1 reads and writes only the
 // practice book (the TEST sheet), gets the made-up workers, cannot change people, PINs, phones or switches, and is counted.
 const check = (name, ok, detail) => { console.log((ok ? 'PASS ' : 'FAIL ') + name + (detail ? ' — ' + detail : '')); if (!ok) process.exitCode = 1; };
 const fs = require('fs'), vm = require('vm');

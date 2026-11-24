@@ -1,4 +1,4 @@
-// E-Book test (1.89). Latihan satu login (Yu Chen, 24 Nov 2026: "i dun need to latihan and cuba baru for new id right?",
+// E-Book test (1.90). Latihan satu login (Yu Chen, 24 Nov 2026: "i dun need to latihan and cuba baru for new id right?",
 // "cause my current need new id for latihan. can you help fix it", "urgent for new user like paitan and meliau").
 // Brief_Latihan_Satu_Login. Below:
 // - MASUK LATIHAN in the name menu of a real login; orange stripes, the band and KELUAR LATIHAN on the screen;

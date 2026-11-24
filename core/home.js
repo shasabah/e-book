@@ -178,6 +178,9 @@
     $('top').className = 'top' + (pr ? ' practice' : isHQ(u) ? ' hq' : '');
     $('practice-band').hidden = !pr;
     $('practice-out').hidden = !(EA.practiceOwn && EA.practiceOwn());
+    var lr = EA.latihanRole && EA.latihanRole(), lrn = lr ? (EA.roleNames[lr] || { bm: lr, en: lr }) : null;
+    $('practice-as').hidden = !lr;
+    $('practice-as').textContent = lr ? EA.t('Latih sebagai: ' + lrn.bm, 'Practising as: ' + lrn.en) : '';
     $('who-name').textContent = u.name;
     var r = EA.roleNames[u.role] || { bm: u.role, en: u.role };
     $('who-role').textContent = EA.t(r.bm, r.en);
@@ -715,10 +718,12 @@
       '<div class="name-menu">' +
       (latOk(u) ? (EA.practiceOwn() ? '<button class="btn btn-wait" type="button" id="nm-lat">LEAVE PRACTICE<small>KELUAR LATIHAN</small></button>'
         : '<button class="btn btn-ghost" type="button" id="nm-lat">PRACTICE<small>MASUK LATIHAN</small></button>') : '') +
+      (EA.practiceOwn && EA.practiceOwn() && EA.canPickRole() ? '<button class="btn btn-ghost" type="button" id="nm-lrole">PRACTISE AS…<small>LATIH SEBAGAI…</small></button>' : '') +
       (testUser() || (EA.practice && EA.practice()) ? '' : '<button class="btn btn-ghost" type="button" id="nm-pin">CHANGE MY PIN<small>TUKAR PIN SAYA</small></button>') +
       '<button class="btn btn-ghost" type="button" id="logout">LOG OUT<small>KELUAR</small></button></div>',
       function (s) {
         var lat = s.querySelector('#nm-lat'); if (lat) lat.onclick = function () { closeSheet(); if (EA.practiceOwn()) latLeave(); else latEnterAsk(); };
+        var lrs = s.querySelector('#nm-lrole'); if (lrs) lrs.onclick = function () { closeSheet(); latRoleSheet(true); };
         var pin = s.querySelector('#nm-pin'); if (pin) pin.onclick = function () { closeSheet(); myPinSheet(); };
         s.querySelector('#logout').onclick = function () { closeSheet(); logoutAsk(); };
       });
@@ -727,7 +732,22 @@
   // name menu. No practice ID. Latihan shows the same app with made-up workers, and its records go only to the
   // practice book. It ends with KELUAR LATIHAN or when the app is closed.
   function latOk(u) { return !!u && !/^[TL]-/.test(String(u.code)) && !!EA.practiceOwn; }
-  function latSwitch(on) { EA.setPractice(on); location.hash = ''; location.reload(); }
+  function latSwitch(on, role) { EA.setPractice(on); if (on) EA.setLatihanRole(role || ''); location.hash = ''; location.reload(); }
+  // v1.91 LATIH SEBAGAI (Yu Chen, 24 Nov 2026): the Owner and HQ pick the position to practise, to guide new people.
+  var LAT_ROLES = [['Staff', 'Staf bertugas', 'Staff in charge', 'chit pagi, kerja, ramp, tutup hari', 'morning chit, work, ramp, close'],
+    ['Clerk', 'Kerani', 'Clerk', 'tiket kilang, gred', 'mill ticket, grading'], ['Manager', 'Pengurus', 'Manager', 'lulus, amaran, Operasi', 'approvals, alerts, Operasi']];
+  function latRoleSheet(inside) {
+    var own = EA.roleNames[EA.realRole()] || { bm: EA.realRole(), en: EA.realRole() };
+    openSheet('<h2 id="sheet-title"><span class="bm">Latih sebagai</span><span class="en">Practise as</span></h2>' +
+      '<p class="hint"><span class="bm">Pilih jawatan. Skrin ikut jawatan itu. Semua masuk buku latihan sahaja.</span><span class="en">Pick a position. The screens follow it. Everything goes to the practice book only.</span></p>' +
+      '<div class="name-menu">' + LAT_ROLES.map(function (r) { return '<button class="btn btn-wait" type="button" data-lr="' + r[0] + '">' + esc(r[2].toUpperCase()) + '<small>' + esc(r[1].toUpperCase() + ' · ' + r[3]) + '</small></button>'; }).join('') +
+      '<button class="btn btn-ghost" type="button" data-lr="">' + esc(EA.t('Jawatan sendiri', 'My own position').toUpperCase()) + '<small>' + esc((EA.t(own.bm, own.en)).toUpperCase()) + '</small></button>' +
+      '<button class="btn btn-ghost" type="button" id="lr-no">CANCEL<small>BATAL</small></button></div>',
+      function (s) {
+        s.querySelectorAll('[data-lr]').forEach(function (b) { b.onclick = function () { closeSheet(); latSwitch(true, b.dataset.lr); }; });
+        s.querySelector('#lr-no').onclick = closeSheet;
+      });
+  }
   function latEnterAsk() {
     openSheet('<h2 id="sheet-title"><span class="bm">Masuk Latihan?</span><span class="en">Enter practice?</span></h2>' +
       '<p class="hint"><span class="bm">Skrin sama seperti biasa. Pekerja rekaan. Apa yang anda isi pergi ke buku latihan sahaja, bukan buku sebenar. ' +
@@ -737,7 +757,7 @@
       '<div class="actions"><button class="btn btn-wait" type="button" id="lat-in">ENTER PRACTICE<small>MASUK LATIHAN</small></button>' +
       '<button class="btn btn-ghost" type="button" id="lat-no">CANCEL<small>BATAL</small></button></div>',
       function (s) {
-        s.querySelector('#lat-in').onclick = function () { closeSheet(); latSwitch(true); };
+        s.querySelector('#lat-in').onclick = function () { closeSheet(); if (EA.canPickRole()) latRoleSheet(); else latSwitch(true); };
         s.querySelector('#lat-no').onclick = closeSheet;
       });
   }

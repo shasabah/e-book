@@ -15,7 +15,12 @@ window.EA = window.EA || {};
     if (keep.length && keep.length !== u.estates.length) u.estates = keep;
     return u;
   }
-  EA.currentUser = function () { return liveOnly(EA.local.get(USER, null)); };
+  EA.currentUser = function () {
+    var u = liveOnly(EA.local.get(USER, null));
+    // v1.91 LATIH SEBAGAI: in Latihan the Owner or HQ may take another position; the kept login never changes.
+    var r = u && EA.latihanRole ? EA.latihanRole() : '';
+    return r ? Object.assign({}, u, { role: r, realRole: u.role }) : u;
+  };
 
   var KNOWN = 'ea.knownUsers';
   function keep(u) {
@@ -67,7 +72,7 @@ window.EA = window.EA || {};
 
   // The Owner made a new PIN for himself (v1.9): this phone keeps working with the new one.
   EA.setMyPin = function (pin) {
-    var u = EA.currentUser();
+    var u = EA.local.get(USER, null);   // the kept login itself (never the Latihan position)
     if (!u || !/^\d{6}$/.test(String(pin))) return;
     u.key = String(pin); EA.local.set(USER, u);
     var last = EA.local.get(LAST, null);

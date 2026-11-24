@@ -239,6 +239,12 @@ function doPost_(e) {
   var user = findUser(req.key);
   if (user && (isPracticeCode_(user.user_code) || (Number(req.latihan) === 1 && req.action !== 'login'))) { PRACTICE_ = true; BOOK_ = null; }
   if (!user) { cache.put(pk, String(bad + 1), 900); cache.put('badkeys', String(badAll + 1), 900); return reply({ ok: false, error: 'wrong_key' }); }
+  // v1.91 LATIH SEBAGAI (Yu Chen, 24 Nov 2026: "i wan wawa to know staff and also clerk work. so she can help me to guide
+  // new person"): in Latihan only, the Owner or HQ may practise as Staf bertugas, Kerani or Pengurus. Only for that
+  // request, and only in the practice book; the real login keeps its own position.
+  if (PRACTICE_ && !isPracticeCode_(user.user_code) && /^(Owner|HQ)$/.test(String(user.role)) && /^(Staff|Clerk|Manager)$/.test(String(req.latihanRole || ''))) {
+    user = Object.assign({}, user, { role: String(req.latihanRole), realRole: String(user.role) });
+  }
 
   if (req.action === 'login') {
     // v1.14: a real person may log in only on a phone code that is theirs (made with the PIN).
@@ -267,7 +273,7 @@ function gen_() { return CacheService.getScriptCache().get('gen') || '0'; }
 function newGen_() { try { CacheService.getScriptCache().put('gen', String(Date.now()) + Math.floor(Math.random() * 1000), 21600); } catch (e) {} }
 function readCached_(user, req) {
   var personal = req.action === 'people' || req.action === 'workers' || req.action === 'mills' || req.action === 'todo' || req.action === 'late' || req.action === 'rates' || /^admin/.test(String(req.action));
-  var key = ['rd', PRACTICE_ ? 'L' : '', req.action, String(req.estate || ''), String(req.month || ''), personal ? user.user_code : '', gen_()].join('|').slice(0, 240);
+  var key = ['rd', PRACTICE_ ? 'L' + user.role : '', req.action, String(req.estate || ''), String(req.month || ''), personal ? user.user_code : '', gen_()].join('|').slice(0, 240);
   var c = CacheService.getScriptCache(), hit = null;
   try { hit = c.get(key); } catch (e) {}
   if (hit) return ContentService.createTextOutput(hit).setMimeType(ContentService.MimeType.JSON);

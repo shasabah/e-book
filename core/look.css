@@ -542,6 +542,7 @@ body:has(#room:not([hidden]) .botbar) .sheet-back:not([hidden]) ~ .toast,
 .practice-band b { display: block; font-weight: 800; }
 .practice-in { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
 .practice-in > div { min-width: 0; }
+.practice-as { display: block; font-size: .85rem; font-weight: 700; margin-top: 2px; }
 .practice-out { flex: none; min-height: 44px; padding: 6px 12px; font-size: .85rem; }
 .tag-practice { display: inline-block; background: var(--wait-soft); color: var(--wait); border-radius: 999px; padding: 1px 9px; font-size: .75rem; font-weight: 700; }
 .us-practice { display: flex; gap: 10px; align-items: flex-start; width: 100%; text-align: left; border: 2px solid var(--line); background: #fff; border-radius: 12px; padding: 10px; margin: 6px 0 10px; font: inherit; color: inherit; cursor: pointer; }

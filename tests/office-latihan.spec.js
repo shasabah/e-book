@@ -43,3 +43,18 @@ const pu = ctx.practiceUse_([real]);
 check('the Telefon page gets the practice line: calls, all calls, records, names', pu.req === 8 && pu.all === 12 && pu.rec === 2 && pu.who[0].name === 'Penolong', JSON.stringify(pu));
 check('a practice login (L-) is still practice with no flag', (ctx.PRACTICE_ = false, ctx.isPractice_({ user_code: 'L-STF-1' })) && !ctx.isPractice_({ user_code: 'MGR-MELU-01' }));
 check('making a practice login (userAdd with practice:true) is still the Owner\'s job, not Latihan', post({ action: 'userAdd', practice: true }).did === 'users');
+
+// v1.91 LATIH SEBAGAI
+ctx.saveBatch = (u, items) => ({ ok: true, role: u.role, canChit: ctx.canWrite_(u, 'FH_CHIT'), canTicket: ctx.canWrite_(u, 'FH_TICKET'), results: items.map(it => ({ id: it.row.id, ok: true })) });
+const owner = { user_code: 'OWN-ALL-01', name: 'Pemilik', role: 'Owner', estates: ['MELU'], status: 'active' };
+const hq = { user_code: 'HQ-SDK-01', name: 'Wawa', role: 'HQ', estates: ['SSGT', 'PTAN', 'MELU'], status: 'active' };
+const sb = (u, extra) => { ctx.findUser = () => Object.assign({}, u); return post(Object.assign({ action: 'saveBatch', items: [{ tab: 'FH_CHIT', row: { id: 'x', date: '2026-11-24' } }] }, extra)); };
+let k = sb(hq, { latihan: 1, latihanRole: 'Clerk' });
+check('HQ in Latihan as Kerani: the office takes the Clerk position (ticket yes, chit no)', k.role === 'Clerk' && k.canTicket === true && k.canChit === false, JSON.stringify(k));
+k = sb(hq, { latihan: 1, latihanRole: 'Staff' });
+check('HQ in Latihan as Staf bertugas: the Staff position', k.role === 'Staff' && k.canChit === true && k.canTicket === false, JSON.stringify(k));
+check('the Owner may practise as Pengurus', sb(owner, { latihan: 1, latihanRole: 'Manager' }).role === 'Manager');
+check('outside Latihan the position is never changed', sb(hq, { latihanRole: 'Staff' }).role === 'HQ');
+check('a Staf bertugas cannot take another position, even in Latihan', sb(real, { latihan: 1, latihanRole: 'Clerk' }).role === 'Manager');
+check('only Staff, Clerk or Manager can be taken (never Owner)', sb(hq, { latihan: 1, latihanRole: 'Owner' }).role === 'HQ');
+check('a remembered answer is kept per position in Latihan', /PRACTICE_ \? 'L' \+ user\.role : ''/.test(code));

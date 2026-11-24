@@ -23,9 +23,20 @@ window.EA = window.EA || {};
   EA.practiceOwn = function () { var u = null; try { u = JSON.parse(localStorage.getItem('ea.user') || 'null'); } catch (e) {} return !!(u && !/^L-/.test(String(u.code)) && latOwn() === String(u.code)); };
   EA.setPractice = function (on) {
     var u = null; try { u = JSON.parse(localStorage.getItem('ea.user') || 'null'); } catch (e) {}
-    try { if (on && u) sessionStorage.setItem(LAT, String(u.code)); else sessionStorage.removeItem(LAT); } catch (e) {}
+    try { if (on && u) sessionStorage.setItem(LAT, String(u.code)); else { sessionStorage.removeItem(LAT); sessionStorage.removeItem(LATROLE); } } catch (e) {}
     PRACT = null;
   };
+  // v1.91 LATIH SEBAGAI: in Latihan the Owner or HQ may practise as Staf bertugas, Kerani or Pengurus (this opening only).
+  var LATROLE = 'ea.latihanRole';
+  EA.realRole = function () { try { var u = JSON.parse(localStorage.getItem('ea.user') || 'null'); return u ? String(u.role) : ''; } catch (e) { return ''; } };
+  EA.canPickRole = function () { return /^(Owner|HQ)$/.test(EA.realRole()); };
+  EA.latihanRole = function () {
+    if (!EA.practiceOwn() || !EA.canPickRole()) return '';
+    var r = ''; try { r = sessionStorage.getItem(LATROLE) || ''; } catch (e) {}
+    return /^(Staff|Clerk|Manager)$/.test(r) ? r : '';
+  };
+  EA.setLatihanRole = function (r) { try { if (/^(Staff|Clerk|Manager)$/.test(r)) sessionStorage.setItem(LATROLE, r); else sessionStorage.removeItem(LATROLE); } catch (e) {} };
+  function latBody(user) { if (!practiceNow() || /^L-/.test(String(user.code))) return {}; var o = { latihan: 1 }, r = EA.latihanRole(); if (r) o.latihanRole = r; return o; }
   function nk(k) { return practiceNow() && /^(fh\.|ea\.people|ea\.refused|ea\.errSeen|ea\.admin)/.test(k) ? 'L:' + k : k; }
   function get(k, d) { try { var v = localStorage.getItem(nk(k)); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }
   function set(k, v) { try { localStorage.setItem(nk(k), JSON.stringify(v)); if (k === 'ea.user') PRACT = null; return true; } catch (e) { return false; } }
@@ -203,7 +214,7 @@ window.EA = window.EA || {};
     var sent = 0, err = null, refusedAll = 0;
     function post(body) {
       return EA.fetchWait(link, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(Object.assign({ key: user.key, version: EA.VERSION, phone: EA.phone(), waiting: get(K.queue, []).length }, practiceNow() && !/^L-/.test(String(user.code)) ? { latihan: 1 } : {}, body)) }).then(function (r) { return r.json(); });
+        body: JSON.stringify(Object.assign({ key: user.key, version: EA.VERSION, phone: EA.phone(), waiting: get(K.queue, []).length }, latBody(user), body)) }).then(function (r) { return r.json(); });
     }
     try {
       // Everything waiting goes in one trip (up to 50 at a time).
@@ -283,7 +294,7 @@ window.EA = window.EA || {};
     try {
       // v1.19: asking for something back waits at most 30 s (sending still waits 60 s).
       var res = await EA.fetchWait(link, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(Object.assign({ action: action, key: user.key, version: EA.VERSION, phone: EA.phone(), waiting: get(K.queue, []).length }, practiceNow() && !/^L-/.test(String(user.code)) ? { latihan: 1 } : {}, extra || {})) }, 30000);
+        body: JSON.stringify(Object.assign({ action: action, key: user.key, version: EA.VERSION, phone: EA.phone(), waiting: get(K.queue, []).length }, latBody(user), extra || {})) }, 30000);
       var j = null;
       try { j = await res.json(); } catch (e2) { j = null; }
       if (j && j.sw) EA.setSwitches(j.sw);

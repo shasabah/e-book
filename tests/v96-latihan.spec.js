@@ -41,7 +41,9 @@ const { chromium } = require('playwright');
   online = false;
   await p.click('#nm-lat'); await p.waitForSelector('#lat-in');
   check('entering asks first and says where the records go', /buku latihan sahaja/.test(await p.innerText('#sheet')));
-  await p.click('#lat-in'); await p.waitForSelector('#home:not([hidden])'); await p.waitForTimeout(300);
+  await p.click('#lat-in'); await p.waitForSelector('[data-lr="Staff"]');
+  check('the Owner is asked which position to practise (Staf bertugas, Kerani, Pengurus, own)', await p.locator('[data-lr]').count() === 4);
+  await p.click('[data-lr=""]'); await p.waitForSelector('#home:not([hidden])'); await p.waitForTimeout(300);
   s = await st();
   check('in Latihan: orange stripes, the band and KELUAR LATIHAN', s.pr && s.own && /practice/.test(s.top) && s.band && s.out, JSON.stringify(s).slice(0, 200));
   check('in Latihan: made-up workers, at Sugut and at Meliau too', /Pekerja Contoh/.test(s.w) && !/Ahmad/.test(s.w) && s.m > 0, s.w.slice(0, 80));
@@ -78,6 +80,22 @@ const { chromium } = require('playwright');
   await p.evaluate(() => EA.send()); await p.waitForTimeout(800);
   sb = calls.filter(c => c.action === 'saveBatch');
   check('back in Latihan the waiting practice record is sent, with latihan:1', sb.length >= 1 && sb.every(c => c.latihan === 1) && sb[0].items[0].row.worker_id === 'W-MELU-002' && await p.evaluate(() => EA.waitingOtherMode() === 0), JSON.stringify(sb.map(c => c.latihan)));
+  // v1.91 LATIH SEBAGAI: the Owner practises as Staf bertugas, then as Kerani
+  await p.click('#who-name'); await p.click('#nm-lrole'); await p.waitForSelector('[data-lr="Staff"]');
+  await p.click('[data-lr="Staff"]'); await p.waitForSelector('#home:not([hidden])'); await p.waitForTimeout(400);
+  let a = await p.evaluate(() => ({ role: EA.currentUser().role, real: EA.realRole(), kept: JSON.parse(localStorage.getItem('ea.user')).role, as: document.getElementById('practice-as').innerText,
+    steps: !!document.getElementById('today') && !document.getElementById('today').hidden, top: document.getElementById('who-role').innerText }));
+  check('as Staf bertugas: the screens follow the Staff position (Langkah hari ini), the band says so', a.role === 'Staff' && a.steps && /Latih sebagai/.test(a.as), JSON.stringify(a));
+  check('the kept login is still the Owner (nothing real changes)', a.real === 'Owner' && a.kept === 'Owner');
+  calls.length = 0; online = true;
+  await p.evaluate(() => { EA.save('FH_MUSTER', 'FH', 'MELU', { worker_id: 'W-MELU-003', muster: 'H' }); }); await p.evaluate(() => EA.send()); await p.waitForTimeout(600);
+  check('every call carries latihan:1 and latihanRole Staff', calls.length > 0 && calls.every(c => c.latihan === 1 && c.latihanRole === 'Staff'), JSON.stringify(calls.map(c => c.action + ':' + c.latihanRole)));
+  await p.click('#who-name'); await p.click('#nm-lrole'); await p.click('[data-lr="Clerk"]'); await p.waitForSelector('#home:not([hidden])'); await p.waitForTimeout(300);
+  check('switching to Kerani takes the Clerk position', await p.evaluate(() => EA.currentUser().role === 'Clerk' && !!EA.practice()));
+  await p.click('#practice-out'); await p.waitForSelector('#home:not([hidden])'); await p.waitForTimeout(300);
+  check('KELUAR LATIHAN brings back the Owner, with no practice position left', await p.evaluate(() => EA.currentUser().role === 'Owner' && !EA.practice() && EA.latihanRole() === '' && !sessionStorage.getItem('ea.latihanRole')));
+  check('outside Latihan a stored position does nothing', await p.evaluate(() => { sessionStorage.setItem('ea.latihanRole', 'Staff'); const r = EA.currentUser().role; sessionStorage.removeItem('ea.latihanRole'); return r === 'Owner'; }));
+  await p.evaluate(() => { EA.setPractice(true); EA.setLatihanRole(''); location.reload(); }); await p.waitForSelector('#home:not([hidden])');
   // a new opening of the app (a new tab = new sessionStorage) starts real
   const p2 = await ctx.newPage(); await p2.goto('http://localhost:8765/index.html'); await p2.waitForSelector('#home:not([hidden])');
   check('closing and opening the app again starts real (Latihan is for one opening only)', await p2.evaluate(() => !EA.practice() && document.getElementById('practice-band').hidden));

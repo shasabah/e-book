@@ -376,7 +376,7 @@
   function rbNav(jobs) {
     var cur = rbIdx(jobs);
     return '<div class="rupa-jobs" id="rb-jobs">' + jobs.map(function (j, i) {
-      return '<button type="button" data-rbj="' + i + '" aria-current="' + (i === cur) + '" class="' + (rbFilled(j) ? 'done' : '') + '">' + (i + 1) + '. ' + esc(shortName(j.task)) + (j.block ? ' ' + esc(j.block) : '') + '</button>';
+      return '<button type="button" data-rbj="' + i + '" aria-current="' + (i === cur) + '" class="' + (rbFilled(j) ? 'done' : '') + '">' + (i + 1) + '. ' + esc(jobName(j.task)) + (j.block ? ' · ' + esc(j.block) : '') + '</button>';
     }).join('') + '</div><p class="hint" id="rb-count"></p>';
   }
   function rbShow(jobs) {

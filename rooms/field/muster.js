@@ -1146,13 +1146,85 @@
         (j.block ? esc(placeName(j.block)) : '') + (isMachJob(j.task) ? ' ' + esc(machPlace('', j.lots)) : j.lots.length ? ' · Petak ' + esc(lotsShow(j.block, j.lots).join(', ')) + (li.ha ? ' (' + li.ha.toFixed(2) + ' Ha)' : '') : '') +
         (j.mandor ? ' · Mandor ' + esc(person(j.mandor)) : '') + '</span>' +
         (j.ask ? '<span class="en warn-t"><b>' + EA.t('Kerja lain · menunggu lulus', 'Other work · waiting for approval') + '</b> · ' + esc(j.ask) + '</span>' : '') +
-        (tg ? '<span class="en' + (tg.short ? ' warn-t' : '') + '">' + tg.text + '</span>' : '') + '</div>' +
+        (tg && !(j.task === 'MAN' && rbOn()) ? '<span class="en' + (tg.short ? ' warn-t' : '') + '">' + tg.text + '</span>' : '') +
+        (j.task === 'MAN' && rbOn() ? manPanel(j, nw) : '') + '</div>' +
         '<div class="acts"><span class="pill plain">' + n + ' orang</span>' +
         '<button type="button" class="btn btn-ghost" data-pick="' + j.key + '">PICK<small>Pilih orang</small></button>' +
         '<button type="button" class="btn btn-ghost" data-edit="' + j.key + '">EDIT<small>Ubah</small></button></div></div>';
     }).join('') : '<p class="hint">' + EA.t('Belum ada kerja. Tekan + TAMBAH KERJA untuk setiap kerja hari ini.', 'No jobs yet. Tap + ADD JOB for each job today.') + '</p>';
     el.querySelectorAll('#fh-jobs [data-edit]').forEach(function (b) { b.onclick = function () { editJob(b.dataset.edit); }; });
     el.querySelectorAll('#fh-jobs [data-pick]').forEach(function (b) { b.onclick = function () { pickPeople(b.dataset.pick); }; });
+    el.querySelectorAll('#fh-jobs [data-mreq]').forEach(function (b) { b.onclick = function () { manAsk(b.dataset.mreq); }; });
+  }
+
+  // ---------- v1.94 Membaja in the new look (Brief_Membaja_Rupa_Baru, signed by Yu Chen 24 Nov 2026) ----------
+  // The fertiliser and the dose come from the programme and are locked; only the Owner approves a change (MINTA TUKAR,
+  // an alert kind "doseask"). Bags = palms x dose / bag kg, rounded up lot by lot. "Bawa dari stor" goes on the chit,
+  // into the WhatsApp text, and to the storekeeper (FH_MATERIAL, kind "bawa", one row a lot).
+  function rbOn() { return !!(EA.rupaBaru && EA.rupaBaru()); }
+  EA.fh = EA.fh || {};
+  EA.fh.manPlan = function (estate, block, date) {
+    var month = String(date || EA.today()).slice(0, 7);
+    var data = EA.local.get('fh.prog.' + estate + '.' + month, null) || EA.local.get('fh.prog.' + estate + '.' + EA.today().slice(0, 7), null);
+    var line = null;
+    ((data && data.programme) || []).forEach(function (r) { if (r.task === 'MAN' && String(r.block) === String(block) && String(r.month) <= month && Number(r.dose) > 0) line = r; });
+    if (!line) return null;
+    var fert = String(line.round || '').trim() || 'Baja';
+    return { fert: fert, dose: Number(line.dose), bagKg: (EA.lists.fertBagKg && EA.lists.fertBagKg[fert]) || EA.lists.bagKg || 50, month: String(line.month) };
+  };
+  EA.fh.manBags = function (estate, lot, dose, kg) { var l = EA.lists.lot(estate, lot); return l && l.palms ? Math.ceil(l.palms * dose / (kg || 50) - 1e-9) : 0; };
+  // A change the Owner approved for this chit and block (the staff's Perlu tindakan carries it), else null.
+  EA.fh.manApproved = function (estate, chit, block) {
+    var c = EA.local.get('ea.todo.' + estate, null), hit = null;
+    ((c && c.items) || []).forEach(function (x) { if (x.dose && x.dose.chit === chit && String(x.dose.block) === String(block) && x.dose.ok) hit = x.dose; });
+    return hit;
+  };
+  function manInfo(j, nw, chitId) {
+    var mp = EA.fh.manPlan(ctx.estate, j.block, draft.date || EA.today());
+    if (!mp) return null;
+    var ap = chitId ? EA.fh.manApproved(ctx.estate, chitId, j.block) : null;
+    var dose = ap ? Number(ap.dose) : mp.dose, fert = ap ? ap.fert : mp.fert, bags = {}, total = 0;
+    j.lots.forEach(function (l) { bags[l] = EA.fh.manBags(ctx.estate, l, dose, mp.bagKg); total += bags[l]; });
+    var per = EA.lists.manTarget ? EA.lists.manTarget(ctx.estate, dose) : 20, target = nw * per;
+    return { fert: fert, dose: dose, bagKg: mp.bagKg, bags: bags, total: total, per: per, target: target, approved: !!ap, prog: mp };
+  }
+  function manPanel(j, nw) {
+    var m = manInfo(j, nw, draft.replacing || '');
+    if (!m) return '<span class="en warn-t"><b>' + EA.t('Tiada program membaja untuk blok ini.', 'No manuring programme for this block.') + '</b> ' + EA.t('Beg tidak boleh dikira. Beritahu Pemilik.', 'Bags cannot be worked out. Tell the Owner.') + '</span>';
+    var st = !j.lots.length ? ['r', EA.t('Pilih petak.', 'Choose the lots.')] : !nw ? ['r', EA.t('Pilih orang.', 'Choose the people.')]
+      : m.total < m.target * 0.9 ? ['r', EA.t('KURANG ' + (m.target - m.total) + ' beg dari sasaran: tambah petak atau kurangkan orang.', (m.target - m.total) + ' bags below target: add lots or take a man off.')]
+      : m.total > m.target * 1.1 ? ['a', EA.t('LEBIH ' + (m.total - m.target) + ' beg dari sasaran: tambah orang atau kurangkan petak.', (m.total - m.target) + ' bags over target: add a man or take lots off.')]
+      : ['g', EA.t('✓ Sepadan dengan sasaran ' + nw + ' orang × ' + m.per + ' beg.', '✓ Matches the target of ' + nw + ' × ' + m.per + ' bags.')];
+    var rq = j.mreq;
+    return '<div class="man-panel"><div class="man-prog' + (m.approved ? ' ok' : '') + '"><b>🔒 ' + EA.t('Ikut program', 'From the programme') + ' · ' + esc(m.fert) + ' · ' + m.dose + EA.t(' kg sepokok', ' kg per palm') + '</b>' +
+      '<span>' + (m.approved ? EA.t('Diluluskan Pemilik.', 'Approved by the Owner.') : EA.t('Beg ' + m.bagKg + ' kg. Jenis dan dos hanya berubah dengan kelulusan Pemilik.', m.bagKg + ' kg bags. The fertiliser and dose change only with the Owner\'s approval.')) + '</span></div>' +
+      (j.lots.length ? '<p class="man-lots">' + j.lots.map(function (l) { return esc(l) + ' · <b>' + m.bags[l] + '</b>'; }).join(' &nbsp; ') + ' &nbsp;=&nbsp; <b>' + m.total + EA.t(' beg', ' bags') + '</b></p>' : '') +
+      '<p class="man-line ' + st[0] + '">' + EA.t('Sasaran: ', 'Target: ') + nw + ' × ' + m.per + ' = ' + m.target + EA.t(' beg · ', ' bags · ') + esc(st[1]) + '</p>' +
+      (j.lots.length ? '<div class="man-bawa"><span>' + EA.t('BAWA DARI STOR', 'TAKE FROM THE STORE') + '<small>' + esc(m.fert) + '</small></span><b>' + m.total + EA.t(' beg', ' bags') + '</b></div>' : '') +
+      (rq ? '<p class="man-line a"><b>' + EA.t('Minta tukar · menunggu lulus Pemilik: ', 'Change asked · waiting for the Owner: ') + '</b>' + esc(rq.fert + ' · ' + rq.dose + ' kg') + ' · "' + esc(rq.why) + '". ' + EA.t('Sementara itu ikut program.', 'Until then the programme stands.') + '</p>'
+        : '<button type="button" class="link-btn" data-mreq="' + esc(j.key) + '">' + EA.t('Minta tukar jenis / dos · perlu lulus Pemilik', 'Ask to change the fertiliser / dose · needs the Owner') + '</button>') + '</div>';
+  }
+  function manAsk(key) {
+    var j = draft.jobs.find(function (x) { return x.key === key; }); if (!j) return;
+    var mp = EA.fh.manPlan(ctx.estate, j.block, draft.date || EA.today()) || { fert: '', dose: '' };
+    ui().openSheet('<h2 id="sheet-title"><span class="bm">Minta tukar jenis / dos</span><span class="en">Ask to change the fertiliser / dose</span></h2>' +
+      '<p class="hint">' + EA.t('Dihantar kepada Pemilik. Chit ikut program sehingga diluluskan. Pengurus dimaklumkan.', 'Sent to the Owner. The chit keeps the programme until approved. The manager is told.') + '</p>' +
+      '<div class="field"><label for="mr-f">' + EA.t('Jenis baja', 'Fertiliser') + '</label><input id="mr-f" class="text-input" value="' + esc(mp.fert) + '"></div>' +
+      '<div class="field"><label for="mr-d">' + EA.t('Dos (kg sepokok)', 'Dose (kg per palm)') + '</label><input id="mr-d" class="text-input" inputmode="decimal" value="' + esc(mp.dose) + '"></div>' +
+      '<div class="field"><label for="mr-w">' + EA.t('Sebab', 'Why') + ' *</label><textarea id="mr-w" class="text-input" rows="2" maxlength="160"></textarea></div>' +
+      '<p class="msg" id="mr-err" hidden></p><div class="actions"><button class="btn btn-ghost btn-back" type="button" id="mr-no">‹ BACK<small>‹ BALIK</small></button>' +
+      '<button class="btn btn-ok" type="button" id="mr-ok">SEND TO THE OWNER<small>Hantar ke Pemilik</small></button></div>',
+      function (s) {
+        s.querySelector('#mr-no').onclick = ui().closeSheet;
+        s.querySelector('#mr-ok').onclick = function () {
+          var f = s.querySelector('#mr-f').value.trim(), d = parseFloat(String(s.querySelector('#mr-d').value).replace(',', '.')), w = s.querySelector('#mr-w').value.replace(/\s+/g, ' ').trim(), m = s.querySelector('#mr-err');
+          if (!f || !(d > 0) || d > 10) { m.textContent = EA.t('Isi jenis dan dos (kg sepokok).', 'Fill the fertiliser and the dose (kg per palm).'); m.hidden = false; return; }
+          if (w.length < 5) { m.textContent = EA.t('Tulis sebab.', 'Write the reason.'); m.hidden = false; return; }
+          if (f === mp.fert && d === Number(mp.dose)) { m.textContent = EA.t('Sama seperti program.', 'Same as the programme.'); m.hidden = false; return; }
+          j.mreq = { fert: f, dose: d, why: w, from: mp.fert + ' ' + mp.dose };
+          keepDraft(); ui().closeSheet(); render(el, ctx); ui().toast(EA.t('Disimpan bersama chit · Pemilik akan nampak', 'Goes with the chit · the Owner will see it'));
+        };
+      });
   }
 
   // The day's target for a job (from the 2025 performance standard): people x target per person.
@@ -1924,6 +1996,33 @@
     showChitObj(planAsChit(p));
   }
 
+  // v1.94 Membaja: one FH_MATERIAL row a lot (kind "bawa"); a correction replaces the old row (Rule 4), a lot taken off
+  // is a 'removed' row. A change of fertiliser or dose asked on this chit goes to the Owner as an alert, kind "doseask".
+  function manSave(c, old) {
+    if (!rbOn()) return;
+    (c.jobs || []).forEach(function (j) {
+      if (j.task !== 'MAN') return;
+      var nw = c.rows.filter(function (r) { return r.muster === 'H' && r.task_code === 'MAN' && r.block === j.block && r.lots === j.lots.join(' ') && r.worker_id !== j.mandor; }).length;
+      var m = manInfo(j, nw, c.chit), oj = old && (old.jobs || []).find(function (x) { return x.task === 'MAN' && x.block === j.block && x.matIds; });
+      var oldIds = (oj && oj.matIds) || {}, ids = {};
+      if (m) {
+        j.mat = { fert: m.fert, dose: m.dose, bagKg: m.bagKg, bags: m.bags, bawa: m.total };
+        j.lots.forEach(function (l) {
+          var o = oj && oj.mat && oj.mat.bags[l] === m.bags[l] && oj.mat.fert === m.fert && oj.mat.dose === m.dose ? oldIds[l] : '';
+          if (o) { ids[l] = o; return; }
+          ids[l] = EA.save('FH_MATERIAL', ROOM, ctx.estate, { date: c.date, chit: c.chit, kind: 'bawa', task_code: 'MAN', block: j.block, lot: l, material: m.fert, dose: m.dose, bag_kg: m.bagKg,
+            bags: m.bags[l], done: '', reason: '', note: '' }, oldIds[l] || '').id;
+        });
+      }
+      Object.keys(oldIds).forEach(function (l) { if (!ids[l]) EA.save('FH_MATERIAL', ROOM, ctx.estate, { date: c.date, chit: c.chit, kind: 'bawa', task_code: 'MAN', block: j.block, lot: l, material: '', dose: '', bag_kg: '', bags: 0, done: '', reason: 'Dibuang dalam pembetulan', note: '' }, oldIds[l], 'removed'); });
+      j.matIds = ids;
+      if (j.mreq && !j.mreq.id) {
+        j.mreq.id = EA.save(TAB_ALERT, ROOM, ctx.estate, { date: c.date, chit: c.chit, kind: 'doseask', block: j.block, lot: j.lots.join(' '),
+          detail: 'Membaja Blk ' + j.block + ': ' + j.mreq.from + ' kg → ' + j.mreq.fert + ' ' + j.mreq.dose + ' kg', staff_note: j.mreq.why, direction: '', direction_by: '', ref: c.chit }).id;
+        var dj = draft.jobs.find(function (x) { return x.key === j.key; }); if (dj) dj.mreq = j.mreq;
+      }
+    });
+  }
   function save(quiet) {
     var confirmedAt = EA.ui.hhmm(new Date());
     var old = draft.replacing ? chits().find(function (c) { return c.estate === ctx.estate && c.chit === draft.replacing; }) : null;
@@ -2012,6 +2111,7 @@
         if ((old && (old.checks || []).indexOf(k.key) >= 0)) return;
         EA.save(TAB_ALERT, ROOM, ctx.estate, { date: c.date, chit: c.chit, kind: 'check', block: '', lot: '', detail: k.bm, staff_note: EA.t('Ya, betul (disimpan juga)', 'Yes, right (saved anyway)'), direction: '', direction_by: '', ref: k.ref || '' });
       });
+      manSave(c, old);   // v1.94 Membaja: the bags to take from the store, and a change asked of the Owner
       c.checks = (draft.checks || []).map(function (k) { return k.key; }).concat(old && old.checks ? old.checks : []);
       var s = summary(c.rows);
       c.chitRowId = EA.save(TAB_CHIT, ROOM, ctx.estate, { date: c.date, chit: c.chit, rain_mm: c.rain_mm, rain_time: c.rain_time,
@@ -2199,6 +2299,11 @@
     // v1.36: other work outside the main jobs, with the staff's reason, for the Assistant Manager.
     (c.jobs || []).filter(function (j) { return j.ask; }).forEach(function (j) {
       L.push('Kerja lain (minta lulus): ' + j.task + ' ' + short(j.task) + (j.block ? ' Blk ' + j.block : '') + ' — ' + j.ask);
+    });
+    // v1.94 Membaja: what to take from the store (Brief_Membaja_Rupa_Baru)
+    (c.jobs || []).filter(function (j) { return j.mat && j.mat.bawa; }).forEach(function (j) {
+      L.push('*BAWA DARI STOR · Membaja Blk ' + j.block + ': ' + j.mat.bawa + ' beg ' + j.mat.fert + '* (' + j.mat.dose + ' kg/pokok)');
+      if (j.mreq) L.push('Minta tukar (lulus Pemilik): ' + j.mreq.fert + ' ' + j.mreq.dose + ' kg — ' + j.mreq.why);
     });
     var mdrs = EA.lists.mandorsFor(c.estate).filter(function (m) { return c.rows.some(function (r) { return r.worker_id === m.id && r.muster === 'H'; }); });
     if (mdrs.length) L.push('Mandor bertugas: ' + mdrs.map(function (m) { return m.name; }).join(', '));

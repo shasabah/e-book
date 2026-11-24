@@ -370,6 +370,7 @@
   function rbType(j) {
     var k = kind(j.task, j.block);
     if (k === 'ticket') return 'ticket';
+    if (j.task === 'MAN' && rbMan0(j)) return 'man';     // v1.94 Membaja (Brief_Membaja_Rupa_Baru)
     if (isHa(j)) return 'old';
     if (isOp(j)) return 'op';
     if (k === 'day') return j.lots.length > 1 && EA.lists.MACHINE_JOBS.indexOf(j.task) < 0 ? 'old' : 'day';
@@ -386,6 +387,7 @@
     if (ch) keepDraft();
   }
   function rbManDone(j, w) {
+    if (rbType(j) === 'man') return num(pbags(j)[w]) > 0;
     var k = kind(j.task, j.block), ls = draft.lines[w] || [];
     if (isOp(j)) return ls.length > 0 && ls.every(function (l) { return hoursOf(l) > 0; });
     if (k === 'day') return ls.length > 0 && ls.every(function (l) { return !!l.qty; });
@@ -455,6 +457,7 @@
       '<div class="field" data-reasonbox="' + j.key + '"' + (st.done === 'N' ? '' : ' hidden') + '><textarea class="text-input" rows="2" data-reason="' + j.key + '" placeholder="' + EA.t('sebab dan tindakan', 'why, and what will be done') + '">' + esc(st.reason || '') + '</textarea></div></div>';
   }
   function rbBody(j) {
+    if (rbType(j) === 'man') return rbManBody(j);
     var t = rbType(j), mand = j.mandors && j.mandors.length ? '<p class="hint">' + EA.t('Mandor ', 'Mandor ') + j.mandors.map(person).map(esc).join(', ') + EA.t(' · ikut kumpulan, tiada angka', ' · goes by the gang, no number') + '</p>' : '';
     if (t === 'old') return jobCard(j);
     var dose = j.task === 'MAN' ? '<div class="wline"><label class="inline-label">' + EA.t('Dos baja (kg sepokok) ', 'Dose (kg per palm) ') + '<input class="qty" inputmode="decimal" data-dose="' + j.key + '" value="' + esc((draft.dose || {})[j.key] || '') + '"></label></div>' : '';
@@ -487,6 +490,7 @@
     var t = rbType(j);
     if (t === 'op') return EA.t('meter belum diisi', 'meter not keyed');
     var left = j.people.filter(function (w) { return !rbManDone(j, w); }).length;
+    if (t === 'man') { var ml = progLots(j).filter(function (l) { return !(rbMl(j)[l] || {}).v; }).length; if (ml) return ml + EA.t(' petak belum dijawab', ' lots to answer'); if (left) return (j.people.length - left) + '/' + j.people.length + EA.t(' diisi', ' keyed'); }
     if ((t === 'harv' || t === 'num') && left) return (j.people.length - left) + '/' + j.people.length + EA.t(' diisi', ' keyed');
     var st = draft.status[j.key] || {};
     if (!left && !st.done) return EA.t(kind(j.task, j.block) === 'bunches' ? 'petak habis?' : 'SIAP / BELUM?', kind(j.task, j.block) === 'bunches' ? 'lots done?' : 'DONE / NOT YET?');
@@ -504,6 +508,153 @@
           '<span class="rb-chip' + (d ? '' : ' w') + '">' + (d ? EA.t('LENGKAP ✓', 'COMPLETE ✓') : esc(rbLeft(j))) + '</span></button>' +
           (open ? '<div class="rb-jb">' + rbBody(j) + (d && n < jobs.length - 1 ? '<button type="button" class="btn btn-main rb-jnext" data-rbjnext="' + esc(j.key) + '">' + EA.t('KERJA SETERUSNYA ›', 'NEXT JOB ›') + '</button>' : '') + '</div>' : '') + '</div>';
       }).join('');
+  }
+  // ---------- v1.94 Membaja in the new look (Brief_Membaja_Rupa_Baru, signed by Yu Chen 24 Nov 2026) ----------
+  // ① each lot HABIS / BELUM with the bags used (HABIS fills what the lot needed; more than 10% off asks why);
+  // ② the bags of each man, with BAHAGI SAMA; bawa · guna · pulang. The answers fill the same draft the old screen
+  // fills (prog, lotwhy, who, pbags, dose), so the checks, SIMPAN and the work records are the old ones; the bags per lot
+  // and the bags back go to FH_MATERIAL. The dose is the programme's (or the Owner's approved change), never typed.
+  var RB_MWHY_N = [['hujan', 'Hujan', 'Rain'], ['orang', 'Kurang orang', 'Short of men'], ['baja', 'Baja tak cukup', 'Not enough fertiliser'], ['lain', 'Lain-lain', 'Other']];
+  var RB_MWHY_K = [['pokok', 'Pokok mati / kosong', 'Dead or missing palms'], ['air', 'Kawasan berair', 'Waterlogged'], ['baja', 'Baja tak cukup', 'Not enough fertiliser'], ['lain', 'Lain-lain', 'Other']];
+  var RB_MWHY_L = [['lebih', 'Pokok lebih dari senarai', 'More palms than listed'], ['beg', 'Beg tak penuh', 'Bags not full'], ['tumpah', 'Tumpah', 'Spilt'], ['lain', 'Lain-lain', 'Other']];
+  var RB_PWHY = [['rosak', 'Rosak', 'Damaged'], ['tumpah', 'Tumpah', 'Spilt'], ['ladang', 'Tinggal di ladang', 'Left in the field'], ['lain', 'Lain-lain', 'Other']];
+  function rbMan0(j) { return !!(EA.fh.manPlan && chit && EA.fh.manPlan(ctx.estate, j.block, chit.date)); }
+  function rbMl(j) { draft.mlot = draft.mlot || {}; return (draft.mlot[j.key] = draft.mlot[j.key] || {}); }
+  function rbMp(j) { draft.mpul = draft.mpul || {}; return (draft.mpul[j.key] = draft.mpul[j.key] || {}); }
+  function rbManInfo(j) {
+    var mp = EA.fh.manPlan(ctx.estate, j.block, chit.date), ap = EA.fh.manApproved ? EA.fh.manApproved(ctx.estate, chit.chit, j.block) : null;
+    var dose = ap ? Number(ap.dose) : mp.dose, fert = ap ? ap.fert : mp.fert, need = {}, sum = 0;
+    progLots(j).forEach(function (l) { need[l] = EA.fh.manBags(ctx.estate, l, dose, mp.bagKg); sum += need[l]; });
+    var cj = (chit.jobs || []).find(function (x) { return x.task === 'MAN' && String(x.block) === String(j.block) && x.mat; });
+    var used = progLots(j).reduce(function (a, l) { var x = rbMl(j)[l]; return a + (x && x.v ? num(x.used) : 0); }, 0);
+    return { fert: fert, dose: dose, kg: mp.bagKg, need: need, bawa: cj ? Number(cj.mat.bawa) || sum : sum, used: used, approved: !!ap };
+  }
+  function rbOff(need, used) { return used < need * 0.9 ? 'kurang' : used > need * 1.1 ? 'lebih' : ''; }
+  function rbWhyName(list, k) { var x = list.find(function (y) { return y[0] === k; }); return x ? x[1] : ''; }
+  // The lots' answers written into the old screen's own fields.
+  function rbManSync(j) {
+    var m = rbManInfo(j), ml = rbMl(j), p = draft.prog[j.key] = draft.prog[j.key] || {}, lw = lotWhy(j), nextDay = (function () { var d = new Date(chit.date + 'T00:00:00'); d.setDate(d.getDate() + 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })();
+    progLots(j).forEach(function (l) {
+      var x = ml[l] || {};
+      if (x.v === 'Y') { p[l] = '100'; delete lw[l]; }
+      else if (x.v === 'N') { p[l] = '0'; lw[l] = { why: 'other', note: 'Belum habis' + (x.why ? ': ' + rbWhyName(RB_MWHY_N, x.why).toLowerCase() : '') + ' · baki ' + Math.max(0, m.need[l] - num(x.used)) + ' beg', until: nextDay }; }
+      else delete p[l];
+    });
+    draft.manual[j.key] = false;
+    draft.who = draft.who || {}; draft.who[j.key] = allWho(j, draft);
+    draft.dose = draft.dose || {}; draft.dose[j.key] = String(m.dose);
+    shareOut(j); syncHaStatus(j);
+  }
+  function rbManProblems(j) {
+    var m = rbManInfo(j), ml = rbMl(j), out = [], n = 'Membaja Blk ' + j.block;
+    progLots(j).forEach(function (l) {
+      var x = ml[l] || {};
+      if (!x.v) { out.push([n + ': petak ' + l + ' HABIS atau BELUM?', 'Lot ' + l + ': done or not?']); return; }
+      if (String(x.used == null ? '' : x.used) === '') { out.push([n + ': beg diguna di petak ' + l, 'Bags used on lot ' + l]); return; }
+      if ((x.v === 'N' || rbOff(m.need[l], num(x.used))) && !x.why) out.push([n + ': petak ' + l + ' · pilih sebab', 'Lot ' + l + ': pick why']);
+    });
+    var mt = j.people.reduce(function (a, w) { return a + num(pbags(j)[w]); }, 0);
+    if (!out.length && j.people.every(function (w) { return num(pbags(j)[w]) > 0; }) && mt !== m.used) out.push([n + ': beg orang (' + mt + ') tidak sama dengan beg petak (' + m.used + ')', 'The men\'s bags do not match the lots\' bags']);
+    if (m.used > m.bawa) out.push([n + ': guna (' + m.used + ') lebih dari bawa (' + m.bawa + ') · semak', 'More used than taken']);
+    var pv = rbMp(j);
+    if (!out.length && m.bawa - m.used > 0 && (!pv.v || (pv.v === 'N' && !pv.why))) out.push([n + ': ' + (m.bawa - m.used) + ' beg pulang ke stor?', 'Bags back to the store?']);
+    return out;
+  }
+  function rbManBody(j) {
+    rbManSync(j);
+    var m = rbManInfo(j), ml = rbMl(j), pv = rbMp(j), pul = m.bawa - m.used, allA = progLots(j).every(function (l) { return (ml[l] || {}).v; });
+    var h = '<div class="man-prog' + (m.approved ? ' ok' : '') + '"><b>🔒 ' + esc(m.fert) + ' · ' + m.dose + EA.t(' kg sepokok', ' kg per palm') + ' · ' + EA.t('bawa ', 'taken ') + m.bawa + EA.t(' beg', ' bags') + '</b><span>' +
+      (m.approved ? EA.t('Dos diluluskan Pemilik.', 'Dose approved by the Owner.') : EA.t('Ikut program. Berubah hanya dengan kelulusan Pemilik.', 'From the programme. Changes only with the Owner\'s approval.')) + '</span></div>';
+    h += '<p class="rb-prog"><b>' + EA.t('① Petak habis dibaja?', '① Is the lot manured out?') + '</b> ' + EA.t('HABIS: beg diisi ikut keperluan, ubah jika lain. Lari lebih 10%: app tanya kenapa.', 'DONE fills the bags the lot needed; change it if different. Off by more than 10%: the app asks why.') + '</p>';
+    h += progLots(j).map(function (l) {
+      var x = ml[l] || {}, lo = EA.lists.lot(ctx.estate, l), off = x.v === 'Y' && String(x.used == null ? '' : x.used) !== '' ? rbOff(m.need[l], num(x.used)) : '';
+      var list = x.v === 'N' ? RB_MWHY_N : off === 'kurang' ? RB_MWHY_K : off === 'lebih' ? RB_MWHY_L : null;
+      return '<div class="rb-lst"><div class="rb-top"><span><b>' + esc(l) + '</b> · ' + EA.t('perlu ', 'needs ') + m.need[l] + EA.t(' beg', ' bags') + '<small>' + (lo && lo.palms ? lo.palms + EA.t(' pokok × ', ' palms × ') + m.dose + ' kg' : '') + '</small></span><span class="seg">' +
+        '<button type="button" data-ml="' + j.key + '|' + esc(l) + '|Y" aria-pressed="' + (x.v === 'Y') + '">' + EA.t('HABIS', 'DONE') + '</button><button type="button" data-ml="' + j.key + '|' + esc(l) + '|N" aria-pressed="' + (x.v === 'N') + '">' + EA.t('BELUM', 'NOT YET') + '</button></span></div>' +
+        (x.v ? '<div class="rb-used">' + EA.t('Beg diguna ', 'Bags used ') + '<input inputmode="numeric" data-mused="' + j.key + '|' + esc(l) + '" value="' + esc(x.used == null ? '' : x.used) + '">' +
+          (x.v === 'N' ? '<span class="rb-chip w">' + EA.t('baki ', 'left ') + Math.max(0, m.need[l] - num(x.used)) + EA.t(' beg · sambung esok', ' bags · tomorrow') + '</span>' : off ? '<span class="rb-chip w">' + (off === 'kurang' ? EA.t('dos kurang?', 'dose short?') : EA.t('dos lebih?', 'dose over?')) + '</span>' : String(x.used) !== '' ? '<span class="rb-chip">✓ ' + EA.t('dos betul', 'dose right') + '</span>' : '') + '</div>' : '') +
+        (list ? '<div class="rb-why">' + list.map(function (y) { return '<button type="button" data-mwhy="' + j.key + '|' + esc(l) + '|' + y[0] + '" aria-pressed="' + (x.why === y[0]) + '">' + esc(EA.t(y[1], y[2])) + '</button>'; }).join('') + '</div>' : '') + '</div>';
+    }).join('');
+    var mt = j.people.reduce(function (a, w) { return a + num(pbags(j)[w]); }, 0);
+    h += '<div class="rb-figs"><span><b>' + m.bawa + '</b>' + EA.t('bawa', 'taken') + '</span><span><b>' + m.used + '</b>' + EA.t('guna', 'used') + '</span><span class="' + (pul < 0 ? 'r' : '') + '"><b>' + pul + '</b>' + EA.t('pulang', 'back') + '</span></div>';
+    if (pul < 0) h += '<p class="man-line r">' + EA.t('Guna lebih dari bawa. Semak.', 'More used than taken. Check.') + '</p>';
+    if (allA && pul > 0) h += '<div class="rb-lst"><div class="rb-top"><b>' + pul + EA.t(' beg pulang ke stor?', ' bags back to the store?') + '</b><span class="seg"><button type="button" data-mpul="' + j.key + '|Y" aria-pressed="' + (pv.v === 'Y') + '">' + EA.t('YA', 'YES') + '</button><button type="button" data-mpul="' + j.key + '|N" aria-pressed="' + (pv.v === 'N') + '">' + EA.t('TIDAK', 'NO') + '</button></span></div>' +
+      (pv.v === 'N' ? '<div class="rb-why">' + RB_PWHY.map(function (y) { return '<button type="button" data-mpulw="' + j.key + '|' + y[0] + '" aria-pressed="' + (pv.why === y[0]) + '">' + esc(EA.t(y[1], y[2])) + '</button>'; }).join('') + '</div>' : '') + '</div>';
+    // ② the men
+    var open = rbMan[j.key];
+    if (open === undefined || j.people.indexOf(open) < 0) open = rbMan[j.key] = j.people.find(function (w) { return !(num(pbags(j)[w]) > 0); }) || '';
+    h += '<p class="rb-prog" style="margin-top:12px"><b>' + EA.t('② Beg setiap orang', '② Bags of each man') + '</b> · ' + j.people.filter(function (w) { return num(pbags(j)[w]) > 0; }).length + EA.t(' daripada ', ' of ') + j.people.length + EA.t(' orang diisi · ', ' keyed · ') + mt + EA.t(' beg', ' bags') + '</p>' +
+      (m.used ? '<button type="button" class="rb-even" data-meven="' + j.key + '">' + EA.t('BAHAGI SAMA · ', 'SPLIT EVENLY · ') + m.used + EA.t(' beg ÷ ', ' bags ÷ ') + j.people.length + EA.t(' orang', ' men') + '</button>' : '<p class="hint">' + EA.t('Jawab petak dahulu, kemudian BAHAGI SAMA atau isi seorang-seorang.', 'Answer the lots first, then SPLIT EVENLY or key each man.') + '</p>');
+    h += j.people.map(function (w) {
+      var v = pbags(j)[w] || '';
+      if (w !== open) return '<button type="button" class="rb-row" data-rbman="' + esc(j.key) + '|' + esc(w) + '"><b>' + esc(person(w)) + '</b>' + (num(v) > 0 ? '<span><b>' + esc(v) + '</b> ' + EA.t('beg', 'bags') + ' <i class="rb-ok">✓</i></span>' : '<span class="rb-chip w">' + EA.t('BELUM DIISI ›', 'NOT KEYED ›') + '</span>') + '</button>';
+      return '<div class="rb-open" data-rbopen="' + esc(j.key) + '"><b class="rb-name">' + esc(person(w)) + '</b><div class="rb-box"><input inputmode="numeric" data-mbag="' + esc(j.key) + '|' + esc(w) + '" data-rbin="' + esc(j.key) + '" data-w="' + esc(w) + '" value="' + esc(v) + '"> ' + EA.t('beg', 'bags') +
+        '<button type="button" class="rb-next" data-mnext="' + esc(j.key) + '|' + esc(w) + '">' + EA.t('SETERUSNYA ›', 'NEXT ›') + '</button></div>' +
+        ('<div class="rb-b2"><button type="button" data-awayw="' + esc(w) + '" data-awayj="' + esc(j.key) + '">' + EA.t('TIDAK HADIR / TIADA KERJA', 'ABSENT / NO WORK') + '</button></div>') + '</div>';
+    }).join('');
+    return h;
+  }
+  function rbManNext(j, w) {
+    var i = j.people.indexOf(w), nxt = '';
+    for (var n = 1; n <= j.people.length; n++) { var c = j.people[(i + n) % j.people.length]; if (c !== w && !(num(pbags(j)[c]) > 0)) { nxt = c; break; } }
+    rbMan[j.key] = nxt; rbFocus = nxt ? j.key + '|' + nxt : '';
+  }
+  function rbManWire(jobs) {
+    var byKey = {}; jobs.forEach(function (j) { byKey[j.key] = j; });
+    el.querySelectorAll('[data-ml]').forEach(function (b) {
+      b.onclick = function () {
+        var x = b.dataset.ml.split('|'), j = byKey[x[0]], ml = rbMl(j), m = rbManInfo(j);
+        ml[x[1]] = { v: x[2], used: x[2] === 'Y' ? String(m.need[x[1]]) : '', why: '' };
+        rbManSync(j); keepDraft(); rbRedraw();
+      };
+    });
+    el.querySelectorAll('[data-mused]').forEach(function (inp) {
+      inp.oninput = function () { var x = inp.dataset.mused.split('|'), j = byKey[x[0]]; rbMl(j)[x[1]].used = inp.value.replace(/\D/g, ''); rbManSync(j); keepDraft(); };
+      inp.onchange = function () { rbRedraw(); };
+    });
+    el.querySelectorAll('[data-mwhy]').forEach(function (b) {
+      b.onclick = function () { var x = b.dataset.mwhy.split('|'), j = byKey[x[0]]; rbMl(j)[x[1]].why = x[2]; rbManSync(j); keepDraft(); rbRedraw(); };
+    });
+    el.querySelectorAll('[data-mpul]').forEach(function (b) {
+      b.onclick = function () { var x = b.dataset.mpul.split('|'), j = byKey[x[0]]; var pv = rbMp(j); pv.v = x[1]; pv.why = ''; keepDraft(); rbRedraw(); };
+    });
+    el.querySelectorAll('[data-mpulw]').forEach(function (b) {
+      b.onclick = function () { var x = b.dataset.mpulw.split('|'), j = byKey[x[0]]; rbMp(j).why = x[1]; keepDraft(); rbRedraw(); };
+    });
+    el.querySelectorAll('[data-meven]').forEach(function (b) {
+      b.onclick = function () {
+        var j = byKey[b.dataset.meven], m = rbManInfo(j), n = j.people.length, per = Math.floor(m.used / n), rem = m.used - per * n;
+        j.people.forEach(function (w, i) { pbags(j)[w] = String(per + (i < rem ? 1 : 0)); });
+        rbMan[j.key] = ''; keepDraft(); rbRedraw();
+        ui().toast(rem ? EA.t('Dibahagi: ', 'Split: ') + j.people.map(function (w) { return pbags(j)[w]; }).join(' + ') + EA.t(' beg. Ubah jika lain.', ' bags. Change if different.') : EA.t('Dibahagi sama: ' + per + ' beg seorang. Ubah jika lain.', 'Split evenly: ' + per + ' bags each. Change if different.'));
+      };
+    });
+    el.querySelectorAll('[data-mbag]').forEach(function (inp) {
+      inp.oninput = function () { var x = inp.dataset.mbag.split('|'), j = byKey[x[0]]; pbags(j)[x[1]] = inp.value.replace(/\D/g, ''); keepDraft(); refresh(jobs); };
+      inp.onkeydown = function (e) { if (e.key !== 'Enter') return; e.preventDefault(); var x = inp.dataset.mbag.split('|'); rbManNext(byKey[x[0]], x[1]); rbRedraw(); };
+    });
+    el.querySelectorAll('[data-mnext]').forEach(function (b) {
+      b.onclick = function () { var x = b.dataset.mnext.split('|'); rbManNext(byKey[x[0]], x[1]); rbRedraw(); };
+    });
+  }
+  // FH_MATERIAL on SIMPAN: one "guna" row a lot, and one "pulang" row. A correction replaces the rows it saved before.
+  function rbManSave(jobs, rec, old) {
+    if (!rbOn()) return {};
+    var out = {}, oldIds = (old && old.mids) || {};
+    jobs.forEach(function (j) {
+      if (rbType(j) !== 'man') return;
+      var m = rbManInfo(j), ml = rbMl(j), pv = rbMp(j), o = oldIds[j.key] || {}, ids = out[j.key] = {};
+      progLots(j).forEach(function (l) {
+        var x = ml[l] || {}, off = x.v === 'Y' ? rbOff(m.need[l], num(x.used)) : '';
+        var why = x.why ? rbWhyName(x.v === 'N' ? RB_MWHY_N : off === 'kurang' ? RB_MWHY_K : RB_MWHY_L, x.why) : '';
+        ids[l] = EA.save('FH_MATERIAL', ROOM, ctx.estate, { date: rec.date, chit: rec.chit, kind: 'guna', task_code: 'MAN', block: j.block, lot: l, material: m.fert, dose: m.dose, bag_kg: m.kg,
+          bags: num(x.used), done: x.v || '', reason: (off ? 'dos ' + off + ': ' : '') + why, note: 'perlu ' + m.need[l] + ' beg' }, o[l] || '').id;
+      });
+      var pul = Math.max(0, m.bawa - m.used);
+      ids._pulang = EA.save('FH_MATERIAL', ROOM, ctx.estate, { date: rec.date, chit: rec.chit, kind: 'pulang', task_code: 'MAN', block: j.block, lot: '', material: m.fert, dose: m.dose, bag_kg: m.kg,
+        bags: pv.v === 'N' ? 0 : pul, done: '', reason: pv.v === 'N' ? rbWhyName(RB_PWHY, pv.why) : '', note: 'bawa ' + m.bawa + ' · guna ' + m.used }, o._pulang || '').id;
+    });
+    return out;
   }
   function rbHl(j) { draft.hlot = draft.hlot || {}; return (draft.hlot[j.key] = draft.hlot[j.key] || {}); }
   var RB_WHY = [['besar', 'Petak besar', 'Big lot'], ['hujan', 'Hujan', 'Rain'], ['orang', 'Kurang orang', 'Short of men'], ['lain', 'Lain-lain', 'Other']];
@@ -558,6 +709,7 @@
   }
   function rbRedraw() { render(el, ctx); }
   function rbWire(jobs) {
+    rbManWire(jobs);
     var byKey = {}; jobs.forEach(function (j) { byKey[j.key] = j; });
     el.querySelectorAll('[data-rbj]').forEach(function (b) {
       b.onclick = function () { var k = b.dataset.rbj; EA.local.set(rbKey(), rbOpenJob(jobs) === k ? '' : k); rbRedraw(); };
@@ -578,6 +730,7 @@
     });
     el.querySelectorAll('input[data-rbin]').forEach(function (inp) {
       inp.setAttribute('enterkeyhint', 'next');
+      if (inp.dataset.mbag) return;          // Membaja: its own Enter (rbManWire)
       inp.onkeydown = function (e) {
         if (e.key !== 'Enter') return;
         e.preventDefault();
@@ -1080,6 +1233,7 @@
       if (isHa(j) && !auto(j) && !st.done) p.push([shortName(j.task) + (j.block ? ' Blk ' + j.block : '') + ': pilih SIAP atau BELUM SIAP bagi setiap petak, dengan sebab', 'Mark each lot done or not done, with the reason']);
       if (!st.done && !isHa(j)) p.push([shortName(j.task) + (j.block ? ' Blk ' + j.block : '') + ': pilih SIAP atau BELUM SIAP', 'Mark the job done or not done']);
       if (st.done === 'N' && !isHa(j) && String(st.reason || '').trim().length < 5) p.push([shortName(j.task) + ': tulis sebab dan tindakan', 'Write why and what will be done']);
+      if (rbOn() && rbType(j) === 'man') rbManProblems(j).forEach(function (x) { p.push(x); });   // v1.94 Membaja
 
     });
     return p;
@@ -1420,12 +1574,13 @@
       (draft.checks || []).forEach(function (k) {
         EA.save('FH_ALERT', ROOM, ctx.estate, { date: rec.date, chit: rec.chit, kind: 'check', block: '', lot: '', detail: k.bm, staff_note: 'Ya, betul (disimpan juga)', direction: '', direction_by: '', ref: k.ref || '' });
       });
+      var mids = rbManSave(jobs, rec, old);   // v1.94 Membaja: bags used per lot, and bags back to the store
       EA.batchEnd();
     } catch (e) { EA.batchCancel(); ui().toast(EA.t('Tidak dapat simpan: ', 'Could not save: ') + e.message, 'bad'); return; }
     settled.forEach(function (x) {   // v1.42: the earlier day now carries its share (kept on this phone too)
       var l = x.s.rec.lines[x.i]; l.hist = (l.hist || []).concat([[l.id, l.qty]]); l.id = x.id; l.qty = x.qty; l.settledBy = rec.chit; keepSaved(x.s);
     });
-    keepSaved({ chit: rec.chit, date: rec.date, estate: rec.estate, rec: rec, lines: draft.lines, status: draft.status, prog: draft.prog, manual: draft.manual, bags: draft.bags || {}, who: draft.who || {}, pbags: draft.pbags || {}, dose: draft.dose || {}, lotwhy: draft.lotwhy || {}, checker: draft.checker, rev: old ? (old.rev || 1) + 1 : 1, chitRev: chit.rev || 1 });
+    keepSaved({ chit: rec.chit, date: rec.date, estate: rec.estate, rec: rec, lines: draft.lines, status: draft.status, prog: draft.prog, manual: draft.manual, bags: draft.bags || {}, who: draft.who || {}, pbags: draft.pbags || {}, dose: draft.dose || {}, lotwhy: draft.lotwhy || {}, checker: draft.checker, rev: old ? (old.rev || 1) + 1 : 1, chitRev: chit.rev || 1, mids: mids || {}, mlot: draft.mlot || {}, mpul: draft.mpul || {} });
     dropDraft();
     var moved = autoCollect(rec, at, !!(chit && chit.fromPlan && !old));   // v1.40: only the first save of a planned day
     ui().toast(EA.t('Kerja harian disimpan', 'Day\'s work saved') + (moved ? ' · ' + moved + EA.t(' tandan ke ramp', ' bunches to the ramp') : ''));

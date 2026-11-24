@@ -1149,3 +1149,21 @@ body:has(#home-bar.botbar) .sheet-back:not([hidden]) ~ .toast { bottom: auto; to
 /* v1.88 the chit's lot picker: a lot another job of the same task already holds today. Marked, never hidden. */
 .pick.lot-taken { opacity: .55; border-style: dashed; }
 .pick.lot-taken[aria-pressed="true"] { opacity: 1; }
+/* v1.94 Membaja in the new look (Brief_Membaja_Rupa_Baru) */
+.man-panel { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.man-prog { background: #eceee9; border-radius: 12px; padding: 8px 10px; }
+.man-prog.ok { background: var(--ok-soft); }
+.man-prog b { display: block; } .man-prog span { font-size: .8rem; color: var(--muted); }
+.man-lots { margin: 0; font-size: .85rem; }
+.man-line { margin: 0; border-radius: 10px; padding: 6px 10px; font-weight: 700; font-size: .85rem; }
+.man-line.r { background: var(--bad-soft); color: var(--bad); } .man-line.a { background: var(--wait-soft); color: #7a4a00; } .man-line.g { background: var(--ok-soft); color: var(--ok); }
+.man-bawa { border: 2px solid var(--ok); border-radius: 12px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.man-bawa span { font-size: .75rem; font-weight: 800; color: var(--muted); } .man-bawa small { display: block; font-size: .9rem; color: var(--ink); font-weight: 600; }
+.man-bawa b { font-size: 1.4rem; }
+.rb-figs { display: flex; gap: 8px; margin: 10px 0 6px; }
+.rb-figs span { flex: 1; text-align: center; background: #f3f4f1; border-radius: 12px; padding: 6px 4px; font-size: .75rem; color: var(--muted); }
+.rb-figs b { display: block; font-size: 1.3rem; color: var(--ink); }
+.rb-figs span.r { background: var(--bad-soft); } .rb-figs span.r b { color: var(--bad); }
+.rb-used { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.rb-used input { border: 2px solid var(--ok); border-radius: 10px; width: 84px; height: 44px; padding: 0 10px; font: inherit; font-size: 1.1rem; font-weight: 700; background: var(--surface); color: var(--ink); }
+.rb-even { width: 100%; margin: 4px 0 8px; background: var(--surface); color: var(--ok); border: 2px solid var(--ok); border-radius: 12px; font: inherit; font-weight: 800; min-height: 48px; }

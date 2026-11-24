@@ -90,6 +90,10 @@ var ROOM_TABS = {
   // source: 'dn' = lots from the delivery note; 'ticket' (or empty, before v19) = lots ticked on the ticket.
   FH_TICKET_HARV: ['ticket_no', 'work_id', 'date_cut', 'block', 'lot', 'worker_id', 'bunches', 'abw_kg', 'mt', 'source'],
   FH_ALERT: ['chit', 'kind', 'block', 'lot', 'detail', 'staff_note', 'direction', 'direction_by', 'ref', 'due'],   // v1.57 due: the promised time of an answer (kind "answer")
+  // v1.94 Membaja (Brief_Membaja_Rupa_Baru, signed 24 Nov 2026): fertiliser, one row a lot. kind "bawa" (taken from the store,
+  // on the chit), "guna" (used on the lot, with done Y/N and the reason when short, over or not finished), "pulang"
+  // (bags back to the store, lot blank, with the reason when not). Field records only: the store keeps no count here.
+  FH_MATERIAL: ['chit', 'kind', 'task_code', 'block', 'lot', 'material', 'dose', 'bag_kg', 'bags', 'done', 'reason', 'note'],
   // Shared list: people (owned by HR). Name, job, worker code, gender and gang only; never IC,
   // passport, date of birth, bank or pay (Rule 8). Written only by the Owner or HQ (v1.1).
   LIST_PEOPLE: ['worker_id', 'name', 'job', 'gang', 'sex', 'mandor', 'active'],
@@ -2175,6 +2179,36 @@ function planAsks_(alerts, est) {
   alerts.forEach(function (a) { if (a.kind === 'jobask' && /^PL-/.test(String(a.ref)) && (!newest[a.ref] || when(a) > when(newest[a.ref]))) newest[a.ref] = a; });
   return alerts.filter(function (a) { return !(a.kind === 'jobask' && /^PL-/.test(String(a.ref))) || (live[a.ref] && newest[a.ref] === a); });
 }
+// v1.94 Membaja (Brief_Membaja_Rupa_Baru, signed 24 Nov 2026; Yu Chen: "dose and variety of fertilizer in the programme
+// cannot be change unless aprroval from the owner"). A change asked on the chit (alert kind "doseask") is the Owner's alone
+// to answer, LULUS / TOLAK; the Pengurus and HQ are told, and the staff sees the answer. A LULUS carries the new dose to the
+// staff's phone (item.dose), where Kerja uses it. The storekeeper (Clerk) sees what to hand out today, and what came back.
+function manTodo_(alerts, est, r, un, add, today) {
+  alerts.filter(function (a) { return a.kind === 'doseask' && String(a.date) >= daysAgo_(14); }).forEach(function (a) {
+    var m = /→ (.+) ([\d.]+) kg$/.exec(String(a.detail || '')), fert = m ? m[1] : '', dose = m ? Number(m[2]) : 0, who = un[a.keyed_by] || '';
+    if (!a.direction) {
+      if (r === 'Owner') add({ id: 'DA:' + a.id, p: 1, ic: 'BJ', bm: a.detail, en: 'Fertiliser / dose change to approve', sub: shortD_(a.date) + ' · ' + who + ' · sebab: ' + String(a.staff_note).slice(0, 90) + ' · LULUS / TOLAK', go: 'jobok', ref: a.id });
+      else if (r === 'Manager' || r === 'HQ' || r === 'Staff') add({ id: 'DW:' + a.id, p: 3, ic: 'BJ', bm: 'Menunggu Pemilik: ' + a.detail, en: 'Waiting for the Owner', sub: shortD_(a.date) + ' · ' + who + ' · sementara itu ikut program', go: '' });
+      return;
+    }
+    if (String(a.keyed_at).slice(0, 10) < daysAgo_(3)) return;
+    var ok = /^LULUS/.test(String(a.direction));
+    if (r === 'Staff' || r === 'Manager' || r === 'HQ') add({ id: 'DD:' + a.id, p: ok ? 3 : 2, ic: 'BJ', bm: (ok ? 'Diluluskan: ' : 'Ditolak: ') + a.detail, en: ok ? 'Dose change approved' : 'Dose change rejected',
+      sub: shortD_(a.date) + ' · ' + a.direction + ' (' + (a.direction_by || 'Pemilik') + ')', go: '', dose: { chit: String(a.ref), block: String(a.block), fert: fert, dose: dose, ok: ok } });
+  });
+  if (r !== 'Clerk' && r !== 'Owner') return;
+  var by = {};
+  standingRows_('FH_MATERIAL', est).filter(function (x) { return String(x.date).slice(0, 10) === today; }).forEach(function (x) {
+    var k = x.chit + '|' + x.block, o = by[k] = by[k] || { block: x.block, mat: '', bawa: 0, pulang: null, why: '', who: x.keyed_by, at: String(x.keyed_at).slice(11, 16) };
+    if (x.kind === 'bawa') { o.bawa += Number(x.bags) || 0; o.mat = o.mat || x.material; }
+    if (x.kind === 'pulang') { o.pulang = Number(x.bags) || 0; o.why = x.reason; }
+  });
+  Object.keys(by).forEach(function (k) {
+    var o = by[k]; if (!o.bawa) return;
+    add({ id: 'MB:' + k, p: 3, ic: 'ST', bm: 'Bawa dari stor: Membaja Blk ' + o.block + ' · ' + o.bawa + ' beg ' + o.mat, en: 'From the store: manuring Blk ' + o.block + ' · ' + o.bawa + ' bags',
+      sub: (un[o.who] || '') + ' · ' + o.at + (o.pulang == null ? ' · pulang: selepas kerja petang' : ' · pulang ' + o.pulang + ' beg' + (o.why ? ' (' + o.why + ')' : '')), go: '' });
+  });
+}
 function todo_(user, req) {
   CLOSED_MEMO_ = null;   // v1.43: the day locks are read fresh in every call
   var est = String(req.estate || ''), r = user.role;
@@ -2267,6 +2301,7 @@ function todo_(user, req) {
   }
   var un = {};
   try { readUsers_().list.forEach(function (x) { un[x.user_code] = String(x.name).replace(/^'/, ''); }); } catch (e) {}
+  manTodo_(alerts, est, r, un, add, today);
   var fixes = chitFixes_(est);
   if (r === 'Staff') {
     fixes.forEach(function (x) {
@@ -2736,7 +2771,8 @@ function todoDirect_(user, req) {
   try {
     ROWS_MEMO_ = null;
     var a = standingRows_('FH_ALERT', est).find(function (x) { return x.id === id; });
-    if (!a || !EXPLAIN_KINDS[a.kind]) return { ok: false, error: 'nothing_waiting' };
+    if (!a || !(EXPLAIN_KINDS[a.kind] || a.kind === 'doseask')) return { ok: false, error: 'nothing_waiting' };
+    if (a.kind === 'doseask' && user.role !== 'Owner') return { ok: false, error: 'not_allowed' };   // v1.94: the Owner only
     // v1.55.1: the Pengurus answers Sunday work too (approved before the day, 5 Nov); SDK (HQ) only sees it.
     if (user.role === 'HQ') return { ok: false, error: 'not_allowed' };
     if (a.direction) return { ok: false, error: 'already' };

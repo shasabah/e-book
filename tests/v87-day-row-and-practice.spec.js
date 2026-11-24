@@ -114,9 +114,9 @@ const root = path.resolve(__dirname, '..');
   const gs = fs.readFileSync(path.join(root, 'server', 'core.gs'), 'utf8');
   const code = gs.split('\n').filter(l => !/^\s*(\/\/|\*)/.test(l)).join('\n');
   check('practice still gets made-up workers, as decided 21 Oct — not changed quietly',
-    /if \(isPracticeCode_\(user\.user_code\)\) return \{ ok: true, people: \[\], practice: true \};/.test(code), 'people_');
+    /if \(isPractice_\(user\)\) return \{ ok: true, people: \[\], practice: true \};/.test(code) && /function isPractice_\(user\) \{ return PRACTICE_ \|\| isPracticeCode_\(user && user\.user_code\); \}/.test(code), 'people_');   // 1.90: Latihan (one login) counts as practice too
   check('practice records still go to their own book, not the real one',
-    /if \(user && isPracticeCode_\(user\.user_code\)\) \{ PRACTICE_ = true; BOOK_ = null; \}/.test(code), 'PRACTICE_');
+    /if \(user && \(isPracticeCode_\(user\.user_code\) \|\| \(Number\(req\.latihan\) === 1 && req\.action !== 'login'\)\)\) \{ PRACTICE_ = true; BOOK_ = null; \}/.test(code), 'PRACTICE_');   // 1.90: or Latihan with one login
   const sync = fs.readFileSync(path.join(root, 'core', 'sync.js'), 'utf8');
   check('and the phone still keeps practice records under their own keys',
     /'L:' \+ k/.test(sync) && /\^\(fh\\\./.test(sync), 'nk()');

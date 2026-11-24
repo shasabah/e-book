@@ -1495,7 +1495,7 @@ function noteSeen_(user, req) {
   var p = String(req.phone || '').toUpperCase();
   if (!/^P\d{2,3}$/.test(p)) return;
   var v = String(req.version || ''), w = req.waiting === undefined ? '' : String(Number(req.waiting) || 0);
-  if (isPractice_(user)) {   // practice logins (and Latihan, v1.89) never change the real phone lines
+  if (isPractice_(user)) {   // practice logins (and Latihan, v1.90) never change the real phone lines
     var ck = 'seenLq:' + user.user_code, mk = p + '|' + v, c0 = CacheService.getScriptCache();
     if (c0.get(ck) === mk) return;
     try { PropertiesService.getScriptProperties().setProperty('seenL:' + user.user_code, JSON.stringify({ phone: p, at: Utilities.formatDate(new Date(), 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'), v: v })); c0.put(ck, mk, 300); } catch (e) {}

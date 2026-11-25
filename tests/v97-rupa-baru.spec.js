@@ -62,19 +62,25 @@ const { chromium } = require('playwright');
   check('after a lot is picked the box has the focus', await p.evaluate(w => document.activeElement && document.activeElement.dataset.w === w, s.hv[0]));
   await p.keyboard.type('120'); await p.click('[data-rbnext]'); await p.waitForTimeout(400);
   check('SETERUSNYA folds the man to one line "2-1 · 120 tandan ✓"', /2-1 · 120 tandan ✓/.test(await p.innerText(`[data-rbman="j1|${s.hv[0]}"]`)), await p.innerText(`[data-rbman="j1|${s.hv[0]}"]`));
-  check('and opens the next man, his lot already 2-1, his box in focus', JSON.stringify(await openMen()) === JSON.stringify([s.hv[1]]) &&
-    await p.evaluate(() => (document.querySelector('[data-rbopen] [data-pick-lot][aria-pressed="true"]') || {}).dataset?.pickLot) === '2-1' &&
-    await p.evaluate(w => document.activeElement && document.activeElement.dataset.w === w, s.hv[1]));
+  // v1.101: sharing a lot is seldom, so the next man gets the next lot nobody has yet, folded to one line
+  check('and opens the next man on the next empty lot (2-2), folded with TUKAR PETAK, his box in focus', JSON.stringify(await openMen()) === JSON.stringify([s.hv[1]]) &&
+    /^2-2/.test((await p.innerText('[data-rbopen] .rb-picked')).trim()) && /TUKAR PETAK/.test(await p.innerText('[data-rbopen] .rb-picked')) && await p.locator('[data-rbopen] [data-pick-lot]').count() === 0 &&
+    await p.evaluate(w => document.activeElement && document.activeElement.dataset.w === w, s.hv[1]), (await p.innerText('[data-rbopen]')).replace(/\s+/g, ' ').slice(0, 160));
   check('progress "1 daripada 3 orang diisi · 120 tandan"', /1 daripada 3 orang diisi · 120 tandan/.test(await p.innerText('[data-rbjob="j1"] .rb-prog')));
   await p.keyboard.type('100'); await p.keyboard.press('Enter'); await p.waitForTimeout(400);
   check('Enter does the same as SETERUSNYA', JSON.stringify(await openMen()) === JSON.stringify([s.hv[2]]));
-  await p.click(`[data-rbopen] [data-pick-lot="2-2"]`); await p.waitForTimeout(400);
-  check('one tap changes the lot', await p.evaluate(() => (document.querySelector('[data-rbopen] [data-pick-lot][aria-pressed="true"]') || {}).dataset?.pickLot) === '2-2');
+  check('every lot has a man: the third starts on the same lot as the man above (2-2)', /^2-2/.test((await p.innerText('[data-rbopen] .rb-picked')).trim()));
+  await p.click('[data-rbopen] [data-rbtukar]'); await p.waitForTimeout(300);
+  check('TUKAR PETAK opens the list: only lots nobody else has, and KONGSI PETAK · 1 petak sudah ada orang', await p.locator('[data-rbopen] [data-pick-lot]').count() === 1 && /KONGSI PETAK · 1 petak sudah ada orang/.test(await p.innerText('[data-rbopen] .rb-share')));
+  await p.click('[data-rbopen] [data-rbshare]'); await p.waitForTimeout(300);
+  await p.click(`[data-rbopen] [data-pick-lot="2-1"]`); await p.waitForTimeout(400);
+  check('KONGSI PETAK shows the lot already taken; one tap picks it and folds it again', /^2-1/.test((await p.innerText('[data-rbopen] .rb-picked')).trim()) && /1 org lain/.test(await p.innerText('[data-rbopen] .rb-picked')));
+  check('the lots sit 5 a row, never wider than the screen', await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
   await p.keyboard.type('90'); await p.keyboard.press('Enter'); await p.waitForTimeout(400);
   check('after the last man, all three fold, none open', (await openMen()).length === 0 && await p.locator('[data-rbjob="j1"] .rb-ok').count() === 3);
   // Petak habis dituai?
   const lotQ = () => p.evaluate(() => [...document.querySelectorAll('[data-rbtile^="h|"]')].map(b => b.dataset.rbtile.split('|')[2]).filter((x, i, a) => a.indexOf(x) === i).join(','));
-  check('"Petak habis dituai?" for each lot with men, with palms, men and bunches', await lotQ() === '2-1,2-2' && /2 org · 220 tandan/.test(await p.innerText('[data-rblots="j1"]')), (await lotQ()) + ' ' + (await p.innerText('[data-rblots="j1"]')).replace(/\s+/g, ' ').slice(0, 160));
+  check('"Petak habis dituai?" for each lot with men, with palms, men and bunches', await lotQ() === '2-1,2-2' && /2 org · 210 tandan/.test(await p.innerText('[data-rblots="j1"]')), (await lotQ()) + ' ' + (await p.innerText('[data-rblots="j1"]')).replace(/\s+/g, ' ').slice(0, 160));
   const st = () => p.evaluate(() => { const d = Object.values(JSON.parse(localStorage.getItem('fh.workdraft') || '{}'))[0] || {}; return d.status && d.status.j1; });
   await p.click('[data-rbtile=\"h|j1|2-1\"]'); await p.waitForTimeout(150); await p.click('#sheet [data-sv=\"Y\"]'); await p.waitForTimeout(300);
   check('one lot answered: the job is not decided yet', !((await st()) || {}).done, JSON.stringify(await st()));

@@ -414,16 +414,36 @@
     if (!ls.length && zeroWhy(w)) return '0 · ' + esc(zeroWhy(w));
     return ls.map(function (l) { return (l.lot ? esc(l.lot) + ' · ' : '') + '<b>' + esc(rbVal(j, l)) + '</b>'; }).join(' + ') + ' ' + esc(rbUnit(j));
   }
+  // v1.101 Pilih petak (Brief_Rupa_Baru 1.2 §3b; Yu Chen, 25 Nov 2026: "Too many lots it show smaller screen",
+  // "Can lot already taken hide or the cursor straight to new lot", "No button for remove or redo if wrong select";
+  // sharing a lot is "seldom"; sample "E-Book Pilih Petak" v2, "Ok"). Lots 5 a row that never shrink. Once a man has a
+  // lot it folds to one line with TUKAR PETAK. The list shows only lots nobody has yet; the others wait behind
+  // KONGSI PETAK. The man after gets the next empty lot (rbNextMan).
+  var rbGrid = {}, rbShare = {};
+  function rbLotCount(j, w, i) {
+    var count = {}; j.lots.forEach(function (n) { count[n] = 0; });
+    j.people.forEach(function (ww) { (draft.lines[ww] || []).forEach(function (ll, ii) { if ((ww !== w || ii !== i) && ll.lot && count[ll.lot] !== undefined) count[ll.lot]++; }); });
+    return count;
+  }
   function rbLotBtns(j, w, i) {
     if (j.lots.length < 2) return '';
-    var count = {}; j.lots.forEach(function (n) { count[n] = 0; });
-    j.people.forEach(function (ww) { (draft.lines[ww] || []).forEach(function (ll) { if (ll.lot && count[ll.lot] !== undefined) count[ll.lot]++; }); });
-    var l = (draft.lines[w] || [])[i] || {};
-    return '<div class="rb-lots">' + j.lots.map(function (n) {
-      var lo = EA.lists.lot(ctx.estate, n), c = count[n];
+    var l = (draft.lines[w] || [])[i] || {}, k = j.key + '|' + w + '|' + i, count = rbLotCount(j, w, i);
+    var palms = function (n) { var lo = EA.lists.lot(ctx.estate, n); return lo && lo.palms ? lo.palms + ' pk' : ''; };
+    if (l.lot && rbGrid[k] !== l.lot) {
+      return '<div class="rb-picked"><b>' + esc(l.lot) + '</b><span class="rb-s">' + [palms(l.lot), count[l.lot] ? count[l.lot] + EA.t(' org lain', ' others') : ''].filter(Boolean).join(' · ') + '</span>' +
+        '<button type="button" data-rbtukar="' + esc(k) + '">' + EA.t('TUKAR PETAK', 'CHANGE LOT') + '</button></div>';
+    }
+    var btn = function (n) {
+      var c = count[n];
       return '<button type="button" data-w="' + esc(w) + '" data-i="' + i + '" data-pick-lot="' + esc(n) + '"' + (c ? ' data-taken' : '') + ' aria-pressed="' + (l.lot === n) + '">' + esc(n) +
-        (lo && lo.palms ? '<span class="rb-s">' + lo.palms + ' pk</span>' : '') + '<span class="rb-s">' + (c ? '<b>' + c + ' org</b>' : EA.t('kosong', 'nobody')) + '</span></button>';
-    }).join('') + '</div>';
+        (palms(n) ? '<span class="rb-s">' + palms(n) + '</span>' : '') + '<span class="rb-s">' + (c ? '<b>' + c + ' org</b>' : EA.t('kosong', 'nobody')) + '</span></button>';
+    };
+    var free = j.lots.filter(function (n) { return !count[n] || l.lot === n; }), used = j.lots.filter(function (n) { return count[n] && l.lot !== n; });
+    if (!free.length) { free = used; used = []; }
+    return '<p class="hint rb-lead"><b>' + EA.t('Pilih petak', 'Pick the lot') + '</b>' + (used.length ? ' · ' + EA.t('belum ada orang', 'nobody on it yet') : '') + '</p>' +
+      '<div class="rb-lots rb-grid5">' + free.map(btn).join('') + '</div>' +
+      (used.length ? (rbShare[k] ? '<p class="hint rb-lead"><b>' + EA.t('Kongsi petak', 'Share a lot') + '</b> · ' + EA.t('sudah ada orang', 'already has someone') + '</p><div class="rb-lots rb-grid5">' + used.map(btn).join('') + '</div>'
+        : '<button type="button" class="rb-share" data-rbshare="' + esc(k) + '">' + EA.t('KONGSI PETAK', 'SHARE A LOT') + ' · ' + used.length + EA.t(' petak sudah ada orang', ' lots already have someone') + '</button>') : '');
   }
   function rbManList(j) {
     var k = kind(j.task, j.block), unit = rbUnit(j), f = k === 'bunches' ? 'bunches' : 'qty';
@@ -441,12 +461,13 @@
       var ls = draft.lines[w] || [];
       return '<div class="rb-open" data-rbopen="' + esc(j.key) + '"><b class="rb-name">' + esc(person(w)) + '</b>' +
         ls.map(function (l, i) {
-          return (i > 0 ? '<p class="hint rb-second">' + EA.t('Petak lain', 'Another lot') + ' · <button type="button" class="link-btn" data-w="' + esc(w) + '" data-del="' + i + '">' + EA.t('buang', 'remove') + '</button></p>' : '') +
+          return (i > 0 ? '<div class="rb-second"><span>' + EA.t('Petak kedua', 'Second lot') + '</span><button type="button" class="rb-delbtn" data-w="' + esc(w) + '" data-del="' + i + '">' + EA.t('× BUANG PETAK INI', '× REMOVE THIS LOT') + '</button></div>' : '') +
             rbLotBtns(j, w, i) +
             '<div class="rb-box"><input inputmode="numeric" data-f="' + f + '" data-w="' + esc(w) + '" data-i="' + i + '" data-rbin="' + esc(j.key) + '" value="' + esc(rbVal(j, l) || '') + '" aria-label="' + esc(unit + ' ' + person(w)) + '"> ' + esc(unit) +
             (i === ls.length - 1 ? '<button type="button" class="rb-next" data-rbnext="' + esc(j.key) + '|' + esc(w) + '">' + EA.t('SETERUSNYA ›', 'NEXT ›') + '</button>' : '') + '</div>';
         }).join('') + bagBox(j, w) +
         '<div class="rb-b2">' + (j.lots.length > 1 ? '<button type="button" data-w="' + esc(w) + '" data-add="1">' + EA.t('+ PETAK LAIN', '+ ANOTHER LOT') + '</button>' : '') +
+        ((draft.lines[w] || []).some(function (l) { return l.lot || l.bunches || l.qty; }) ? '<button type="button" class="rb-red" data-rbclear="' + esc(j.key) + '|' + esc(w) + '">' + EA.t('KOSONGKAN', 'CLEAR') + '</button>' : '') +
         (askable(j) ? '<button type="button" data-awayw="' + esc(w) + '" data-awayj="' + esc(j.key) + '">' + EA.t('TIDAK HADIR / TIADA KERJA', 'ABSENT / NO WORK') + '</button>' : '') + '</div></div>';
     }).join('');
     return h;
@@ -635,6 +656,19 @@
     rbMan[j.key] = nxt; rbFocus = nxt ? j.key + '|' + nxt : '';
   }
   function rbManWire(jobs) {
+    el.querySelectorAll('[data-rbtukar]').forEach(function (b) {
+      b.onclick = function () { var x = b.dataset.rbtukar.split('|'), l = (draft.lines[x[1]] || [])[Number(x[2])] || {}; rbGrid[b.dataset.rbtukar] = l.lot || ''; delete rbShare[b.dataset.rbtukar]; render(el, ctx); };
+    });
+    el.querySelectorAll('[data-rbshare]').forEach(function (b) { b.onclick = function () { rbShare[b.dataset.rbshare] = 1; render(el, ctx); }; });
+    el.querySelectorAll('[data-rbclear]').forEach(function (b) {
+      b.onclick = function () {
+        var x = b.dataset.rbclear.split('|'), ls = draft.lines[x[1]] || [];
+        if (!ls.length) return;
+        ls.splice(1); ls[0].lot = ''; ls[0].bunches = ''; ls[0].qty = ''; ls[0].bags = '';
+        Object.keys(rbGrid).forEach(function (k) { if (k.indexOf(x[0] + '|' + x[1] + '|') === 0) delete rbGrid[k]; });
+        rbFocus = ''; keepDraft(); render(el, ctx);
+      };
+    });
     var byKey = {}; jobs.forEach(function (j) { byKey[j.key] = j; });
     el.querySelectorAll('[data-ml]').forEach(function (b) {
       b.onclick = function () {
@@ -790,7 +824,14 @@
     var i = j.people.indexOf(w), nxt = '';
     for (var n = 1; n <= j.people.length; n++) { var c = j.people[(i + n) % j.people.length]; if (c !== w && !rbManDone(j, c)) { nxt = c; break; } }
     var mine = (draft.lines[w] || []).filter(function (l) { return l.lot; }), last = mine.length ? mine[mine.length - 1].lot : '';
-    if (nxt && last && j.lots.length > 1) { var l0 = (draft.lines[nxt] || [])[0]; if (l0 && !l0.lot) { l0.lot = last; keepDraft(); } }
+    if (nxt && last && j.lots.length > 1) {
+      var l0 = (draft.lines[nxt] || [])[0];
+      if (l0 && !l0.lot) {
+        // v1.101: sharing a lot is seldom, so the next man gets the next lot nobody has yet (chit order), else the same lot
+        var cnt = rbLotCount(j, nxt, 0), at = j.lots.indexOf(last), ring = j.lots.slice(at + 1).concat(j.lots.slice(0, at + 1));
+        l0.lot = ring.find(function (n) { return !cnt[n]; }) || last; keepDraft();
+      }
+    }
     rbMan[j.key] = nxt; rbFocus = nxt ? j.key + '|' + nxt : '';
   }
   // ---------- v1.95 Tuai & kutip (Brief_Tuai_Kutip_Rupa_Baru, signed by Yu Chen 24 Nov 2026) ----------

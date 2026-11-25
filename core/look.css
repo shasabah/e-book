@@ -615,6 +615,15 @@ body.rb-room header.top { display: none; }
 .rb-job > .rb-jh { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .rb-bb .hint { text-align: center; margin: 0 0 6px; }
 #rb-done[disabled], .rb-bb #wk-check[disabled] { opacity: .45; }
+/* v1.101 Pilih petak: 5 lots a row that never shrink, a picked lot folded to one line, KONGSI PETAK, KOSONGKAN */
+.rb-lots.rb-grid5 { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); overflow: visible; }
+.rb-lots.rb-grid5 button { min-width: 0; }
+.rb-picked { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 2px solid var(--ok); border-radius: 12px; padding: 6px 6px 6px 12px; margin: 8px 0; min-height: 52px; }
+.rb-picked b { font-size: 1.1rem; } .rb-picked .rb-s { flex: 1; min-width: 0; color: var(--muted); font-size: .8rem; }
+.rb-picked button, .rb-share { border: 2px solid var(--ok); background: var(--surface); color: var(--ok); border-radius: 10px; font: inherit; font-weight: 800; font-size: .82rem; min-height: 44px; padding: 0 12px; }
+.rb-share { width: 100%; margin: 2px 0 8px; }
+.rb-second { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; font-size: .82rem; color: var(--muted); }
+.rb-delbtn, .rb-b2 .rb-red { border: 2px solid #c2362b !important; color: #c2362b !important; background: var(--surface); border-radius: 10px; font: inherit; font-weight: 800; font-size: .8rem; min-height: 40px; padding: 0 12px; }
 /* v1.96 Jubin: the lot questions as tiles, one SEMUA HABIS button, the answer on the shared sheet */
 .rb-all { width: 100%; min-height: 52px; border: 0; border-radius: 14px; background: var(--ok); color: #fff; font: inherit; font-weight: 800; font-size: 1rem; margin: 6px 0 0; }
 .rb-all.ghost { background: var(--surface); color: var(--ok); border: 2px solid var(--ok); }

@@ -35,9 +35,13 @@ const { chromium } = require('playwright');
   await p.click('[data-rbj="j1"]'); await p.waitForTimeout(300);
   // Menuai: the lot question waits for the last harvester
   await p.click('[data-rbopen] [data-pick-lot="2-1"]'); await p.waitForTimeout(300); await p.keyboard.type('120'); await p.keyboard.press('Enter'); await p.waitForTimeout(300);
+  // v1.101: the second man starts on the next empty lot (2-2); here he shares 2-1, through TUKAR PETAK › KONGSI PETAK
+  await p.click('[data-rbopen] [data-rbtukar]'); await p.waitForTimeout(200); await p.click('[data-rbopen] [data-rbshare]'); await p.waitForTimeout(200);
+  await p.click('[data-rbopen] [data-pick-lot="2-1"]'); await p.waitForTimeout(300);
   await p.keyboard.type('100'); await p.keyboard.press('Enter'); await p.waitForTimeout(300);
   check('with 2 of 3 harvesters keyed there is no "Petak habis dituai?" yet, only the note (2/3)', await p.locator('[data-rbtile]').count() === 0 && /selepas semua penuai diisi \(2\/3\)/.test(await p.innerText('[data-rblots="j1"]')), await p.innerText('[data-rblots="j1"]'));
-  await p.click('[data-rbopen] [data-pick-lot="2-2"]'); await p.waitForTimeout(300); await p.keyboard.type('90'); await p.keyboard.press('Enter'); await p.waitForTimeout(400);
+  check('the third man starts on the next lot nobody has (2-2)', /^2-2/.test((await p.innerText('[data-rbopen] .rb-picked')).trim()));
+  await p.keyboard.type('90'); await p.keyboard.press('Enter'); await p.waitForTimeout(400);
   check('after the last harvester it asks, for each lot with men', await p.evaluate(() => [...document.querySelectorAll('[data-rbtile^="h|"]')].map(b => b.dataset.rbtile.split('|')[2]).filter((x, i, a) => a.indexOf(x) === i).join(',')) === '2-1,2-2');
   await p.click('[data-rbtile=\"h|j1|2-1\"]'); await p.waitForTimeout(150); await p.click('#sheet [data-sv=\"Y\"]'); await p.waitForTimeout(200);
   await p.click('[data-rbtile=\"h|j1|2-2\"]'); await p.waitForTimeout(150); await p.click('#sheet [data-sv=\"N\"]'); await p.waitForTimeout(200); await p.click('#sheet [data-sw=\"hujan\"]'); await p.waitForTimeout(300);

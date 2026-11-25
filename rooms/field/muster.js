@@ -380,7 +380,7 @@
         x.lines.map(function (l) {
           var pt = x.s.parts.length > 1 ? EA.lists.partOf(l.task) : null, ph = '';
           if (pt && pt.en !== lastPart) { lastPart = pt.en; ph = '<tr class="part"><td colspan="6">' + esc(EA.t(pt.bm, pt.en)) + '</td></tr>'; }
-          return ph + '<tr><td class="mono">' + esc(l.block || '') + '</td><td>' + esc(jobName(l.task)) + (l.lots.length ? '<span class="en">' + (isMachJob(l.task) ? esc(machPlace('', l.lots)) : 'Petak ' + esc(lotsShow(l.block, l.lots).join(', '))) + '</span>' : '') +
+          return ph + '<tr><td class="mono">' + esc(l.block || '') + '</td><td>' + (l.task || !rbOn() ? esc(jobName(l.task)) : '<b class="warn-t">' + EA.t('Belum pilih kerja', 'No job chosen yet') + '</b>') + (l.lots.length ? '<span class="en">' + (isMachJob(l.task) ? esc(machPlace('', l.lots)) : 'Petak ' + esc(lotsShow(l.block, l.lots).join(', '))) + '</span>' : '') +
             '</td><td>' + n(l.mdr) + '</td><td>' + n(l.m) + '</td><td>' + n(l.f) + '</td><td><b>' + s.tot(l) + '</b></td></tr>';
         }).join('');
     }).join('');
@@ -1168,7 +1168,23 @@
     });
     return rows;
   }
-  function drawTable() { $('#fh-table').innerHTML = chitTable(draftRows()); }
+  function drawTable() { $('#fh-table').innerHTML = chitTable(draftRows()); rbCheckLabel(); }
+  // 1.102 (new look): the bottom button says what the chit still lacks. It still opens the same checks.
+  // a .btn label in both languages, already split (lang.js shows the phone's language)
+  function rbLbl(bm, en) { return '<span class="l-bm">' + esc(bm) + '</span><span class="l-en">' + esc(en) + '</span>'; }
+  function rbCheckLabel() {
+    var b = $('#fh-check'); if (!b || !rbOn() || isPlan() || isConfirm()) return;
+    if (!b.dataset.rb0) b.dataset.rb0 = b.innerHTML;
+    var rows = draftRows(), miss = [], missEn = [];
+    var noJob = rows.filter(function (r) { return r.muster === 'H' && !r.task_code; }).length;
+    var left = isSunday(draft.date || EA.today()) ? 0 : unmarked().length;
+    if (!draft.jobs.length) { miss.push('TAMBAH KERJA'); missEn.push('ADD A JOB'); }
+    if (left) { miss.push(left + ' BELUM DITANDA'); missEn.push(left + ' NOT MARKED'); }
+    if (noJob) { miss.push(noJob + ' TIADA KERJA'); missEn.push(noJob + ' WITH NO JOB'); }
+    b.dataset.l2 = '1';
+    b.innerHTML = miss.length ? rbLbl(miss.join(' · '), missEn.join(' · ')) : b.dataset.rb0;
+    b.classList.toggle('rb-notyet', !!miss.length);
+  }
 
   function drawJobs() {
     if (!$('#fh-jobs')) return;          // v1.36: the chit screen was left (seen on P13, 24 Oct 05:51)
@@ -1394,17 +1410,23 @@
     var j0 = key ? job(key) : null;
     var pick = j0 ? { task: j0.task, block: j0.block, lots: j0.lots.slice(), mandor: j0.mandor, ask: j0.ask || '', repeat: Object.assign({}, j0.repeat || {}) } : { task: '', block: '', lots: [], mandor: '', ask: '', repeat: {} };
     var hasMain = !!EA.lists.mainJobs[ctx.estate];
+    // 1.102 (Brief_Tambah_Kerja_Rupa_Baru, new look only): one place to pick the job, blocks as buttons, the men on
+    // the same screen, the tractor and its loader as one button, and SIMPAN says what is still missing.
+    var rb = rbOn();
+    if (rb) { pick.men = {}; pick.menFor = null; pick.ld = ''; }
     var used = key ? draftRows().filter(function (r) { return r.muster === 'H' && jobFor(r.worker_id) === j0; }).length : 0;
     ui().openSheet(
       '<h2 id="sheet-title"><span class="bm">' + (key ? 'Ubah kerja' : 'Tambah kerja') + '</span><span class="en">' + (key ? 'Change job' : 'Add a job') + '</span></h2>' +
-      '<div class="field"><span class="inline"><span class="bm">' + (hasMain ? 'Kerja harian' : 'Kerja biasa') + '</span> · <span class="en">' + (hasMain ? 'Every day' : 'Usual jobs') + '</span></span><div class="picks jb-quick" id="jb-quick">' +
+      (rb ? '<p class="rb-st"><span class="inline"><span class="bm">1 · Kerja apa?</span> · <span class="en">Which job</span></span></p><div id="jb-rbjob" hidden></div>' : '') +
+      '<div class="field" id="jb-quickbox"><span class="inline"><span class="bm">' + (hasMain ? 'Kerja harian' : 'Kerja biasa') + '</span> · <span class="en">' + (hasMain ? 'Every day' : 'Usual jobs') + '</span></span><div class="picks jb-quick" id="jb-quick">' +
         EA.lists.quickJobsFor(ctx.estate).map(function (c) { var t = task(c); return '<button type="button" class="pick" data-quick="' + c + '" aria-pressed="' + (c === pick.task) + '"><b>' + c + '</b><small>' + esc(EA.t(t.bm, t.en)) + '</small></button>'; }).join('') + '</div>' +
         // v1.36: the other main jobs (rounds, machines, lorry, repairs), folded so the shortcuts stay short.
         (EA.lists.moreJobsFor(ctx.estate).length ? '<details class="jb-more" id="jb-more"' + (EA.lists.moreJobsFor(ctx.estate).indexOf(pick.task) >= 0 || EA.lists.OP_JOBS.indexOf(pick.task) >= 0 || (pick.task && !EA.lists.isMainJob(ctx.estate, pick.task)) ? ' open' : '') + '><summary><span class="bm">Kerja pusingan & lain · ' + EA.lists.moreJobsFor(ctx.estate).length + '</span> <span class="en">Round & other main jobs</span>' +
           // v1.43 (27 Oct): the names show on the folded button, so Membaja is found without opening it.
           '<small class="jb-more-names">' + esc(EA.lists.moreJobsFor(ctx.estate).map(function (c) { var t = c === 'OP' ? { bm: 'Operator jentera', en: 'Machine operator' } : task(c); return EA.t(t.bm, t.en); }).join(', ')) + '</small></summary><div class="picks jb-quick jb-small">' +
           EA.lists.moreJobsFor(ctx.estate).map(function (c) { var t = c === 'OP' ? { bm: 'Operator jentera', en: 'Machine operator' } : task(c); return '<button type="button" class="pick" data-quick="' + c + '" aria-pressed="' + (c === pick.task || (c === 'OP' && EA.lists.OP_JOBS.indexOf(pick.task) >= 0)) + '"><b>' + c + '</b><small>' + esc(EA.t(t.bm, t.en)) + '</small></button>'; }).join('') + '</div></details>' : '') + '</div>' +
-      '<div class="field' + (hasMain ? ' jb-other' : '') + '"><label for="jb-task"><span class="bm">' + (hasMain ? '+ Kerja lain · minta lulus' : 'Kerja (semua kod)') + '</span><span class="en">' + (hasMain ? 'Other work · needs the Assistant Manager\'s approval' : 'Job code (all codes)') + '</span></label><select id="jb-task" class="text-input">' + taskOptions(pick.task) + '</select></div>' +
+      (rb ? '<button type="button" class="rb-addo" id="jb-otherbtn">' + (hasMain ? '+ KERJA LAIN<span class="rb-sub">tiada di atas · perlu lulus Pengurus · Other work, needs approval</span>' : '+ SEMUA KERJA<span class="rb-sub">All job codes</span>') + '</button><div id="jb-otherlist" hidden></div>' : '') +
+      '<div class="field' + (hasMain ? ' jb-other' : '') + '" id="jb-taskbox"><label for="jb-task"><span class="bm">' + (hasMain ? '+ Kerja lain · minta lulus' : 'Kerja (semua kod)') + '</span><span class="en">' + (hasMain ? 'Other work · needs the Assistant Manager\'s approval' : 'Job code (all codes)') + '</span></label><select id="jb-task" class="text-input">' + taskOptions(pick.task) + '</select></div>' +
       // v1.36: other work needs a reason; Samsir answers LULUS / TOLAK. The job goes on the chit at once.
       '<div class="field" id="jb-whybox" hidden><p class="warn"><span class="bm">Kerja ini bukan kerja utama ' + esc(ctx.estate) + '. Tulis sebab. Pengurus akan LULUS atau TOLAK.</span><span class="en">Not a main job here. Write why. The Assistant Manager approves or rejects.</span></p>' +
         '<label for="jb-why"><span class="bm">Sebab *</span><span class="en">Why (required)</span></label><textarea id="jb-why" class="text-input" rows="2" maxlength="200" placeholder="' + EA.t('cth: jalan ladang Blok 02 rosak lepas hujan', 'e.g. field road in Block 02 broken after rain') + '">' + esc(pick.ask) + '</textarea></div>' +
@@ -1417,7 +1439,8 @@
             return '<button type="button" class="pick" data-for="' + x[0] + '"><b>' + esc(x[1]) + '</b><small>' + esc(x[0] + ' · ' + x[2]) + '</small></button>'; }).join('') + '</div>' +
           '<p class="hint">' + EA.t('Traktor bawa BTS ke ramp = ITF, bukan operator.', 'A farm tractor carrying FFB to the ramp is ITF, not an operator.') + '</p></div></div>' +
       '<p class="msg ok-note" id="jb-noblock" hidden><span class="bm">✓ Tidak perlu blok untuk kerja ini</span><span class="en">✓ No block needed for this job</span></p>' +
-      '<div id="jb-where"><div class="field"><label for="jb-block"><span class="bm">Blok</span><span class="en">Block</span></label><select id="jb-block" class="text-input"></select></div>' +
+      (rb ? '<p class="rb-st" id="jb-st2"><span class="inline"><span class="bm">2 · Di mana?</span> · <span class="en">Block and lots</span></span></p>' : '') +
+      '<div id="jb-where">' + (rb ? '<div id="jb-rbblk"></div>' : '') + '<div class="field" id="jb-blockbox"><label for="jb-block"><span class="bm">Blok</span><span class="en">Block</span></label><select id="jb-block" class="text-input"></select></div>' +
       '<p class="hint jb-round" id="jb-round" hidden></p>' +
       '<div class="field"><span class="inline" id="jb-lotlbl"><span class="bm">Petak · jika tahu</span> · <span class="en">Lots, if known</span></span><div id="jb-lots"></div>' +
         '<p class="hint"><span class="bm">Belum pasti petak? Boleh isi petang di Kerja.</span><span class="en">Lots not sure yet? Add them in the afternoon in Day\'s work.</span></p></div></div>' +
@@ -1425,6 +1448,7 @@
       (key ? '' : '<div class="field" id="jb-pair" hidden><label for="jb-ld"><span class="bm">Pasangan pemuat (LFF)</span><span class="en">Loader partner (LFF)</span></label><select id="jb-ld" class="text-input"><option value="">' + EA.t('— Tiada / pilih nanti —', '— None / later —') + '</option>' +
         EA.lists.workersFor(ctx.estate).filter(function (w) { return !onOtherChit()[w.id]; }).sort(function (a, b) { return /Muat|Load/i.test(b.gang || '') - /Muat|Load/i.test(a.gang || '') || (a.name < b.name ? -1 : 1); })
           .map(function (w) { return '<option value="' + esc(w.id) + '">' + esc(w.name) + (w.gang ? ' · ' + esc(w.gang) : '') + '</option>'; }).join('') + '</select></div>') +
+      (rb && !key ? '<div id="jb-who" hidden></div>' : '') +
       '<div class="field"><label for="jb-mdr"><span class="bm">Mandor</span><span class="en">Foreman (optional)</span></label><select id="jb-mdr" class="text-input"><option value="">' + EA.t('— Tiada —', '— None —') + '</option>' +
         EA.lists.mandorsFor(ctx.estate).map(function (m) { return '<option value="' + m.id + '"' + (m.id === pick.mandor ? ' selected' : '') + '>' + esc(m.name) + '</option>'; }).join('') + '</select></div>' +
       '<div class="actions">' + (key ? '<button class="btn btn-ghost" type="button" id="jb-del"' + (used ? ' disabled title="Ada orang dalam kerja ini"' : '') + '>REMOVE<small>Buang</small></button>' : '') +
@@ -1490,13 +1514,134 @@
             };
           });
           var rn = s.querySelector('#jb-repeat-no'); if (rn) rn.onclick = function () { pick.askLot = ''; fill(); };
+          if (rb) rbFill();
+        }
+        // ---- 1.102: the new look of this sheet. It only shows and hides; the picks and the save are the ones above. ----
+        function rbBusy(id) {
+          var m = draft.marks[id];
+          if (m && m !== 'H') return EA.t(MARKS[m][0], MARKS[m][1]);
+          var o = m === 'H' ? jobFor(id) : null;
+          return o ? o.task + (o.block ? ' Blk ' + o.block : '') : '';
+        }
+        function rbPeople() { var taken = onOtherChit(); return EA.lists.workersFor(ctx.estate).filter(function (w) { return !taken[w.id]; }); }
+        function rbLastMen(code) {
+          var last = lastChit(), ids = [], all = rbPeople();
+          if (last) last.rows.forEach(function (r) { if (r.muster === 'H' && r.task_code === code && ids.indexOf(r.worker_id) < 0 && all.some(function (w) { return w.id === r.worker_id; })) ids.push(r.worker_id); });
+          return ids;
+        }
+        function rbMen() { return Object.keys(pick.men).filter(function (k) { return pick.men[k]; }); }
+        function rbReady() {
+          var t = pick.task;
+          if (!t) return ['PILIH KERJA', 'Choose the job'];
+          if (!EA.lists.isMainJob(ctx.estate, t) && String(pick.ask || '').replace(/\s+/g, ' ').trim().length < 5) return ['TULIS SEBAB', 'Write why'];
+          if (EA.lists.MACHINE_JOBS.indexOf(t) >= 0 && !EA.lists.splitMach(ctx.estate, pick.lots).mach.length) return ['PILIH JENTERA', 'Choose the machine'];
+          if (EA.lists.needsBlock(t) && !pick.block) return ['PILIH BLOK', 'Choose the block'];
+          if (!key && !rbMen().length) return t === 'ITF' ? ['PILIH PEMANDU', 'Choose the driver'] : ['PILIH ORANG', 'Choose the people'];
+          return null;
+        }
+        function rbSaveLabel() {
+          var r = rbReady(), b = s.querySelector('#jb-save');
+          b.dataset.l2 = '1';
+          b.innerHTML = r ? rbLbl(r[0], r[1]) : rbLbl('SIMPAN', 'SAVE');
+          b.classList.toggle('rb-notyet', !!r);
+        }
+        function rbWho() {
+          var box = s.querySelector('#jb-who'); if (!box) return;
+          var t = pick.task, show = !!t && (!EA.lists.needsBlock(t) || !!pick.block);
+          box.hidden = !show; if (!show) return;
+          var all = rbPeople(), byId = {}; all.forEach(function (w) { byId[w.id] = w; });
+          if (pick.menFor !== t) {
+            pick.menFor = t; pick.men = {}; pick.moreMen = false; pick.moreLd = false; pick.ld = '';
+            rbLastMen(t).forEach(function (id) { if (!rbBusy(id)) pick.men[id] = true; });
+            if (t === 'ITF') pick.ld = rbLastMen('LFF').filter(function (id) { return !rbBusy(id) && !pick.men[id]; })[0] || '';
+          }
+          var before = rbLastMen(t), day = lastChit() ? niceDate(lastChit().date) : '';
+          var ids = pick.moreMen || !before.length ? before.concat(all.map(function (w) { return w.id; }).filter(function (id) { return before.indexOf(id) < 0; })) : before;
+          function row(id, attr, on, note) {
+            var w = byId[id], busy = rbBusy(id);
+            return '<button type="button" class="rb-who" ' + attr + '="' + esc(id) + '" aria-pressed="' + !!on + '"' + (busy && !on ? ' disabled' : '') + '><i>' + (on ? '✓' : '') + '</i><span><b>' + esc(w.name) + '</b><small>' +
+              esc(busy && !on ? EA.t('sudah di ', 'already on ') + busy : (note || w.id + (w.gang ? ' · ' + w.gang : ''))) + '</small></span></button>';
+          }
+          var h = '<p class="rb-st"><span class="inline"><span class="bm">3 · Siapa? · ' + (rbMen().length + (t === 'ITF' && pick.ld ? 1 : 0)) + ' orang</span> · <span class="en">Who · ' + (rbMen().length + (t === 'ITF' && pick.ld ? 1 : 0)) + ' people</span></span></p>' +
+            (t === 'ITF' ? '<p class="hint"><b>' + EA.t('Pemandu traktor (ITF)', 'Tractor driver (ITF)') + '</b></p>' : '') +
+            '<p class="hint">' + (before.length ? EA.t('Ditanda: yang buat ' + t + ' pada ' + day + '. Buang tanda yang tidak datang.', 'Ticked: on ' + t + ' on ' + day + '. Untick anyone not coming.') : EA.t('Tanda orang untuk kerja ini.', 'Tick the people for this job.')) + ' ' + EA.t('Yang ditanda = Hadir.', 'Ticked = present.') + '</p>' +
+            ids.map(function (id) { return row(id, 'data-rbman', pick.men[id], before.indexOf(id) >= 0 ? t + ' · ' + day : ''); }).join('') +
+            (before.length && !pick.moreMen ? '<button type="button" class="rb-mini" id="jb-moremen">+ ORANG LAIN<span class="rb-sub">Other people</span></button>' : '');
+          if (t === 'ITF') {
+            var lb = rbLastMen('LFF'), lids = (pick.moreLd ? lb.concat(all.map(function (w) { return w.id; }).filter(function (id) { return lb.indexOf(id) < 0; })) : lb).filter(function (id) { return !pick.men[id]; });
+            if (pick.ld && lids.indexOf(pick.ld) < 0) lids.unshift(pick.ld);
+            h += '<p class="hint" style="margin-top:12px"><b>' + EA.t('Pemuat (LFF)', 'Loader (LFF)') + '</b></p>' +
+              '<button type="button" class="rb-who" data-rbld="" aria-pressed="' + !pick.ld + '"><i>' + (!pick.ld ? '✓' : '') + '</i><span><b>' + EA.t('Tiada · pemandu muat sendiri', 'None · the driver loads himself') + '</b><small>' + EA.t('seorang buat kedua-dua', 'one man does both') + '</small></span></button>' +
+              lids.map(function (id) { return row(id, 'data-rbld', pick.ld === id, lb.indexOf(id) >= 0 ? 'LFF · ' + day : ''); }).join('') +
+              (!pick.moreLd ? '<button type="button" class="rb-mini" id="jb-moreld">+ PEMUAT LAIN<span class="rb-sub">Another loader</span></button>' : '') +
+              '<p class="hint">' + EA.t('Pemuat dapat kerja LFF pada petak yang sama; petang nanti ditutup bersama traktor.', 'The loader gets LFF on the same lots; in the afternoon the two close together.') + '</p>';
+          }
+          box.innerHTML = h;
+          box.querySelectorAll('[data-rbman]').forEach(function (b) { b.onclick = function () { var id = b.dataset.rbman; pick.men[id] = !pick.men[id]; if (pick.men[id] && pick.ld === id) pick.ld = ''; rbWho(); rbSaveLabel(); }; });
+          box.querySelectorAll('[data-rbld]').forEach(function (b) { b.onclick = function () { pick.ld = b.dataset.rbld; rbWho(); rbSaveLabel(); }; });
+          var mm = box.querySelector('#jb-moremen'); if (mm) mm.onclick = function () { pick.moreMen = true; rbWho(); };
+          var ml = box.querySelector('#jb-moreld'); if (ml) ml.onclick = function () { pick.moreLd = true; rbWho(); };
+        }
+        function rbFill() {
+          var t = pick.task, sel = s.querySelector('#jb-task'), main = !t || EA.lists.isMainJob(ctx.estate, t);
+          var hasOther = sel.querySelectorAll('option[value]:not([value=""])').length > 0;
+          s.querySelector('#jb-taskbox').hidden = true;
+          s.querySelector('#jb-quickbox').classList.add('rb-q'); s.querySelector('#jb-lots').classList.add('rb-l');
+          s.querySelector('#jb-quickbox').hidden = !!t || !!pick.other;
+          s.querySelector('#jb-otherbtn').hidden = !!t || !!pick.other || !hasOther;
+          var ol = s.querySelector('#jb-otherlist'); ol.hidden = !!t || !pick.other;
+          if (!ol.hidden) {
+            ol.innerHTML = '<button type="button" class="rb-mini" id="jb-otherback">‹ ' + (hasMain ? 'KERJA HARIAN' : 'KERJA BIASA') + '<span class="rb-sub">Back</span></button>' +
+              (hasMain ? '<p class="hint">' + EA.t('Kerja lain perlu lulus Pengurus. Pilih satu:', 'Other work needs the Assistant Manager\'s approval. Choose one:') + '</p>' : '') +
+              [].slice.call(sel.querySelectorAll('optgroup')).map(function (g) {
+                return '<p class="hint pick-group"><b>' + esc(g.label) + '</b></p><div class="rb-jg rb-oth">' + [].slice.call(g.querySelectorAll('option')).map(function (o) {
+                  return '<button type="button" data-oth="' + esc(o.value) + '"><b>' + esc(o.value) + '</b><span>' + esc(o.textContent.slice(o.value.length + 1)) + '</span></button>'; }).join('') + '</div>'; }).join('');
+            ol.querySelector('#jb-otherback').onclick = function () { pick.other = false; fill(); };
+            ol.querySelectorAll('[data-oth]').forEach(function (b) { b.onclick = function () { pick.task = b.dataset.oth; pick.other = false; fill(); }; });
+          }
+          // the tractor and its loader are one button when adding
+          if (!key) s.querySelectorAll('.jb-quick [data-quick]').forEach(function (b) {
+            if (b.dataset.quick === 'LFF' && s.querySelector('.jb-quick [data-quick="ITF"]')) b.hidden = true;
+            if (b.dataset.quick === 'ITF' && s.querySelector('.jb-quick [data-quick="LFF"]')) b.innerHTML = '<b>ITF + LFF</b><small>' + EA.t('Traktor & pemuat', 'Tractor & loader') + '</small>';
+          });
+          var pj = s.querySelector('#jb-rbjob'); pj.hidden = !t;
+          if (t) {
+            var pair = t === 'ITF' && !key;
+            pj.innerHTML = '<div class="rb-picked"><b>' + (pair ? 'ITF + LFF' : esc(t)) + '</b><span class="rb-s">' + esc(pair ? EA.t('Traktor & pemuat', 'Tractor & loader') : jobName(t)) +
+              (main ? '' : '<span class="rb-tag">' + EA.t('KERJA LAIN · MINTA LULUS', 'OTHER WORK · NEEDS APPROVAL') + '</span>') + '</span><button type="button" id="jb-tukar">TUKAR KERJA</button></div>';
+            pj.querySelector('#jb-tukar').onclick = function () { pick.task = ''; pick.other = false; pick.block = ''; pick.lots = []; pick.repeat = {}; pick.askLot = ''; pick.autoFor = ''; pick.blkOpen = false; fill(); };
+          }
+          // step 2: blocks as buttons
+          var needs = t ? EA.lists.needsBlock(t) : true, st2 = s.querySelector('#jb-st2');
+          st2.classList.toggle('rb-off', !t);
+          s.querySelector('#jb-where').hidden = !t || !needs;
+          s.querySelector('#jb-blockbox').hidden = true;
+          var bsel = s.querySelector('#jb-block'), bb = s.querySelector('#jb-rbblk');
+          var opts = [].slice.call(bsel.options).filter(function (o) { return o.value; });
+          function parts(o) { var x = o.textContent.split(' · '); return [x[0], x.slice(1, 3).join(' · ')]; }
+          var cur = opts.find(function (o) { return o.value === pick.block; });
+          if (cur && !pick.blkOpen) {
+            bb.innerHTML = '<div class="rb-picked"><b>' + esc(parts(cur)[0]) + '</b><span class="rb-s">' + esc(parts(cur)[1]) + '</span>' + (opts.length > 1 ? '<button type="button" id="jb-tukarblk">TUKAR BLOK</button>' : '') + '</div>';
+            var tb = bb.querySelector('#jb-tukarblk'); if (tb) tb.onclick = function () { pick.blkOpen = true; fill(); };
+          } else {
+            bb.innerHTML = '<div class="rb-bg4">' + opts.map(function (o) { return '<button type="button" data-rbblk="' + esc(o.value) + '" aria-pressed="' + (o.value === pick.block) + '"><b>' + esc(parts(o)[0].replace(/^Blok /, '')) + '</b><small>' + esc(parts(o)[1].split(' · ').pop()) + '</small></button>'; }).join('') + '</div>';
+            bb.querySelectorAll('[data-rbblk]').forEach(function (b) { b.onclick = function () {
+              pick.blkOpen = false;
+              if (b.dataset.rbblk === pick.block) { fill(); return; }
+              bsel.value = b.dataset.rbblk; bsel.onchange.call(bsel);
+            }; });
+          }
+          var lf = s.querySelector('#jb-lots'); if (lf && lf.parentNode) lf.parentNode.hidden = !cur || !!pick.blkOpen;
+          var pr = s.querySelector('#jb-pair'); if (pr) pr.hidden = true;
+          rbWho(); rbSaveLabel();
         }
         fill();
         s.querySelector('#jb-task').onchange = function () { pick.task = this.value; fill(); };
         s.querySelectorAll('.jb-quick [data-quick]').forEach(function (b) { b.onclick = function () { pick.task = b.dataset.quick === 'OP' ? (EA.lists.OP_JOBS.indexOf(pick.task) >= 0 ? pick.task : 'OPH') : b.dataset.quick; fill(); }; });
         s.querySelector('#jb-block').onchange = function () { pick.block = this.value; pick.lots = []; pick.repeat = {}; pick.askLot = ''; fill(); };
         s.querySelector('#jb-mdr').onchange = function () { pick.mandor = this.value; };
-        s.querySelector('#jb-why').oninput = function () { pick.ask = this.value; };
+        s.querySelector('#jb-why').oninput = function () { pick.ask = this.value; if (rb) rbSaveLabel(); };
+        if (rb) s.querySelector('#jb-otherbtn').onclick = function () { pick.other = true; fill(); };
         s.querySelector('#jb-cancel').onclick = ui().closeSheet;
         if (key) s.querySelector('#jb-del').onclick = function () {
           draft.jobs = draft.jobs.filter(function (x) { return x.key !== key; });
@@ -1504,6 +1649,8 @@
           keepDraft(); ui().closeSheet(); drawAll();
         };
         s.querySelector('#jb-save').onclick = function () {
+          if (rb && pick.task && !key && !rbMen().length) { ui().toast(pick.task === 'ITF' ? EA.t('Pilih pemandu', 'Choose the driver') : EA.t('Pilih orang untuk kerja ini', 'Choose the people for this job'), 'bad'); return; }
+          if (rb && s.querySelector('#jb-ld')) s.querySelector('#jb-ld').value = pick.task === 'ITF' ? pick.ld : '';
           if (!pick.task) { ui().toast(EA.t('Pilih kerja', 'Choose the job'), 'bad'); return; }
           if (EA.lists.needsBlock(pick.task) && !pick.block) { ui().toast(EA.t('Kerja ladang perlu blok', 'Field work needs a block'), 'bad'); return; }
           var main = EA.lists.isMainJob(ctx.estate, pick.task);
@@ -1523,7 +1670,9 @@
                    var lj = draft.jobs.find(function (x) { return x.task === 'LFF' && x.block === pick.block && x.lots.join(' ') === pick.lots.join(' '); });
                    if (!lj) { lj = { key: 'j' + (draft.nextJob++), task: 'LFF', block: pick.block, lots: pick.lots.slice(), mandor: '' }; draft.jobs.push(lj); }
                    draft.marks[ld] = 'H'; draft.jobOf[ld] = lj.key;
-                 } }
+                 }
+                 // 1.102: the men ticked on this sheet go on the job, present
+                 if (rb) rbMen().forEach(function (id) { if (id !== ld) { draft.marks[id] = 'H'; draft.jobOf[id] = nj.key; } }); }
           keepDraft(); ui().closeSheet(); drawAll();
         };
       });

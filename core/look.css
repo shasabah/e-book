@@ -1208,3 +1208,29 @@ body:has(#home-bar.botbar) .sheet-back:not([hidden]) ~ .toast { bottom: auto; to
 .rb-used { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .rb-used input { border: 2px solid var(--ok); border-radius: 10px; width: 84px; height: 44px; padding: 0 10px; font: inherit; font-size: 1.1rem; font-weight: 700; background: var(--surface); color: var(--ink); }
 .rb-even { width: 100%; margin: 4px 0 8px; background: var(--surface); color: var(--ok); border: 2px solid var(--ok); border-radius: 12px; font: inherit; font-weight: 800; min-height: 48px; }
+
+/* 1.102 Tambah kerja (new look): one place to pick the job, blocks as buttons, the men on the same sheet */
+.rb-st { font-size: .8rem; font-weight: 800; color: var(--muted); letter-spacing: .04em; margin: 14px 0 4px; }
+.rb-st .bm { text-transform: uppercase; } .rb-st span { display: inline; } .rb-st.rb-off { opacity: .4; }
+.rb-q .jb-quick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.rb-q .jb-quick .pick { text-align: left; min-height: 58px; min-width: 0; }
+.rb-q .jb-quick .pick small { max-width: none; white-space: normal; overflow: visible; font-size: .8rem; line-height: 1.25; }
+.rb-addo { width: 100%; min-height: 52px; border: 2px dashed var(--warn, #b7791f); background: var(--surface); border-radius: 12px; font: inherit; font-weight: 800; color: var(--warn, #8a5a00); margin-top: 8px; }
+.rb-addo .rb-sub { display: block; font-weight: 500; font-size: .75rem; }
+.rb-jg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0; }
+.rb-jg button { text-align: left; min-height: 58px; border: 2px dashed var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; padding: 6px 10px; }
+.rb-jg button b { display: block; } .rb-jg button span { display: block; font-size: .8rem; color: var(--muted); line-height: 1.25; }
+.rb-mini { border: 2px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 10px; font: inherit; font-weight: 800; font-size: .82rem; min-height: 44px; padding: 4px 12px; margin: 6px 0; width: 100%; }
+.rb-mini .rb-sub { display: block; font-weight: 500; font-size: .72rem; color: var(--muted); }
+.rb-tag { display: table; font-size: .68rem; font-weight: 800; background: #fdf1d7; color: #8a5a00; border-radius: 99px; padding: 2px 8px; margin-top: 3px; }
+.rb-bg4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 8px 0; }
+.rb-bg4 button { min-height: 58px; min-width: 0; border: 2px dashed var(--line); background: var(--surface); color: var(--ink); border-radius: 10px; font: inherit; padding: 4px 2px; overflow: hidden; }
+.rb-bg4 button b { display: block; font-size: 1.05rem; overflow-wrap: anywhere; } .rb-bg4 button small { display: block; font-size: .68rem; color: var(--muted); }
+.rb-bg4 button[aria-pressed="true"] { border: 2px solid var(--ok); }
+#jb-lots.rb-l .picks:not(#jb-repeat .picks) { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+#jb-lots.rb-l .picks:not(#jb-repeat .picks) .pick { min-width: 0; padding-left: 2px; padding-right: 2px; }
+.rb-who { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 50px; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--ink); font: inherit; text-align: left; padding: 6px 2px; }
+.rb-who i { width: 26px; height: 26px; border-radius: 7px; border: 2px solid var(--ok); flex: none; display: grid; place-items: center; font-style: normal; font-weight: 800; color: #fff; }
+.rb-who[aria-pressed="true"] i { background: var(--ok); }
+.rb-who small { display: block; color: var(--muted); font-size: .75rem; } .rb-who[disabled] { opacity: .45; }
+.btn.rb-notyet { background: #e3e6e1; color: #4d564f; border-color: #e3e6e1; }

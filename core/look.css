@@ -1234,3 +1234,22 @@ body:has(#home-bar.botbar) .sheet-back:not([hidden]) ~ .toast { bottom: auto; to
 .rb-who[aria-pressed="true"] i { background: var(--ok); }
 .rb-who small { display: block; color: var(--muted); font-size: .75rem; } .rb-who[disabled] { opacity: .45; }
 .btn.rb-notyet { background: #e3e6e1; color: #4d564f; border-color: #e3e6e1; }
+
+/* 1.104 Chit ringkas (new look): one line per job, only who is left to mark, folded table and backlog, Ha total */
+.rb-jrow { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 60px; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--ink); font: inherit; text-align: left; padding: 8px 2px; }
+.rb-jrow:first-child { border-top: 0; }
+.rb-jc { flex: none; min-width: 48px; font-size: .95rem; }
+.rb-jt { flex: 1; min-width: 0; } .rb-jt > b { display: block; } .rb-jt small { display: block; color: var(--muted); font-size: .8rem; line-height: 1.3; }
+.rb-jt .en { display: block; font-size: .78rem; }
+.rb-chip.rb-r { background: #fbe3e1; color: #a3261b; } .rb-chip.rb-a { background: #fdf1d7; color: #8a5a00; }
+.rb-jrow > .rb-ok { flex: none; font-style: normal; font-weight: 800; color: var(--ok); }
+.rb-count { margin: 0 0 6px; font-size: .9rem; }
+.rb-prow { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 48px; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--muted); font: inherit; text-align: left; padding: 4px 2px; }
+.rb-prow > b { flex: 1; min-width: 0; font-weight: 500; }
+.rb-foldline { display: flex; align-items: center; gap: 10px; } .rb-foldline > span { flex: 1; min-width: 0; }
+.rb-foldline .rb-mini { width: auto; flex: none; margin: 0; }
+.rb-fold .rb-foldbody { display: none; } .rb-fold.rb-unfold .rb-foldbody { display: block; }
+.rb-tot { position: sticky; top: 0; z-index: 3; background: var(--ok); color: #fff; border-radius: 12px; padding: 8px 12px; margin: 8px 0; }
+.rb-tot b { font-size: 1.05rem; } .rb-tot small { display: block; opacity: .92; font-size: .8rem; } .rb-tot small b { font-size: inherit; }
+.rb-rows .wrow .who-w .en { display: none; }
+.rb-rows .wrow .who-w b { font-family: inherit; }

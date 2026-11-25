@@ -89,7 +89,7 @@ const { chromium } = require('playwright');
   // a man marked H with no job: named in the chit table
   await p.evaluate(id => { const all = JSON.parse(localStorage.getItem('fh.draft2')); const k = Object.keys(all)[0]; all[k].marks[id] = 'H'; delete all[k].jobOf[id]; localStorage.setItem('fh.draft2', JSON.stringify(all)); }, s.hv[3]);
   await p.evaluate(() => { location.hash = ''; }); await p.waitForTimeout(200); await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForTimeout(1000);
-  check('the chit table names a line with no job "Belum pilih kerja"', /Belum pilih kerja/.test(await p.innerText('#fh-table')));
+  check('the chit table names a line with no job "Belum pilih kerja"', /Belum pilih kerja/.test(await p.textContent('#fh-table')));
   check('SIMPAN CHIT says "1 TIADA KERJA"', /1 TIADA KERJA/.test(await p.innerText('#fh-check')), await p.innerText('#fh-check'));
   check('the page never grew wider than the phone', await wide() <= 390, String(await wide()));
 

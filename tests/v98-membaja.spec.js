@@ -26,6 +26,9 @@ const { chromium } = require('playwright');
     return { men, lots: LOTS };
   });
   await p.evaluate(() => { location.hash = 'field-harvest'; }); await p.waitForTimeout(900);
+  // 1.104: on the chit each job is one line; Membaja's programme and bags are in its sheet
+  check('chit: Membaja is one line, red "KURANG BEG" (35 bags planned for 2 × 20)', /KURANG BEG/.test(await p.innerText('[data-rbchj="j1"]')), await p.innerText('[data-rbchj="j1"]'));
+  await p.click('[data-rbchj="j1"]'); await p.waitForTimeout(400);
   const pan = () => p.evaluate(() => (document.querySelector('.man-panel') || {}).innerText || '');
   let t = await pan();
   check('chit: the fertiliser and dose come from the programme, locked', /🔒 Ikut program · Baja Contoh · 2.5 kg sepokok/.test(t), t.replace(/\s+/g, ' ').slice(0, 200));
@@ -36,9 +39,12 @@ const { chromium } = require('playwright');
   // ask for a change
   await p.click('[data-mreq="j1"]'); await p.waitForSelector('#mr-ok');
   await p.fill('#mr-d', '2'); await p.fill('#mr-w', 'pokok muda di petak 1-17'); await p.click('#mr-ok'); await p.waitForTimeout(300);
+  await p.evaluate(() => EA.ui.closeSheet()); await p.waitForTimeout(200);
+  await p.click('[data-rbchj="j1"]'); await p.waitForTimeout(400);
   t = await pan();
   check('MINTA TUKAR: shows "menunggu lulus Pemilik", the chit keeps the programme dose', /menunggu lulus Pemilik/i.test(t) && /2.5 kg sepokok/.test(t) && /=\s*35 beg/.test(t), t.replace(/\s+/g, ' ').slice(0, 300));
   // save the chit
+  await p.evaluate(() => EA.ui.closeSheet()); await p.waitForTimeout(200);
   await (async () => { if (await p.$('#fh-rain-no') && await p.getAttribute('#fh-rain-no', 'aria-pressed') !== 'true') { await p.click('#fh-rain-no'); await p.waitForTimeout(150); } await p.click('#fh-check'); })();
   await p.waitForTimeout(400); if (await p.$('#ck-go')) { await p.click('#ck-go'); await p.waitForTimeout(300); }
   await p.waitForSelector('#cf-ok'); await p.click('#cf-ok'); await p.waitForTimeout(600);

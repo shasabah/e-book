@@ -1253,3 +1253,21 @@ body:has(#home-bar.botbar) .sheet-back:not([hidden]) ~ .toast { bottom: auto; to
 .rb-tot b { font-size: 1.05rem; } .rb-tot small { display: block; opacity: .92; font-size: .8rem; } .rb-tot small b { font-size: inherit; }
 .rb-rows .wrow .who-w .en { display: none; }
 .rb-rows .wrow .who-w b { font-family: inherit; }
+
+/* 1.106 Chit dari rancangan (new look): jobs with their men as ticks, move several, tap one who did not come */
+.rb-jcard { border-top: 1px solid var(--line); padding: 10px 0; } .rb-jcard:first-of-type { border-top: 0; }
+.rb-jhead { display: flex; align-items: center; gap: 8px; } .rb-jhead > b { flex: none; min-width: 44px; }
+.rb-jhead > span:not(.rb-chip) { flex: 1; min-width: 0; } .rb-jhead small { display: block; color: var(--muted); font-size: .8rem; }
+.rb-jhead .rb-ubah { width: auto; flex: none; margin: 0; min-height: 40px; }
+.rb-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.rb-mc { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 4px 12px; border-radius: 99px; border: 2px solid var(--ok); background: var(--ok-soft); color: var(--ok); font: inherit; font-weight: 700; font-size: .85rem; }
+.rb-mc i { font-style: normal; font-weight: 800; }
+.rb-mc.off { border-color: var(--line); background: var(--surface); color: var(--muted); text-decoration: line-through; }
+.rb-mc.sel { outline: 3px solid #e0a400; outline-offset: 1px; }
+.rb-movebar { position: sticky; top: 0; z-index: 4; background: #f6b93b; color: #2a1e00; border-radius: 12px; padding: 8px 10px; margin-bottom: 8px; }
+.rb-movejobs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.rb-movejobs button { flex: 1 0 40%; min-height: 44px; border: 2px solid #2a1e00; border-radius: 10px; background: #fff6df; color: #2a1e00; font: inherit; font-weight: 800; }
+.rb-opts4 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+.rb-opts4 button { min-height: 60px; border: 2px solid var(--ok); border-radius: 12px; background: var(--surface); color: var(--ok); font: inherit; }
+.rb-opts4 button b { display: block; } .rb-opts4 button .rb-sub { display: block; font-size: .75rem; color: var(--muted); }
+.rb-opts4 button[aria-pressed="true"] { background: var(--ok); color: #fff; } .rb-opts4 button[aria-pressed="true"] .rb-sub { color: #fff; }

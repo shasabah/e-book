@@ -1066,7 +1066,7 @@
   }
   function startConfirm(p) {
     var d = draftFrom(p, p.date);
-    d.mode = 'confirm'; d.fromPlan = p.plan;
+    d.mode = 'confirm'; d.fromPlan = p.plan; d.planJobOf = Object.assign({}, d.jobOf);
     draft = d; keepDraft(); render(el, ctx); window.scrollTo(0, 0);
   }
   function cancelPlan(p, why) {
@@ -1200,7 +1200,7 @@
   // a .btn label in both languages, already split (lang.js shows the phone's language)
   function rbLbl(bm, en) { return '<span class="l-bm">' + esc(bm) + '</span><span class="l-en">' + esc(en) + '</span>'; }
   function rbCheckLabel() {
-    var b = $('#fh-check'); if (!b || !rbOn() || isPlan() || isConfirm()) return;
+    var b = $('#fh-check'); if (!b || !rbOn() || isPlan()) return;
     if (!b.dataset.rb0) b.dataset.rb0 = b.innerHTML;
     var rows = draftRows(), miss = [], missEn = [];
     var noJob = rows.filter(function (r) { return r.muster === 'H' && !r.task_code; }).length;
@@ -1210,8 +1210,10 @@
     if (bad) { miss.push(bad + ' KERJA BELUM LENGKAP'); missEn.push(bad + ' JOBS NOT COMPLETE'); }
     if (left) { miss.push(left + ' BELUM DITANDA'); missEn.push(left + ' NOT MARKED'); }
     if (noJob) { miss.push(noJob + ' TIADA KERJA'); missEn.push(noJob + ' WITH NO JOB'); }
+    if (isConfirm() && !isPast() && !rainOk()) { miss.unshift('JAWAB HUJAN'); missEn.unshift('ANSWER THE RAIN'); }
     b.dataset.l2 = '1';
-    b.innerHTML = miss.length ? rbLbl(miss.join(' · '), missEn.join(' · ')) : b.dataset.rb0;
+    var here = rows.filter(function (r) { return r.muster === 'H'; }).length;
+    b.innerHTML = miss.length ? rbLbl(miss.join(' · '), missEn.join(' · ')) : isConfirm() ? rbLbl('SAHKAN CHIT · ' + here + ' hadir', 'CONFIRM CHIT · ' + here + ' present') : b.dataset.rb0;
     b.classList.toggle('rb-notyet', !!miss.length);
   }
 
@@ -1286,7 +1288,64 @@
     if (j.ask) return ['a', EA.t('MENUNGGU LULUS', 'WAITING APPROVAL')];
     return null;
   }
+  // 1.106 (Brief_Chit_Rancangan_Rupa_Baru, signed by Yu Chen 25 Nov 2026): the morning chit from last night's plan.
+  // Every planned man is a green tick under his job; tap one who did not come; PINDAH BEBERAPA ORANG moves several.
+  var rbMove = null;
+  function rbPlannedOn(j) {
+    var pj = draft.planJobOf || {}, ids = [];
+    Object.keys(draft.marks).forEach(function (id) {
+      var m = draft.marks[id];
+      if ((m === 'H' && jobFor(id) === j) || (m && m !== 'H' && pj[id] === j.key)) ids.push(id);
+    });
+    return ids;
+  }
+  function rbDrawConfirm() {
+    var mv = rbMove;
+    var h = mv ? '<div class="rb-movebar"><b>' + EA.t('Pindah ' + Object.keys(mv).length + ' orang ke:', 'Move ' + Object.keys(mv).length + ' people to:') + '</b><div class="rb-movejobs">' +
+        draft.jobs.map(function (j) { return '<button type="button" data-rbto="' + esc(j.key) + '">' + esc(j.task) + (j.block ? ' · ' + esc(j.block) : '') + '</button>'; }).join('') +
+        '<button type="button" data-rbmvx="1">BATAL</button></div></div>'
+      : '<div class="rb-foldline" style="margin-bottom:6px"><span><b>' + EA.t('Siapa datang?', 'Who came?') + '</b><small style="display:block;color:var(--muted)">' + EA.t('Hijau = hadir. Tekan nama yang tidak datang.', 'Green = present. Tap anyone who did not come.') + '</small></span>' +
+        '<button type="button" class="rb-mini" id="fh-rbmove">PINDAH BEBERAPA ORANG<span class="rb-sub">Move several</span></button></div>';
+    var paired = {};
+    draft.jobs.forEach(function (j) { if (j.task === 'ITF') { var pt = rbPartner(j); if (pt) paired[pt.key] = j; } });
+    h += draft.jobs.filter(function (j) { return !paired[j.key]; }).map(function (j) {
+      var pt = j.task === 'ITF' ? rbPartner(j) : null;
+      var ids = rbPlannedOn(j).concat(pt ? rbPlannedOn(pt) : []), li = lotsInfo(j.lots), ms = rbMissOf(j);
+      var sub = (j.block ? placeName(j.block) : EA.t('Tiada blok', 'No block')) + (j.lots.length ? ' · ' + j.lots.length + EA.t(' petak', ' lots') + (li.ha && j.task !== 'ITF' && j.task !== 'LFF' ? ' · ' + li.ha.toFixed(2) + ' Ha' : '') : '');
+      return '<div class="rb-jcard"><div class="rb-jhead"><b>' + (pt ? 'ITF + LFF' : esc(j.task)) + '</b><span><b>' + (pt ? EA.t('Traktor & pemuat', 'Tractor & loader') : esc(jobName(j.task))) + '</b><small>' + esc(sub) + '</small>' + carryNote(j) + '</span>' +
+        (ms ? '<span class="rb-chip ' + (ms[0] === 'r' ? 'rb-r' : 'rb-a') + '">' + esc(ms[1]) + '</span>' : '') +
+        '<button type="button" class="rb-mini rb-ubah" data-rbchj="' + esc(j.key) + '">UBAH<span class="rb-sub">Change</span></button></div>' +
+        '<div class="rb-chips">' + (ids.length ? ids.map(function (id) {
+          var m = draft.marks[id], off = m !== 'H';
+          return '<button type="button" class="rb-mc' + (off ? ' off' : '') + (mv && mv[id] ? ' sel' : '') + '" data-rbmc="' + esc(id) + '"><i>' + (off ? esc(m) : '✓') + '</i> ' + esc(person(id)) + '</button>';
+        }).join('') : '<span class="hint">' + EA.t('Tiada orang', 'Nobody') + '</span>') + '</div></div>';
+    }).join('');
+    $('#fh-jobs').innerHTML = h;
+    el.querySelectorAll('#fh-jobs [data-rbchj]').forEach(function (b) { b.onclick = function () { editJob(b.dataset.rbchj); }; });
+    var mb = $('#fh-rbmove'); if (mb) mb.onclick = function () { rbMove = {}; drawJobs(); };
+    el.querySelectorAll('#fh-jobs [data-rbmvx]').forEach(function (b) { b.onclick = function () { rbMove = null; drawJobs(); }; });
+    el.querySelectorAll('#fh-jobs [data-rbto]').forEach(function (b) { b.onclick = function () {
+      var to = b.dataset.rbto, ids = Object.keys(rbMove || {});
+      ids.forEach(function (id) { draft.marks[id] = 'H'; draft.jobOf[id] = to; });
+      rbMove = null; keepDraft(); drawAll();
+      if (ids.length) ui().toast(EA.t(ids.length + ' orang dipindah', ids.length + ' people moved'));
+    }; });
+    el.querySelectorAll('#fh-jobs [data-rbmc]').forEach(function (b) { b.onclick = function () {
+      var id = b.dataset.rbmc;
+      if (rbMove) { if (rbMove[id]) delete rbMove[id]; else rbMove[id] = true; drawJobs(); return; }
+      var cur = draft.marks[id] || 'H';
+      ui().openSheet('<h2 id="sheet-title"><span class="bm">' + esc(person(id)) + '</span><span class="en">' + esc(id) + '</span></h2>' +
+        '<div class="rb-opts4">' + [['H', 'HADIR', 'Present'], ['S', 'SAKIT', 'Sick'], ['C', 'CUTI', 'Leave'], ['T', 'TAK HADIR', 'Absent']].map(function (k) {
+          return '<button type="button" data-rbk="' + k[0] + '" aria-pressed="' + (cur === k[0]) + '"><b>' + k[1] + '</b><span class="rb-sub">' + k[2] + '</span></button>'; }).join('') + '</div>',
+        function (sh) { sh.querySelectorAll('[data-rbk]').forEach(function (x) { x.onclick = function () {
+          var k = x.dataset.rbk, pj = (draft.planJobOf || {})[id];
+          ui().closeSheet(); setMark(id, k);
+          if (k === 'H' && pj && job(pj)) { draft.jobOf[id] = pj; keepDraft(); drawAll(); }
+        }; }); });
+    }; });
+  }
   function rbDrawJobs() {
+    if (isConfirm()) { rbDrawConfirm(); return; }
     var rows = draftRows();
     var paired = {};
     draft.jobs.forEach(function (j) { if (j.task === 'ITF') { var pt = rbPartner(j); if (pt) paired[pt.key] = j.key; } });
@@ -1406,7 +1465,7 @@
     var left = unmarked();
     var sun = isSunday(draft.date || EA.today());
     if ($('#fh-rows')) $('#fh-rows').classList.remove('rb-rows');
-    if (rbOn() && !rbAllRows && !isPlan()) { rbDrawRows(taken, left, sun); return; }
+    if (rbOn() && !rbAllRows) { rbDrawRows(taken, left, sun); return; }
     $('#fh-rows').innerHTML = (left.length && sun ? '<p class="hint">' + EA.t(restBm(draft.date || EA.today()) + ': yang tidak ditanda = rehat (' + left.length + ' orang). Tanda hanya yang bekerja, sakit atau cuti.', restEn(draft.date || EA.today()) + ': anyone not marked is resting (' + left.length + '). Mark only those working, sick or on leave.') + '</p>' : '') +
       (left.length && !sun ? '<p class="warn"><span class="bm">' + left.length + ' orang belum ditanda.</span><span class="en">' + left.length + ' people not marked yet.</span></p>' : left.length ? '' : '<p class="hint">' + EA.t('Semua orang sudah ditanda.', 'Everyone is marked.') + '</p>') +
       // v1.38 (Yu Chen, 25 Oct): people still to mark come first; a person done (mark, and a job if H) shrinks to a

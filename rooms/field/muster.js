@@ -784,7 +784,7 @@
   function wireAlerts() {
     el.querySelectorAll('#fh-alerts [data-alert]').forEach(function (i) {
       if (draft.alertNotes[i.dataset.alert] == null && i.value) { draft.alertNotes[i.dataset.alert] = i.value; }
-      i.oninput = function () { draft.alertNotes[i.dataset.alert] = i.value; keepDraft(); };
+      i.oninput = function () { draft.alertNotes[i.dataset.alert] = i.value; keepDraft(); if (rbOn()) rbCheckLabel(); };
     });
     keepDraft();
   }
@@ -1199,8 +1199,10 @@
   // 1.102 (new look): the bottom button says what the chit still lacks. It still opens the same checks.
   // a .btn label in both languages, already split (lang.js shows the phone's language)
   function rbLbl(bm, en) { return '<span class="l-bm">' + esc(bm) + '</span><span class="l-en">' + esc(en) + '</span>'; }
+  function rbNoNote() { return isPast() ? [] : chitAlerts().filter(function (a) { return !a.note; }); }
   function rbCheckLabel() {
-    var b = $('#fh-check'); if (!b || !rbOn() || isPlan()) return;
+    // 1.107 (Brief_Semakan_Rupa_Baru §3): the night plan's button reads what is missing too.
+    var b = $('#fh-check'); if (!b || !rbOn()) return;
     if (!b.dataset.rb0) b.dataset.rb0 = b.innerHTML;
     var rows = draftRows(), miss = [], missEn = [];
     var noJob = rows.filter(function (r) { return r.muster === 'H' && !r.task_code; }).length;
@@ -1210,6 +1212,8 @@
     if (bad) { miss.push(bad + ' KERJA BELUM LENGKAP'); missEn.push(bad + ' JOBS NOT COMPLETE'); }
     if (left) { miss.push(left + ' BELUM DITANDA'); missEn.push(left + ' NOT MARKED'); }
     if (noJob) { miss.push(noJob + ' TIADA KERJA'); missEn.push(noJob + ' WITH NO JOB'); }
+    // 1.107 (§1): an alert with no note stops the save, so the button names it first (after the rain).
+    if (rbNoNote().length) { miss.unshift('TULIS AMARAN'); missEn.unshift('WRITE THE ALERT'); }
     if (isConfirm() && !isPast() && !rainOk()) { miss.unshift('JAWAB HUJAN'); missEn.unshift('ANSWER THE RAIN'); }
     b.dataset.l2 = '1';
     var here = rows.filter(function (r) { return r.muster === 'H'; }).length;
@@ -1281,7 +1285,8 @@
     if (j.task === 'MAN') {
       if (!j.lots.length) return ['r', EA.t('PILIH PETAK', 'CHOOSE LOTS')];
       var m = manInfo(j, nw, draft.replacing || '');
-      if (m && m.total < m.target * 0.9) return ['r', EA.t('KURANG BEG', 'BAGS SHORT')];
+      // 1.107 (§2): bags short is a warning (orange), like BAWAH SASARAN; the chit still saves.
+      if (m && m.total < m.target * 0.9) return ['a', EA.t('KURANG BEG', 'BAGS SHORT')];
       if (m && m.total > m.target * 1.1) return ['a', EA.t('LEBIH BEG', 'BAGS OVER')];
     }
     if (tg && tg.short) return ['a', EA.t('BAWAH SASARAN', 'BELOW TARGET')];
@@ -1311,9 +1316,12 @@
     h += draft.jobs.filter(function (j) { return !paired[j.key]; }).map(function (j) {
       var pt = j.task === 'ITF' ? rbPartner(j) : null;
       var ids = rbPlannedOn(j).concat(pt ? rbPlannedOn(pt) : []), li = lotsInfo(j.lots), ms = rbMissOf(j);
-      var sub = (j.block ? placeName(j.block) : EA.t('Tiada blok', 'No block')) + (j.lots.length ? ' · ' + j.lots.length + EA.t(' petak', ' lots') + (li.ha && j.task !== 'ITF' && j.task !== 'LFF' ? ' · ' + li.ha.toFixed(2) + ' Ha' : '') : '');
-      return '<div class="rb-jcard"><div class="rb-jhead"><b>' + (pt ? 'ITF + LFF' : esc(j.task)) + '</b><span><b>' + (pt ? EA.t('Traktor & pemuat', 'Tractor & loader') : esc(jobName(j.task))) + '</b><small>' + esc(sub) + '</small>' + carryNote(j) + '</span>' +
-        (ms ? '<span class="rb-chip ' + (ms[0] === 'r' ? 'rb-r' : 'rb-a') + '">' + esc(ms[1]) + '</span>' : '') +
+      var bk = j.task === 'ITF' ? rbBaki(j.block, j.lots) : 0;
+      var sub = (j.block ? placeName(j.block) : EA.t('Tiada blok', 'No block')) + (j.lots.length ? ' · ' + j.lots.length + EA.t(' petak', ' lots') + (li.ha && j.task !== 'ITF' && j.task !== 'LFF' ? ' · ' + li.ha.toFixed(2) + ' Ha' : '') : '') +
+        (bk ? EA.t(' · baki ', ' · left ') + bk + EA.t(' tandan', ' bunches') : '');
+      // 1.107 (§4, §6): the tag sits under the name (a long name is not squeezed); the tractor shows the fruit left.
+      return '<div class="rb-jcard"><div class="rb-jhead"><b>' + (pt ? 'ITF + LFF' : esc(j.task)) + '</b><span><b>' + (pt ? EA.t('Traktor & pemuat', 'Tractor & loader') : esc(jobName(j.task))) + '</b><small>' + esc(sub) + '</small>' + carryNote(j) +
+        (ms ? '<span class="rb-chip rb-under ' + (ms[0] === 'r' ? 'rb-r' : 'rb-a') + '">' + esc(ms[1]) + '</span>' : '') + '</span>' +
         '<button type="button" class="rb-mini rb-ubah" data-rbchj="' + esc(j.key) + '">UBAH<span class="rb-sub">Change</span></button></div>' +
         '<div class="rb-chips">' + (ids.length ? ids.map(function (id) {
           var m = draft.marks[id], off = m !== 'H';
@@ -1414,7 +1422,7 @@
       '<p class="man-line ' + st[0] + '">' + EA.t('Sasaran: ', 'Target: ') + nw + ' × ' + m.per + ' = ' + m.target + EA.t(' beg · ', ' bags · ') + esc(st[1]) + '</p>' +
       (j.lots.length ? '<div class="man-bawa"><span>' + EA.t('BAWA DARI STOR', 'TAKE FROM THE STORE') + '<small>' + esc(m.fert) + '</small></span><b>' + m.total + EA.t(' beg', ' bags') + '</b></div>' : '') +
       (rq ? '<p class="man-line a"><b>' + EA.t('Minta tukar · menunggu lulus Pemilik: ', 'Change asked · waiting for the Owner: ') + '</b>' + esc(rq.fert + ' · ' + rq.dose + ' kg') + ' · "' + esc(rq.why) + '". ' + EA.t('Sementara itu ikut program.', 'Until then the programme stands.') + '</p>'
-        : '<button type="button" class="link-btn" data-mreq="' + esc(j.key) + '">' + EA.t('Minta tukar jenis / dos · perlu lulus Pemilik', 'Ask to change the fertiliser / dose · needs the Owner') + '</button>') + '</div>';
+        : '<button type="button" class="link-btn rb-mreq" data-mreq="' + esc(j.key) + '">' + EA.t('Minta tukar jenis / dos · perlu lulus Pemilik', 'Ask to change the fertiliser / dose · needs the Owner') + '</button>') + '</div>';
   }
   function manAsk(key) {
     var j = draft.jobs.find(function (x) { return x.key === key; }); if (!j) return;
@@ -2213,6 +2221,12 @@
   }
 
   function check() {
+    // 1.107 (§1): new look, an alert with no note: go to the alert box instead of a list of problems.
+    var nn = rbOn() && (isPast() || draft.mode === 'plan' || rainOk()) ? rbNoNote() : [];
+    if (nn.length) {
+      var box = el.querySelector('#fh-alerts [data-alert="' + nn[0].key + '"]') || el.querySelector('#fh-alerts [data-alert]');
+      if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); ui().toast(EA.t('Tulis apa berlaku untuk amaran ini', 'Say what happened for this alert'), 'bad'); return; }
+    }
     var p = problems();
     if (p.length) {
       ui().openSheet('<h2 id="sheet-title"><span class="bm">Belum lengkap</span><span class="en">Not complete yet</span></h2>' +

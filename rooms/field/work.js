@@ -365,7 +365,7 @@
   // the sending line with HANTAR stays. Back on any other screen the heading returns.
   function rbRoom(on) { try { document.body.classList.toggle('rb-room', !!on); } catch (e) {} }
   window.addEventListener('hashchange', function () { if (location.hash.indexOf('field-harvest/work') < 0) rbRoom(false); });
-  var rbMan = {}, rbFocus = '';
+  var rbMan = {}, rbFocus = '', rbSeeLot = '';
   function rbKey() { return 'fh.rbJob.' + (chit ? chit.chit : ''); }
   function rbType(j) {
     var k = kind(j.task, j.block);
@@ -977,11 +977,21 @@
       };
     });
     // a lot picked: the man's box takes the focus, so the number goes straight in
-    el.querySelectorAll('[data-pick-lot]').forEach(function (b) { b.addEventListener('click', function () { rbFocus = (b.closest('[data-rbopen]') || {}).dataset ? b.closest('[data-rbopen]').dataset.rbopen + '|' + b.dataset.w : ''; }); });
+    // 1.103 (Yu Chen 25 Nov: "once we add lot the cursor still at the old column"): the box of the SAME line takes the
+    // focus — a second lot's number goes in the second box, not the first.
+    // (set in the [data-pick-lot] and [data-add] handlers below, before the screen is drawn again)
     if (rbFocus) {
       var fx = rbFocus.split('|'); rbFocus = '';
-      var fi = el.querySelector('input[data-rbin="' + fx[0] + '"][data-w="' + fx[1] + '"]');
+      var fi = el.querySelector('input[data-rbin="' + fx[0] + '"][data-w="' + fx[1] + '"]' + (fx[2] != null ? '[data-i="' + fx[2] + '"]' : ''));
       if (fi) { fi.focus(); fi.scrollIntoView({ block: 'center' }); }
+    }
+    // + PETAK LAIN: the old box lets go, and the new lot's buttons come into view
+    if (rbSeeLot) {
+      var sw = rbSeeLot; rbSeeLot = '';
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      var last = String((draft.lines[sw] || []).length - 1);
+      var nl = el.querySelector('[data-rbopen] [data-pick-lot][data-w="' + sw + '"][data-i="' + last + '"]') || el.querySelector('[data-rbopen] input[data-w="' + sw + '"][data-i="' + last + '"]');
+      if (nl) nl.scrollIntoView({ block: 'center' });
     }
   }
   // While keying, the counts and ticks follow without drawing the screen again (so the box keeps its focus).
@@ -1280,6 +1290,7 @@
       b.onclick = function () {
         var l = draft.lines[b.dataset.w][Number(b.dataset.i)];
         l.lot = l.lot === b.dataset.pickLot ? '' : b.dataset.pickLot;
+        var o = b.closest('[data-rbopen]'); if (o) rbFocus = o.dataset.rbopen + '|' + b.dataset.w + '|' + (b.dataset.i || 0);
         keepDraft(); render(el, ctx);
       };
     });
@@ -1301,7 +1312,7 @@
       };
     });
     el.querySelectorAll('[data-add]').forEach(function (b) {
-      b.onclick = function () { draft.lines[b.dataset.w].push({ lot: '', qty: '', bunches: '' }); keepDraft(); render(el, ctx); };
+      b.onclick = function () { draft.lines[b.dataset.w].push({ lot: '', qty: '', bunches: '' }); if (b.closest('[data-rbopen]')) rbSeeLot = b.dataset.w; keepDraft(); render(el, ctx); };
     });
     el.querySelectorAll('[data-del]').forEach(function (b) {
       b.onclick = function () { draft.lines[b.dataset.w].splice(Number(b.dataset.del), 1); keepDraft(); render(el, ctx); };

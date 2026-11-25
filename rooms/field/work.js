@@ -119,6 +119,11 @@
       if (w && w.mdr) j.mandors.push(r.worker_id);     // a mandor supervises: nothing to key for him
       else j.people.push(r.worker_id);
     });
+    // 1.105 (Brief_Tuai_Kutip_Rupa_Baru 1.3 §5b, new look): the tractor and loader also cover the harvest's lots in their block
+    if (rbOn()) jobs.forEach(function (j) {
+      if (j.task !== 'ITF' && j.task !== 'LFF') return;
+      jobs.forEach(function (h) { if (h.task === EA.lists.HARVEST && h.block === j.block) h.lots.forEach(function (l) { if (j.lots.indexOf(l) < 0) j.lots = j.lots.concat([l]); }); });
+    });
     return jobs.filter(function (j) { return j.people.length || j.mandors.length; }).sort(function (a, b) {
       var sa = EA.lists.sectionOf(a.task), sb = EA.lists.sectionOf(b.task);
       return sa.code < sb.code ? -1 : sa.code > sb.code ? 1 : sa.tasks.indexOf(a.task) - sb.tasks.indexOf(b.task);

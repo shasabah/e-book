@@ -1642,10 +1642,13 @@
       (rb ? '<div id="jb-who" hidden></div>' : '') +
       '<div class="field"><label for="jb-mdr"><span class="bm">Mandor</span><span class="en">Foreman (optional)</span></label><select id="jb-mdr" class="text-input"><option value="">' + EA.t('— Tiada —', '— None —') + '</option>' +
         EA.lists.mandorsFor(ctx.estate).map(function (m) { return '<option value="' + m.id + '"' + (m.id === pick.mandor ? ' selected' : '') + '>' + esc(m.name) + '</option>'; }).join('') + '</select></div>' +
-      '<div class="actions">' + (key ? '<button class="btn btn-ghost" type="button" id="jb-del"' + (used ? ' disabled title="Ada orang dalam kerja ini"' : '') + '>REMOVE<small>Buang</small></button>' : '') +
+      '<div class="actions">' + (key ? '<button class="btn btn-ghost" type="button" id="jb-del"' + (used && !rb ? ' disabled title="Ada orang dalam kerja ini"' : '') + '>REMOVE<small>Buang</small></button>' : '') +
       '<button class="btn btn-ghost" type="button" id="jb-cancel">CANCEL<small>Batal</small></button>' +
       '<button class="btn btn-ok" type="button" id="jb-save">SAVE<small>Simpan</small></button></div>' +
-      (used ? '<p class="hint">' + EA.t(used + ' orang dalam kerja ini. Pindahkan mereka dahulu untuk buang.', used + ' people on this job; move them first to remove it.') + '</p>' : ''),
+      (used && !rb ? '<p class="hint">' + EA.t(used + ' orang dalam kerja ini. Pindahkan mereka dahulu untuk buang.', used + ' people on this job; move them first to remove it.') + '</p>' : '') +
+      // 1.107 (Yu Chen, 25 Nov: "Remove button cannot function"): in the new look BUANG works with men on the job. The
+      // first tap asks in the sheet; YA, BUANG takes the job off and its men go back to "belum ditanda".
+      (used && rb ? '<p class="hint rb-delask" id="jb-delask" hidden></p>' : ''),
       function (s) {
         function fill() {
           var needs = pick.task ? EA.lists.needsBlock(pick.task) : true;
@@ -1863,10 +1866,26 @@
         if (rb) s.querySelector('#jb-otherbtn').onclick = function () { pick.other = true; fill(); };
         s.querySelector('#jb-cancel').onclick = ui().closeSheet;
         if (key) s.querySelector('#jb-del').onclick = function () {
+          var gone = [j0], men = [];
+          if (rb) {
+            var pj = j0 && j0.task === 'ITF' ? rbPartner(j0) : null; if (pj) gone.push(pj);
+            men = Object.keys(draft.marks).filter(function (id) { return draft.marks[id] === 'H' && gone.indexOf(jobFor(id)) >= 0 && gone.every(function (g) { return id !== g.mandor; }); });
+            var ask = s.querySelector('#jb-delask');
+            if (men.length && ask && ask.hidden) {
+              ask.hidden = false;
+              ask.innerHTML = '<b>' + EA.t('Buang kerja ini' + (pj ? ' (dengan pemuat)' : '') + '?', 'Remove this job' + (pj ? ' (with the loader)' : '') + '?') + '</b> ' +
+                EA.t(men.length + ' orang balik ke "belum ditanda": ' + men.map(person).join(', ') + '. Tekan YA, BUANG sekali lagi.',
+                  men.length + (men.length === 1 ? ' man goes' : ' men go') + ' back to "not marked": ' + men.map(person).join(', ') + '. Tap YES, REMOVE again.');
+              this.dataset.l2 = '1'; this.innerHTML = rbLbl('YA, BUANG', 'YES, REMOVE'); this.classList.add('rb-delyes');
+              ask.scrollIntoView({ block: 'nearest' });
+              return;
+            }
+          }
           var prevH = rb ? rbHarvLots() : null;
-          draft.jobs = draft.jobs.filter(function (x) { return x.key !== key; });
+          men.forEach(function (id) { delete draft.marks[id]; delete draft.jobOf[id]; });
+          draft.jobs = draft.jobs.filter(function (x) { return gone.indexOf(x) < 0 && x.key !== key; });
           if (rb) rbColFollow(prevH);
-          Object.keys(draft.jobOf).forEach(function (w) { if (draft.jobOf[w] === key) delete draft.jobOf[w]; });
+          Object.keys(draft.jobOf).forEach(function (w) { if (gone.some(function (g) { return g && draft.jobOf[w] === g.key; }) || draft.jobOf[w] === key) delete draft.jobOf[w]; });
           keepDraft(); ui().closeSheet(); drawAll();
         };
         s.querySelector('#jb-save').onclick = function () {

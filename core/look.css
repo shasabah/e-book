@@ -1271,3 +1271,7 @@ body:has(#home-bar.botbar) .sheet-back:not([hidden]) ~ .toast { bottom: auto; to
 .rb-opts4 button { min-height: 60px; border: 2px solid var(--ok); border-radius: 12px; background: var(--surface); color: var(--ok); font: inherit; }
 .rb-opts4 button b { display: block; } .rb-opts4 button .rb-sub { display: block; font-size: .75rem; color: var(--muted); }
 .rb-opts4 button[aria-pressed="true"] { background: var(--ok); color: #fff; } .rb-opts4 button[aria-pressed="true"] .rb-sub { color: #fff; }
+
+/* 1.107 BUANG with men on the job: the question in the sheet, and the red YA, BUANG */
+.rb-delask { background: #fdecea; border: 1px solid #e0a39c; border-radius: 10px; padding: 10px 12px; color: #7a1d14; }
+.btn.rb-delyes { background: #b3261e; border-color: #b3261e; color: #fff; }

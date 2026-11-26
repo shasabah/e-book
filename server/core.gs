@@ -742,7 +742,12 @@ function dayCloseRead_(estate) {
 // count in the month's totals and History, but never in the field / ramp backlog, the lorry's
 // open harvest lines or the clerk's ungraded list: their lorries were not keyed lot by lot.
 var IMPORT_BY = 'IMPORT';
-function live_(r) { return String(r.keyed_by) !== IMPORT_BY; }
+// v1.110 (Yu Chen, 26 Nov 2026 8:37 pm "ok"): an old-data row stays history when it is corrected. The office one-off
+// that moved six Meliau harvesters' days to their own codes (26 Nov, moveMeluLama) wrote its 200 new rows keyed_by
+// OWNER-FIX, so the field backlog took them as live harvest with no ramp line: "LEBIH TEMPOH: 14267 tandan masih
+// di ladang" at Meliau, which has not keyed a real day yet. Every old-data row carries an id starting IMP- (checked
+// in every tab of the live sheet, 26 Nov), and a correction keeps it, so that id also marks history.
+function live_(r) { return String(r.keyed_by) !== IMPORT_BY && String(r.id || '').indexOf('IMP-') !== 0; }
 function backlog(estate) {
   var cut = standingRows_('FH_WORK', estate).filter(function (r) { return r.task_code === HARVEST_CODE && live_(r); });
   var col = standingRows_('FH_COLLECT', estate).filter(live_);

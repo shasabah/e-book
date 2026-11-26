@@ -1281,3 +1281,7 @@ body:has(#home-bar.botbar) .sheet-back:not([hidden]) ~ .toast { bottom: auto; to
 /* 1.107 Brief_Semakan_Rupa_Baru: the tag under the job name on SAHKAN CHIT; a full-size "Minta tukar jenis / dos" */
 .rb-jhead .rb-chip.rb-under { display: inline-block; margin-top: 4px; }
 .link-btn.rb-mreq { display: block; width: 100%; min-height: 48px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; text-align: center; }
+
+/* 1.111 Brief_Meliau_Mula: a job already on the chit says so on its Tambah kerja button */
+.jb-quick .pick.rb-hasjob { border-color: #d9a441; background: #fff8e8; }
+.jb-quick .pick .rb-have { display: block; margin-top: 4px; font-size: 12px; font-weight: 700; letter-spacing: .02em; color: #8a5a00; }

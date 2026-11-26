@@ -204,6 +204,15 @@ EA.roomViews = EA.roomViews || {};
       h += '<div class="adm-sw"><div><b>3 · ' + t('Buka Kerja Ladang: ', 'Open Field & Harvest: ') + e + '</b><span>' + t('Bilik jadi "Digunakan" untuk ', 'The room becomes "In use" for ') + e + '</span></div>' + toggle('sw-live-' + e, on, on || modeOff) + '</div>';
     });
     h += '<p class="hint">' + t('Ikut turutan 1 → 2 → 3. Suis yang kelabu menunggu langkah sebelumnya. Setiap suis = satu baris dalam log.', 'Follow the order 1 → 2 → 3. A grey switch waits for the step before. Each switch is one line in the log.') + '</p></div>';
+    // v1.111 (Brief_Meliau_Mula §1, Yu Chen 27 Nov "sign 1"): the new look for everyone at one estate, no choice on the phone.
+    var rupaE = d.rupaEstates || [];
+    h += '<div class="card"><h2>' + t('Rupa Baru untuk semua', 'New look for everyone') + '</h2>';
+    ctx.user.estates.filter(function (e) { return e !== 'SDK'; }).forEach(function (e) {
+      var on = rupaE.indexOf(e) >= 0;
+      h += '<div class="adm-sw"><div><b>' + t('Rupa Baru: ', 'New look: ') + e + '</b><span>' + (on ? t('Semua di ' + e + ' guna rupa baru · tiada pilihan di telefon', 'Everyone at ' + e + ' uses the new look · no choice on the phone')
+        : t('Rupa lama · yang ditanda boleh cuba sendiri', 'Old look · ticked people may try it')) + '</span></div>' + toggle('sw-rupa-' + e, on, true) + '</div>';
+    });
+    h += '<p class="hint">' + t('Rekod sama dalam kedua-dua rupa. Tutup suis = semua kembali ke rupa lama serta-merta, tanpa versi baru.', 'Same records in both looks. Switch off = everyone back on the old look at once, no new version.') + '</p></div>';
     h += '<div class="card"><h2>' + t('Log suis', 'Switch log') + '</h2>' + ((d.log || []).length ? d.log.map(function (l) { return '<div class="us-logline"><b>' + esc(l.at) + ' · ' + esc(l.by) + '</b><br>' + esc(l.detail) + '</div>'; }).join('') : '<p class="hint">' + t('Belum ada.', 'Nothing yet.') + '</p>') + '</div>';
     return h;
   }
@@ -244,6 +253,11 @@ EA.roomViews = EA.roomViews || {};
       confirmSwitch('testMode', !off, '', off ? t('Mod ujian OFF?', 'Test mode OFF?') : t('Mod ujian ON semula?', 'Test mode ON again?'),
         off ? t('Tanda UJIAN dan senarai PIN contoh hilang dari semua telefon dalam 30 minit.', 'TEST marks and the sample PIN list go from every phone within 30 minutes.') : t('Semua bilik kembali ke mod ujian.', 'Every room goes back to test mode.')); };
     ctx.user.estates.forEach(function (e) {
+      var rb = el.querySelector('#sw-rupa-' + e);
+      if (rb) rb.onclick = function () { var on = (d.rupaEstates || []).indexOf(e) < 0;
+        confirmSwitch('rupaEstate', on, e, on ? t('Rupa Baru untuk semua di ' + e + '?', 'New look for everyone at ' + e + '?') : t('Kembali ke rupa lama untuk semua di ' + e + '?', 'Back to the old look for everyone at ' + e + '?'),
+          on ? t('Semua di ' + e + ' nampak Chit dan Kerja dalam rupa baru, tanpa butang KEMBALI. Rekod sama.', 'Everyone at ' + e + ' gets Chit and Kerja in the new look, with no way back on the phone. Same records.')
+            : t('Semua di ' + e + ' kembali ke rupa lama. Tiada rekod hilang.', 'Everyone at ' + e + ' goes back to the old look. No record is lost.')); };
       var b = el.querySelector('#sw-live-' + e);
       if (b) b.onclick = function () { var on = ((d.live || {})['field-harvest'] || []).indexOf(e) < 0;
         confirmSwitch('live', on, e, on ? t('Buka Kerja Ladang untuk ' + e + '?', 'Open Field & Harvest for ' + e + '?') : t('Tutup Kerja Ladang untuk ' + e + '?', 'Close Field & Harvest for ' + e + '?'),

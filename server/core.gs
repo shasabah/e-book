@@ -125,7 +125,7 @@ var ROOM_TABS = {
   // chit's JENTERA card (tractors, backhoe, excavator, lorry); pickups and cars are N. owner_co is the company that
   // owns the unit, which is not always the company of the estate it works at. status disposed = sold or written off
   // (never deleted). Loaded once by seedMachines from "List of vehicles & machineries 28.05.2026.xlsx".
-  LIST_MACHINES: ['reg_no', 'kind', 'model', 'year', 'home_estate', 'owner_co', 'on_chit', 'note'],
+  LIST_MACHINES: ['reg_no', 'kind', 'model', 'year', 'home_estate', 'owner_co', 'on_chit', 'note', 'serves'],   // v1.111 serves: estates a lorry serves (Brief_Lori_Meliau)
   // v1.29 one line per step of a new mill request. kind: request, checked, approved, rejected; ref = the request line.
   MILL_LOG: ['ref', 'name', 'mill_kind', 'location', 'kind', 'note'],
   // v1.43 TUTUP HARI (room DCL, Brief "Rancangan & Prestasi" §4–5): one row per day close. kind: close (the staff
@@ -1506,7 +1506,8 @@ function phoneNames_(u) { try { var o = JSON.parse(String(u.phone_names || '{}')
 
 // The trial switches, sent to every phone with the login and each send.
 // v1.92 Rupa Baru (Brief_Rupa_Baru, signed 24 Nov 2026): the people the Owner ticked may try the new look.
-function switches_() { var w = getJson_('SWITCHES', {}); return { testModeOff: !!w.testModeOff, live: w.live || {}, cleanFrom: liveFrom_(), rupaBaru: w.rupaBaru || [] }; }
+// v1.111 rupaEstates (Yu Chen, 27 Nov 2026 "sign 1"): estates where everyone has the new look, set by the Owner in Suis.
+function switches_() { var w = getJson_('SWITCHES', {}); return { testModeOff: !!w.testModeOff, live: w.live || {}, cleanFrom: liveFrom_(), rupaBaru: w.rupaBaru || [], rupaEstates: w.rupaEstates || [] }; }
 
 // When each phone last reached the office, with its app version and how many records were waiting.
 // Written at most every 5 minutes per phone (or when the version or waiting count changes).
@@ -1695,7 +1696,7 @@ function adminSwitches_() {
   if (lg && lg.getLastRow() > 1) lg.getRange(2, 1, lg.getLastRow() - 1, USERS_LOG_COLS.length).getValues().forEach(function (r) {
     if (String(r[3]) === 'switch' || String(r[3]) === 'test_off') log.push({ at: r[0] instanceof Date ? Utilities.formatDate(r[0], 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm') : String(r[0]).replace(/^'/, ''), by: String(r[2]), detail: String(r[6]) });
   });
-  return { ok: true, testPinsOn: testOn, testModeOff: sw.testModeOff, live: sw.live, rupaBaru: sw.rupaBaru, people: people, log: log.reverse().slice(0, 10) };
+  return { ok: true, testPinsOn: testOn, testModeOff: sw.testModeOff, live: sw.live, rupaBaru: sw.rupaBaru, rupaEstates: sw.rupaEstates, people: people, log: log.reverse().slice(0, 10) };
 }
 function adminSwitch_(user, req) {
   var lock = LockService.getScriptLock();
@@ -1729,6 +1730,13 @@ function adminSwitch_(user, req) {
       var act = {}; readUsers_().list.forEach(function (u) { if (u.status === 'active' && !isTestCode_(u.user_code) && !isPracticeCode_(u.user_code)) act[String(u.user_code)] = 1; });
       w.rupaBaru = (req.codes || []).map(String).filter(function (c, i, a) { return act[c] && a.indexOf(c) === i; }).slice(0, 60);
       detail = 'Rupa Baru: ' + (w.rupaBaru.join(', ') || 'tiada');
+    } else if (which === 'rupaEstate') {
+      // v1.111 (Brief_Meliau_Mula §1): the new look for everyone at one estate, no choice on the phone. Off = the old look.
+      var re = String(req.estate || '');
+      if (ESTATES.indexOf(re) < 0) return { ok: false, error: 'bad_estates' };
+      w.rupaEstates = (w.rupaEstates || []).filter(function (x) { return x !== re; });
+      if (on) w.rupaEstates.push(re);
+      detail = (on ? 'Rupa Baru untuk semua: ' : 'Rupa lama untuk semua: ') + re;
     } else return { ok: false, error: 'unknown_switch' };
     setJson_('SWITCHES', w);
     logUser_(user, 'switch', { user_code: '-', name: '-' }, detail);
@@ -2145,7 +2153,24 @@ function ticketDue_(d) {
   x.setUTCDate(x.getUTCDate() + (x.getUTCDay() === 6 ? 2 : 1));
   return x.toISOString().slice(0, 10);
 }
-var LORRY_MT = 8;             // v1.33: a full Sugut lorry (Yu Chen, 22 Oct 2026)        // lists/tasks.js: a lot is ready again after 10 days, late after 15
+var LORRY_MT = 8;             // v1.33: a full Sugut lorry (Yu Chen, 22 Oct 2026)
+// v1.111 (Brief_Lori_Meliau, Yu Chen 27 Nov 2026 "sign … lorry"): an estate with a lorry of its own (LIST_MACHINES, kind
+// lori, serves = that estate) sends it out as routine (Meliau: 2–4 trips a day), so the ramp line never says "panggil
+// lori" there and a full load is that lorry's own ("8 TON" in its model). Estates with no lorry serving them (Sugut) and
+// lorries with serves empty keep today's lines and 8 t.
+function ownLorries_(est) {
+  var out = [];
+  try {
+    readRows_('LIST_MACHINES', null).standing.forEach(function (r) {
+      if (!/^lor/i.test(String(r.kind || '')) || String(r.status) === 'disposed') return;
+      var sv = String(r.serves || '').toUpperCase().split(/[\s,;\/]+/).filter(String);
+      if (sv.indexOf(est) < 0) return;
+      var m = /([\d.]+)\s*TON/i.exec(String(r.model || '')), mt = m ? Number(m[1]) : LORRY_MT;
+      out.push({ reg: String(r.reg_no || ''), mt: mt > 0 ? mt : LORRY_MT });
+    });
+  } catch (e) {}
+  return out;
+}        // lists/tasks.js: a lot is ready again after 10 days, late after 15
 var EXPLAIN_KINDS = { grading: 1, ramp: 1, field: 1, jobask: 1, sunask: 1 };   // v1.41 sunask: Sunday work outside crop / manuring / CPS, approved by SDK (HQ)   // v1.36 jobask: other work outside the main jobs (LULUS / TOLAK)
 function dayAdd_(d, n) { var p = String(d).slice(0, 10).split('-'), x = new Date(Date.UTC(Number(p[0]), Number(p[1]) - 1, Number(p[2]) + n)); return x.toISOString().slice(0, 10); }
 function dayDiff_(a, b) { return Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 864e5); }
@@ -2347,9 +2372,19 @@ function todo_(user, req) {
   function rampOld() {
     var b = backlog(est), rp = b.ramp || {}, abw = lastAbw();
     var mt = abw ? Math.round(rp.bunches * abw / 100) / 10 : 0, mtTxt = mt ? ' · ~' + mt.toFixed(1) + ' tan' : '';
-    var full = mt >= LORRY_MT, old = rp.bunches && rp.since && rp.since < today, days = rp.since ? dayDiff_(rp.since, today) : 0;
+    var own = ownLorries_(est), fullMt = own.length ? Math.min.apply(null, own.map(function (x) { return x.mt; })) : LORRY_MT;
+    var full = mt >= fullMt, old = rp.bunches && rp.since && rp.since < today, days = rp.since ? dayDiff_(rp.since, today) : 0;
     var blk = (rp.blocks || []).map(function (x) { return 'Blk ' + x.block + ' ' + x.bunches; }).join(', ');
-    if (rp.bunches && (full || old)) {
+    // v1.111: an estate with its own lorry: the same rule, no "call the lorry"; the half load is under its own lorry's load.
+    if (own.length && rp.bunches && (full || old)) {
+      var lr = own.map(function (x) { return x.reg + ' ' + x.mt + ' t'; }).join(' · ');
+      if (r === 'Staff') add({ id: 'RP:' + rp.since, p: 1, ls: old ? dayAdd_(rp.since, 1) : today, ic: 'LR', bm: old ? 'Buah masih di ramp sejak ' + shortD_(rp.since) : 'Buah di ramp' + mtTxt + ' · cukup satu lori',
+        en: old ? 'Fruit still on the ramp since ' + shortD_(rp.since) : 'Fruit on the ramp · a lorry load',
+        sub: rp.bunches + ' tandan' + mtTxt + (blk ? ' (' + blk + ')' : '') + ' · lori sendiri: ' + lr, go: '#field-harvest/collect' });
+      if (r === 'Manager' && old && !full) add({ id: 'RP:' + rp.since, p: 1, ic: 'LR', bm: 'Putuskan: hantar lori separuh penuh?', en: 'Decide: send a half-full lorry?',
+        sub: rp.bunches + ' tandan' + mtTxt + ' di ramp sejak ' + shortD_(rp.since) + ' · kurang ' + fullMt + ' tan · beritahu Staf', go: '' });
+      if (r === 'Clerk') add({ id: 'RP:' + rp.since, p: 4, ic: 'LR', bm: 'Lori dijangka keluar' + mtTxt, en: 'A lorry is expected', sub: rp.bunches + ' tandan di ramp · jangka tiket kilang', go: '' });
+    } else if (rp.bunches && (full || old)) {
       if (r === 'Staff') add({ id: 'RP:' + rp.since, p: 1, ls: old ? dayAdd_(rp.since, 1) : today, ic: 'LR', bm: full ? 'Ramp penuh' + mtTxt + ' · panggil lori' : 'Buah di ramp sejak ' + shortD_(rp.since) + ' · panggil lori sekarang',
         en: full ? 'Ramp full · call the lorry' : 'Fruit on the ramp since ' + shortD_(rp.since) + ' · call the lorry now',
         sub: rp.bunches + ' tandan' + mtTxt + (blk ? ' (' + blk + ')' : '') + (full ? '' : ' · kurang ' + LORRY_MT + ' tan: tanya ' + EP_.mgr), go: '#field-harvest/collect' });
@@ -2702,7 +2737,7 @@ function lateLines_(est, alerts) {
     var n = users.filter(function (u) { return String(u.role) === role && estatesNow_(u).indexOf(est) >= 0; }).map(function (u) { return String(u.name).replace(/^'/, ''); });
     return n.length ? n.join(', ') : { Staff: 'Staf bertugas', Clerk: 'Kerani', Manager: 'Pengurus' }[role];
   }
-  var items = [], staff = who('Staff'), clerk = who('Clerk'), mgr = who('Manager');
+  var items = [], staff = who('Staff'), clerk = who('Clerk'), mgr = who('Manager'), ownL = ownLorries_(est);
   alerts = alerts || standingRows_('FH_ALERT', est);
   var ansBy = answers_(alerts), mBy = {}, doneHelp = {};
   alerts.forEach(function (a) {
@@ -2718,7 +2753,8 @@ function lateLines_(est, alerts) {
     if (kind === 'RP') {
       bm = bm.replace(/ · panggil lori( sekarang)?$/, '');
       var mt = /~?([\d.]+) tan/.exec(bm + ' ' + sub), n = mt ? Math.floor(Number(mt[1]) / 8) : 0;
-      if (n >= 1) fix = 'Panggil lori hari ini: cukup untuk ' + n + ' lori penuh. Lori sudah pergi? Buka E-Book → Ramp → kunci DN';
+      if (ownL.length) fix = 'Hantar lori sendiri hari ini. Lori sudah pergi? Buka E-Book → Ramp → kunci DN';   // v1.111 Brief_Lori_Meliau
+      else if (n >= 1) fix = 'Panggil lori hari ini: cukup untuk ' + n + ' lori penuh. Lori sudah pergi? Buka E-Book → Ramp → kunci DN';
     }
     var l = { id: i.id, kind: kind, role: role, who: role === 'Staff' ? staff : clerk, bm: bm, en: i.en || i.bm, sub: sub, fix: fix,
       st: kind === 'CH' ? '' : (i.st || 'new'), ans: i.ans ? i.ans.why + ' · janji ' + dueTxt_(i.ans.due) : '',

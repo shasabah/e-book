@@ -68,7 +68,7 @@ window.EA = window.EA || {};
   EA.switches = function () { return get('ea.switches', { testModeOff: false, live: {} }) || { testModeOff: false, live: {} }; };
   EA.setSwitches = function (sw) {
     if (!sw || typeof sw !== 'object') return;
-    set('ea.switches', { testModeOff: !!sw.testModeOff, live: sw.live || {}, rupaBaru: Array.isArray(sw.rupaBaru) ? sw.rupaBaru : [], at: Date.now() });
+    set('ea.switches', { testModeOff: !!sw.testModeOff, live: sw.live || {}, rupaBaru: Array.isArray(sw.rupaBaru) ? sw.rupaBaru : [], rupaEstates: Array.isArray(sw.rupaEstates) ? sw.rupaEstates : [], at: Date.now() });
     if (sw.cleanFrom && !practiceNow() && get('ea.cleanDone', '') !== sw.cleanFrom) EA.cleanBefore(sw.cleanFrom);
   };
 
@@ -106,7 +106,17 @@ window.EA = window.EA || {};
     if (!raw || /^L-/.test(String(raw.code))) return false;
     return raw.role === 'Owner' || (EA.switches().rupaBaru || []).indexOf(String(raw.code)) >= 0;
   };
-  EA.rupaBaru = function () { try { return EA.rupaBaruAllowed() && localStorage.getItem('ea.rupaBaru') === '1'; } catch (e) { return false; } };
+  // v1.111 (Brief_Meliau_Mula §1, Yu Chen 27 Nov "sign 1"): an estate the Owner switched to the new look (Suis) has it
+  // for everyone working there, practice too, with no CUBA / KEMBALI card; switched off, the estate is back on the old look.
+  EA.rupaEstate = function (est) {
+    var raw = null; try { raw = JSON.parse(localStorage.getItem('ea.user') || 'null'); } catch (x) {}
+    if (!raw) return false;
+    var mine = raw.estates || [], e = est || get('ea.estate', '');
+    if (mine.indexOf(e) < 0) e = mine.length === 1 ? mine[0] : '';
+    if (!e) return false;
+    return ((EA.switches().rupaEstates) || []).indexOf(e) >= 0;
+  };
+  EA.rupaBaru = function () { try { return EA.rupaEstate() || (EA.rupaBaruAllowed() && localStorage.getItem('ea.rupaBaru') === '1'); } catch (e) { return false; } };
   EA.setRupaBaru = function (on) { try { if (on) localStorage.setItem('ea.rupaBaru', '1'); else localStorage.removeItem('ea.rupaBaru'); } catch (e) {} };
   EA.testMode = function () { return !!EA.config.TEST_MODE && !EA.switches().testModeOff; };
   EA.roomLive = function (r, estate) { if (!r) return false; if (r.state === 'live') return true; var l = (EA.switches().live || {})[r.id] || []; return l.indexOf(estate) >= 0; };

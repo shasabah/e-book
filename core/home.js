@@ -580,7 +580,7 @@
   // CUBA RUPA BARU turns the new look on for this phone; KEMBALI KE RUPA LAMA turns it off. Only the screens change.
   function renderRupa() {
     var box = $('rupa-card'); if (!box) return;
-    var ok = EA.rupaBaruAllowed && EA.rupaBaruAllowed() && pane() === 'today';
+    var ok = EA.rupaBaruAllowed && EA.rupaBaruAllowed() && pane() === 'today' && !(EA.rupaEstate && EA.rupaEstate());   // v1.111: no choice where the Owner set the estate
     box.hidden = !ok;
     if (!ok) { box.innerHTML = ''; return; }
     var on = EA.rupaBaru();

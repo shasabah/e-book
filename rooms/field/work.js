@@ -1085,6 +1085,8 @@
       wireJobs(jobs);
       if ($('#wk-check')) $('#wk-check').onclick = function () { check(jobs); };
       refresh(jobs);
+      // 1.111 (crosscheck old / new look): the day-close band is refreshed from the office here too, as in the old look
+      if (EA.fh.refreshDayClose && navigator.onLine) EA.fh.refreshDayClose(ctx.estate).then(function (j) { if (j && el && location.hash.indexOf('/work') > 0) { var b = el.querySelector('#wk-dayclose'); var nb = EA.fh.dayCloseBand(ctx.estate, ctx.user); if (b && !nb) b.remove(); } });
       return;
     }
     el.innerHTML = head + chooser +

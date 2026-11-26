@@ -1612,7 +1612,7 @@
     // 1.102 (Brief_Tambah_Kerja_Rupa_Baru, new look only): one place to pick the job, blocks as buttons, the men on
     // the same screen, the tractor and its loader as one button, and SIMPAN says what is still missing.
     var rb = rbOn();
-    if (rb) { pick.men = {}; pick.menFor = null; pick.ld = ''; }
+    if (rb) { pick.men = {}; pick.menFor = null; pick.ld = ''; pick.lds = {}; }
     var used = key ? draftRows().filter(function (r) { return r.muster === 'H' && jobFor(r.worker_id) === j0; }).length : 0;
     ui().openSheet(
       '<h2 id="sheet-title"><span class="bm">' + (key ? 'Ubah kerja' : 'Tambah kerja') + '</span><span class="en">' + (key ? 'Change job' : 'Add a job') + '</span></h2>' +
@@ -1734,6 +1734,7 @@
           if (last) last.rows.forEach(function (r) { if (r.muster === 'H' && r.task_code === code && ids.indexOf(r.worker_id) < 0 && all.some(function (w) { return w.id === r.worker_id; })) ids.push(r.worker_id); });
           return ids;
         }
+        function rbLds() { return Object.keys(pick.lds || {}).filter(function (id) { return pick.lds[id] && !(pick.men || {})[id]; }); }
         function rbMen() { return Object.keys(pick.men).filter(function (k) { return pick.men[k]; }); }
         function rbReady() {
           var t = pick.task;
@@ -1779,10 +1780,12 @@
           var all = rbPeople(), byId = {}; all.forEach(function (w) { byId[w.id] = w; });
           var same = !!j0 && t === j0.task;
           if (pick.menFor !== t) {
-            pick.menFor = t; pick.men = {}; pick.moreMen = false; pick.moreLd = false; pick.ld = '';
+            pick.menFor = t; pick.men = {}; pick.moreMen = false; pick.moreLd = false; pick.ld = ''; pick.lds = {};
             (same ? rbNowMen() : rbLastMen(t)).forEach(function (id) { if (!rbBusy(id)) pick.men[id] = true; });
-            if (t === 'ITF' && !key) pick.ld = rbLastMen('LFF').filter(function (id) { return !rbBusy(id) && !pick.men[id]; })[0] || '';
-            if (t === 'ITF' && same) { var p0 = rbPartner(j0); pick.ld = p0 ? (rbJobMen(p0)[0] || '') : ''; }
+            // 1.111 (Yu Chen, 27 Nov: "able to choose as a pair … the loader no turn up or low season it can be single … during
+            // peak season we can choose more loader to help"): none, one or several loaders; last chit's loaders start ticked.
+            if (t === 'ITF' && !key) rbLastMen('LFF').filter(function (id) { return !rbBusy(id) && !pick.men[id]; }).forEach(function (id) { pick.lds[id] = true; });
+            if (t === 'ITF' && same) { var p0 = rbPartner(j0); (p0 ? rbJobMen(p0) : []).forEach(function (id) { pick.lds[id] = true; }); }
           }
           var before = same ? rbNowMen() : rbLastMen(t), day = same ? EA.t('hari ini', 'today') : lastChit() ? niceDate(lastChit().date) : '';
           if (same) before = before.concat(Object.keys(pick.men).filter(function (id) { return pick.men[id] && before.indexOf(id) < 0; }));
@@ -1792,24 +1795,30 @@
             return '<button type="button" class="rb-who" ' + attr + '="' + esc(id) + '" aria-pressed="' + !!on + '"' + (busy && !on ? ' disabled' : '') + '><i>' + (on ? '✓' : '') + '</i><span><b>' + esc(w.name) + '</b><small>' +
               esc(busy && !on ? EA.t('sudah di ', 'already on ') + busy : (note || w.id + (w.gang ? ' · ' + w.gang : ''))) + '</small></span></button>';
           }
-          var h = '<p class="rb-st"><span class="inline"><span class="bm">3 · Siapa? · ' + (rbMen().length + (t === 'ITF' && pick.ld ? 1 : 0)) + ' orang</span> · <span class="en">Who · ' + (rbMen().length + (t === 'ITF' && pick.ld ? 1 : 0)) + ' people</span></span></p>' +
+          var nLd = t === 'ITF' ? rbLds().length : 0;
+          var h = '<p class="rb-st"><span class="inline"><span class="bm">3 · Siapa? · ' + (rbMen().length + nLd) + ' orang</span> · <span class="en">Who · ' + (rbMen().length + nLd) + ' people</span></span></p>' +
             (t === 'ITF' ? '<p class="hint"><b>' + EA.t('Pemandu traktor (ITF)', 'Tractor driver (ITF)') + '</b></p>' : '') +
             '<p class="hint">' + (same ? EA.t('Orang dalam kerja ini. Buang tanda untuk keluarkan; dia jadi belum ditanda.', 'The people on this job. Untick to take a man off; he goes back to not marked.') : before.length ? EA.t('Ditanda: yang buat ' + t + ' pada ' + day + '. Buang tanda yang tidak datang.', 'Ticked: on ' + t + ' on ' + day + '. Untick anyone not coming.') : EA.t('Tanda orang untuk kerja ini.', 'Tick the people for this job.')) + ' ' + EA.t('Yang ditanda = Hadir.', 'Ticked = present.') + '</p>' +
+            // 1.111 (crosscheck with the old PILIH ORANG): a long list gets the same "Cari nama" box (Meliau has 39 on the muster)
+            (ids.length > 12 ? '<input class="text-input rb-find" id="jb-find" placeholder="' + EA.t('Cari nama', 'Search a name') + '" autocomplete="off" value="' + esc(pick.find || '') + '">' : '') +
             ids.map(function (id) { return row(id, 'data-rbman', pick.men[id], before.indexOf(id) >= 0 ? t + ' · ' + day : ''); }).join('') +
             (before.length && !pick.moreMen ? '<button type="button" class="rb-mini" id="jb-moremen">+ ORANG LAIN<span class="rb-sub">Other people</span></button>' : '');
           if (t === 'ITF') {
             var lb = rbLastMen('LFF'), lids = (pick.moreLd ? lb.concat(all.map(function (w) { return w.id; }).filter(function (id) { return lb.indexOf(id) < 0; })) : lb).filter(function (id) { return !pick.men[id]; });
-            if (pick.ld && lids.indexOf(pick.ld) < 0) lids.unshift(pick.ld);
-            h += '<p class="hint" style="margin-top:12px"><b>' + EA.t('Pemuat (LFF)', 'Loader (LFF)') + '</b></p>' +
-              '<button type="button" class="rb-who" data-rbld="" aria-pressed="' + !pick.ld + '"><i>' + (!pick.ld ? '✓' : '') + '</i><span><b>' + EA.t('Tiada · pemandu muat sendiri', 'None · the driver loads himself') + '</b><small>' + EA.t('seorang buat kedua-dua', 'one man does both') + '</small></span></button>' +
-              lids.map(function (id) { return row(id, 'data-rbld', pick.ld === id, lb.indexOf(id) >= 0 ? 'LFF · ' + day : ''); }).join('') +
+            rbLds().forEach(function (id) { if (lids.indexOf(id) < 0) lids.unshift(id); });
+            h += '<p class="hint" style="margin-top:12px"><b>' + EA.t('Pemuat (LFF) · boleh pilih lebih seorang', 'Loader (LFF) · more than one allowed') + '</b></p>' +
+              '<button type="button" class="rb-who" data-rbld="" aria-pressed="' + !nLd + '"><i>' + (!nLd ? '✓' : '') + '</i><span><b>' + EA.t('Tiada · pemandu muat sendiri', 'None · the driver loads himself') + '</b><small>' + EA.t('seorang buat kedua-dua', 'one man does both') + '</small></span></button>' +
+              lids.map(function (id) { return row(id, 'data-rbld', !!pick.lds[id], lb.indexOf(id) >= 0 ? 'LFF · ' + day : ''); }).join('') +
               (!pick.moreLd ? '<button type="button" class="rb-mini" id="jb-moreld">+ PEMUAT LAIN<span class="rb-sub">Another loader</span></button>' : '') +
               '<p class="hint">' + EA.t('Pemuat dapat kerja LFF pada petak yang sama; petang nanti ditutup bersama traktor.', 'The loader gets LFF on the same lots; in the afternoon the two close together.') + '</p>';
           }
           box.innerHTML = h;
-          box.querySelectorAll('[data-rbman]').forEach(function (b) { b.onclick = function () { var id = b.dataset.rbman; pick.men[id] = !pick.men[id]; if (pick.men[id] && pick.ld === id) pick.ld = ''; rbWho(); rbTot(); }; });
-          box.querySelectorAll('[data-rbld]').forEach(function (b) { b.onclick = function () { pick.ld = b.dataset.rbld; rbWho(); rbSaveLabel(); }; });
+          box.querySelectorAll('[data-rbman]').forEach(function (b) { b.onclick = function () { var id = b.dataset.rbman; pick.men[id] = !pick.men[id]; if (pick.men[id]) delete pick.lds[id]; rbWho(); rbTot(); }; });
+          box.querySelectorAll('[data-rbld]').forEach(function (b) { b.onclick = function () { var id = b.dataset.rbld; if (!id) pick.lds = {}; else if (pick.lds[id]) delete pick.lds[id]; else pick.lds[id] = true; pick.ld = rbLds()[0] || ''; rbWho(); rbSaveLabel(); }; });
           var mm = box.querySelector('#jb-moremen'); if (mm) mm.onclick = function () { pick.moreMen = true; rbWho(); };
+          var fd = box.querySelector('#jb-find');
+          function findNow() { var q = String(pick.find || '').trim().toLowerCase(); box.querySelectorAll('[data-rbman]').forEach(function (x) { x.hidden = !!q && x.innerText.toLowerCase().indexOf(q) < 0 && x.getAttribute('aria-pressed') !== 'true'; }); }
+          if (fd) { fd.oninput = function () { pick.find = fd.value; findNow(); }; findNow(); }
           var ml = box.querySelector('#jb-moreld'); if (ml) ml.onclick = function () { pick.moreLd = true; rbWho(); };
         }
         function rbFill() {
@@ -1833,6 +1842,15 @@
           if (!key) s.querySelectorAll('.jb-quick [data-quick]').forEach(function (b) {
             if (b.dataset.quick === 'LFF' && s.querySelector('.jb-quick [data-quick="ITF"]')) b.hidden = true;
             if (b.dataset.quick === 'ITF' && s.querySelector('.jb-quick [data-quick="LFF"]')) b.innerHTML = '<b>ITF + LFF</b><small>' + EA.t('Traktor & pemuat', 'Tractor & loader') + '</small>';
+          });
+          // 1.111 (Yu Chen, 27 Nov: "task already chosen from the shortcut button should be show or hide just in case
+          // confusing"): a job already on the chit keeps its button (a second harvest gang in another block is real) but
+          // says so, in amber: "SUDAH ADA · Blk 01". Tapping it still adds a new job.
+          if (!key) s.querySelectorAll('.jb-quick [data-quick]').forEach(function (b) {
+            var q = b.dataset.quick, have = draft.jobs.filter(function (x) { return x.task === q; });
+            var old = b.querySelector('.rb-have'); if (old) old.remove();
+            b.classList.toggle('rb-hasjob', !!have.length);
+            if (have.length) b.insertAdjacentHTML('beforeend', '<span class="rb-have">' + EA.t('SUDAH ADA', 'ON THE CHIT') + ' · ' + esc(have.map(function (x) { return x.block ? 'Blk ' + x.block : EA.t('tiada blok', 'no block'); }).join(', ')) + '</span>');
           });
           var pj = s.querySelector('#jb-rbjob'); pj.hidden = !t;
           if (t) {
@@ -1920,21 +1938,23 @@
           else { var nj = { key: 'j' + (draft.nextJob++), task: pick.task, block: pick.block, lots: pick.lots, mandor: pick.mandor }; if (pick.ask) nj.ask = pick.ask; if (Object.keys(rep).length) nj.repeat = rep; draft.jobs.push(nj);
                  if (pick.mandor && !draft.marks[pick.mandor]) draft.marks[pick.mandor] = 'H';
                  var ld = s.querySelector('#jb-ld') && pick.task === 'ITF' ? s.querySelector('#jb-ld').value : '';
-                 if (ld) {        // the loader partner: an LFF job on the same lots
+                 var lds = pick.task !== 'ITF' ? [] : rb ? rbLds() : ld ? [ld] : [];   // 1.111: the new look may carry several loaders
+                 if (lds.length) {        // the loader partner: an LFF job on the same lots
                    var lj = draft.jobs.find(function (x) { return x.task === 'LFF' && x.block === pick.block && x.lots.join(' ') === pick.lots.join(' '); });
                    if (!lj) { lj = { key: 'j' + (draft.nextJob++), task: 'LFF', block: pick.block, lots: pick.lots.slice(), mandor: '' }; draft.jobs.push(lj); }
-                   draft.marks[ld] = 'H'; draft.jobOf[ld] = lj.key;
+                   lds.forEach(function (x) { draft.marks[x] = 'H'; draft.jobOf[x] = lj.key; });
                  }
                  // 1.102: the men ticked on this sheet go on the job, present
-                 if (rb) rbMen().forEach(function (id) { if (id !== ld) { draft.marks[id] = 'H'; draft.jobOf[id] = nj.key; } }); }
+                 if (rb) rbMen().forEach(function (id) { if (lds.indexOf(id) < 0) { draft.marks[id] = 'H'; draft.jobOf[id] = nj.key; } }); }
           // 1.105: a changed tractor keeps its loader on the same lots, and one man or a pair can be switched
           if (rb && j0 && j0.task === 'ITF') {
             var pj = part0, curL = pj ? Object.keys(draft.jobOf).filter(function (w) { return draft.jobOf[w] === pj.key; }) : [];
             if (pj) { pj.block = j0.block; pj.lots = j0.lots.slice(); }
-            if (pick.ld) {
+            var ldsE = rbLds();
+            if (ldsE.length) {
               if (!pj) { pj = { key: 'j' + (draft.nextJob++), task: 'LFF', block: j0.block, lots: j0.lots.slice(), mandor: '' }; draft.jobs.push(pj); }
-              curL.forEach(function (w) { if (w !== pick.ld) { delete draft.marks[w]; delete draft.jobOf[w]; } });
-              draft.marks[pick.ld] = 'H'; draft.jobOf[pick.ld] = pj.key;
+              curL.forEach(function (w) { if (ldsE.indexOf(w) < 0) { delete draft.marks[w]; delete draft.jobOf[w]; } });
+              ldsE.forEach(function (x) { draft.marks[x] = 'H'; draft.jobOf[x] = pj.key; });
             } else if (pj) {
               curL.forEach(function (w) { delete draft.marks[w]; delete draft.jobOf[w]; });
               draft.jobs = draft.jobs.filter(function (x) { return x !== pj; });

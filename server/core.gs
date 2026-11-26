@@ -1794,6 +1794,10 @@ function workerStates_(estate) {
   var st = {};
   workerRows_(estate).forEach(function (r) {
     var w = String(r.worker_id), k = String(r.kind), o = st[w] || (st[w] = { kind: '', day: '', pending: false, start: '' });
+    // v1.109 (Yu Chen, 26 Nov 2026, Meliau clerk's phone: 31 "Menunggu Pengurus" lines): a worker loaded from an old
+    // book (keyed_by IMPORT) is history, already decided, so it never waits for the Pengurus (21 Oct rule: imported
+    // records count in totals and history, not in lists to act on).
+    if (k === 'new' && String(r.keyed_by) === 'IMPORT') { o.kind = ''; o.day = ''; o.pending = false; o.start = String(r.day); return; }
     if (k === 'new' || k === 'resigned' || k === 'absconded') {
       o.kind = k; o.day = String(r.day); o.pending = true; o.line = r; if (k === 'new') o.start = String(r.day);
     } else if (k === 'approved' && o.pending) {
@@ -2270,9 +2274,24 @@ function tuaiTodo_(est, r, add, today) {
     if (r === 'HQ' || r === 'Owner') add(Object.assign({ p: late ? 2 : 4 }, line));
   });
 }
+// v1.109: the names on a to-do line follow the estate's own people: its Pengurus ("Encik Samsir" at Sugut and Paitan)
+// and its Staf bertugas ("Ferezelly" at Sugut), or the plain position where the estate has none (Meliau stands alone).
+function estPeople_(est) {
+  var o = { mgr: 'Pengurus', staff: 'Staf bertugas' };
+  try {
+    readUsers_().list.forEach(function (u) {
+      if (String(u.status) !== 'active' || /^[TL]-/.test(String(u.user_code))) return;
+      var es = String(u.estates || '').split(','), first = String(u.name).replace(/^'/, '').split(' ')[0];
+      if (es.indexOf(est) < 0 || !first) return;
+      if (String(u.role) === 'Manager' && o.mgr === 'Pengurus') o.mgr = 'Encik ' + first;
+      if (String(u.role) === 'Staff' && o.staff === 'Staf bertugas' && es.length === 1) o.staff = first;
+    });
+  } catch (e) {}
+  return o;
+}
 function todo_(user, req) {
   CLOSED_MEMO_ = null;   // v1.43: the day locks are read fresh in every call
-  var est = String(req.estate || ''), r = user.role;
+  var est = String(req.estate || ''), r = user.role, EP_ = estPeople_(est);
   if (['Staff', 'Clerk', 'Manager', 'Owner', 'HQ'].indexOf(r) < 0) return { ok: true, estate: est, items: [] };
   if (user.estates.indexOf(est) < 0) return { ok: false, error: 'not_your_estate' };
   var today = todayKL_(), yday = daysAgo_(1), items = [];
@@ -2328,14 +2347,14 @@ function todo_(user, req) {
     if (rp.bunches && (full || old)) {
       if (r === 'Staff') add({ id: 'RP:' + rp.since, p: 1, ls: old ? dayAdd_(rp.since, 1) : today, ic: 'LR', bm: full ? 'Ramp penuh' + mtTxt + ' · panggil lori' : 'Buah di ramp sejak ' + shortD_(rp.since) + ' · panggil lori sekarang',
         en: full ? 'Ramp full · call the lorry' : 'Fruit on the ramp since ' + shortD_(rp.since) + ' · call the lorry now',
-        sub: rp.bunches + ' tandan' + mtTxt + (blk ? ' (' + blk + ')' : '') + (full ? '' : ' · kurang ' + LORRY_MT + ' tan: tanya Encik Samsir'), go: '#field-harvest/collect' });
+        sub: rp.bunches + ' tandan' + mtTxt + (blk ? ' (' + blk + ')' : '') + (full ? '' : ' · kurang ' + LORRY_MT + ' tan: tanya ' + EP_.mgr), go: '#field-harvest/collect' });
       if (r === 'Manager') add({ id: 'RP:' + rp.since, p: full ? 2 : 1, ic: 'LR', bm: full ? 'Ramp penuh' + mtTxt + ' · Staf panggil lori' : 'Putuskan: hantar lori separuh penuh?',
         en: full ? 'Ramp full · the staff calls the lorry' : 'Decide: send a half-full lorry?',
         sub: rp.bunches + ' tandan' + mtTxt + ' di ramp sejak ' + shortD_(rp.since) + (full ? '' : ' · lebih 24 jam · beritahu Staf'), go: '' });
       if (r === 'Clerk') add({ id: 'RP:' + rp.since, p: 4, ic: 'LR', bm: 'Lori dijangka keluar' + mtTxt, en: 'A lorry is expected', sub: rp.bunches + ' tandan di ramp · jangka tiket kilang', go: '' });
     }
     if (r === 'Owner' && rp.bunches && days >= 2) add({ id: 'RO:' + rp.since, p: 1, ic: '!', bm: 'Tersangkut: buah ' + days + ' hari di ramp', en: 'Stuck: fruit ' + days + ' days on the ramp',
-      sub: rp.bunches + ' tandan' + mtTxt + ' sejak ' + shortD_(rp.since) + ' · Encik Samsir', go: '' });
+      sub: rp.bunches + ' tandan' + mtTxt + ' sejak ' + shortD_(rp.since) + ' · ' + EP_.mgr, go: '' });
     // v1.54 (Yu Chen, 11 Nov 2026): harvested fruit must be at the ramp by the end of the day after harvest, rain
     // or not; Sunday counts (calendar days). Counted by the day of harvest, not the keying time. Day after harvest:
     // the staff's line, with the deadline. Past that: red for the staff and the Pengurus's line by name (he gives
@@ -2354,13 +2373,13 @@ function todo_(user, req) {
       var fdue = fld.filter(function (x) { return x.since === yday; }), flate = fld.filter(function (x) { return x.since < yday; });
       var f1 = flate.map(function (x) { return x.since; }).sort()[0], fdays = f1 ? dayDiff_(f1, today) : 0;
       if (r === 'Staff' && flate.length) add({ id: 'FO:' + f1, p: 1, ls: dayAdd_(f1, 2), ic: '!', bm: 'LEBIH TEMPOH: ' + fsum(flate) + ' tandan' + ftan(fsum(flate)) + ' masih di ladang', en: 'OVERDUE: ' + fsum(flate) + ' bunches' + ftan(fsum(flate)) + ' still in the field',
-        sub: 'Dituai ' + shortD_(f1) + ' · ' + fdays + ' hari · ' + fblk(flate) + ' · angkat sekarang · Encik Samsir sudah nampak', go: '#field-harvest/collect' });
+        sub: 'Dituai ' + shortD_(f1) + ' · ' + fdays + ' hari · ' + fblk(flate) + ' · angkat sekarang · ' + EP_.mgr + ' sudah nampak', go: '#field-harvest/collect' });
       if (r === 'Staff' && fdue.length) add({ id: 'FC:' + yday, p: 1, ic: 'LR', bm: fsum(fdue) + ' tandan' + ftan(fsum(fdue)) + ' dituai semalam · mesti ke ramp hari ini', en: fsum(fdue) + ' bunches' + ftan(fsum(fdue)) + ' harvested yesterday · must reach the ramp today',
         sub: fblk(fdue) + ' · traktor angkat dahulu · tekan di sini → Semua ke ramp', go: '#field-harvest/collect' });
       if (r === 'Manager' && flate.length) add({ id: 'FM:' + f1, p: 1, ic: '!', bm: 'Buah di ladang lebih tempoh · ' + fsum(flate) + ' tandan' + ftan(fsum(flate)), en: 'Fruit in the field past its deadline · ' + fsum(flate) + ' bunches' + ftan(fsum(flate)),
         sub: 'Dituai ' + shortD_(f1) + ' · ' + fdays + ' hari · ' + fblk(flate) + ' · beri arahan kepada Staf', go: '' });
       if (r === 'Owner' && flate.length && fdays >= 3) add({ id: 'FW:' + f1, p: 1, ic: '!', bm: 'Tersangkut: buah ' + fdays + ' hari di ladang', en: 'Stuck: fruit ' + fdays + ' days in the field',
-        sub: fsum(flate) + ' tandan' + ftan(fsum(flate)) + ' · dituai ' + shortD_(f1) + ' · ' + fblk(flate) + ' · Ferezelly, Encik Samsir', go: '' });
+        sub: fsum(flate) + ' tandan' + ftan(fsum(flate)) + ' · dituai ' + shortD_(f1) + ' · ' + fblk(flate) + ' · ' + EP_.staff + ', ' + EP_.mgr, go: '' });
     }
     return b;
   }
@@ -2410,7 +2429,7 @@ function todo_(user, req) {
     (wk.flags || []).forEach(function (f) { add({ id: 'FL:' + f.worker, p: 2, ic: 'PK', bm: f.name + ' – mungkin lari?', en: f.name + ' – maybe absconded?', sub: 'Dari ' + f.by + ' · ' + shortD_(f.date), go: '#workers' }); });
     (wk.pending || []).forEach(function (q) {
       if (dayDiff_(String(q.at).slice(0, 10), today) < 2) return;
-      add({ id: 'WT:' + q.worker, p: 2, ic: 'PK', bm: 'Menunggu Pengurus lebih 2 hari: ' + q.name, en: 'Waiting for the manager over 2 days: ' + q.name, sub: 'Dikunci ' + shortD_(q.at) + ' · ingatkan Encik Samsir', go: '#workers' });
+      add({ id: 'WT:' + q.worker, p: 2, ic: 'PK', bm: 'Menunggu Pengurus lebih 2 hari: ' + q.name, en: 'Waiting for the manager over 2 days: ' + q.name, sub: 'Dikunci ' + shortD_(q.at) + ' · ingatkan ' + EP_.mgr, go: '#workers' });
     });
     (wk.changes || []).forEach(function (c) {
       if ((c.kind !== 'rejected' && c.kind !== 'not_absconded' && c.kind !== 'fix_no') || String(c.at).slice(0, 10) < daysAgo_(3)) return;
@@ -2460,7 +2479,7 @@ function todo_(user, req) {
       if (d >= today) return;
       var due = ticketDue_(d), late = today > due || (today === due && hm >= TICKET_BY), what = 'Lori ' + shortD_(d) + ' · ' + t.mill + ' · ' + t.bunches + ' tandan';
       if (r === 'Clerk') add(late
-        ? { id: 'DN:' + t.trip, p: 1, ls: due, ic: '!', bm: 'LEWAT: tiket DN ' + (t.dn || '—') + ' belum dikunci', en: 'LATE: the ticket for DN ' + (t.dn || '—') + ' is not keyed', sub: what + ' · had ' + TICKET_BY + ' pagi ' + shortD_(due) + ' · tiada gambar pemandu? beritahu Encik Samsir', go: '#field-harvest/ticket' }
+        ? { id: 'DN:' + t.trip, p: 1, ls: due, ic: '!', bm: 'LEWAT: tiket DN ' + (t.dn || '—') + ' belum dikunci', en: 'LATE: the ticket for DN ' + (t.dn || '—') + ' is not keyed', sub: what + ' · had ' + TICKET_BY + ' pagi ' + shortD_(due) + ' · tiada gambar pemandu? beritahu ' + EP_.mgr, go: '#field-harvest/ticket' }
         : { id: 'DN:' + t.trip, p: 2, ic: 'DN', bm: 'DN ' + (t.dn || '—') + ': kunci tiket sebelum ' + TICKET_BY + ' pagi' + (due > today ? ' ' + shortD_(due) : ''), en: 'DN ' + (t.dn || '—') + ': key the ticket before ' + TICKET_BY + ' am', sub: what, go: '#field-harvest/ticket' });
       if (!late) return;
       if (r === 'HQ') add({ id: 'DN:' + t.trip, p: 2, ic: 'DN', bm: 'Tiket DN ' + (t.dn || '—') + ' lewat · kunci jika kerani bercuti', en: 'The ticket for DN ' + (t.dn || '—') + ' is late · key it if the clerk is on leave', sub: what + ' · had ' + TICKET_BY + ' pagi ' + shortD_(due), go: '#field-harvest/ticket' });

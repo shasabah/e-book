@@ -32,7 +32,10 @@ function seedTwoDays(p) {
       alerts: [], rain_mm: '', rain_time: '', checker: 'Ujian',
       jobs: [{ key: 'j1', task: 'HA', block: '02', lots: ['2-1'], mandor: mandor.id }],
       rows: [row(mandor, 99)].concat(on.map(row)) });
-    const oldDay = EA.dayAgo(5), newDay = EA.dayAgo(2);   // one past the window, one inside it
+    // one past the window, one inside it; never a Sunday (1.111: on 27 Nov, five days back was Sunday 22/11, when no one
+    // is expected on the chit, so the "on the list but not on the chit" line rightly never came and the test failed by date)
+    const sun = d => new Date(d + 'T00:00:00').getDay() === 0;
+    const oldDay = sun(EA.dayAgo(5)) ? EA.dayAgo(6) : EA.dayAgo(5), newDay = sun(EA.dayAgo(2)) ? EA.dayAgo(3) : EA.dayAgo(2);
     localStorage.setItem('fh.chits2', JSON.stringify([mk(oldDay, 'OLD'), mk(newDay, 'NEW')]));
     localStorage.setItem('fh.dayclose', JSON.stringify([]));
     // The work MUST be keyed, or check 1 stops at "Kerja harian belum dikunci" and never reaches the

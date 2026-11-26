@@ -72,7 +72,7 @@ const s0 = line(f, 'RP');
 check('no ABW yet: the line shows bunches only (no tonnes made up)', s0 && !/~/.test(s0.bm + s0.sub) && /100 tandan/.test(s0.sub), JSON.stringify(s0));
 addRow('FH_TICKET', { date: ago(5), ticket_no: 'T1', abw_kg: 18, nett_mt: 9 });
 const s2 = line(f, 'RP'), m2 = line(mg, 'RP') || line(mg, 'MG:RP');   // 1.58: from 5:00 petang it is his own line (MG), carrying the same decision
-check('fruit from yesterday (1.8 t): the staff is told to call the lorry now, under 8 t ask the Pengurus', s2 && s2.p === 1 && /panggil lori sekarang/.test(s2.bm) && /1\.8 tan/.test(s2.sub) && /tanya Encik Samsir/.test(s2.sub), JSON.stringify(s2));
+check('fruit from yesterday (1.8 t): the staff is told to call the lorry now, under 8 t ask the Pengurus', s2 && s2.p === 1 && /panggil lori sekarang/.test(s2.bm) && /1\.8 tan/.test(s2.sub) && /tanya Encik Pengurus/.test(s2.sub), JSON.stringify(s2));   // v1.109: the estate's own Pengurus login (here "Pengurus Contoh"), not Samsir by hand
 check('under 8 t and over 24 hours: the Pengurus decides (red)', m2 && m2.p === 1 && /separuh penuh/.test(m2.bm + ' ' + m2.sub), JSON.stringify(m2));
 check('the clerk expects a ticket', (x => x && x.p === 4 && /Lori dijangka/.test(x.bm))(line(ck, 'RP')));
 check('1 day: not yet stuck for the Owner', !line(own, 'RO'));

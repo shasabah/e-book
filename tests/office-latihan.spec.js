@@ -55,6 +55,12 @@ k = sb(hq, { latihan: 1, latihanRole: 'Staff' });
 check('HQ in Latihan as Staf bertugas: the Staff position', k.role === 'Staff' && k.canChit === true && k.canTicket === false, JSON.stringify(k));
 check('the Owner may practise as Pengurus', sb(owner, { latihan: 1, latihanRole: 'Manager' }).role === 'Manager');
 check('outside Latihan the position is never changed', sb(hq, { latihanRole: 'Staff' }).role === 'HQ');
-check('a Staf bertugas cannot take another position, even in Latihan', sb(real, { latihan: 1, latihanRole: 'Clerk' }).role === 'Manager');
+// v1.108: every real login may take a position in Latihan (the Meliau assistant and clerk)
+check('a Pengurus in Latihan may practise as Kerani', sb(real, { latihan: 1, latihanRole: 'Clerk' }).role === 'Clerk');
+const clerk = { user_code: 'CLK-MELU-01', name: 'Kerani Meliau', role: 'Clerk', estates: ['MELU'], status: 'active' };
+k = sb(clerk, { latihan: 1, latihanRole: 'Staff' });
+check('a Kerani in Latihan as Staf bertugas: chit yes, ticket no', k.role === 'Staff' && k.canChit === true && k.canTicket === false, JSON.stringify(k));
+check('a Kerani outside Latihan stays Kerani (no chit)', (k = sb(clerk, { latihanRole: 'Staff' })).role === 'Clerk' && k.canChit === false, JSON.stringify(k));
+check('a practice ID (L-) never takes another position', sb({ user_code: 'L-CLK-MELU-01', name: 'Latihan', role: 'Clerk', estates: ['MELU'], status: 'active' }, { latihan: 1, latihanRole: 'Staff' }).role === 'Clerk');
 check('only Staff, Clerk or Manager can be taken (never Owner)', sb(hq, { latihan: 1, latihanRole: 'Owner' }).role === 'HQ');
 check('a remembered answer is kept per position in Latihan', /PRACTICE_ \? 'L' \+ user\.role : ''/.test(code));

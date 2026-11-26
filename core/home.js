@@ -751,13 +751,14 @@
   function latOk(u) { return !!u && !/^[TL]-/.test(String(u.code)) && !!EA.practiceOwn; }
   function latSwitch(on, role) { EA.setPractice(on); if (on) EA.setLatihanRole(role || ''); location.hash = ''; location.reload(); }
   // v1.91 LATIH SEBAGAI (Yu Chen, 24 Nov 2026): the Owner and HQ pick the position to practise, to guide new people.
+  // v1.108 (26 Nov 2026): every real login picks; his own position shows once, as "Jawatan sendiri".
   var LAT_ROLES = [['Staff', 'Staf bertugas', 'Staff in charge', 'chit pagi, kerja, ramp, tutup hari', 'morning chit, work, ramp, close'],
     ['Clerk', 'Kerani', 'Clerk', 'tiket kilang, gred', 'mill ticket, grading'], ['Manager', 'Pengurus', 'Manager', 'lulus, amaran, Operasi', 'approvals, alerts, Operasi']];
   function latRoleSheet(inside) {
     var own = EA.roleNames[EA.realRole()] || { bm: EA.realRole(), en: EA.realRole() };
     openSheet('<h2 id="sheet-title"><span class="bm">Latih sebagai</span><span class="en">Practise as</span></h2>' +
       '<p class="hint"><span class="bm">Pilih jawatan. Skrin ikut jawatan itu. Semua masuk buku latihan sahaja.</span><span class="en">Pick a position. The screens follow it. Everything goes to the practice book only.</span></p>' +
-      '<div class="name-menu">' + LAT_ROLES.map(function (r) { return '<button class="btn btn-wait" type="button" data-lr="' + r[0] + '">' + esc(r[2].toUpperCase()) + '<small>' + esc(r[1].toUpperCase() + ' · ' + r[3]) + '</small></button>'; }).join('') +
+      '<div class="name-menu">' + LAT_ROLES.filter(function (r) { return r[0] !== EA.realRole(); }).map(function (r) { return '<button class="btn btn-wait" type="button" data-lr="' + r[0] + '">' + esc(r[2].toUpperCase()) + '<small>' + esc(r[1].toUpperCase() + ' · ' + r[3]) + '</small></button>'; }).join('') +
       '<button class="btn btn-ghost" type="button" data-lr="">' + esc(EA.t('Jawatan sendiri', 'My own position').toUpperCase()) + '<small>' + esc((EA.t(own.bm, own.en)).toUpperCase()) + '</small></button>' +
       '<button class="btn btn-ghost" type="button" id="lr-no">CANCEL<small>BATAL</small></button></div>',
       function (s) {

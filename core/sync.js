@@ -27,9 +27,13 @@ window.EA = window.EA || {};
     PRACT = null;
   };
   // v1.91 LATIH SEBAGAI: in Latihan the Owner or HQ may practise as Staf bertugas, Kerani or Pengurus (this opening only).
+  // v1.108 (Yu Chen, 26 Nov 2026: the Meliau assistant and clerk practise each other's job before the structure is set):
+  // every real login may pick the position in Latihan. Practice IDs (L-) and test IDs (T-) keep their own.
   var LATROLE = 'ea.latihanRole';
   EA.realRole = function () { try { var u = JSON.parse(localStorage.getItem('ea.user') || 'null'); return u ? String(u.role) : ''; } catch (e) { return ''; } };
-  EA.canPickRole = function () { return /^(Owner|HQ)$/.test(EA.realRole()); };
+  EA.canPickRole = function () {
+    try { var u = JSON.parse(localStorage.getItem('ea.user') || 'null'); return !!u && !!u.role && !/^[TL]-/.test(String(u.code)); } catch (e) { return false; }
+  };
   EA.latihanRole = function () {
     if (!EA.practiceOwn() || !EA.canPickRole()) return '';
     var r = ''; try { r = sessionStorage.getItem(LATROLE) || ''; } catch (e) {}

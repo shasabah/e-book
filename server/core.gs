@@ -246,7 +246,9 @@ function doPost_(e) {
   // v1.91 LATIH SEBAGAI (Yu Chen, 24 Nov 2026: "i wan wawa to know staff and also clerk work. so she can help me to guide
   // new person"): in Latihan only, the Owner or HQ may practise as Staf bertugas, Kerani or Pengurus. Only for that
   // request, and only in the practice book; the real login keeps its own position.
-  if (PRACTICE_ && !isPracticeCode_(user.user_code) && /^(Owner|HQ)$/.test(String(user.role)) && /^(Staff|Clerk|Manager)$/.test(String(req.latihanRole || ''))) {
+  // v1.108 (Yu Chen, 26 Nov 2026: the Meliau assistant and clerk practise each other's job before the structure is set):
+  // every real login may take the position in Latihan, still only for that call and only in the practice book.
+  if (PRACTICE_ && !isPracticeCode_(user.user_code) && /^(Staff|Clerk|Manager)$/.test(String(req.latihanRole || ''))) {
     user = Object.assign({}, user, { role: String(req.latihanRole), realRole: String(user.role) });
   }
 

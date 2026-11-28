@@ -803,6 +803,8 @@
   function render(container, c) {
     // v1.12: the clerk opens on Tiket and otherwise sees Operasi; the manager sees only Operasi.
     if (c.user.role === 'Clerk' && (c.screen === '' || c.screen === 'ticket') && EA.fh.ticket) return EA.fh.ticket.render(container, Object.assign({}, c, { screen: 'ticket' }));
+    // v1.112 (Brief_Kerani_DN_Meliau): at an estate with "Kerani isi DN" on, the clerk keys Ramp & lorry and the DN.
+    if (c.user.role === 'Clerk' && c.screen === 'collect' && EA.keraniDn && EA.keraniDn(c.estate)) return EA.fh.collect.render(container, c);
     if (viewOnly(c.user) && EA.fh.history) return EA.fh.history.render(container, Object.assign({}, c, { screen: 'history' }));
     if (c.user.role === 'Worker' || c.screen === 'collect') return EA.fh.collect.render(container, c);
     if (c.screen === 'work' && EA.fh.work) return EA.fh.work.render(container, c);

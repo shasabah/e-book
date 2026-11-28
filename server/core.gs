@@ -432,9 +432,12 @@ function findUserInSheet_(key) {
 // only the clerk keys the mill ticket and grading; only the Owner or HQ change the shared lists.
 // Errors from any phone are always accepted.
 var TICKET_TABS = ['FH_TICKET', 'FH_GRADING', 'FH_TICKET_BLOCK', 'FH_TICKET_HARV'];
-function canWrite_(user, tab) {
+// v1.112 (Brief_Kerani_DN_Meliau): the ramp and DN tabs a Kerani may write at an estate with "Kerani isi DN" on.
+var KERANI_DN_TABS = ['FH_COLLECT', 'FH_DISPATCH', 'FH_DISPATCH_LOT'];
+function canWrite_(user, tab, row, keraniDn) {
   var r = user.role;
   if (tab === 'APP_ERROR' || tab === 'CHECK') return true;
+  if (r === 'Clerk' && KERANI_DN_TABS.indexOf(tab) >= 0 && row && (keraniDn || switches_().keraniDn || []).indexOf(String(row.estate)) >= 0) return true;
   // v1.49 SEMAK PETAK: the Staf bertugas ticks which lots have had the round (LIST_LOTSTART), for his own estate.
   // It is a record of field work, not a shared list, so the staff may write it; every tick is a new row.
   if (tab === 'LIST_LOTSTART') return r === 'Staff' || r === 'Owner' || r === 'HQ';
@@ -454,7 +457,7 @@ function saveRow(user, tab, row) {
   // Checks before writing
   if (!row.id) return { ok: false, error: 'no_id' };
   if (user.estates.indexOf(row.estate) < 0) return { ok: false, error: 'not_your_estate' };
-  if (!canWrite_(user, String(tab))) return { ok: false, error: 'not_allowed' };
+  if (!canWrite_(user, String(tab), row)) return { ok: false, error: 'not_allowed' };
   if (STATUSES.indexOf(row.status) < 0) return { ok: false, error: 'bad_status' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(row.date))) return { ok: false, error: 'bad_date' };
   if (beforeLive_(user, row, tab)) return { ok: true, skipped: 'before_live' };
@@ -545,12 +548,13 @@ function saveBatch(user, items) {
       }
       return (tabs[name] = { sh: sh, head: head, missing: missing, seen: seen, older: older, add: [], last: last });
     }
+    var keraniDn = switches_().keraniDn || [];
     items.forEach(function (it) {
       var row = it && it.row, tab = it && it.tab;
       var id = row && row.id;
       function fail(e) { results.push({ id: id || '', ok: false, error: e }); }
       if (!tab || tab === USERS_TAB || !row || typeof row !== 'object') return fail('bad_entry');
-      if (!canWrite_(user, String(tab))) return fail('not_allowed');
+      if (!canWrite_(user, String(tab), row, keraniDn)) return fail('not_allowed');
       // v1.3: a lorry's delivery note cannot be changed once its mill ticket is keyed.
       if ((tab === 'FH_DISPATCH' || tab === 'FH_DISPATCH_LOT') && row.replaces && row.trip && ticketed_(row.estate)[row.trip]) return fail('ticketed');
       var t = tabInfo(String(tab));
@@ -756,7 +760,7 @@ function backlog(estate) {
   var b = calcBacklog(cut, col, dis, Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd'));
   return { ok: true, estate: estate, at: Utilities.formatDate(now, 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm'),
            field: b.field, fieldTotal: b.fieldTotal, ramp: b.ramp, checks: b.checks, grading: gradingAlerts_(estate, now), tonnage: tonnageMtd_(estate, now),
-           rain: dmsRain_(estate, now), machines: machines_(estate, now) };
+           rain: dmsRain_(estate, now), machines: machines_(estate, now), ownLorries: ownLorries_(estate) };
 }
 
 // v1.48 (Yu Chen, 29 Oct 2026: "staff key rainfall in the DMS daily, but the chit can't link"): the morning chit
@@ -1507,7 +1511,8 @@ function phoneNames_(u) { try { var o = JSON.parse(String(u.phone_names || '{}')
 // The trial switches, sent to every phone with the login and each send.
 // v1.92 Rupa Baru (Brief_Rupa_Baru, signed 24 Nov 2026): the people the Owner ticked may try the new look.
 // v1.111 rupaEstates (Yu Chen, 27 Nov 2026 "sign 1"): estates where everyone has the new look, set by the Owner in Suis.
-function switches_() { var w = getJson_('SWITCHES', {}); return { testModeOff: !!w.testModeOff, live: w.live || {}, cleanFrom: liveFrom_(), rupaBaru: w.rupaBaru || [], rupaEstates: w.rupaEstates || [] }; }
+// v1.112 keraniDn (Brief_Kerani_DN_Meliau, signed 28 Nov 2026): estates where the Kerani keys Ramp & lorry and the DN.
+function switches_() { var w = getJson_('SWITCHES', {}); return { testModeOff: !!w.testModeOff, live: w.live || {}, cleanFrom: liveFrom_(), rupaBaru: w.rupaBaru || [], rupaEstates: w.rupaEstates || [], keraniDn: w.keraniDn || [] }; }
 
 // When each phone last reached the office, with its app version and how many records were waiting.
 // Written at most every 5 minutes per phone (or when the version or waiting count changes).
@@ -1696,7 +1701,7 @@ function adminSwitches_() {
   if (lg && lg.getLastRow() > 1) lg.getRange(2, 1, lg.getLastRow() - 1, USERS_LOG_COLS.length).getValues().forEach(function (r) {
     if (String(r[3]) === 'switch' || String(r[3]) === 'test_off') log.push({ at: r[0] instanceof Date ? Utilities.formatDate(r[0], 'Asia/Kuala_Lumpur', 'yyyy-MM-dd HH:mm') : String(r[0]).replace(/^'/, ''), by: String(r[2]), detail: String(r[6]) });
   });
-  return { ok: true, testPinsOn: testOn, testModeOff: sw.testModeOff, live: sw.live, rupaBaru: sw.rupaBaru, rupaEstates: sw.rupaEstates, people: people, log: log.reverse().slice(0, 10) };
+  return { ok: true, testPinsOn: testOn, testModeOff: sw.testModeOff, live: sw.live, rupaBaru: sw.rupaBaru, rupaEstates: sw.rupaEstates, keraniDn: sw.keraniDn, people: people, log: log.reverse().slice(0, 10) };
 }
 function adminSwitch_(user, req) {
   var lock = LockService.getScriptLock();
@@ -1737,6 +1742,13 @@ function adminSwitch_(user, req) {
       w.rupaEstates = (w.rupaEstates || []).filter(function (x) { return x !== re; });
       if (on) w.rupaEstates.push(re);
       detail = (on ? 'Rupa Baru untuk semua: ' : 'Rupa lama untuk semua: ') + re;
+    } else if (which === 'keraniDn') {
+      // v1.112 (Brief_Kerani_DN_Meliau §2): at this estate the Kerani keys Ramp & lorry and the DN; the staff still may.
+      var ke = String(req.estate || '');
+      if (ESTATES.indexOf(ke) < 0) return { ok: false, error: 'bad_estates' };
+      w.keraniDn = (w.keraniDn || []).filter(function (x) { return x !== ke; });
+      if (on) w.keraniDn.push(ke);
+      detail = (on ? 'Kerani isi DN: ' : 'Staf isi DN: ') + ke;
     } else return { ok: false, error: 'unknown_switch' };
     setJson_('SWITCHES', w);
     logUser_(user, 'switch', { user_code: '-', name: '-' }, detail);
@@ -2374,24 +2386,26 @@ function todo_(user, req) {
     var mt = abw ? Math.round(rp.bunches * abw / 100) / 10 : 0, mtTxt = mt ? ' · ~' + mt.toFixed(1) + ' tan' : '';
     var own = ownLorries_(est), fullMt = own.length ? Math.min.apply(null, own.map(function (x) { return x.mt; })) : LORRY_MT;
     var full = mt >= fullMt, old = rp.bunches && rp.since && rp.since < today, days = rp.since ? dayDiff_(rp.since, today) : 0;
+    // v1.112 (Brief_Kerani_DN_Meliau): where the Kerani keys the DN, she gets the staff's ramp line and opens Ramp & lorry.
+    var kd = (switches_().keraniDn || []).indexOf(est) >= 0;
     var blk = (rp.blocks || []).map(function (x) { return 'Blk ' + x.block + ' ' + x.bunches; }).join(', ');
     // v1.111: an estate with its own lorry: the same rule, no "call the lorry"; the half load is under its own lorry's load.
     if (own.length && rp.bunches && (full || old)) {
       var lr = own.map(function (x) { return x.reg + ' ' + x.mt + ' t'; }).join(' · ');
-      if (r === 'Staff') add({ id: 'RP:' + rp.since, p: 1, ls: old ? dayAdd_(rp.since, 1) : today, ic: 'LR', bm: old ? 'Buah masih di ramp sejak ' + shortD_(rp.since) : 'Buah di ramp' + mtTxt + ' · cukup satu lori',
+      if (r === 'Staff' || (r === 'Clerk' && kd)) add({ id: 'RP:' + rp.since, p: 1, ls: old ? dayAdd_(rp.since, 1) : today, ic: 'LR', bm: old ? 'Buah masih di ramp sejak ' + shortD_(rp.since) : 'Buah di ramp' + mtTxt + ' · cukup satu lori',
         en: old ? 'Fruit still on the ramp since ' + shortD_(rp.since) : 'Fruit on the ramp · a lorry load',
         sub: rp.bunches + ' tandan' + mtTxt + (blk ? ' (' + blk + ')' : '') + ' · lori sendiri: ' + lr, go: '#field-harvest/collect' });
       if (r === 'Manager' && old && !full) add({ id: 'RP:' + rp.since, p: 1, ic: 'LR', bm: 'Putuskan: hantar lori separuh penuh?', en: 'Decide: send a half-full lorry?',
         sub: rp.bunches + ' tandan' + mtTxt + ' di ramp sejak ' + shortD_(rp.since) + ' · kurang ' + fullMt + ' tan · beritahu Staf', go: '' });
-      if (r === 'Clerk') add({ id: 'RP:' + rp.since, p: 4, ic: 'LR', bm: 'Lori dijangka keluar' + mtTxt, en: 'A lorry is expected', sub: rp.bunches + ' tandan di ramp · jangka tiket kilang', go: '' });
+      if (r === 'Clerk' && !kd) add({ id: 'RP:' + rp.since, p: 4, ic: 'LR', bm: 'Lori dijangka keluar' + mtTxt, en: 'A lorry is expected', sub: rp.bunches + ' tandan di ramp · jangka tiket kilang', go: '' });
     } else if (rp.bunches && (full || old)) {
-      if (r === 'Staff') add({ id: 'RP:' + rp.since, p: 1, ls: old ? dayAdd_(rp.since, 1) : today, ic: 'LR', bm: full ? 'Ramp penuh' + mtTxt + ' · panggil lori' : 'Buah di ramp sejak ' + shortD_(rp.since) + ' · panggil lori sekarang',
+      if (r === 'Staff' || (r === 'Clerk' && kd)) add({ id: 'RP:' + rp.since, p: 1, ls: old ? dayAdd_(rp.since, 1) : today, ic: 'LR', bm: full ? 'Ramp penuh' + mtTxt + ' · panggil lori' : 'Buah di ramp sejak ' + shortD_(rp.since) + ' · panggil lori sekarang',
         en: full ? 'Ramp full · call the lorry' : 'Fruit on the ramp since ' + shortD_(rp.since) + ' · call the lorry now',
         sub: rp.bunches + ' tandan' + mtTxt + (blk ? ' (' + blk + ')' : '') + (full ? '' : ' · kurang ' + LORRY_MT + ' tan: tanya ' + EP_.mgr), go: '#field-harvest/collect' });
       if (r === 'Manager') add({ id: 'RP:' + rp.since, p: full ? 2 : 1, ic: 'LR', bm: full ? 'Ramp penuh' + mtTxt + ' · Staf panggil lori' : 'Putuskan: hantar lori separuh penuh?',
         en: full ? 'Ramp full · the staff calls the lorry' : 'Decide: send a half-full lorry?',
         sub: rp.bunches + ' tandan' + mtTxt + ' di ramp sejak ' + shortD_(rp.since) + (full ? '' : ' · lebih 24 jam · beritahu Staf'), go: '' });
-      if (r === 'Clerk') add({ id: 'RP:' + rp.since, p: 4, ic: 'LR', bm: 'Lori dijangka keluar' + mtTxt, en: 'A lorry is expected', sub: rp.bunches + ' tandan di ramp · jangka tiket kilang', go: '' });
+      if (r === 'Clerk' && !kd) add({ id: 'RP:' + rp.since, p: 4, ic: 'LR', bm: 'Lori dijangka keluar' + mtTxt, en: 'A lorry is expected', sub: rp.bunches + ' tandan di ramp · jangka tiket kilang', go: '' });
     }
     if (r === 'Owner' && rp.bunches && days >= 2) add({ id: 'RO:' + rp.since, p: 1, ic: '!', bm: 'Tersangkut: buah ' + days + ' hari di ramp', en: 'Stuck: fruit ' + days + ' days on the ramp',
       sub: rp.bunches + ' tandan' + mtTxt + ' sejak ' + shortD_(rp.since) + ' · ' + EP_.mgr, go: '' });

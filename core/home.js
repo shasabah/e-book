@@ -457,7 +457,7 @@
   function renderScreens(u, estate, fh) {
     var box = $('work-screens'); if (!box) return;
     var steps = u.role === 'Staff' && $('today') && !$('today').hidden;   // v1.64: the steps are the buttons, no second row
-    var list = !fh || steps ? [] : u.role === 'Clerk' ? [['ticket', 'MILL TICKET', 'TIKET KILANG']]
+    var list = !fh || steps ? [] : u.role === 'Clerk' ? (EA.keraniDn && EA.keraniDn(estate) ? [['collect', 'RAMP & LORRY', 'RAMP & LORI']] : []).concat([['ticket', 'MILL TICKET', 'TIKET KILANG']])
       : u.role === 'Worker' ? [['collect', 'RAMP & LORRY', 'RAMP & LORI']]
       : /^(Owner|HQ)$/.test(u.role) ? [['ticket', 'MILL TICKET', 'TIKET KILANG']]   // v1.66: they key no chit, work or ramp
       : u.role === 'Staff' ? [['', 'MORNING CHIT', 'CHIT PAGI'], ['work', 'WORK', 'KERJA'], ['collect', 'RAMP & LORRY', 'RAMP & LORI'], ['close', 'CLOSE THE DAY', 'TUTUP HARI']] : [];

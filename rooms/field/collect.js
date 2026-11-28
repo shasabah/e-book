@@ -97,6 +97,24 @@
   }
 
   // ---------- the screen ----------
+  // v1.112 (Brief_Kerani_DN_Meliau §2): an estate with lorries of its own (LIST_MACHINES serves, from the office with the
+  // ramp check) picks the lorry, so no number is typed wrong; "Lain-lain" still lets a hired lorry be typed. An estate
+  // with no lorry of its own (Sugut, Paitan) types it, as before.
+  function ownRegs() {
+    var b = EA.fh.getBacklog ? EA.fh.getBacklog(ctx.estate) : null;
+    return ((b && b.ownLorries) || []).map(function (x) { return String(x.reg || '').toUpperCase(); }).filter(String);
+  }
+  function lorryField(d) {
+    var own = ownRegs(), lab = '<label for="cl-lr"><span class="bm">No. lori</span><span class="en">Lorry number</span></label>';
+    var text = '<input id="cl-lr" class="text-input" value="' + esc(d.lorry) + '">';
+    if (!own.length) return '<div class="field">' + lab + text + '</div>';
+    var other = !!d.lorryOther || (!!d.lorry && own.indexOf(String(d.lorry).toUpperCase()) < 0);
+    return '<div class="field"><label for="cl-lrs"><span class="bm">No. lori</span><span class="en">Lorry number</span></label>' +
+      '<select id="cl-lrs" class="text-input"><option value=""' + (!d.lorry && !other ? ' selected' : '') + '>' + EA.t('— pilih lori —', '— pick the lorry —') + '</option>' +
+      own.map(function (r) { return '<option value="' + esc(r) + '"' + (!other && String(d.lorry).toUpperCase() === r ? ' selected' : '') + '>' + esc(r) + '</option>'; }).join('') +
+      '<option value="__other"' + (other ? ' selected' : '') + '>' + EA.t('Lain-lain (taip)', 'Other (type it)') + '</option></select>' +
+      (other ? text : '') + '</div>';
+  }
   function render(container, c) {
     el = container; ctx = c;
     var testing = !EA.roomLive(ctx.room, ctx.estate);
@@ -138,7 +156,7 @@
       (lorryOn() ? '<section class="card" aria-labelledby="cl-s2"><h2 id="cl-s2"><span class="step">2</span><span class="inline"><span class="bm">Nota hantar (DN)</span> · <span class="en">Delivery note</span></span></h2>' +
       '<div class="fields">' +
         '<div class="field"><label for="cl-dn"><span class="bm">No. nota hantar (DN)</span><span class="en">Delivery note no.</span></label><input id="cl-dn" class="text-input" inputmode="numeric" value="' + esc(d.dn) + '"></div>' +
-        '<div class="field"><label for="cl-lr"><span class="bm">No. lori</span><span class="en">Lorry number</span></label><input id="cl-lr" class="text-input" value="' + esc(d.lorry) + '"></div>' +
+        lorryField(d) +
         '<div class="field"><label for="cl-dr"><span class="bm">Pemandu</span><span class="en">Driver</span></label><input id="cl-dr" class="text-input" value="' + esc(d.driver) + '"></div>' +
         '<div class="field"><label for="cl-ml"><span class="bm">Kilang</span><span class="en">Mill or collecting centre</span></label><select id="cl-ml" class="text-input">' +
           EA.lists.millsFor(ctx.estate).concat(['Lain-lain · Other']).map(function (m) { return '<option' + (m === d.mill ? ' selected' : '') + '>' + esc(m) + '</option>'; }).join('') + '</select></div>' +
@@ -161,7 +179,11 @@
     if ($('#cl-dn')) {
       $('#cl-dn').oninput = function () { draft.dispatch.dn = this.value.replace(/\s/g, ''); keepDraft(); };
       $('#cl-dr').oninput = function () { draft.dispatch.driver = this.value; keepDraft(); };
-      $('#cl-lr').oninput = function () { draft.dispatch.lorry = this.value.toUpperCase(); keepDraft(); };
+      if ($('#cl-lr')) $('#cl-lr').oninput = function () { draft.dispatch.lorry = this.value.toUpperCase(); keepDraft(); };
+      if ($('#cl-lrs')) $('#cl-lrs').onchange = function () {
+        if (this.value === '__other') { draft.dispatch.lorryOther = true; draft.dispatch.lorry = ''; } else { draft.dispatch.lorryOther = false; draft.dispatch.lorry = this.value; }
+        keepDraft(); render(el, ctx);
+      };
       $('#cl-ml').onchange = function () { draft.dispatch.mill = this.value; keepDraft(); };
       $('#cl-rc').onchange = function () { draft.dispatch.ramp_cleared = this.checked ? 'Y' : ''; keepDraft(); };
     }
@@ -171,7 +193,11 @@
     wireToday();
     EA.fh.wireBacklog(el, ctx.estate);
     Promise.all([EA.fh.refreshBacklog(ctx.estate), EA.fh.harvest.refreshOpen(ctx.estate)]).then(function () {
-      if (el && document.body.contains(el) && !el.hidden && $('#cl-rows') && !el.contains(document.activeElement)) { drawRows(); $('#cl-today').outerHTML = todayCard(); wireToday(); }
+      if (el && document.body.contains(el) && !el.hidden && $('#cl-rows') && !el.contains(document.activeElement)) {
+        // v1.112: the estate's own lorries came with the ramp check: draw the pick list once.
+        if (ownRegs().length && $('#cl-lr') && !$('#cl-lrs')) return render(el, ctx);
+        drawRows(); $('#cl-today').outerHTML = todayCard(); wireToday();
+      }
     });
   }
 

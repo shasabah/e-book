@@ -213,6 +213,15 @@ EA.roomViews = EA.roomViews || {};
         : t('Rupa lama · yang ditanda boleh cuba sendiri', 'Old look · ticked people may try it')) + '</span></div>' + toggle('sw-rupa-' + e, on, true) + '</div>';
     });
     h += '<p class="hint">' + t('Rekod sama dalam kedua-dua rupa. Tutup suis = semua kembali ke rupa lama serta-merta, tanpa versi baru.', 'Same records in both looks. Switch off = everyone back on the old look at once, no new version.') + '</p></div>';
+    // v1.112 (Brief_Kerani_DN_Meliau, signed 28 Nov 2026): the Kerani keys Ramp & lorry and the DN at this estate.
+    var keraniE = d.keraniDn || [];
+    h += '<div class="card"><h2>' + t('Kerani isi DN', 'Clerk keys the DN') + '</h2>';
+    ctx.user.estates.filter(function (e) { return e !== 'SDK'; }).forEach(function (e) {
+      var on = keraniE.indexOf(e) >= 0;
+      h += '<div class="adm-sw"><div><b>' + t('Kerani isi DN: ', 'Clerk keys the DN: ') + e + '</b><span>' + (on ? t('Kerani isi Ramp & lori dan DN · Staf masih boleh · Staf tutup hari', 'The clerk keys Ramp & lorry and the DN · the staff still can · the staff closes the day')
+        : t('Staf isi Ramp & lori dan DN · Kerani isi tiket', 'The staff keys Ramp & lorry and the DN · the clerk keys the ticket')) + '</span></div>' + toggle('sw-kdn-' + e, on, true) + '</div>';
+    });
+    h += '<p class="hint">' + t('Rekod sama. Tutup suis = Kerani kembali ke tiket sahaja, tanpa versi baru.', 'Same records. Switch off = the clerk is back to tickets only, no new version.') + '</p></div>';
     h += '<div class="card"><h2>' + t('Log suis', 'Switch log') + '</h2>' + ((d.log || []).length ? d.log.map(function (l) { return '<div class="us-logline"><b>' + esc(l.at) + ' · ' + esc(l.by) + '</b><br>' + esc(l.detail) + '</div>'; }).join('') : '<p class="hint">' + t('Belum ada.', 'Nothing yet.') + '</p>') + '</div>';
     return h;
   }
@@ -258,6 +267,11 @@ EA.roomViews = EA.roomViews || {};
         confirmSwitch('rupaEstate', on, e, on ? t('Rupa Baru untuk semua di ' + e + '?', 'New look for everyone at ' + e + '?') : t('Kembali ke rupa lama untuk semua di ' + e + '?', 'Back to the old look for everyone at ' + e + '?'),
           on ? t('Semua di ' + e + ' nampak Chit dan Kerja dalam rupa baru, tanpa butang KEMBALI. Rekod sama.', 'Everyone at ' + e + ' gets Chit and Kerja in the new look, with no way back on the phone. Same records.')
             : t('Semua di ' + e + ' kembali ke rupa lama. Tiada rekod hilang.', 'Everyone at ' + e + ' goes back to the old look. No record is lost.')); };
+      var kb = el.querySelector('#sw-kdn-' + e);
+      if (kb) kb.onclick = function () { var on = (d.keraniDn || []).indexOf(e) < 0;
+        confirmSwitch('keraniDn', on, e, on ? t('Kerani isi DN di ' + e + '?', 'Clerk keys the DN at ' + e + '?') : t('Kembali: Staf isi DN di ' + e + '?', 'Back: the staff keys the DN at ' + e + '?'),
+          on ? t('Kerani di ' + e + ' nampak RAMP & LORI dan boleh simpan DN. Staf masih boleh, dan Staf tutup hari.', 'The clerk at ' + e + ' gets RAMP & LORRY and can save the DN. The staff still can, and closes the day.')
+            : t('Kerani di ' + e + ' kembali ke tiket sahaja. Tiada rekod hilang.', 'The clerk at ' + e + ' is back to tickets only. No record is lost.')); };
       var b = el.querySelector('#sw-live-' + e);
       if (b) b.onclick = function () { var on = ((d.live || {})['field-harvest'] || []).indexOf(e) < 0;
         confirmSwitch('live', on, e, on ? t('Buka Kerja Ladang untuk ' + e + '?', 'Open Field & Harvest for ' + e + '?') : t('Tutup Kerja Ladang untuk ' + e + '?', 'Close Field & Harvest for ' + e + '?'),

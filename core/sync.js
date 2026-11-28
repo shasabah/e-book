@@ -68,7 +68,7 @@ window.EA = window.EA || {};
   EA.switches = function () { return get('ea.switches', { testModeOff: false, live: {} }) || { testModeOff: false, live: {} }; };
   EA.setSwitches = function (sw) {
     if (!sw || typeof sw !== 'object') return;
-    set('ea.switches', { testModeOff: !!sw.testModeOff, live: sw.live || {}, rupaBaru: Array.isArray(sw.rupaBaru) ? sw.rupaBaru : [], rupaEstates: Array.isArray(sw.rupaEstates) ? sw.rupaEstates : [], at: Date.now() });
+    set('ea.switches', { testModeOff: !!sw.testModeOff, live: sw.live || {}, rupaBaru: Array.isArray(sw.rupaBaru) ? sw.rupaBaru : [], rupaEstates: Array.isArray(sw.rupaEstates) ? sw.rupaEstates : [], keraniDn: Array.isArray(sw.keraniDn) ? sw.keraniDn : [], at: Date.now() });
     if (sw.cleanFrom && !practiceNow() && get('ea.cleanDone', '') !== sw.cleanFrom) EA.cleanBefore(sw.cleanFrom);
   };
 
@@ -116,6 +116,8 @@ window.EA = window.EA || {};
     if (!e) return false;
     return ((EA.switches().rupaEstates) || []).indexOf(e) >= 0;
   };
+  // v1.112 (Brief_Kerani_DN_Meliau): at an estate with "Kerani isi DN" on, the Kerani keys Ramp & lorry and the DN.
+  EA.keraniDn = function (est) { return !!est && ((EA.switches().keraniDn) || []).indexOf(est) >= 0; };
   EA.rupaBaru = function () { try { return EA.rupaEstate() || (EA.rupaBaruAllowed() && localStorage.getItem('ea.rupaBaru') === '1'); } catch (e) { return false; } };
   EA.setRupaBaru = function (on) { try { if (on) localStorage.setItem('ea.rupaBaru', '1'); else localStorage.removeItem('ea.rupaBaru'); } catch (e) {} };
   EA.testMode = function () { return !!EA.config.TEST_MODE && !EA.switches().testModeOff; };

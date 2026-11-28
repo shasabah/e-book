@@ -386,7 +386,7 @@ EA.roomViews = EA.roomViews || {};
       this.disabled = true;
       var j = await EA.askFull('adminSwitch', { which: 'rupaBaru', codes: f.codes });
       if (!j || !j.ok) { f.err = (j && j.error) || 'busy'; draw(); return; }
-      var sw = EA.switches(); EA.setSwitches({ testModeOff: sw.testModeOff, live: sw.live, rupaBaru: j.rupaBaru || [], rupaEstates: j.rupaEstates || sw.rupaEstates || [] });
+      var sw = EA.switches(); EA.setSwitches({ testModeOff: sw.testModeOff, live: sw.live, rupaBaru: j.rupaBaru || [], rupaEstates: j.rupaEstates || sw.rupaEstates || [], keraniDn: j.keraniDn || sw.keraniDn || [] });
       form = null; ui().toast(EA.t('Disimpan', 'Saved')); draw();
     };
   }
